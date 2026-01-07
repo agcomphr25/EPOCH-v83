@@ -5420,6 +5420,31 @@ export const orderStatusEnum = pgEnum('order_status', [
   'FINALIZED',
   'CANCELLED',
   'RESERVED',
+  'FULFILLED',
+]);
+
+// Missing production enums
+export const frequencyTypeEnum = pgEnum('frequency_type', [
+  'DAILY',
+  'WEEKLY',
+  'MONTHLY',
+  'ONGOING',
+]);
+
+export const taskTypeEnum = pgEnum('task_type', [
+  'RECURRING',
+  'DYNAMIC',
+  'MANUAL',
+]);
+
+export const surveyQuestionTypeEnum = pgEnum('survey_question_type', [
+  'multiple_choice',
+  'rating_scale',
+  'text',
+  'yes_no',
+  'dropdown',
+  'matrix',
+  'nps',
 ]);
 
 // Survey Engine Enums - Generic survey system for reuse across applications
@@ -9596,5 +9621,792 @@ export const insertTicketActivitySchema = createInsertSchema(ticketActivity).omi
 
 export type TicketActivity = typeof ticketActivity.$inferSelect;
 export type InsertTicketActivity = z.infer<typeof insertTicketActivitySchema>;
+
+// ========================================================================
+// MISSING PRODUCTION TABLES - Added for schema alignment
+// ========================================================================
+
+// Additional stocks for order drafts
+export const additionalStocks = pgTable('additional_stocks', {
+  id: integer('id').primaryKey(),
+  orderDraftId: integer('order_draft_id').notNull(),
+  stockNumber: integer('stock_number').notNull(),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  shankLength: text('shank_length'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  tikkaOption: text('tikka_option'),
+  priceOverride: real('price_override'),
+  currentDepartment: text('current_department'),
+  departmentHistory: jsonb('department_history'),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  status: text('status'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  isCustomOrder: text('is_custom_order'),
+});
+
+// Chatbot conversations
+export const chatbotConversations = pgTable('chatbot_conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id'),
+  username: text('username'),
+  query: text('query').notNull(),
+  response: text('response').notNull(),
+  queryType: text('query_type'),
+  referencedInventoryIds: text('referenced_inventory_ids').array(),
+  referencedKnowledgeIds: text('referenced_knowledge_ids').array(),
+  wasHelpful: boolean('was_helpful'),
+  feedbackNotes: text('feedback_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Chatbot knowledge base
+export const chatbotKnowledgeBase = pgTable('chatbot_knowledge_base', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  documentType: text('document_type').notNull(),
+  category: text('category'),
+  filePath: text('file_path'),
+  fileName: text('file_name'),
+  fileSize: integer('file_size'),
+  extractedText: text('extracted_text'),
+  keywords: text('keywords').array(),
+  relatedPartNumbers: text('related_part_numbers').array(),
+  relatedMaterials: text('related_materials').array(),
+  isActive: boolean('is_active').notNull().default(true),
+  uploadedBy: text('uploaded_by'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  lastAccessedAt: timestamp('last_accessed_at'),
+  accessCount: integer('access_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Checklist metadata
+export const checklistMetadata = pgTable('checklist_metadata', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  frequency: frequencyTypeEnum('frequency').notNull().default('DAILY'),
+  reportRecipients: integer('report_recipients').array(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cut yield configs
+export const cutYieldConfigs = pgTable('cut_yield_configs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  partNumber: text('part_number'),
+  partName: text('part_name').notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  fabricType: text('fabric_type'),
+  cutsPerRoll: integer('cuts_per_roll'),
+  yieldPerCut: integer('yield_per_cut').notNull().default(1),
+  squareMetersPerCut: numeric('square_meters_per_cut', { precision: 10, scale: 4 }),
+  wasteFactor: numeric('waste_factor', { precision: 5, scale: 4 }).default('0.05'),
+  isActive: boolean('is_active').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting packet schedule
+export const cuttingPacketSchedule = pgTable('cutting_packet_schedule', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetType: varchar('packet_type').notNull(),
+  packetBomId: uuid('packet_bom_id'),
+  mfgQueueItemId: integer('mfg_queue_item_id'),
+  partNumber: varchar('part_number'),
+  partName: varchar('part_name'),
+  quantityNeeded: integer('quantity_needed').default(1),
+  quantityCompleted: integer('quantity_completed').default(0),
+  priority: integer('priority').default(50),
+  scheduledDate: date('scheduled_date'),
+  scheduledBy: varchar('scheduled_by'),
+  assignedOperator: varchar('assigned_operator'),
+  status: varchar('status').default('SCHEDULED'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting run log
+export const cuttingRunLog = pgTable('cutting_run_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetScheduleId: uuid('packet_schedule_id').references(() => cuttingPacketSchedule.id),
+  plyScheduleId: uuid('ply_schedule_id').references(() => plySchedule.id),
+  operatorName: varchar('operator_name').notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id'),
+  fabricType: varchar('fabric_type'),
+  fabricLot: varchar('fabric_lot'),
+  fabricBatch: varchar('fabric_batch'),
+  fabricRoll: varchar('fabric_roll'),
+  freezerLocation: varchar('freezer_location'),
+  sessionStartedAt: timestamp('session_started_at').defaultNow(),
+  sessionCompletedAt: timestamp('session_completed_at'),
+  cutsCompleted: integer('cuts_completed').default(0),
+  partsYielded: integer('parts_yielded').default(0),
+  squareMetersUsed: numeric('square_meters_used'),
+  isRollEmpty: boolean('is_roll_empty').default(false),
+  rollRemainingMeters: numeric('roll_remaining_meters'),
+  labelsGenerated: integer('labels_generated').default(0),
+  labelsPrinted: boolean('labels_printed').default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Daily task notifications
+export const dailyTaskNotifications = pgTable('daily_task_notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  notifyUserId: integer('notify_user_id').notNull().references(() => users.id),
+  taskDate: date('task_date').notNull(),
+  notificationTime: text('notification_time').notNull(),
+  message: text('message'),
+  sent: boolean('sent').notNull().default(false),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily tasks
+export const dailyTasks = pgTable('daily_tasks', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  taskDate: date('task_date').notNull(),
+  taskType: taskTypeEnum('task_type').notNull().default('RECURRING'),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category').notNull(),
+  priority: integer('priority').notNull().default(3),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  completedAt: timestamp('completed_at'),
+  dueTime: text('due_time'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Fabric receiving log
+export const fabricReceivingLog = pgTable('fabric_receiving_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id),
+  receivedDate: timestamp('received_date').notNull().defaultNow(),
+  receivedBy: text('received_by'),
+  vendorName: text('vendor_name'),
+  purchaseOrderNumber: text('purchase_order_number'),
+  materialType: text('material_type').notNull(),
+  fabricName: text('fabric_name'),
+  lotNumber: text('lot_number').notNull(),
+  batchNumber: text('batch_number'),
+  rollNumber: text('roll_number'),
+  manufactureDate: date('manufacture_date'),
+  expirationDate: date('expiration_date'),
+  quantityReceived: integer('quantity_received').notNull().default(1),
+  squareMeters: numeric('square_meters', { precision: 10, scale: 2 }),
+  freezerNumber: integer('freezer_number'),
+  conformanceDocumentPath: text('conformance_document_path'),
+  inspectionStatus: text('inspection_status').default('PENDING'),
+  inspectedBy: text('inspected_by'),
+  inspectedAt: timestamp('inspected_at'),
+  notes: text('notes'),
+  barcode: text('barcode'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Freezer locations
+export const freezerLocations = pgTable('freezer_locations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  freezerNumber: integer('freezer_number').notNull(),
+  name: text('name'),
+  description: text('description'),
+  temperature: numeric('temperature', { precision: 4, scale: 1 }),
+  isActive: boolean('is_active').notNull().default(true),
+  capacity: integer('capacity'),
+  currentItemCount: integer('current_item_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Layup orders
+export const layupOrders = pgTable('layup_orders', {
+  id: integer('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  priorityScore: integer('priority_score').notNull(),
+  department: text('department').notNull(),
+  status: text('status').notNull(),
+  customer: text('customer').notNull(),
+  product: text('product').notNull(),
+  isActive: boolean('is_active'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+});
+
+// Migration audit
+export const migrationAudit = pgTable('migration_audit', {
+  id: serial('id').primaryKey(),
+  tableSource: text('table_source').notNull(),
+  orderId: text('order_id'),
+  action: text('action').notNull(),
+  reason: text('reason'),
+  originalData: jsonb('original_data'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Non-conforming items
+export const nonConformingItems = pgTable('non_conforming_items', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  p1OrP2: text('p1_or_p2').notNull(),
+  customer: text('customer').notNull(),
+  sku: text('sku').notNull(),
+  qty: integer('qty').notNull().default(1),
+  issueCause: text('issue_cause').notNull(),
+  manufacturerDefect: boolean('manufacturer_defect').notNull().default(false),
+  disposition: text('disposition').notNull(),
+  authorization: text('authorization').notNull(),
+  serialTagNumber: text('serial_tag_number'),
+  dispositionDate: date('disposition_date'),
+  correctiveActionNotes: text('corrective_action_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Notification triggers
+export const notificationTriggers = pgTable('notification_triggers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  customerId: integer('customer_id'),
+  customerName: text('customer_name'),
+  targetDepartment: text('target_department').notNull(),
+  recipientUserId: integer('recipient_user_id').references(() => users.id),
+  recipientUsername: text('recipient_username').notNull(),
+  triggerOnFirstEntry: boolean('trigger_on_first_entry').default(false),
+  isActive: boolean('is_active').default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Order departments tracking
+export const orderDepartments = pgTable('order_departments', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().references(() => ordersUnified.orderId),
+  department: text('department').notNull(),
+  completedAt: timestamp('completed_at').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Order drafts
+export const orderDrafts = pgTable('order_drafts', {
+  id: integer('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  customerId: text('customer_id'),
+  customerPO: text('customer_po'),
+  fbOrderNumber: text('fb_order_number'),
+  agrOrderDetails: text('agr_order_details'),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  discountCode: text('discount_code'),
+  shipping: real('shipping'),
+  status: text('status'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  shankLength: text('shank_length'),
+  tikkaOption: text('tikka_option'),
+  customDiscountType: text('custom_discount_type'),
+  customDiscountValue: real('custom_discount_value'),
+  showCustomDiscount: boolean('show_custom_discount'),
+  isCustomOrder: text('is_custom_order'),
+  priceOverride: real('price_override'),
+  barcode: text('barcode'),
+  currentDepartment: text('current_department').default('P1 Production Queue'),
+  departmentHistory: jsonb('department_history'),
+  scrappedQuantity: integer('scrapped_quantity'),
+  totalProduced: integer('total_produced'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  isReplacement: boolean('is_replacement'),
+  replacedOrderId: text('replaced_order_id'),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  notes: text('notes'),
+  isPaid: boolean('is_paid'),
+  paymentType: text('payment_type'),
+  paymentAmount: real('payment_amount'),
+  paymentDate: timestamp('payment_date'),
+  paymentTimestamp: timestamp('payment_timestamp'),
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier'),
+  shippingMethod: text('shipping_method'),
+  shippedDate: timestamp('shipped_date'),
+  estimatedDelivery: timestamp('estimated_delivery'),
+  shippingLabelGenerated: boolean('shipping_label_generated'),
+  customerNotified: boolean('customer_notified'),
+  notificationMethod: text('notification_method'),
+  notificationSentAt: timestamp('notification_sent_at'),
+  deliveryConfirmed: boolean('delivery_confirmed'),
+  deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
+  p1ProductionQueueCompletedAt: timestamp('p1_production_queue_completed_at'),
+  layupPluggingCompletedAt: timestamp('layup_plugging_completed_at'),
+  barcodeCompletedAt: timestamp('barcode_completed_at'),
+  finishAssignmentCompletedAt: timestamp('finish_assignment_completed_at'),
+  qcFinishCompletedAt: timestamp('qc_finish_completed_at'),
+  qcShippingCompletedAt: timestamp('qc_shipping_completed_at'),
+  source: text('source'),
+  isFlattop: boolean('is_flattop'),
+  isVerified: boolean('is_verified'),
+  assignedTechnician: text('assigned_technician'),
+  isManualDueDate: boolean('is_manual_due_date'),
+  isManualOrderDate: boolean('is_manual_order_date'),
+  hasAltShipTo: boolean('has_alt_ship_to'),
+  altShipToCustomerId: text('alt_ship_to_customer_id'),
+  altShipToName: text('alt_ship_to_name'),
+  altShipToCompany: text('alt_ship_to_company'),
+  altShipToEmail: text('alt_ship_to_email'),
+  altShipToPhone: text('alt_ship_to_phone'),
+  altShipToAddress: jsonb('alt_ship_to_address'),
+  specialShippingInternational: boolean('special_shipping_international'),
+  specialShippingNextDayAir: boolean('special_shipping_next_day_air'),
+  specialShippingBillToReceiver: boolean('special_shipping_bill_to_receiver'),
+  statusId: integer('status_id').references(() => orderStatuses.id),
+  currentDepartmentId: integer('current_department_id').references(() => orderDepartments.id),
+  qdSameSideConfirmed: boolean('qd_same_side_confirmed').default(false),
+  qdSameSideConfirmedBy: text('qd_same_side_confirmed_by'),
+  qdSameSideConfirmedAt: timestamp('qd_same_side_confirmed_at'),
+});
+
+// Order statuses
+export const orderStatuses = pgTable('order_statuses', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  displayName: text('display_name').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Orders unified
+export const ordersUnified = pgTable('orders_unified', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date'),
+  customerId: text('customer_id'),
+  customerPO: text('customer_po'),
+  fbOrderNumber: text('fb_order_number'),
+  agrOrderDetails: text('agr_order_details'),
+  isFlattop: boolean('is_flattop').default(false),
+  isCustomOrder: text('is_custom_order'),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  shankLength: text('shank_length'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  discountCode: text('discount_code'),
+  notes: text('notes'),
+  customDiscountType: text('custom_discount_type').default('percent'),
+  customDiscountValue: real('custom_discount_value').default(0),
+  showCustomDiscount: boolean('show_custom_discount').default(false),
+  priceOverride: real('price_override'),
+  shipping: real('shipping').default(0),
+  tikkaOption: text('tikka_option'),
+  status: orderStatusEnum('status').notNull(),
+  barcode: text('barcode'),
+  currentDepartment: text('current_department'),
+  scrappedQuantity: integer('scrapped_quantity').default(0),
+  totalProduced: integer('total_produced').default(0),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  isReplacement: boolean('is_replacement').default(false),
+  replacedOrderId: text('replaced_order_id'),
+  isPaid: boolean('is_paid').default(false),
+  paymentType: text('payment_type'),
+  paymentAmount: real('payment_amount'),
+  paymentDate: timestamp('payment_date'),
+  paymentTimestamp: timestamp('payment_timestamp'),
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier').default('UPS'),
+  shippingMethod: text('shipping_method').default('Ground'),
+  shippedDate: timestamp('shipped_date'),
+  estimatedDelivery: timestamp('estimated_delivery'),
+  shippingLabelGenerated: boolean('shipping_label_generated').default(false),
+  customerNotified: boolean('customer_notified').default(false),
+  notificationMethod: text('notification_method'),
+  notificationSentAt: timestamp('notification_sent_at'),
+  deliveryConfirmed: boolean('delivery_confirmed').default(false),
+  deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
+  isCancelled: boolean('is_cancelled').default(false),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelReason: text('cancel_reason'),
+  isVerified: boolean('is_verified').default(false),
+  isManualDueDate: boolean('is_manual_due_date').default(false),
+  isManualOrderDate: boolean('is_manual_order_date').default(false),
+  hasAltShipTo: boolean('has_alt_ship_to').default(false),
+  altShipToCustomerId: text('alt_ship_to_customer_id'),
+  altShipToName: text('alt_ship_to_name'),
+  altShipToCompany: text('alt_ship_to_company'),
+  altShipToEmail: text('alt_ship_to_email'),
+  altShipToPhone: text('alt_ship_to_phone'),
+  altShipToAddress: jsonb('alt_ship_to_address'),
+  specialShippingInternational: boolean('special_shipping_international').default(false),
+  specialShippingNextDayAir: boolean('special_shipping_next_day_air').default(false),
+  specialShippingBillToReceiver: boolean('special_shipping_bill_to_receiver').default(false),
+  assignedTechnician: text('assigned_technician'),
+  customer: text('customer'),
+  product: text('product'),
+  quantity: integer('quantity'),
+  date: timestamp('date'),
+  isOnSchedule: boolean('is_on_schedule').default(true),
+  priorityScore: integer('priority_score').default(50),
+  rushTier: text('rush_tier'),
+  poId: integer('po_id'),
+  itemId: text('item_id'),
+  stockModelId: text('stock_model_id'),
+});
+
+// P1 packet inventory
+export const p1PacketInventory = pgTable('p1_packet_inventory', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetType: text('packet_type').notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  quantityOnHand: integer('quantity_on_hand').notNull().default(0),
+  minimumThreshold: integer('minimum_threshold').notNull().default(400),
+  reorderPoint: integer('reorder_point').default(450),
+  maxCapacity: integer('max_capacity'),
+  location: text('location'),
+  lastCountDate: date('last_count_date'),
+  lastCountedBy: text('last_counted_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P1 packet manufacturing queue
+export const p1PacketManufacturingQueue = pgTable('p1_packet_manufacturing_queue', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  weekStartDate: date('week_start_date').notNull(),
+  packetInventoryId: uuid('packet_inventory_id').references(() => p1PacketInventory.id),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  packetType: text('packet_type').notNull(),
+  quantityScheduled: integer('quantity_scheduled').notNull(),
+  quantityProduced: integer('quantity_produced').default(0),
+  quantityRemainingFromPrevious: integer('quantity_remaining_from_previous').default(0),
+  status: text('status').notNull().default('PENDING'),
+  priority: integer('priority').default(50),
+  dueDate: date('due_date'),
+  assignedTo: text('assigned_to'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P1 packet production records
+export const p1PacketProductionRecords = pgTable('p1_packet_production_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  queueItemId: uuid('queue_item_id').references(() => p1PacketManufacturingQueue.id),
+  packetInventoryId: uuid('packet_inventory_id').references(() => p1PacketInventory.id),
+  productionDate: date('production_date').notNull(),
+  quantityProduced: integer('quantity_produced').notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id),
+  fabricLot: text('fabric_lot'),
+  fabricBatch: text('fabric_batch'),
+  fabricRoll: text('fabric_roll'),
+  fabricExpirationDate: date('fabric_expiration_date'),
+  cutYieldConfigId: uuid('cut_yield_config_id').references(() => cutYieldConfigs.id),
+  cutsPerformed: integer('cuts_performed'),
+  squareMetersUsed: numeric('square_meters_used', { precision: 10, scale: 4 }),
+  producedBy: text('produced_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Packet compositions
+export const packetCompositions = pgTable('packet_compositions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').notNull().references(() => cuttingProductCategories.id),
+  componentId: uuid('component_id').notNull().references(() => cuttingComponents.id),
+  quantityPerPacket: integer('quantity_per_packet').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Ply schedule
+export const plySchedule = pgTable('ply_schedule', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name'),
+  packetBomId: uuid('packet_bom_id'),
+  packetScheduleId: uuid('packet_schedule_id').references(() => cuttingPacketSchedule.id),
+  totalPlies: integer('total_plies').default(0),
+  totalCuts: integer('total_cuts').default(0),
+  status: varchar('status').default('DRAFT'),
+  createdBy: varchar('created_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Ply schedule items
+export const plyScheduleItems = pgTable('ply_schedule_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  plyScheduleId: uuid('ply_schedule_id').notNull().references(() => plySchedule.id),
+  sortOrder: integer('sort_order').default(0),
+  partNumber: varchar('part_number'),
+  partDescription: varchar('part_description'),
+  fabricType: varchar('fabric_type'),
+  materialPartNumber: varchar('material_part_number'),
+  cutsNeeded: integer('cuts_needed').default(1),
+  cutsCompleted: integer('cuts_completed').default(0),
+  partsPerCut: integer('parts_per_cut').default(1),
+  status: varchar('status').default('PENDING'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Sessions
+export const sessions = pgTable('sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  sessionToken: text('session_token').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Survey questions (for generic survey engine)
+export const surveyQuestions = pgTable('survey_questions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  questionText: text('question_text').notNull(),
+  questionType: surveyQuestionTypeEnum('question_type').notNull(),
+  isRequired: boolean('is_required').default(false),
+  sortOrder: integer('sort_order').default(0),
+  options: jsonb('options'),
+  settings: jsonb('settings'),
+  conditionalLogic: jsonb('conditional_logic'),
+  placeholder: text('placeholder'),
+  helpText: text('help_text'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Survey response answers
+export const surveyResponseAnswers = pgTable('survey_response_answers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  responseId: uuid('response_id').notNull().references(() => surveyResponses.id),
+  questionId: uuid('question_id').notNull().references(() => surveyQuestions.id),
+  answerValue: text('answer_value'),
+  answerNumeric: real('answer_numeric'),
+  answerJson: jsonb('answer_json'),
+  answeredAt: timestamp('answered_at').defaultNow(),
+});
+
+// Survey send log
+export const surveySendLog = pgTable('survey_send_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  triggerId: uuid('trigger_id').references(() => surveyTriggers.id),
+  orderId: text('order_id').notNull(),
+  customerId: text('customer_id'),
+  customerEmail: text('customer_email'),
+  responseId: uuid('response_id').references(() => surveyResponses.id),
+  sentAt: timestamp('sent_at').defaultNow(),
+  sentVia: text('sent_via').default('email'),
+  status: text('status').default('sent'),
+});
+
+// Survey triggers
+export const surveyTriggers = pgTable('survey_triggers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  triggerStatus: text('trigger_status').notNull(),
+  delayDays: integer('delay_days').default(0),
+  emailSubject: text('email_subject').default("We'd love your feedback!"),
+  emailBody: text('email_body'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Task templates
+export const taskTemplates = pgTable('task_templates', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category').notNull(),
+  priority: integer('priority').notNull().default(3),
+  dueTime: text('due_time'),
+  isActive: boolean('is_active').notNull().default(true),
+  daysOfWeek: text('days_of_week').array(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  checklistId: integer('checklist_id').references(() => checklistMetadata.id),
+  dayOfMonth: integer('day_of_month'),
+});
+
+// Training attendees
+export const trainingAttendees = pgTable('training_attendees', {
+  id: serial('id').primaryKey(),
+  attendeeId: text('attendee_id').notNull(),
+  sessionId: text('session_id').notNull().references(() => trainingSessions.sessionId),
+  employeeId: integer('employee_id'),
+  employeeName: text('employee_name').notNull(),
+  employeeNumber: text('employee_number'),
+  department: text('department'),
+  signedInAt: timestamp('signed_in_at').defaultNow(),
+  signedOutAt: timestamp('signed_out_at'),
+  attendanceStatus: text('attendance_status').notNull().default('PRESENT'),
+  quizStartedAt: timestamp('quiz_started_at'),
+  quizCompletedAt: timestamp('quiz_completed_at'),
+  quizScore: integer('quiz_score'),
+  quizResponses: jsonb('quiz_responses'),
+  passed: boolean('passed').default(false),
+  certificateGenerated: boolean('certificate_generated').default(false),
+  certificateGeneratedAt: timestamp('certificate_generated_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training completions
+export const trainingCompletions = pgTable('training_completions', {
+  id: serial('id').primaryKey(),
+  moduleId: integer('module_id').notNull().references(() => trainingModules.id),
+  employeeId: varchar('employee_id', { length: 50 }).notNull(),
+  employeeName: varchar('employee_name', { length: 255 }).notNull(),
+  score: integer('score').notNull(),
+  passed: boolean('passed').notNull(),
+  answers: jsonb('answers').notNull(),
+  certificateIssued: boolean('certificate_issued').default(false),
+  completedAt: timestamp('completed_at').defaultNow(),
+  expiresAt: timestamp('expires_at'),
+});
+
+// Training quiz answers
+export const trainingQuizAnswers = pgTable('training_quiz_answers', {
+  id: serial('id').primaryKey(),
+  questionId: integer('question_id').notNull().references(() => trainingQuizQuestions.id),
+  answerText: text('answer_text').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isCorrect: boolean('is_correct').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training quiz questions
+export const trainingQuizQuestions = pgTable('training_quiz_questions', {
+  id: serial('id').primaryKey(),
+  moduleId: integer('module_id').notNull().references(() => trainingModules.id),
+  question: text('question').notNull(),
+  questionType: text('question_type').notNull().default('multiple_choice'),
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training sessions
+export const trainingSessions = pgTable('training_sessions', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  topic: text('topic').notNull(),
+  description: text('description'),
+  instructorId: integer('instructor_id'),
+  instructorName: text('instructor_name').notNull(),
+  sessionDate: timestamp('session_date').notNull(),
+  startTime: text('start_time').notNull(),
+  endTime: text('end_time'),
+  location: text('location').default('Conference Room'),
+  maxAttendees: integer('max_attendees').default(50),
+  materials: jsonb('materials'),
+  quizQuestions: jsonb('quiz_questions'),
+  passingScore: integer('passing_score').default(80),
+  status: text('status').notNull().default('SCHEDULED'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Vendor evaluations
+export const vendorEvaluations = pgTable('vendor_evaluations', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id),
+  evaluationMonth: date('evaluation_month').notNull(),
+  qualityScore: integer('quality_score'),
+  deliveryRating: integer('delivery_rating'),
+  deliveryOccurrence: integer('delivery_occurrence'),
+  costScore: integer('cost_score'),
+  communicationScore: integer('communication_score'),
+  aggregateScore: real('aggregate_score'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Vendor PO optional settings
+export const vendorPoOptionalSettings = pgTable('vendor_po_optional_settings', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Vendor PO specific settings
+export const vendorPoSpecificSettings = pgTable('vendor_po_specific_settings', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id').notNull().references(() => vendorPOs.id),
+  selectedOptionalSettings: integer('selected_optional_settings').array().default([]),
+  adHocSettings: text('ad_hoc_settings'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
 export * from './calendar.schema';

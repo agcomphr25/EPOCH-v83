@@ -3578,7 +3578,7 @@ export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
 // Purchase Order Management Tables
 export const purchaseOrders = pgTable('purchase_orders', {
   id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull().unique(),
+  poNumber: text('po_number').notNull(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(), // Denormalized for performance
   itemType: text('item_type').notNull().default('single'), // single, multiple

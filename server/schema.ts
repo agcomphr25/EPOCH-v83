@@ -7597,7 +7597,7 @@ export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
 // Cost Centers - Track business units, departments, and projects for expense allocation
 export const costCenters = pgTable('cost_centers', {
   id: uuid('id').defaultRandom().primaryKey(),
-  code: text('code').notNull().unique(), // Short identifier (e.g., LAYUP, ADMIN)
+  code: text('code').notNull(), // Short identifier (e.g., LAYUP, ADMIN)
   name: text('name').notNull(), // Full name (e.g., Layup Department)
   type: text('type').notNull(), // DEPARTMENT, PROJECT, OVERHEAD, ADMINISTRATIVE
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE

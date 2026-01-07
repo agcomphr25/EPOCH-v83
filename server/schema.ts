@@ -715,7 +715,7 @@ export const rtsInventoryHistory = pgTable('rts_inventory_history', {
 // RTS Sales Transactions - Track sales of RTS inventory to customers
 export const rtsSales = pgTable('rts_sales', {
   id: uuid('id').defaultRandom().primaryKey(),
-  saleNumber: text('sale_number').notNull().unique(), // e.g., RTS-2024-001
+  saleNumber: text('sale_number').notNull(), // e.g., RTS-2024-001
   customerId: text('customer_id').notNull(),
   orderId: text('order_id'), // Reference to order created for this sale
   // Shipping Information

@@ -7464,7 +7464,7 @@ export type InsertManufacturingQueue = z.infer<typeof insertManufacturingQueueSc
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
-  documentNumber: text('document_number').notNull().unique(), // e.g., DOC-001
+  documentNumber: text('document_number').notNull(), // e.g., DOC-001
   documentName: text('document_name').notNull(),
   documentType: text('document_type').notNull(), // SOP, Work Instruction, Form, etc.
   department: text('department').notNull(), // P1, P2, Quality, etc.

@@ -2862,7 +2862,7 @@ export const vendorParts = pgTable('vendor_parts', {
 // Vendor Purchase Orders
 export const vendorPOs = pgTable('vendor_pos', {
   id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull().unique(),
+  poNumber: text('po_number').notNull(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),

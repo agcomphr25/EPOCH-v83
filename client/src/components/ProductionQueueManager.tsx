@@ -798,6 +798,10 @@ export default function ProductionQueueManager() {
            customerName.includes(searchLower);
   });
 
+  // Explicit guards to distinguish truly empty queue from filtered-to-empty
+  const isTrulyEmpty = productionQueue.length === 0;
+  const isFilteredEmpty = productionQueue.length > 0 && filteredProductionQueue.length === 0;
+
   if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -1519,13 +1523,29 @@ export default function ProductionQueueManager() {
                     </div>
                   </div>
                 )}
-                {productionQueue.length === 0 ? (
+                {isTrulyEmpty ? (
                   <div className="text-center py-8 text-gray-500">
                     <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p>No orders in production queue</p>
                     <p className="text-sm">
                       Use Auto-Populate to add eligible orders
                     </p>
+                  </div>
+                ) : isFilteredEmpty ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No orders match your search</p>
+                    <p className="text-sm mb-4">
+                      {productionQueue.length} order{productionQueue.length !== 1 ? 's' : ''} in queue, but none match "{queueSearchQuery}"
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQueueSearchQuery('')}
+                      data-testid="button-clear-search"
+                    >
+                      Clear Search
+                    </Button>
                   </div>
                 ) : (
                   <Table>

@@ -3678,7 +3678,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
 // RFQ Risk Assessments - stores RFQ risk assessment records
 export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   id: serial('id').primaryKey(),
-  rfqNumber: text('rfq_number').notNull().unique(),
+  rfqNumber: text('rfq_number').notNull(),
   customerId: text('customer_id')
     .references(() => p2Customers.customerId)
     .notNull(),

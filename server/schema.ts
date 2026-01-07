@@ -45,7 +45,7 @@ export const orderStatusTypes = pgTable('order_status_types', {
 // All finalized orders - production table
 export const allOrders = pgTable('all_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(),
+  orderId: text('order_id').notNull(),
   orderDate: timestamp('order_date').notNull(),
   dueDate: timestamp('due_date').notNull(),
   customerId: text('customer_id'),

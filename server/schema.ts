@@ -2770,9 +2770,7 @@ export const inventoryBalances = pgTable('inventory_balances', {
   lastCountedAt: timestamp('last_counted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePartLocation: unique().on(table.agPartNumber, table.locationId),
-}));
+});
 
 // Department-Location Mapping for derived department tracking
 // Department-Location Mapping for physical staging locations

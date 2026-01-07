@@ -6684,7 +6684,7 @@ export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;
 // Departments table for internal messaging and parts requests
 export const departments = pgTable('departments', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name'), // Display name for UI
   description: text('description'),
   locationId: text('location_id'), // Physical location/storage area for parts

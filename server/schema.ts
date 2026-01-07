@@ -6403,39 +6403,22 @@ export const surveys = pgTable('surveys', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Generic Survey Responses table - uses respondent/context abstraction
+// Generic Survey Responses table
 export const surveyResponses = pgTable('survey_responses', {
   id: uuid('id').defaultRandom().primaryKey(),
   surveyId: uuid('survey_id')
     .references(() => surveys.id)
     .notNull(),
-  // Respondent abstraction - who is responding
-  respondentId: text('respondent_id').notNull(),
-  respondentType: surveyRespondentTypeEnum('respondent_type')
-    .notNull()
-    .default('customer'),
-  respondentName: text('respondent_name'),
-  respondentEmail: text('respondent_email'),
-  // Context abstraction - what the survey is about
-  contextId: text('context_id'),
-  contextType: surveyContextTypeEnum('context_type').default('general'),
-  // Survey responses stored as JSON
-  responses: jsonb('responses').notNull().default('{}'),
-  // Calculated scores
-  overallSatisfaction: integer('overall_satisfaction'),
-  npsScore: integer('nps_score'),
-  aggregateScore: integer('aggregate_score'),
-  // Metadata
-  responseTimeSeconds: integer('response_time_seconds'),
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  submittedBy: text('submitted_by'),
-  surveyDate: timestamp('survey_date'),
-  // Status tracking
+  orderId: text('order_id'),
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  customerEmail: text('customer_email'),
+  responseToken: text('response_token'),
   isComplete: boolean('is_complete').default(false),
-  submittedAt: timestamp('submitted_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+  triggerId: uuid('trigger_id'),
+  metadata: jsonb('metadata'),
 });
 
 // Insert schema for Generic Surveys

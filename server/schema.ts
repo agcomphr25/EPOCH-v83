@@ -6063,7 +6063,7 @@ export const documents = pgTable('documents', {
 
 export const documentTags = pgTable('document_tags', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   category: text('category'), // 'project', 'customer', 'po_number', 'status', 'document_type'
   color: text('color').default('#3B82F6'), // Hex color for UI
   description: text('description'),

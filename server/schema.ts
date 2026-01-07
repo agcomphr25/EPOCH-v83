@@ -5730,7 +5730,7 @@ export type OrderIdReservation = typeof orderIdReservations.$inferSelect;
 // Replaces the reservation system with a simpler, faster, and 100% reliable approach
 export const orderIdSequences = pgTable('order_id_sequences', {
   id: serial('id').primaryKey(),
-  yearMonthPrefix: text('year_month_prefix').notNull().unique(), // Year-month prefix (e.g., EH for Aug 2025)
+  yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., EH for Aug 2025)
   currentSequence: integer('current_sequence').notNull().default(0), // Current sequence number
   lastUsedAt: timestamp('last_used_at').defaultNow().notNull(), // Last time this prefix was used
   createdAt: timestamp('created_at').defaultNow().notNull(),

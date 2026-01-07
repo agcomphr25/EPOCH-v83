@@ -4492,7 +4492,7 @@ export const p2TestForConformanceReports = pgTable('p2_test_for_conformance_repo
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // Customer-based format: ABC00199-0001
+  orderId: text('order_id').notNull(), // Customer-based format: ABC00199-0001
   poId: integer('po_id')
     .references(() => purchaseOrders.id, { onDelete: 'cascade' })
     .notNull(),

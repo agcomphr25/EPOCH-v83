@@ -2485,7 +2485,7 @@ export type ManufacturersCertificate =
 // Layup Scheduler Tables
 export const molds = pgTable('molds', {
   id: serial('id').primaryKey(),
-  moldId: text('mold_id').notNull().unique(),
+  moldId: text('mold_id').notNull(),
   modelName: text('model_name').notNull(),
   stockModels: text('stock_models').array().default([]), // Array of associated stock model IDs
   instanceNumber: integer('instance_number').notNull(),

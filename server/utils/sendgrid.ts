@@ -3,16 +3,16 @@ import sgMail from '@sendgrid/mail';
 let connectionSettings: any;
 
 async function getCredentials() {
-  // LOCKED: Sender must be explicitly configured via SENDGRID_FROM_EMAIL
-  // No fallbacks allowed - this prevents sender drift and ensures determinism
   const apiKey = process.env.SENDGRID_API_KEY;
-  const email = process.env.SENDGRID_FROM_EMAIL;
+  const email = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
+  const source = process.env.SENDGRID_FROM_EMAIL ? 'SENDGRID_FROM_EMAIL' : 'SENDGRID_FROM';
 
   console.log('🔍 SendGrid credentials check:', {
     hasApiKey: !!apiKey,
     hasFromEmail: !!email,
     nodeEnv: process.env.NODE_ENV,
   });
+  console.log(`📧 SendGrid FROM email resolved from: ${source}`);
 
   if (!apiKey) {
     console.error('❌ SENDGRID_API_KEY is required');
@@ -20,8 +20,8 @@ async function getCredentials() {
   }
 
   if (!email) {
-    console.error('❌ SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
-    throw new Error('SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
+    console.error('❌ SENDGRID_FROM_EMAIL or SENDGRID_FROM is required and must be a verified SendGrid sender');
+    throw new Error('SENDGRID_FROM_EMAIL or SENDGRID_FROM is required and must be a verified SendGrid sender');
   }
 
   console.log('✅ SendGrid configured with sender:', email);
@@ -88,7 +88,7 @@ export async function getUncachableSendGridClient() {
   
   // Validate sender email is explicitly configured
   if (!email) {
-    throw new Error('SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
+    throw new Error('SENDGRID_FROM_EMAIL or SENDGRID_FROM is required and must be a verified SendGrid sender');
   }
   
   sgMail.setApiKey(apiKey);

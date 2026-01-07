@@ -234,7 +234,7 @@ export const linkedOrders = pgTable('linked_orders', {
 // Follow-up Orders - New orders that require customer signature before production
 export const followupOrders = pgTable('followup_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(),
+  orderId: text('order_id').notNull(),
   customerId: text('customer_id').notNull(),
   customerEmail: text('customer_email').notNull(),
   // Email Tracking

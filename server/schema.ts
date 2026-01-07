@@ -7539,7 +7539,7 @@ export type InsertInvoiceNumber = z.infer<typeof insertInvoiceNumberSchema>;
 // Quotes - Customer quotes for P2 business (stub for future implementation)
 export const quotes = pgTable('quotes', {
   id: uuid('id').defaultRandom().primaryKey(),
-  quoteNumber: text('quote_number').notNull().unique(),
+  quoteNumber: text('quote_number').notNull(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   description: text('description'),

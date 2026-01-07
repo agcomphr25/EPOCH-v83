@@ -1131,28 +1131,22 @@ export const capabilities = pgTable('capabilities', {
 });
 
 // Employee-Capability Junction Table with toggle for hardcoded capabilities
-export const employeeCapabilities = pgTable(
-  'employee_capabilities',
-  {
-    id: serial('id').primaryKey(),
-    employeeId: integer('employee_id')
-      .references(() => employees.id)
-      .notNull(),
-    capabilityId: integer('capability_id')
-      .references(() => capabilities.id)
-      .notNull(),
-    grantedBy: text('granted_by'), // Username or system that granted this capability
-    isHardcoded: boolean('is_hardcoded').default(false), // True if this is a hardcoded capability
-    useHardcodedValue: boolean('use_hardcoded_value').default(true), // Toggle to enable/disable hardcoded capabilities
-    notes: text('notes'),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
-  },
-  (table) => ({
-    // Unique constraint to prevent duplicate capability grants
-    uniqueEmployeeCapability: unique().on(table.employeeId, table.capabilityId),
-  })
-);
+export const employeeCapabilities = pgTable('employee_capabilities', {
+  id: serial('id').primaryKey(),
+  employeeId: integer('employee_id')
+    .references(() => employees.id)
+    .notNull(),
+  capabilityId: integer('capability_id')
+    .references(() => capabilities.id)
+    .notNull(),
+  grantedBy: text('granted_by'), // Username or system that granted this capability
+  isHardcoded: boolean('is_hardcoded').default(false), // True if this is a hardcoded capability
+  useHardcodedValue: boolean('use_hardcoded_value').default(true), // Toggle to enable/disable hardcoded capabilities
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  // Unique constraint exists in production as unique_employee_capability
+});
 
 // User-Capability Junction Table with toggle for hardcoded capabilities
 export const userCapabilities = pgTable(

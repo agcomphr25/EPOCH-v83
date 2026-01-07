@@ -8249,7 +8249,7 @@ export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2Departm
 // sourceType: 'manual' = manual adjustment, 'overpayment' = order overpayment, 'return' = returned item/refund not sent to payment method
 export const creditMemos = pgTable('credit_memos', {
   id: serial('id').primaryKey(),
-  memoNumber: text('memo_number').notNull().unique(),
+  memoNumber: text('memo_number').notNull(),
   customerId: text('customer_id').notNull(),
   amount: real('amount').notNull(),
   appliedAmount: real('applied_amount').default(0),

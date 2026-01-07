@@ -6959,7 +6959,7 @@ export const cuttingMaterials = pgTable('cutting_materials', {
 // Cutting Table - Production Lines
 export const cuttingProductionLines = pgTable('cutting_production_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
-  lineName: text('line_name').notNull().unique(), // "Production Line 1", "Production Line 2"
+  lineName: text('line_name').notNull(), // "Production Line 1", "Production Line 2"
   lineNumber: integer('line_number').notNull(), // 1 or 2
   description: text('description'), // "Gun stock products", "Aircraft products"
   isActive: boolean('is_active').default(true),

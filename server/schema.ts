@@ -1121,7 +1121,7 @@ export const userIntegrations = pgTable('user_integrations', {
 // Capability-Based Permission System
 export const capabilities = pgTable('capabilities', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS"
+  name: text('name').notNull(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS" (constraint exists in production as capabilities_name_key)
   displayName: text('display_name').notNull(), // e.g., "View Orders", "Edit Inventory"
   category: text('category').notNull(), // e.g., "ORDERS", "INVENTORY", "EMPLOYEES", "REPORTS"
   description: text('description'),

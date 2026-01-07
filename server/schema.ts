@@ -2752,9 +2752,7 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniqueVendorMonthYear: unique().on(table.vendorId, table.month, table.year),
-}));
+});
 
 // Enhanced Inventory MRP Tables
 

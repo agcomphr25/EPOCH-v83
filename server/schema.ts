@@ -2975,9 +2975,7 @@ export const poOptionalSettings = pgTable('po_optional_settings', {
     .references(() => optionalSettings.id, { onDelete: 'cascade' })
     .notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePoSetting: unique().on(table.vendorPoId, table.optionalSettingId),
-}));
+});
 
 // Vendor PO Attachments - Files attached to vendor POs (emails, reference docs, etc.)
 export const vendorPoAttachments = pgTable('vendor_po_attachments', {

@@ -5867,26 +5867,20 @@ export type InsertShipmentRecord = z.infer<typeof insertShipmentRecordSchema>;
 export type ShipmentRecord = typeof shipmentRecords.$inferSelect;
 
 // Shipment Items - Join table linking shipments to PO items and production orders
-export const shipmentItems = pgTable(
-  'shipment_items',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    shipmentId: uuid('shipment_id')
-      .references(() => shipmentRecords.id, { onDelete: 'cascade' })
-      .notNull(),
-    poItemId: integer('po_item_id')
-      .references(() => purchaseOrderItems.id)
-      .notNull(),
-    orderId: text('order_id').notNull(), // Production order ID (e.g., "AG123-1")
-    quantity: integer('quantity').notNull().default(1),
-    weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
-    notes: text('notes'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  (table) => ({
-    uniqueShipmentItem: unique().on(table.shipmentId, table.orderId),
-  })
-);
+export const shipmentItems = pgTable('shipment_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shipmentId: uuid('shipment_id')
+    .references(() => shipmentRecords.id, { onDelete: 'cascade' })
+    .notNull(),
+  poItemId: integer('po_item_id')
+    .references(() => purchaseOrderItems.id)
+    .notNull(),
+  orderId: text('order_id').notNull(), // Production order ID (e.g., "AG123-1")
+  quantity: integer('quantity').notNull().default(1),
+  weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 export const insertShipmentItemSchema = createInsertSchema(shipmentItems)
   .omit({

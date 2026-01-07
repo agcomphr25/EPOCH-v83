@@ -7126,7 +7126,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   quantityInStock: integer('quantity_in_stock').notNull().default(0),
   squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric
   lowStockThreshold: integer('low_stock_threshold').default(10),
-  barcode: text('barcode').unique(), // Auto-generated for P2 items
+  barcode: text('barcode'), // Auto-generated for P2 items
   notes: text('notes'),
   status: text('status').default('active'), // active, depleted - for traceability
   depletedAt: timestamp('depleted_at'), // When the roll was marked as depleted

@@ -636,7 +636,7 @@ export const inventoryScans = pgTable('inventory_scans', {
   lotNumber: text('lot_number'),
   batchNumber: text('batch_number'),
   aluminumHeatNumber: text('aluminum_heat_number'), // New field for P2 products
-  barcode: text('barcode').unique(), // 39-line barcode for P2 products
+  barcode: text('barcode'), // 39-line barcode for P2 products
   receivingDate: date('receiving_date'), // Date when received
   technicianId: text('technician_id'),
   scannedAt: timestamp('scanned_at').defaultNow(),

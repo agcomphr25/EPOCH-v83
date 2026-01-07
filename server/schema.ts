@@ -5757,7 +5757,7 @@ export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 // P2 Production Orders - Generated from P2 Purchase Orders based on BOM
 export const p2ProductionOrders = pgTable('p2_production_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // P2-PO123-001, P2-PO123-002, etc.
+  orderId: text('order_id').notNull(), // P2-PO123-001, P2-PO123-002, etc.
   p2PoId: integer('p2_po_id')
     .references(() => p2PurchaseOrders.id)
     .notNull(),

@@ -34,7 +34,7 @@ export const orderDepartmentTypes = pgTable('order_department_types', {
 // Order Status Types Reference Table
 export const orderStatusTypes = pgTable('order_status_types', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true),

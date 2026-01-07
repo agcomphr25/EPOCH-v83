@@ -6857,7 +6857,7 @@ export type InsertFeatureSelection = z.infer<
 // Magic Link Tokens - Passwordless authentication and secure actions
 export const magicLinkTokens = pgTable('magic_link_tokens', {
   id: serial('id').primaryKey(),
-  token: text('token').notNull().unique(), // Unique cryptographic token
+  token: text('token').notNull(), // Unique cryptographic token (constraint exists in production as magic_link_tokens_token_key)
   email: text('email').notNull(), // Email address to send link to
   purpose: text('purpose').notNull(), // e.g., 'login', 'order_confirmation', 'password_reset', 'customer_action'
   metadata: jsonb('metadata'), // Additional data (userId, orderId, customerId, etc.)

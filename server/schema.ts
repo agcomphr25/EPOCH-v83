@@ -3758,8 +3758,8 @@ export type P2DepartmentStage = typeof P2_DEPARTMENT_STAGES[number];
 // P2 Serialized Items - Individual tracked items from P2 PO items
 export const p2SerializedItems = pgTable('p2_serialized_items', {
   id: uuid('id').defaultRandom().primaryKey(),
-  serialNumber: text('serial_number').notNull().unique(), // Unique serial for this item
-  barcode: text('barcode').notNull().unique(), // Format: {PONumber}-{PartNumber}-{Sequence}
+  serialNumber: text('serial_number').notNull(), // Unique serial for this item (constraint exists in production as p2_serialized_items_serial_number_key)
+  barcode: text('barcode').notNull(), // Format: {PONumber}-{PartNumber}-{Sequence} (constraint exists in production as p2_serialized_items_barcode_key)
   poId: integer('po_id')
     .references(() => p2PurchaseOrders.id)
     .notNull(),

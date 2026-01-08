@@ -834,15 +834,18 @@ router.post('/create-label', async (req: Request, res: Response) => {
             }
 
             if (customer && (customer.email || customer.phone)) {
-              // Send notification via both email and SMS if available
+              // Send notification respecting customer preference (ONE channel only)
               const { sendCustomerNotification } = await import(
                 '../../utils/notifications'
               );
               
-              // Build notification methods based on what's available
-              const preferredMethods = [];
-              if (customer.email) preferredMethods.push('email');
-              if (customer.phone) preferredMethods.push('sms');
+              // Use customer's preferred communication method - NOT all available channels
+              const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
+              const preferredMethods: string[] = customerPreference.length > 0 
+                ? customerPreference 
+                : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+              
+              console.log(`[LABEL-NOTIFY] Order ${orderId} - Customer preference: ${preferredMethods.join(', ')}`);
               
               const notificationResult = await sendCustomerNotification({
                 orderId,
@@ -851,6 +854,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
                 customerPhone: customer.phone || undefined,
                 customerEmail: customer.email || undefined,
                 preferredMethods,
+                // forceResend NOT set - will be deduplicated if already sent
               });
 
               if (notificationResult.success) {
@@ -2415,7 +2419,7 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     }
 
     // ===========================================
-    // 🔥 FINAL NOTIFICATION SUCCESS LOGIC
+    // 🔥 MANUAL RESEND - BYPASSES DEDUPLICATION
     // ===========================================
     const { sendCustomerNotification } = await import('../../utils/notifications');
     
@@ -2433,6 +2437,7 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       carrier: order.shippingCarrier || 'UPS',
       estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
       preferredMethods,
+      forceResend: true, // Manual resend bypasses deduplication
     });
     
     console.log('[NOTIFY-CUSTOMER] Result:', JSON.stringify(notificationResult));

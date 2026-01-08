@@ -1,6 +1,6 @@
 import { customers } from '@shared/schema';
 import { allOrders, communicationLogs } from '../schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import sgMail from '@sendgrid/mail';
 import twilio from 'twilio';
 
@@ -27,6 +27,7 @@ export interface NotificationData {
   customerEmail?: string;
   customerPhone?: string;
   preferredMethods?: string[];
+  forceResend?: boolean; // Set true to bypass deduplication (manual resend)
 }
 
 export async function sendCustomerNotification(
@@ -35,6 +36,7 @@ export async function sendCustomerNotification(
   success: boolean;
   methods: string[];
   errors?: string[];
+  skipped?: boolean;
 }> {
   const results = {
     success: false,
@@ -44,6 +46,40 @@ export async function sendCustomerNotification(
 
   console.log('📬 Starting customer notification for order:', data.orderId);
   console.log('[TRACKING NOTIFY] Incoming notification data:', JSON.stringify(data, null, 2));
+
+  // ============================================================
+  // DEDUPLICATION GUARD: Check if notification already sent for this order + tracking combo
+  // ============================================================
+  if (!data.forceResend) {
+    try {
+      const existingNotification = await db
+        .select()
+        .from(communicationLogs)
+        .where(
+          and(
+            eq(communicationLogs.orderId, data.orderId),
+            eq(communicationLogs.type, 'shipping-notification'),
+            eq(communicationLogs.status, 'sent')
+          )
+        )
+        .limit(1);
+
+      if (existingNotification.length > 0) {
+        const existing = existingNotification[0];
+        console.log(`⏭️ [DEDUP] Notification already sent for order ${data.orderId} at ${existing.sentAt} via ${existing.method}. Skipping.`);
+        return {
+          success: true,
+          methods: [existing.method || 'unknown'],
+          skipped: true,
+        };
+      }
+    } catch (dedupError) {
+      console.error('[DEDUP] Error checking for existing notification:', dedupError);
+      // Continue with notification if check fails - prefer to potentially double-send than not send
+    }
+  } else {
+    console.log(`📬 [FORCE RESEND] Bypassing deduplication for order ${data.orderId}`);
+  }
 
   // Get customer preferences - look in both finalized and draft orders
   let customer = null;

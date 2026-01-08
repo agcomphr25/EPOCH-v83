@@ -321,13 +321,33 @@ router.get('/prioritized', async (req: Request, res: Response) => {
           COUNT(*) FILTER (WHERE status IN ('FINALIZED', 'Active')) as valid_status,
           COUNT(*) FILTER (WHERE is_cancelled IS NULL OR is_cancelled = false) as not_cancelled,
           COUNT(*) FILTER (WHERE model_id IS NOT NULL AND model_id != '' AND model_id != 'None') as has_model,
-          COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length
+          COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length,
+          COUNT(*) FILTER (WHERE production_readiness_status = 'ready' OR production_readiness_status IS NULL) as ready_or_null,
+          COUNT(*) FILTER (
+            WHERE status IN ('FINALIZED', 'Active')
+            AND (is_cancelled IS NULL OR is_cancelled = false)
+            AND (production_readiness_status = 'ready' OR production_readiness_status IS NULL)
+            AND model_id IS NOT NULL AND model_id != '' AND model_id != 'None'
+            AND LOWER(model_id) NOT IN ('no stock', 'no_stock')
+            AND features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
+          ) as passes_all_filters
         FROM all_orders 
         WHERE current_department = 'P1 Production Queue'
       `;
       const diagResult = await pool.query(diagnosticQuery);
       const diagData = Array.isArray(diagResult) ? diagResult[0] : diagResult.rows?.[0];
       console.log(`🔍 PRODUCTION QUEUE DIAGNOSTICS:`, JSON.stringify(diagData));
+      
+      // Also check what production_readiness_status values exist
+      const statusQuery = `
+        SELECT production_readiness_status, COUNT(*) as cnt
+        FROM all_orders 
+        WHERE current_department = 'P1 Production Queue'
+        GROUP BY production_readiness_status
+      `;
+      const statusResult = await pool.query(statusQuery);
+      const statusData = Array.isArray(statusResult) ? statusResult : statusResult.rows || [];
+      console.log(`🔍 PRODUCTION_READINESS_STATUS breakdown:`, JSON.stringify(statusData));
     } catch (diagErr) {
       console.error('Diagnostic query failed:', diagErr);
     }

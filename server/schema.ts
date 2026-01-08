@@ -3004,6 +3004,7 @@ export const communicationLogs = pgTable('communication_logs', {
   error: text('error'),
   direction: text('direction').default('outbound'), // inbound, outbound
   externalId: text('external_id'), // External message ID from Twilio/SendGrid
+  trackingNumber: text('tracking_number'), // For shipping notifications - enables structured deduplication
   isRead: boolean('is_read').default(false), // Whether message has been read
   sentAt: timestamp('sent_at'),
   receivedAt: timestamp('received_at'), // For inbound messages

@@ -42,6 +42,23 @@ export async function sendReminderForOverdueOrders() {
         // Skip if already signed
         if (followupOrder.signatureSigned) {
           console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} already signed, skipping`);
+          
+          // Log skipped with reason
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'skipped',
+            skipReason: 'already_signed',
+            signatureToken: followupOrder.signatureToken || undefined,
+            message: `Reminder skipped for ${followupOrder.orderId}: order already signed`,
+            sentAt: new Date(),
+          });
+          
           skippedCount++;
           results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: 'already_signed' });
           continue;
@@ -63,6 +80,7 @@ export async function sendReminderForOverdueOrders() {
             recipient: followupOrder.customerEmail,
             status: 'skipped',
             skipReason: 'max_attempts',
+            signatureToken: followupOrder.signatureToken || undefined,
             message: `Reminder skipped for ${followupOrder.orderId}: max attempts (${MAX_REMINDER_ATTEMPTS}) reached`,
             sentAt: new Date(),
           });
@@ -90,6 +108,7 @@ export async function sendReminderForOverdueOrders() {
               recipient: followupOrder.customerEmail,
               status: 'skipped',
               skipReason: 'cooldown',
+              signatureToken: followupOrder.signatureToken || undefined,
               message: `Reminder skipped for ${followupOrder.orderId}: cooldown (${hoursSinceLastReminder.toFixed(1)}h since last reminder)`,
               sentAt: new Date(),
             });
@@ -113,6 +132,7 @@ export async function sendReminderForOverdueOrders() {
             context: 'reminder',
             recipient: followupOrder.customerEmail,
             status: 'failed',
+            signatureToken: null, // Token unavailable - explicit null per contract
             error: 'No signature token available',
             message: `Reminder failed for ${followupOrder.orderId}: no signature token`,
             sentAt: new Date(),
@@ -135,6 +155,7 @@ export async function sendReminderForOverdueOrders() {
             context: 'reminder',
             recipient: followupOrder.customerEmail,
             status: 'failed',
+            signatureToken: followupOrder.signatureToken || undefined,
             error: 'No PDF path available',
             message: `Reminder failed for ${followupOrder.orderId}: no PDF path`,
             sentAt: new Date(),
@@ -218,6 +239,7 @@ export async function sendReminderForOverdueOrders() {
             context: 'reminder',
             recipient: followupOrder.customerEmail,
             status: 'failed',
+            signatureToken: followupOrder.signatureToken || undefined,
             error: errorMessage,
             message: `Reminder exception for ${followupOrder.orderId}: ${errorMessage}`,
             sentAt: new Date(),

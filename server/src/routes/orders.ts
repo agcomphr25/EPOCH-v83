@@ -805,6 +805,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           console.log(`📧 Thank you email sent for order ${order.orderId} (no signature required)`);
           
           // Write communication log entry for thank-you email success
+          // signatureToken is null for no-stock orders (no signature required)
           await db.insert(communicationLogs).values({
             orderId: order.orderId,
             customerId: order.customerId || '',
@@ -814,6 +815,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             context: 'initial',
             recipient: customer.email,
             status: 'sent',
+            signatureToken: null, // No signature required for no-stock orders
             externalId: thankYouResult.messageId,
             message: `Thank you email sent for ${order.orderId} (no signature required)`,
             sentAt: new Date(),
@@ -824,6 +826,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           console.error(`❌ Failed to send thank you email for order ${order.orderId}: ${thankYouResult.error}`);
           
           // Write communication log entry for thank-you email failure
+          // signatureToken is null for no-stock orders (no signature required)
           await db.insert(communicationLogs).values({
             orderId: order.orderId,
             customerId: order.customerId || '',
@@ -833,6 +836,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             context: 'initial',
             recipient: customer.email,
             status: 'failed',
+            signatureToken: null, // No signature required for no-stock orders
             error: thankYouResult.error,
             message: `Failed thank you email for ${order.orderId}: ${thankYouResult.error}`,
             sentAt: new Date(),
@@ -872,6 +876,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             context: 'initial',
             recipient: 'N/A - exception during preparation',
             status: 'failed',
+            signatureToken: signatureToken || null, // May be null if exception occurred before token generation
             error: errorMessage,
             message: `Order confirmation failed for ${order.orderId}: ${errorMessage}`,
             sentAt: new Date(),

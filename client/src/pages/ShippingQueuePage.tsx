@@ -271,6 +271,18 @@ export default function ShippingQueuePage() {
     },
   });
 
+  // Helper to safely parse date values - returns null if invalid
+  const safeParseDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return null;
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
   // Get orders in Shipping department, categorized by due date
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
@@ -286,8 +298,10 @@ export default function ShippingQueuePage() {
 
     // Sort by due date - most urgent first (RMAs without due date go to end)
     return allShippingItems.sort((a: any, b: any) => {
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : (a.isRma ? Date.now() : 0);
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : (b.isRma ? Date.now() : 0);
+      const parsedA = safeParseDate(a.dueDate);
+      const parsedB = safeParseDate(b.dueDate);
+      const dateA = parsedA ? parsedA.getTime() : (a.isRma ? Date.now() : 0);
+      const dateB = parsedB ? parsedB.getTime() : (b.isRma ? Date.now() : 0);
       return dateA - dateB; // Earliest due date first (most urgent)
     });
   }, [allOrders, rmasReadyToShip]);
@@ -310,21 +324,25 @@ export default function ShippingQueuePage() {
     const dueLater: any[] = [];
 
     shippingOrders.forEach((order: any) => {
-      if (!order.dueDate) {
+      const dueDate = safeParseDate(order.dueDate);
+      
+      // If no valid due date, put in dueLater
+      if (!dueDate) {
         dueLater.push(order);
         return;
       }
 
-      const dueDate = new Date(order.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      // Normalize to start of day for comparison
+      const normalizedDueDate = new Date(dueDate);
+      normalizedDueDate.setHours(0, 0, 0, 0);
 
-      if (dueDate < today) {
+      if (normalizedDueDate < today) {
         overdue.push(order);
-      } else if (dueDate.getTime() === today.getTime()) {
+      } else if (normalizedDueDate.getTime() === today.getTime()) {
         dueToday.push(order);
-      } else if (dueDate.getTime() === tomorrow.getTime()) {
+      } else if (normalizedDueDate.getTime() === tomorrow.getTime()) {
         dueTomorrow.push(order);
-      } else if (dueDate <= nextWeek) {
+      } else if (normalizedDueDate <= nextWeek) {
         dueThisWeek.push(order);
       } else {
         dueLater.push(order);

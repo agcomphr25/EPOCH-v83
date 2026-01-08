@@ -1,0 +1,89 @@
+index-BCC-m6xn.js:4067 React initialized: Object
+index-BCC-m6xn.js:4067 React hooks: Object
+index-BCC-m6xn.js:4064 App component is rendering...
+index-BCC-m6xn.js:4064 Environment: production
+index-BCC-m6xn.js:4064 Base URL: /
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/04c6ae04-5e4e-4d4b-bff4-1877d362725c (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/04c6ae04-5e4e-4d4b-bff4-1877d362725c: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/9a6633c9-e252-4338-8381-944f652e6ddd (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/9a6633c9-e252-4338-8381-944f652e6ddd: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/9a6633c9-e252-4338-8381-944f652e6ddd (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/9a6633c9-e252-4338-8381-944f652e6ddd: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/e20491d1-c7aa-4564-80df-f0ce0b2589ed (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/e20491d1-c7aa-4564-80df-f0ce0b2589ed: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/ac35c83e-435f-4683-98dc-d1edf5338161 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/ac35c83e-435f-4683-98dc-d1edf5338161: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/ac35c83e-435f-4683-98dc-d1edf5338161 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/ac35c83e-435f-4683-98dc-d1edf5338161: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/7d3c3a43-d213-4d86-843c-273335ac881f (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/7d3c3a43-d213-4d86-843c-273335ac881f: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/7d3c3a43-d213-4d86-843c-273335ac881f (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/7d3c3a43-d213-4d86-843c-273335ac881f: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/42c79b53-0ebd-4e35-98c7-6518e2aca8a4 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/42c79b53-0ebd-4e35-98c7-6518e2aca8a4: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/fee92b75-e6ef-459d-b789-5da309cfc331 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/fee92b75-e6ef-459d-b789-5da309cfc331: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/6b949c9e-0242-4869-bfa0-81a6ad5f0130 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/6b949c9e-0242-4869-bfa0-81a6ad5f0130: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/42c79b53-0ebd-4e35-98c7-6518e2aca8a4 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/42c79b53-0ebd-4e35-98c7-6518e2aca8a4: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/fee92b75-e6ef-459d-b789-5da309cfc331 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/fee92b75-e6ef-459d-b789-5da309cfc331: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/29d076aa-a208-4939-961f-52672b5ba929: 200
+index-BCC-m6xn.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/c3c0b934-4d10-4407-a265-c684be7117b9: 200
+index-BCC-m6xn.js:4067 Failed to fetch session for redirect: Error: Not authenticated
+    at index-BCC-m6xn.js:4064:167613
+console.error @ index-BCC-m6xn.js:4067
+index-BCC-m6xn.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-BCC-m6xn.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-BCC-m6xn.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-BCC-m6xn.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-BCC-m6xn.js:1726 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-BCC-m6xn.js:4064 App component is rendering...
+index-BCC-m6xn.js:4064 Environment: production
+index-BCC-m6xn.js:4064 Base URL: /
+index-BCC-m6xn.js:4064 App component is rendering...
+index-BCC-m6xn.js:4064 Environment: production
+index-BCC-m6xn.js:4064 Base URL: /
+index-BCC-m6xn.js:4067 RangeError: Invalid time value
+    at Wr (index-BCC-m6xn.js:1382:57573)
+    at je (index-BCC-m6xn.js:3290:45944)
+    at index-BCC-m6xn.js:3290:42987
+    at Array.map (<anonymous>)
+    at VZr (index-BCC-m6xn.js:3290:42979)
+    at cie (index-BCC-m6xn.js:38:17091)
+    at ree (index-BCC-m6xn.js:40:3166)
+    at FPe (index-BCC-m6xn.js:40:45147)
+    at PPe (index-BCC-m6xn.js:40:40053)
+    at Vot (index-BCC-m6xn.js:40:39976)
+console.error @ index-BCC-m6xn.js:4067
+index-BCC-m6xn.js:4067 Global error caught: RangeError: Invalid time value
+    at Wr (index-BCC-m6xn.js:1382:57573)
+    at je (index-BCC-m6xn.js:3290:45944)
+    at index-BCC-m6xn.js:3290:42987
+    at Array.map (<anonymous>)
+    at VZr (index-BCC-m6xn.js:3290:42979)
+    at cie (index-BCC-m6xn.js:38:17091)
+    at ree (index-BCC-m6xn.js:40:3166)
+    at FPe (index-BCC-m6xn.js:40:45147)
+    at PPe (index-BCC-m6xn.js:40:40053)
+    at Vot (index-BCC-m6xn.js:40:39976)
+console.error @ index-BCC-m6xn.js:4067

@@ -49,10 +49,15 @@ export async function sendCustomerNotification(
 
   // ============================================================
   // DEDUPLICATION GUARD: Check if notification already sent for this order + tracking combo
+  // Scoped by tracking number to allow re-shipments with new tracking to still send
   // ============================================================
   if (!data.forceResend) {
     try {
-      const existingNotification = await db
+      // Look for existing notification with same order AND same tracking number
+      // The message field contains "Tracking: {trackingNumber}" which we can match
+      const trackingPattern = `Tracking: ${data.trackingNumber}`;
+      
+      const existingNotifications = await db
         .select()
         .from(communicationLogs)
         .where(
@@ -61,17 +66,22 @@ export async function sendCustomerNotification(
             eq(communicationLogs.type, 'shipping-notification'),
             eq(communicationLogs.status, 'sent')
           )
-        )
-        .limit(1);
+        );
 
-      if (existingNotification.length > 0) {
-        const existing = existingNotification[0];
-        console.log(`⏭️ [DEDUP] Notification already sent for order ${data.orderId} at ${existing.sentAt} via ${existing.method}. Skipping.`);
+      // Check if any existing notification has the same tracking number
+      const alreadySent = existingNotifications.find(n => 
+        n.message?.includes(trackingPattern)
+      );
+
+      if (alreadySent) {
+        console.log(`⏭️ [DEDUP] Notification already sent for order ${data.orderId} with tracking ${data.trackingNumber} at ${alreadySent.sentAt} via ${alreadySent.method}. Skipping.`);
         return {
           success: true,
-          methods: [existing.method || 'unknown'],
+          methods: [alreadySent.method || 'unknown'],
           skipped: true,
         };
+      } else if (existingNotifications.length > 0) {
+        console.log(`📬 [DEDUP] Prior notification exists for order ${data.orderId}, but with different tracking number. Proceeding with new notification.`);
       }
     } catch (dedupError) {
       console.error('[DEDUP] Error checking for existing notification:', dedupError);

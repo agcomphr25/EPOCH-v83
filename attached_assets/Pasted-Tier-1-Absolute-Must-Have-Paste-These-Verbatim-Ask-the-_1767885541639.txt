@@ -1,0 +1,137 @@
+Tier 1 — Absolute Must-Have (Paste These Verbatim)
+
+Ask the Replit agent to give you all of the following, unedited:
+
+1️⃣ Browser console errors (PROD, not dev)
+
+From the affected page:
+
+- Full console error output
+- Red error messages
+- Stack traces (even minified)
+- Network errors (failed JS chunks)
+
+
+👉 Ask the agent to:
+
+“Open the deployed prod URL, open DevTools → Console, and paste ALL errors exactly as shown.”
+
+⚠️ White screen = React crashed → console always knows why.
+
+2️⃣ Network tab → failed requests
+
+Specifically request:
+
+- Any JS chunks returning 404 / 403
+- Any API calls returning 401 / 500
+- The FIRST failed request (very important)
+
+
+Ask for:
+
+Request URL
+
+Status code
+
+Response body (if any)
+
+3️⃣ Exact URL + route
+
+You need to tell me:
+
+The full prod URL
+
+The React route (/admin/orders, /p2-control-center, etc.)
+
+Whether it loads in dev but not prod
+
+🟠 Tier 2 — Code Context That Usually Breaks Prod
+
+Ask the Replit agent for ONLY the files below (don’t dump the repo):
+
+4️⃣ The page component file
+
+Example:
+
+client/src/pages/AdminPanelPage.tsx
+
+
+I need:
+
+Imports
+
+Hooks
+
+JSX return
+
+Any useEffect, useMemo, useQuery
+
+5️⃣ Router definition that points to this page
+
+Example:
+
+client/src/App.tsx
+client/src/router.tsx
+
+
+Prod-only white screens often come from:
+
+Lazy imports
+
+Wrong dynamic import paths
+
+Role guards crashing
+
+6️⃣ Auth / guard wrapper (if used)
+
+If the page is wrapped in something like:
+
+<RequireRole>
+
+<ProtectedRoute>
+
+<AuthenticatedLayout>
+
+Ask for that wrapper’s code.
+
+🟡 Tier 3 — Known “Replit + Prod” Killers (Ask These Explicitly)
+
+Ask the agent yes/no on each:
+
+7️⃣ Environment variable mismatch
+
+Ask:
+
+“List all env vars referenced in this page and confirm they exist in PROD.”
+
+Missing env vars = undefined → crash.
+
+8️⃣ SSR / window / document usage
+
+Ask:
+
+“Does this page reference window, document, or localStorage outside a useEffect?”
+
+Prod builds are stricter.
+
+9️⃣ Data assumptions
+
+Ask:
+
+“Does this page assume API data is non-null before rendering?”
+
+Classic prod crash:
+
+data.items.map(...)
+
+
+When data === undefined.
+
+🟢 Tier 4 — Fast Triage Signal (Very Useful)
+
+Ask the agent to answer this directly:
+
+“If you wrap the page return in a try/catch with a fallback JSX, does the page render anything?”
+
+If YES → render-time crash
+If NO → import / route failure

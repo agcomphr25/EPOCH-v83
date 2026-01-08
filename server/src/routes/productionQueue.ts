@@ -313,6 +313,25 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       `🏭 PRIORITIZED QUEUE: Fetching for user ${requestUser?.username} (role: ${requestUser?.role})...`
     );
 
+    // DIAGNOSTIC: Count orders at each filter stage to debug production issues
+    try {
+      const diagnosticQuery = `
+        SELECT 
+          COUNT(*) as total_in_dept,
+          COUNT(*) FILTER (WHERE status IN ('FINALIZED', 'Active')) as valid_status,
+          COUNT(*) FILTER (WHERE is_cancelled IS NULL OR is_cancelled = false) as not_cancelled,
+          COUNT(*) FILTER (WHERE model_id IS NOT NULL AND model_id != '' AND model_id != 'None') as has_model,
+          COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length
+        FROM all_orders 
+        WHERE current_department = 'P1 Production Queue'
+      `;
+      const diagResult = await pool.query(diagnosticQuery);
+      const diagData = Array.isArray(diagResult) ? diagResult[0] : diagResult.rows?.[0];
+      console.log(`🔍 PRODUCTION QUEUE DIAGNOSTICS:`, JSON.stringify(diagData));
+    } catch (diagErr) {
+      console.error('Diagnostic query failed:', diagErr);
+    }
+
     // AUTOMATIC CLEANUP: Handle orders that need attention or movement
     console.log('🧹 CLEANUP: Processing orders that need attention...');
     await autoMoveInvalidStockModelOrders(storage);

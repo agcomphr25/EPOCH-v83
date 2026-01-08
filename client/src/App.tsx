@@ -157,6 +157,7 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
+import CommunicationLogsPage from './pages/CommunicationLogsPage';
 import MonitoredLinksManager from './pages/MonitoredLinksManager';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
@@ -366,6 +367,7 @@ function App() {
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/admin/monitored-links" component={MonitoredLinksManager} />
+                  <Route path="/admin/communication-logs" component={CommunicationLogsPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />

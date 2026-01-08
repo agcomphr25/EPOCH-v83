@@ -448,3 +448,177 @@ export async function updateTrackingInfo(
     })
     .where(eq(allOrders.orderId, orderId));
 }
+
+// =============================================================================
+// ORDER CONFIRMATION NOTIFICATION
+// Single unified function for sending order confirmation (magic-link) emails
+// with structured deduplication using signature_token
+// =============================================================================
+
+export interface OrderConfirmationData {
+  orderId: string;
+  customerId: string;
+  customerEmail: string;
+  customerPhone?: string;
+  preferredCommunicationMethod?: string; // 'email' | 'sms' | null
+  signatureToken: string;
+  pdfPath: string;
+  orderData: {
+    orderId: string;
+    customerName: string;
+    customerEmail: string;
+    orderDate: string;
+    dueDate: string;
+    customerPO?: string;
+    modelId?: string;
+    handedness?: string;
+    features?: Record<string, any>;
+    notes?: string;
+    shipping?: number;
+    signatureLink: string;
+  };
+  forceResend?: boolean; // Set true to bypass deduplication (manual resend)
+}
+
+export async function sendOrderConfirmationNotification(
+  data: OrderConfirmationData
+): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  skipped?: boolean;
+  method?: string;
+}> {
+  console.log('📧 [ORDER-CONFIRM] Starting order confirmation notification:', data.orderId);
+
+  // ============================================================
+  // DEDUPLICATION GUARD: Check if confirmation already sent for this order + token
+  // Uses structured signature_token column (not message text parsing)
+  // ============================================================
+  if (!data.forceResend) {
+    try {
+      const existingNotification = await db
+        .select()
+        .from(communicationLogs)
+        .where(
+          and(
+            eq(communicationLogs.orderId, data.orderId),
+            eq(communicationLogs.type, 'order-confirmation'),
+            eq(communicationLogs.status, 'sent'),
+            eq(communicationLogs.signatureToken, data.signatureToken)
+          )
+        )
+        .limit(1);
+
+      if (existingNotification.length > 0) {
+        const existing = existingNotification[0];
+        console.log(`⏭️ [DEDUP] Order confirmation already sent for ${data.orderId} with token ${data.signatureToken.substring(0, 8)}... at ${existing.sentAt} via ${existing.method}. Skipping.`);
+        return {
+          success: true,
+          skipped: true,
+          method: existing.method || 'email',
+          messageId: existing.externalId || undefined,
+        };
+      }
+    } catch (dedupError) {
+      console.error('[DEDUP] Error checking for existing order confirmation:', dedupError);
+      // Continue with notification if check fails - prefer to potentially double-send than not send
+    }
+  } else {
+    console.log(`📧 [FORCE RESEND] Bypassing deduplication for order confirmation ${data.orderId}`);
+  }
+
+  // ============================================================
+  // CHANNEL SELECTION: Use customer's preferred method (default: email)
+  // Only one channel - no multi-channel sends for order confirmations
+  // ============================================================
+  const preferredMethod = data.preferredCommunicationMethod || 'email';
+  
+  // For order confirmations, we currently only support email (requires PDF attachment)
+  // SMS confirmation would need a different flow (link-only, no PDF)
+  const channel = 'email'; // SMS support could be added later if needed
+
+  if (preferredMethod === 'sms' && channel === 'email') {
+    console.log(`📧 [ORDER-CONFIRM] Customer prefers SMS but order confirmations require email for PDF attachment`);
+  }
+
+  // ============================================================
+  // SEND EMAIL via existing sendFollowupOrderEmail function
+  // ============================================================
+  try {
+    // Dynamic import to avoid circular dependency
+    const { sendFollowupOrderEmail } = await import('./followupOrderEmail.js');
+    
+    const emailResult = await sendFollowupOrderEmail(data.orderData, data.pdfPath);
+
+    if (emailResult.success) {
+      // Log success to communication_logs (with structured signature_token)
+      await db.insert(communicationLogs).values({
+        orderId: data.orderId,
+        customerId: data.customerId,
+        messageType: 'transactional',
+        method: channel,
+        type: 'order-confirmation',
+        recipient: data.customerEmail,
+        status: 'sent',
+        signatureToken: data.signatureToken,
+        externalId: emailResult.messageId,
+        message: `Order confirmation with signature link for ${data.orderId}`,
+        sentAt: new Date(),
+      });
+
+      console.log(`✅ [ORDER-CONFIRM] Email sent successfully for ${data.orderId}`);
+      return {
+        success: true,
+        messageId: emailResult.messageId,
+        method: channel,
+      };
+    } else {
+      // Log failure to communication_logs
+      await db.insert(communicationLogs).values({
+        orderId: data.orderId,
+        customerId: data.customerId,
+        messageType: 'transactional',
+        method: channel,
+        type: 'order-confirmation',
+        recipient: data.customerEmail,
+        status: 'failed',
+        signatureToken: data.signatureToken,
+        error: emailResult.error,
+        message: `Failed order confirmation attempt for ${data.orderId}`,
+        sentAt: new Date(),
+      });
+
+      console.error(`❌ [ORDER-CONFIRM] Email failed for ${data.orderId}:`, emailResult.error);
+      return {
+        success: false,
+        error: emailResult.error,
+        method: channel,
+      };
+    }
+  } catch (error: any) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ [ORDER-CONFIRM] Exception sending email for ${data.orderId}:`, errorMessage);
+    
+    // Log exception to communication_logs
+    await db.insert(communicationLogs).values({
+      orderId: data.orderId,
+      customerId: data.customerId,
+      messageType: 'transactional',
+      method: channel,
+      type: 'order-confirmation',
+      recipient: data.customerEmail,
+      status: 'failed',
+      signatureToken: data.signatureToken,
+      error: errorMessage,
+      message: `Exception during order confirmation for ${data.orderId}`,
+      sentAt: new Date(),
+    });
+
+    return {
+      success: false,
+      error: errorMessage,
+      method: channel,
+    };
+  }
+}

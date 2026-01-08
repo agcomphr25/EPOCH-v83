@@ -1438,23 +1438,32 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
-    // Send the SAME email that was originally sent (Review and Sign with PDF)
-    const emailData = {
+    // Send email via unified notification function with forceResend=true (bypass deduplication)
+    // Manual resends intentionally bypass deduplication since user explicitly requested it
+    const emailResult = await sendOrderConfirmationNotification({
       orderId: order.orderId,
-      customerName: customer.name,
+      customerId: order.customerId || '',
       customerEmail: customer.email,
-      orderDate: new Date(order.orderDate).toLocaleDateString(),
-      dueDate: new Date(order.dueDate).toLocaleDateString(),
-      customerPO: order.customerPO || undefined,
-      modelId: order.modelId || undefined,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      signatureLink,
-    };
-
-    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
+      customerPhone: customer.phone,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod,
+      signatureToken: followupOrder.signatureToken || '',
+      pdfPath,
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        signatureLink,
+      },
+      forceResend: true, // MANUAL RESEND - bypass deduplication intentionally
+    });
 
     if (emailResult.success) {
       // Update email sent timestamp and clear any previous error

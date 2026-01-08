@@ -536,6 +536,7 @@ router.post('/', async (req, res) => {
       await storage.updateFollowupOrder(followupOrder.id, {
         emailSent: true,
         emailSentAt: new Date(),
+        emailError: null, // Clear any previous error on success
       });
 
       res.json({

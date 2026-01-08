@@ -1,0 +1,68 @@
+COPY-PASTE THIS TO THE REPLIT AGENT
+Apply structured, idempotent notification logic to ORDER CONFIRMATION (magic-link) emails.
+
+Goal:
+Ensure exactly ONE automatic order confirmation email is sent per order + signature token,
+respecting customer communication preference, with reliable audit history.
+
+Do ONLY the following:
+
+1) COMMUNICATION LOG STRUCTURE
+- Add (if not present) or reuse structured fields in communication_logs:
+  - order_id
+  - type = 'order-confirmation'
+  - channel ('email' | 'sms')
+  - status ('sent' | 'failed')
+  - signature_token (varchar, nullable)
+  - message_id (provider id, nullable)
+
+2) DEDUPLICATION RULE
+Before sending an order confirmation:
+- Check communication_logs for:
+  order_id = {orderId}
+  type = 'order-confirmation'
+  status = 'sent'
+  signature_token = {signatureToken}
+
+If a match exists → SKIP sending (return success: true, skipped: true)
+
+3) FORCE RESEND PATH
+- Allow bypass ONLY when an explicit forceResend flag is passed
+- Manual resend endpoint should set forceResend = true
+- Automatic create-order flow MUST NOT set forceResend
+
+4) TOKEN HANDLING
+- Automatic create-order flow:
+  - Use the existing signature_token already generated
+  - Do NOT regenerate token unless forceResend = true
+- Manual resend:
+  - Generate a fresh signature_token
+  - Persist it before sending
+
+5) CHANNEL SELECTION
+- Send via customer.preferredCommunicationMethod ONLY
+- Default to email if preference is missing
+- Do NOT send on multiple channels
+
+6) SINGLE SEND FUNCTION
+- Ensure ALL order confirmation sends go through ONE function:
+  sendOrderConfirmationNotification(...)
+- No direct SendGrid/Twilio calls elsewhere
+
+7) LOGGING ORDER
+- Perform deduplication check FIRST
+- Send email/SMS
+- Insert ONE communication_logs record on success
+- Do NOT log before send
+
+Do NOT:
+- Change templates
+- Change copy
+- Change business rules
+- Change schema unrelated to communication_logs
+
+Result:
+- One confirmation email per order + token
+- Manual resends work intentionally
+- No duplicate emails
+- Clean, reliable audit history

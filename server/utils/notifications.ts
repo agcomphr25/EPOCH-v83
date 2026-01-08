@@ -480,15 +480,18 @@ export interface OrderConfirmationData {
   forceResend?: boolean; // Set true to bypass deduplication (manual resend)
 }
 
-export async function sendOrderConfirmationNotification(
-  data: OrderConfirmationData
-): Promise<{
-  success: boolean;
+export type OrderConfirmationOutcome = 'sent' | 'skipped' | 'failed';
+
+export interface OrderConfirmationResult {
+  outcome: OrderConfirmationOutcome;
   messageId?: string;
   error?: string;
-  skipped?: boolean;
   method?: string;
-}> {
+}
+
+export async function sendOrderConfirmationNotification(
+  data: OrderConfirmationData
+): Promise<OrderConfirmationResult> {
   console.log('📧 [ORDER-CONFIRM] Starting order confirmation notification:', data.orderId);
 
   // ============================================================
@@ -513,9 +516,25 @@ export async function sendOrderConfirmationNotification(
       if (existingNotification.length > 0) {
         const existing = existingNotification[0];
         console.log(`⏭️ [DEDUP] Order confirmation already sent for ${data.orderId} with token ${data.signatureToken.substring(0, 8)}... at ${existing.sentAt} via ${existing.method}. Skipping.`);
+        
+        // MANDATORY LOGGING: Insert a communication_log record for this dedup skip
+        // Each finalization attempt must have its own log entry, even if deduped
+        await db.insert(communicationLogs).values({
+          orderId: data.orderId,
+          customerId: data.customerId,
+          messageType: 'transactional',
+          method: existing.method || 'email',
+          type: 'order-confirmation',
+          recipient: data.customerEmail,
+          status: 'skipped',
+          signatureToken: data.signatureToken,
+          externalId: existing.externalId,
+          message: `Order confirmation skipped (dedup) for ${data.orderId} - already sent at ${existing.sentAt}`,
+          sentAt: new Date(),
+        });
+        
         return {
-          success: true,
-          skipped: true,
+          outcome: 'skipped',
           method: existing.method || 'email',
           messageId: existing.externalId || undefined,
         };
@@ -569,7 +588,7 @@ export async function sendOrderConfirmationNotification(
 
       console.log(`✅ [ORDER-CONFIRM] Email sent successfully for ${data.orderId}`);
       return {
-        success: true,
+        outcome: 'sent',
         messageId: emailResult.messageId,
         method: channel,
       };
@@ -591,7 +610,7 @@ export async function sendOrderConfirmationNotification(
 
       console.error(`❌ [ORDER-CONFIRM] Email failed for ${data.orderId}:`, emailResult.error);
       return {
-        success: false,
+        outcome: 'failed',
         error: emailResult.error,
         method: channel,
       };
@@ -616,7 +635,7 @@ export async function sendOrderConfirmationNotification(
     });
 
     return {
-      success: false,
+      outcome: 'failed',
       error: errorMessage,
       method: channel,
     };

@@ -2309,12 +2309,41 @@ export default function OrderEntry() {
           body: JSON.stringify(orderData),
         });
 
-        toast({
-          title: 'Success',
-          description: saveAsDraft
-            ? 'Order saved as draft'
-            : 'Order created and added to P1 Production Queue',
-        });
+        if (saveAsDraft) {
+          toast({
+            title: 'Success',
+            description: 'Order saved as draft',
+          });
+        } else {
+          // Check email outcome for finalized orders
+          const emailOutcome = (response as any)?.emailOutcome;
+          const emailError = (response as any)?.emailError;
+          
+          if (emailOutcome === 'sent') {
+            toast({
+              title: 'Success',
+              description: 'Order created and confirmation email sent to customer',
+            });
+          } else if (emailOutcome === 'skipped') {
+            toast({
+              title: 'Success',
+              description: 'Order created (confirmation email already sent previously)',
+            });
+          } else if (emailOutcome === 'failed') {
+            // Show warning toast for failed email - order was still created
+            toast({
+              title: 'Order Created - Email Failed',
+              description: `Order was created but the confirmation email failed to send: ${emailError || 'Unknown error'}. Please resend manually from the Orders page.`,
+              variant: 'destructive',
+            });
+          } else {
+            // No email outcome (might be no-stock order or other case)
+            toast({
+              title: 'Success',
+              description: 'Order created and added to P1 Production Queue',
+            });
+          }
+        }
       }
 
       // Invalidate relevant caches based on whether it was saved as draft or finalized

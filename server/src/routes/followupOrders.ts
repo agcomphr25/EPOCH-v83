@@ -541,25 +541,45 @@ router.post('/', async (req, res) => {
       // forceResend: false - automatic sends respect deduplication
     });
 
-    if (emailResult.success) {
-      // Only update emailSentAt if email was actually sent (not skipped by deduplication)
-      if (!emailResult.skipped) {
-        await storage.updateFollowupOrder(followupOrder.id, {
-          emailSent: true,
-          emailSentAt: new Date(),
-          emailError: null, // Clear any previous error on success
-        });
-      }
-      // If skipped, the followup order already has email_sent=true from a prior send
+    // MANDATORY OUTCOME HANDLING: Every finalization must have a recorded email outcome
+    // Fail fast if we receive an unknown outcome
+    const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+    if (!validOutcomes.includes(emailResult.outcome)) {
+      console.error(`❌ [FINALIZE-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+      return res.status(500).json({
+        success: false,
+        error: `Order finalization failed: Unknown email outcome "${emailResult.outcome}"`,
+        followupOrder,
+      });
+    }
+
+    if (emailResult.outcome === 'sent') {
+      // Email was actually sent - update timestamp
+      await storage.updateFollowupOrder(followupOrder.id, {
+        emailSent: true,
+        emailSentAt: new Date(),
+        emailError: null, // Clear any previous error on success
+      });
 
       res.json({
         success: true,
         followupOrder,
-        emailSent: !emailResult.skipped, // True only if email was actually dispatched
-        skipped: emailResult.skipped || false,
+        emailOutcome: 'sent',
+        emailSent: true,
+        messageId: emailResult.messageId,
+      });
+    } else if (emailResult.outcome === 'skipped') {
+      // Email was skipped due to deduplication - followup order already has email_sent=true
+      res.json({
+        success: true,
+        followupOrder,
+        emailOutcome: 'skipped',
+        emailSent: false, // Not sent this time
+        skipped: true,
         messageId: emailResult.messageId,
       });
     } else {
+      // Email failed - record the error and return failure
       await storage.updateFollowupOrder(followupOrder.id, {
         emailError: emailResult.error,
       });
@@ -567,6 +587,7 @@ router.post('/', async (req, res) => {
       res.status(500).json({
         success: false,
         followupOrder,
+        emailOutcome: 'failed',
         emailSent: false,
         error: emailResult.error,
       });
@@ -1469,7 +1490,18 @@ router.post('/:orderId/resend-email', async (req, res) => {
       forceResend: true, // MANUAL RESEND - bypass deduplication intentionally
     });
 
-    if (emailResult.success) {
+    // MANDATORY OUTCOME HANDLING: Every resend must have a recorded email outcome
+    // Fail fast if we receive an unknown outcome
+    const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+    if (!validOutcomes.includes(emailResult.outcome)) {
+      console.error(`❌ [RESEND-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+      return res.status(500).json({
+        success: false,
+        error: `Email resend failed: Unknown email outcome "${emailResult.outcome}"`,
+      });
+    }
+
+    if (emailResult.outcome === 'sent') {
       // Update email sent timestamp and clear any previous error
       await storage.updateFollowupOrder(followupOrder.id, {
         emailSent: true,
@@ -1480,10 +1512,21 @@ router.post('/:orderId/resend-email', async (req, res) => {
       res.json({
         success: true,
         message: 'Review and sign email has been resent successfully.',
+        emailOutcome: 'sent',
         emailSent: true,
         messageId: emailResult.messageId,
       });
+    } else if (emailResult.outcome === 'skipped') {
+      // This shouldn't happen with forceResend=true, but handle it gracefully
+      res.json({
+        success: true,
+        message: 'Email was skipped (deduplication).',
+        emailOutcome: 'skipped',
+        emailSent: false,
+        skipped: true,
+      });
     } else {
+      // Email failed - record the error and return failure
       await storage.updateFollowupOrder(followupOrder.id, {
         emailError: emailResult.error,
       });
@@ -1491,6 +1534,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       res.status(500).json({
         success: false,
         message: 'Failed to send email.',
+        emailOutcome: 'failed',
         error: emailResult.error,
       });
     }

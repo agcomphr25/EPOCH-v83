@@ -49,39 +49,31 @@ export async function sendCustomerNotification(
 
   // ============================================================
   // DEDUPLICATION GUARD: Check if notification already sent for this order + tracking combo
-  // Scoped by tracking number to allow re-shipments with new tracking to still send
+  // Uses structured tracking_number column (not message text parsing)
   // ============================================================
   if (!data.forceResend) {
     try {
-      // Look for existing notification with same order AND same tracking number
-      // The message field contains "Tracking: {trackingNumber}" which we can match
-      const trackingPattern = `Tracking: ${data.trackingNumber}`;
-      
-      const existingNotifications = await db
+      const existingNotification = await db
         .select()
         .from(communicationLogs)
         .where(
           and(
             eq(communicationLogs.orderId, data.orderId),
             eq(communicationLogs.type, 'shipping-notification'),
-            eq(communicationLogs.status, 'sent')
+            eq(communicationLogs.status, 'sent'),
+            eq(communicationLogs.trackingNumber, data.trackingNumber)
           )
-        );
+        )
+        .limit(1);
 
-      // Check if any existing notification has the same tracking number
-      const alreadySent = existingNotifications.find(n => 
-        n.message?.includes(trackingPattern)
-      );
-
-      if (alreadySent) {
-        console.log(`⏭️ [DEDUP] Notification already sent for order ${data.orderId} with tracking ${data.trackingNumber} at ${alreadySent.sentAt} via ${alreadySent.method}. Skipping.`);
+      if (existingNotification.length > 0) {
+        const existing = existingNotification[0];
+        console.log(`⏭️ [DEDUP] Notification already sent for order ${data.orderId} with tracking ${data.trackingNumber} at ${existing.sentAt} via ${existing.method}. Skipping.`);
         return {
           success: true,
-          methods: [alreadySent.method || 'unknown'],
+          methods: [existing.method || 'unknown'],
           skipped: true,
         };
-      } else if (existingNotifications.length > 0) {
-        console.log(`📬 [DEDUP] Prior notification exists for order ${data.orderId}, but with different tracking number. Proceeding with new notification.`);
       }
     } catch (dedupError) {
       console.error('[DEDUP] Error checking for existing notification:', dedupError);
@@ -269,7 +261,7 @@ export async function sendCustomerNotification(
       })
       .where(eq(allOrders.orderId, data.orderId));
 
-    // Log success to communication_logs for each method
+    // Log success to communication_logs for each method (with structured tracking_number)
     for (const method of succeededMethods) {
       await db.insert(communicationLogs).values({
         orderId: data.orderId,
@@ -279,6 +271,7 @@ export async function sendCustomerNotification(
         type: 'shipping-notification',
         recipient: (method === 'email' ? email : phone) || 'unknown',
         status: 'sent',
+        trackingNumber: data.trackingNumber,
         message: `Tracking: ${data.trackingNumber}`,
         sentAt: new Date(),
       });
@@ -286,7 +279,7 @@ export async function sendCustomerNotification(
 
     console.log('✅ Notification complete for order:', data.orderId);
   } else {
-    // Always log failure to communication_logs
+    // Always log failure to communication_logs (with structured tracking_number)
     const fallbackMessage = `Shipping notification attempt failed for order ${data.orderId}. Errors: ${results.errors?.join('; ') || 'Unknown failure'}`;
 
     await db.insert(communicationLogs).values({
@@ -297,6 +290,7 @@ export async function sendCustomerNotification(
       type: 'shipping-notification',
       recipient: email || phone || 'no-contact',
       status: 'failed',
+      trackingNumber: data.trackingNumber,
       error: results.errors?.join('; ') || 'No contact method available',
       message: fallbackMessage,
       sentAt: new Date(),
@@ -412,7 +406,7 @@ async function sendSMSNotification(
 
     console.log('✅ [DIRECT TWILIO] SMS sent successfully:', twilioMessage.sid);
 
-    // Log to communication_logs
+    // Log to communication_logs (with structured tracking_number)
     await db.insert(communicationLogs).values({
       customerId: customerId || data.orderId,
       orderId: data.orderId,
@@ -421,6 +415,7 @@ async function sendSMSNotification(
       type: 'shipping-notification',
       recipient: data.phone,
       status: 'sent',
+      trackingNumber: data.trackingNumber,
       message: message,
       externalId: twilioMessage.sid,
       sentAt: new Date(),

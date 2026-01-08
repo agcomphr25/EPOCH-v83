@@ -765,14 +765,25 @@ router.post('/finalized', async (req: Request, res: Response) => {
           });
           console.log(`📧 Signature email sent for order ${order.orderId}`);
         } else if (emailResult.outcome === 'skipped') {
-          // Email was skipped due to deduplication - no update needed
-          console.log(`⏭️ Signature email skipped for order ${order.orderId} (already sent)`);
+          // Email was skipped due to deduplication - reason must be provided
+          console.log(`⏭️ Signature email skipped for order ${order.orderId} (reason: ${emailResult.reason || 'unknown'})`);
         } else {
-          // Update followup order with error
+          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
+          // Order is created but marked as requiring manual intervention
           await storage.updateFollowupOrder(followupOrder.id, {
             emailError: emailResult.error,
           });
           console.error(`❌ Failed to send signature email for order ${order.orderId}: ${emailResult.error}`);
+          
+          // Return HTTP 500 to indicate finalization failure
+          return res.status(500).json({
+            success: false,
+            error: `Order created but email failed: ${emailResult.error}`,
+            order, // Return order data so it can be tracked
+            emailOutcome: 'failed',
+            emailError: emailResult.error,
+            message: 'Order finalization failed due to email delivery failure. Please resend the confirmation email manually.',
+          });
         }
       } else {
         // Order without stock - send thank you email (no signature required)
@@ -800,6 +811,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             messageType: 'transactional',
             method: 'email',
             type: 'order-confirmation',
+            context: 'initial',
             recipient: customer.email,
             status: 'sent',
             externalId: thankYouResult.messageId,
@@ -818,11 +830,22 @@ router.post('/finalized', async (req: Request, res: Response) => {
             messageType: 'transactional',
             method: 'email',
             type: 'order-confirmation',
+            context: 'initial',
             recipient: customer.email,
             status: 'failed',
             error: thankYouResult.error,
             message: `Failed thank you email for ${order.orderId}: ${thankYouResult.error}`,
             sentAt: new Date(),
+          });
+          
+          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
+          return res.status(500).json({
+            success: false,
+            error: `Order created but thank you email failed: ${thankYouResult.error}`,
+            order, // Return order data so it can be tracked
+            emailOutcome: 'failed',
+            emailError: thankYouResult.error,
+            message: 'Order finalization failed due to email delivery failure.',
           });
         }
       }
@@ -830,11 +853,10 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // MANDATORY OUTCOME: Any thrown error results in 'failed' outcome
       // NOTE: sendOrderConfirmationNotification handles its own logging internally
       // This catch block only handles exceptions from PDF generation or other pre-send errors
-      // Only log if we haven't already gone through sendOrderConfirmationNotification
       const errorMessage = sendError instanceof Error ? sendError.message : 'Unknown email error';
       console.error('Error in email preparation/send flow:', errorMessage);
       
-      // Only set these if not already set by the notification function
+      // Only log if we haven't already gone through the notification function
       if (emailOutcome === undefined) {
         emailOutcome = 'failed';
         emailError = errorMessage;
@@ -847,6 +869,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             messageType: 'transactional',
             method: 'email',
             type: 'order-confirmation',
+            context: 'initial',
             recipient: 'N/A - exception during preparation',
             status: 'failed',
             error: errorMessage,
@@ -857,6 +880,16 @@ router.post('/finalized', async (req: Request, res: Response) => {
           console.error('Failed to write communication log for exception:', logError);
         }
       }
+      
+      // FAIL-FAST: Return HTTP 500 for any exception in email flow
+      return res.status(500).json({
+        success: false,
+        error: `Order created but email preparation failed: ${errorMessage}`,
+        order, // Return order data so it can be tracked
+        emailOutcome: 'failed',
+        emailError: errorMessage,
+        message: 'Order finalization failed due to email error. Please resend the confirmation email manually.',
+      });
     }
     
     // Log audit event for order creation

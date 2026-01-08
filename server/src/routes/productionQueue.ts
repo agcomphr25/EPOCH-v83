@@ -322,11 +322,11 @@ router.get('/prioritized', async (req: Request, res: Response) => {
           COUNT(*) FILTER (WHERE is_cancelled IS NULL OR is_cancelled = false) as not_cancelled,
           COUNT(*) FILTER (WHERE model_id IS NOT NULL AND model_id != '' AND model_id != 'None') as has_model,
           COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length,
-          COUNT(*) FILTER (WHERE production_readiness_status = 'ready' OR production_readiness_status IS NULL) as ready_or_null,
+          COUNT(*) FILTER (WHERE production_readiness_status IN ('ready', 'pending') OR production_readiness_status IS NULL) as ready_pending_or_null,
           COUNT(*) FILTER (
             WHERE status IN ('FINALIZED', 'Active')
             AND (is_cancelled IS NULL OR is_cancelled = false)
-            AND (production_readiness_status = 'ready' OR production_readiness_status IS NULL)
+            AND (production_readiness_status IN ('ready', 'pending') OR production_readiness_status IS NULL)
             AND model_id IS NOT NULL AND model_id != '' AND model_id != 'None'
             AND LOWER(model_id) NOT IN ('no stock', 'no_stock')
             AND features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
@@ -381,7 +381,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND o.status IN ('FINALIZED', 'Active')
         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND (
-          o.production_readiness_status = 'ready'
+          o.production_readiness_status IN ('ready', 'pending')
           OR o.production_readiness_status IS NULL
         )
         AND o.model_id IS NOT NULL 

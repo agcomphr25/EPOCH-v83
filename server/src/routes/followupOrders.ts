@@ -524,6 +524,7 @@ router.post('/', async (req, res) => {
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken,
       pdfPath,
+      context: 'initial', // Initial order finalization
       orderData: {
         orderId: order.orderId,
         customerName: customer.name,
@@ -1473,6 +1474,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken: followupOrder.signatureToken || '',
       pdfPath,
+      context: 'resend', // Manual resend by user
       orderData: {
         orderId: order.orderId,
         customerName: customer.name,

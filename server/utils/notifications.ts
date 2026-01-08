@@ -455,6 +455,8 @@ export async function updateTrackingInfo(
 // with structured deduplication using signature_token
 // =============================================================================
 
+export type OrderConfirmationContext = 'initial' | 'resend' | 'reminder';
+
 export interface OrderConfirmationData {
   orderId: string;
   customerId: string;
@@ -463,6 +465,7 @@ export interface OrderConfirmationData {
   preferredCommunicationMethod?: string; // 'email' | 'sms' | null
   signatureToken: string;
   pdfPath: string;
+  context: OrderConfirmationContext; // Required: initial, resend, or reminder
   orderData: {
     orderId: string;
     customerName: string;
@@ -486,6 +489,7 @@ export interface OrderConfirmationResult {
   outcome: OrderConfirmationOutcome;
   messageId?: string;
   error?: string;
+  reason?: string; // For skipped outcomes: 'dedup' | 'cooldown' | 'max_attempts' | etc
   method?: string;
 }
 
@@ -525,8 +529,10 @@ export async function sendOrderConfirmationNotification(
           messageType: 'transactional',
           method: existing.method || 'email',
           type: 'order-confirmation',
+          context: data.context,
           recipient: data.customerEmail,
           status: 'skipped',
+          skipReason: 'dedup',
           signatureToken: data.signatureToken,
           externalId: existing.externalId,
           message: `Order confirmation skipped (dedup) for ${data.orderId} - already sent at ${existing.sentAt}`,
@@ -535,6 +541,7 @@ export async function sendOrderConfirmationNotification(
         
         return {
           outcome: 'skipped',
+          reason: 'dedup',
           method: existing.method || 'email',
           messageId: existing.externalId || undefined,
         };
@@ -578,15 +585,16 @@ export async function sendOrderConfirmationNotification(
         messageType: 'transactional',
         method: channel,
         type: 'order-confirmation',
+        context: data.context,
         recipient: data.customerEmail,
         status: 'sent',
         signatureToken: data.signatureToken,
         externalId: emailResult.messageId,
-        message: `Order confirmation with signature link for ${data.orderId}`,
+        message: `Order confirmation (${data.context}) with signature link for ${data.orderId}`,
         sentAt: new Date(),
       });
 
-      console.log(`✅ [ORDER-CONFIRM] Email sent successfully for ${data.orderId}`);
+      console.log(`✅ [ORDER-CONFIRM] Email sent successfully for ${data.orderId} (${data.context})`);
       return {
         outcome: 'sent',
         messageId: emailResult.messageId,
@@ -600,15 +608,16 @@ export async function sendOrderConfirmationNotification(
         messageType: 'transactional',
         method: channel,
         type: 'order-confirmation',
+        context: data.context,
         recipient: data.customerEmail,
         status: 'failed',
         signatureToken: data.signatureToken,
         error: emailResult.error,
-        message: `Failed order confirmation attempt for ${data.orderId}`,
+        message: `Failed order confirmation attempt (${data.context}) for ${data.orderId}`,
         sentAt: new Date(),
       });
 
-      console.error(`❌ [ORDER-CONFIRM] Email failed for ${data.orderId}:`, emailResult.error);
+      console.error(`❌ [ORDER-CONFIRM] Email failed for ${data.orderId} (${data.context}):`, emailResult.error);
       return {
         outcome: 'failed',
         error: emailResult.error,
@@ -617,7 +626,7 @@ export async function sendOrderConfirmationNotification(
     }
   } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`❌ [ORDER-CONFIRM] Exception sending email for ${data.orderId}:`, errorMessage);
+    console.error(`❌ [ORDER-CONFIRM] Exception sending email for ${data.orderId} (${data.context}):`, errorMessage);
     
     // Log exception to communication_logs
     await db.insert(communicationLogs).values({
@@ -626,11 +635,12 @@ export async function sendOrderConfirmationNotification(
       messageType: 'transactional',
       method: channel,
       type: 'order-confirmation',
+      context: data.context,
       recipient: data.customerEmail,
       status: 'failed',
       signatureToken: data.signatureToken,
       error: errorMessage,
-      message: `Exception during order confirmation for ${data.orderId}`,
+      message: `Exception during order confirmation (${data.context}) for ${data.orderId}`,
       sentAt: new Date(),
     });
 

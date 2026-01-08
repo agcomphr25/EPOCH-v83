@@ -726,6 +726,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           preferredCommunicationMethod: customer.preferredCommunicationMethod,
           signatureToken,
           pdfPath,
+          context: 'initial', // Initial order finalization
           orderData: {
             orderId: order.orderId,
             customerName: customer.name,

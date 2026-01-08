@@ -257,6 +257,7 @@ export const followupOrders = pgTable('followup_orders', {
   // Reminder Tracking
   reminderSent: boolean('reminder_sent').default(false),
   reminderSentAt: timestamp('reminder_sent_at'),
+  reminderCount: integer('reminder_count').default(0), // Number of reminder emails sent
   // Order Summary for Email Display
   orderSummary: jsonb('order_summary'), // Contains order details for email body
   createdAt: timestamp('created_at').defaultNow(),
@@ -2995,12 +2996,14 @@ export const communicationLogs = pgTable('communication_logs', {
   messageType: text('message_type').notNull().default('transactional'), // transactional, marketing, notification
   customerId: text('customer_id').notNull(),
   type: text('type').notNull(), // order-confirmation, shipping-notification, quality-alert
+  context: text('context'), // initial, resend, reminder - for order confirmation emails
   method: text('method').notNull(), // email, sms
   recipient: text('recipient').notNull(), // email address or phone number
   sender: text('sender'), // sender email/phone for inbound messages
   subject: text('subject'),
   message: text('message'),
   status: text('status').notNull().default('pending'), // pending, sent, failed, received
+  skipReason: text('skip_reason'), // For skipped outcomes: dedup, cooldown, max_attempts
   error: text('error'),
   direction: text('direction').default('outbound'), // inbound, outbound
   externalId: text('external_id'), // External message ID from Twilio/SendGrid

@@ -542,16 +542,20 @@ router.post('/', async (req, res) => {
     });
 
     if (emailResult.success) {
-      await storage.updateFollowupOrder(followupOrder.id, {
-        emailSent: true,
-        emailSentAt: new Date(),
-        emailError: null, // Clear any previous error on success
-      });
+      // Only update emailSentAt if email was actually sent (not skipped by deduplication)
+      if (!emailResult.skipped) {
+        await storage.updateFollowupOrder(followupOrder.id, {
+          emailSent: true,
+          emailSentAt: new Date(),
+          emailError: null, // Clear any previous error on success
+        });
+      }
+      // If skipped, the followup order already has email_sent=true from a prior send
 
       res.json({
         success: true,
         followupOrder,
-        emailSent: true,
+        emailSent: !emailResult.skipped, // True only if email was actually dispatched
         skipped: emailResult.skipped || false,
         messageId: emailResult.messageId,
       });

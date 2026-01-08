@@ -1,146 +1,246 @@
 import { storage } from '../storage.js';
-import { sendEmailViaSendGrid } from './sendgrid.js';
-import { nanoid } from 'nanoid';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { db } from '../db.js';
+import { communicationLogs } from '@shared/schema';
+import { sendOrderConfirmationNotification } from './notifications.js';
+import { createMagicLink } from './magicLink.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const REMINDER_COOLDOWN_HOURS = 48; // Minimum hours between reminders
+const MAX_REMINDER_ATTEMPTS = 3; // Maximum reminder emails per order
 
 /**
- * Send reminder email for follow-up orders older than 5 days without signature
+ * Send reminder emails for follow-up orders using the unified notification function.
+ * Enforces cooldown (48h) and max attempts (3) per order.
+ * Uses existing signature_token - does NOT regenerate.
+ * Does NOT bypass deduplication.
  */
 export async function sendReminderForOverdueOrders() {
-  console.log('📧 Checking for overdue follow-up orders (>5 days without signature)...');
+  console.log('📧 [REMINDER] Checking for overdue follow-up orders (>5 days without signature)...');
   
   try {
     // Get all follow-up orders that need reminders
     const overdueOrders = await storage.getOverdueFollowupOrders(5);
     
     if (overdueOrders.length === 0) {
-      console.log('✅ No overdue orders found');
-      return { sent: 0, message: 'No overdue orders' };
+      console.log('✅ [REMINDER] No overdue orders found');
+      return { sent: 0, skipped: 0, failed: 0, message: 'No overdue orders' };
     }
     
-    console.log(`⚠️  Found ${overdueOrders.length} overdue order(s)`);
+    console.log(`⚠️  [REMINDER] Found ${overdueOrders.length} overdue order(s)`);
     
     let sentCount = 0;
-    let errorCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
+    const results: Array<{
+      orderId: string;
+      outcome: 'sent' | 'skipped' | 'failed';
+      reason?: string;
+      error?: string;
+    }> = [];
     
     for (const followupOrder of overdueOrders) {
       try {
-        console.log(`📨 Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
+        // Skip if already signed
+        if (followupOrder.signatureSigned) {
+          console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} already signed, skipping`);
+          skippedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: 'already_signed' });
+          continue;
+        }
         
-        // Generate a fresh token for the reminder email
-        const { createMagicLink } = await import('./magicLink');
-        const newToken = nanoid(32);
+        // Check max attempts
+        const reminderCount = followupOrder.reminderCount || 0;
+        if (reminderCount >= MAX_REMINDER_ATTEMPTS) {
+          console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} has reached max attempts (${MAX_REMINDER_ATTEMPTS}), skipping`);
+          
+          // Log skipped with reason
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'skipped',
+            skipReason: 'max_attempts',
+            message: `Reminder skipped for ${followupOrder.orderId}: max attempts (${MAX_REMINDER_ATTEMPTS}) reached`,
+            sentAt: new Date(),
+          });
+          
+          skippedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: 'max_attempts' });
+          continue;
+        }
         
-        // Persist the new token and mark reminder as sent
-        await storage.updateFollowupOrder(followupOrder.id, {
-          signatureToken: newToken,
-          reminderSent: true,
-          reminderSentAt: new Date(),
+        // Check cooldown
+        const lastReminderAt = followupOrder.reminderSentAt;
+        if (lastReminderAt) {
+          const hoursSinceLastReminder = (Date.now() - new Date(lastReminderAt).getTime()) / (1000 * 60 * 60);
+          if (hoursSinceLastReminder < REMINDER_COOLDOWN_HOURS) {
+            console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} in cooldown (${hoursSinceLastReminder.toFixed(1)}h < ${REMINDER_COOLDOWN_HOURS}h), skipping`);
+            
+            // Log skipped with reason
+            await db.insert(communicationLogs).values({
+              orderId: followupOrder.orderId,
+              customerId: followupOrder.customerId,
+              messageType: 'transactional',
+              method: 'email',
+              type: 'order-confirmation',
+              context: 'reminder',
+              recipient: followupOrder.customerEmail,
+              status: 'skipped',
+              skipReason: 'cooldown',
+              message: `Reminder skipped for ${followupOrder.orderId}: cooldown (${hoursSinceLastReminder.toFixed(1)}h since last reminder)`,
+              sentAt: new Date(),
+            });
+            
+            skippedCount++;
+            results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: 'cooldown' });
+            continue;
+          }
+        }
+        
+        // Validate required data
+        if (!followupOrder.signatureToken) {
+          console.error(`❌ [REMINDER] Order ${followupOrder.orderId} has no signature token, skipping`);
+          
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'failed',
+            error: 'No signature token available',
+            message: `Reminder failed for ${followupOrder.orderId}: no signature token`,
+            sentAt: new Date(),
+          });
+          
+          failedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'failed', error: 'No signature token' });
+          continue;
+        }
+        
+        if (!followupOrder.pdfPath) {
+          console.error(`❌ [REMINDER] Order ${followupOrder.orderId} has no PDF path, skipping`);
+          
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'failed',
+            error: 'No PDF path available',
+            message: `Reminder failed for ${followupOrder.orderId}: no PDF path`,
+            sentAt: new Date(),
+          });
+          
+          failedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'failed', error: 'No PDF path' });
+          continue;
+        }
+        
+        console.log(`📨 [REMINDER] Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
+        
+        // Use EXISTING signature token - do NOT regenerate
+        const signatureLink = createMagicLink(followupOrder.signatureToken);
+        
+        // Get order details from orderSummary
+        const orderSummary = followupOrder.orderSummary as Record<string, any> || {};
+        
+        // Send via unified notification function (with context: 'reminder')
+        // forceResend is NOT set - reminder flow respects deduplication
+        const emailResult = await sendOrderConfirmationNotification({
+          orderId: followupOrder.orderId,
+          customerId: followupOrder.customerId,
+          customerEmail: followupOrder.customerEmail,
+          signatureToken: followupOrder.signatureToken,
+          pdfPath: followupOrder.pdfPath,
+          context: 'reminder', // Automated reminder email
+          orderData: {
+            orderId: followupOrder.orderId,
+            customerName: orderSummary.customerName || '',
+            customerEmail: followupOrder.customerEmail,
+            orderDate: orderSummary.orderDate ? new Date(orderSummary.orderDate).toLocaleDateString() : '',
+            dueDate: orderSummary.dueDate ? new Date(orderSummary.dueDate).toLocaleDateString() : '',
+            customerPO: orderSummary.customerPO || undefined,
+            modelId: orderSummary.modelId || undefined,
+            handedness: orderSummary.handedness || undefined,
+            features: orderSummary.features as Record<string, any> || undefined,
+            notes: orderSummary.notes || undefined,
+            shipping: orderSummary.shipping || 0,
+            signatureLink,
+          },
+          // forceResend: false - reminder flow respects deduplication
         });
         
-        const signatureUrl = createMagicLink(newToken);
+        // Handle outcome
+        if (emailResult.outcome === 'sent') {
+          // Update followup order with reminder tracking
+          await storage.updateFollowupOrder(followupOrder.id, {
+            reminderSent: true,
+            reminderSentAt: new Date(),
+            reminderCount: reminderCount + 1,
+          });
+          
+          sentCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'sent' });
+          console.log(`✅ [REMINDER] Reminder sent successfully for order ${followupOrder.orderId} (attempt ${reminderCount + 1}/${MAX_REMINDER_ATTEMPTS})`);
+        } else if (emailResult.outcome === 'skipped') {
+          // Deduplication prevented sending
+          skippedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: emailResult.reason || 'dedup' });
+          console.log(`⏭️ [REMINDER] Reminder skipped for order ${followupOrder.orderId} (reason: ${emailResult.reason || 'dedup'})`);
+        } else {
+          // Email failed
+          failedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'failed', error: emailResult.error });
+          console.error(`❌ [REMINDER] Reminder failed for order ${followupOrder.orderId}: ${emailResult.error}`);
+        }
         
-        // Create reminder email
-        const emailHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #0066cc; color: white; padding: 20px; text-align: center; }
-              .content { padding: 20px; background: #f9f9f9; }
-              .button { 
-                display: inline-block; 
-                padding: 12px 30px; 
-                background: #0066cc; 
-                color: white; 
-                text-decoration: none; 
-                border-radius: 5px; 
-                margin: 20px 0; 
-              }
-              .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
-              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>Reminder: Sales Order Confirmation Required</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
-                
-                <div class="warning">
-                  <strong>Action Required:</strong> We sent you a sales order confirmation 5 days ago and haven't received your signature yet.
-                </div>
-                
-                <p><strong>Order Number:</strong> ${followupOrder.orderId}</p>
-                
-                <p>We need your signature to proceed with production of your order. Please review and sign the sales order at your earliest convenience.</p>
-                
-                <div style="text-align: center;">
-                  <a href="${signatureUrl}" class="button">Review & Sign Order</a>
-                </div>
-                
-                <p><em>If you have any questions or concerns about your order, please contact us immediately.</em></p>
-                
-                <p>Thank you,<br>AG Composites Team</p>
-              </div>
-              <div class="footer">
-                <p>This is an automated reminder. Please do not reply to this email.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
+      } catch (orderError: any) {
+        const errorMessage = orderError instanceof Error ? orderError.message : 'Unknown error';
+        console.error(`❌ [REMINDER] Exception processing reminder for order ${followupOrder.orderId}:`, errorMessage);
         
-        const emailText = `
-REMINDER: Sales Order Confirmation Required
-
-Hello,
-
-Action Required: We sent you a sales order confirmation 5 days ago and haven't received your signature yet.
-
-Order Number: ${followupOrder.orderId}
-
-We need your signature to proceed with production of your order. Please review and sign the sales order at your earliest convenience.
-
-Review & Sign Order: ${signatureUrl}
-
-If you have any questions or concerns about your order, please contact us immediately.
-
-Thank you,
-AG Composites Team
-
-This is an automated reminder. Please do not reply to this email.
-        `.trim();
-
-        await sendEmailViaSendGrid({
-          to: followupOrder.customerEmail,
-          subject: `REMINDER: Order ${followupOrder.orderId} - Signature Required`,
-          text: emailText,
-          html: emailHtml,
-        });
+        // Log exception
+        try {
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'failed',
+            error: errorMessage,
+            message: `Reminder exception for ${followupOrder.orderId}: ${errorMessage}`,
+            sentAt: new Date(),
+          });
+        } catch (logError) {
+          console.error('[REMINDER] Failed to log exception:', logError);
+        }
         
-        sentCount++;
-        console.log(`✅ Reminder sent successfully for order ${followupOrder.orderId}`);
-        
-      } catch (emailError) {
-        errorCount++;
-        console.error(`❌ Failed to send reminder for order ${followupOrder.orderId}:`, emailError);
+        failedCount++;
+        results.push({ orderId: followupOrder.orderId, outcome: 'failed', error: errorMessage });
       }
     }
     
-    console.log(`📧 Reminder process complete: ${sentCount} sent, ${errorCount} failed`);
-    return { sent: sentCount, failed: errorCount };
+    console.log(`📧 [REMINDER] Reminder process complete: ${sentCount} sent, ${skippedCount} skipped, ${failedCount} failed`);
+    return { 
+      sent: sentCount, 
+      skipped: skippedCount, 
+      failed: failedCount,
+      results 
+    };
     
   } catch (error) {
-    console.error('Error in reminder process:', error);
+    console.error('[REMINDER] Error in reminder process:', error);
     throw error;
   }
 }

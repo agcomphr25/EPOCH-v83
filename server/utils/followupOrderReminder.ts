@@ -7,6 +7,11 @@ import { createMagicLink } from './magicLink.js';
 const REMINDER_COOLDOWN_HOURS = 48; // Minimum hours between reminders
 const MAX_REMINDER_ATTEMPTS = 3; // Maximum reminder emails per order
 
+// LEGACY ORDER CUTOFF: Orders created before this date will NOT receive reminder emails.
+// This prevents sending reminders for orders already in the system as of 1/8/26.
+// Only orders entered after 01/11/26 (i.e., created on 01/12/26 or later) will receive reminders.
+const REMINDER_CUTOFF_DATE = new Date('2026-01-12T00:00:00Z');
+
 /**
  * Send reminder emails for follow-up orders using the unified notification function.
  * Enforces cooldown (48h) and max attempts (3) per order.
@@ -39,6 +44,42 @@ export async function sendReminderForOverdueOrders() {
     
     for (const followupOrder of overdueOrders) {
       try {
+        // Skip legacy orders created before the cutoff date (or with missing/invalid createdAt)
+        // Treat null/invalid createdAt as legacy to ensure no pre-cutoff orders receive reminders
+        let orderCreatedAt: Date | null = null;
+        if (followupOrder.createdAt) {
+          const parsed = new Date(followupOrder.createdAt);
+          if (!isNaN(parsed.getTime())) {
+            orderCreatedAt = parsed;
+          }
+        }
+        
+        const isLegacyOrder = !orderCreatedAt || orderCreatedAt < REMINDER_CUTOFF_DATE;
+        if (isLegacyOrder) {
+          const dateInfo = orderCreatedAt ? orderCreatedAt.toISOString() : 'missing/invalid date';
+          console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} is legacy (${dateInfo}), skipping reminder`);
+          
+          // Log to communication_logs for traceability
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'skipped',
+            skipReason: 'legacy_order_before_cutoff',
+            signatureToken: followupOrder.signatureToken || undefined,
+            message: `Reminder skipped for ${followupOrder.orderId}: legacy order created before cutoff (${dateInfo})`,
+            sentAt: new Date(),
+          });
+          
+          skippedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'skipped', reason: 'legacy_order_before_cutoff' });
+          continue;
+        }
+        
         // Skip if already signed
         if (followupOrder.signatureSigned) {
           console.log(`⏭️ [REMINDER] Order ${followupOrder.orderId} already signed, skipping`);

@@ -8,6 +8,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { ShippingActions } from '@/components/ShippingActions';
 import { BulkShippingActions } from '@/components/BulkShippingActions';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
+import OrderCardErrorBoundary from '@/components/OrderCardErrorBoundary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1083,9 +1084,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.overdue.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.overdue.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1101,9 +1104,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueToday.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueToday.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1119,9 +1124,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueTomorrow.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueTomorrow.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1137,9 +1144,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueThisWeek.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueThisWeek.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1155,9 +1164,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueLater.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueLater.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1191,11 +1202,40 @@ export default function ShippingQueuePage() {
     );
   }
 
+  // Helper function to safely parse features that may be a string or object
+  function safeParseFeatures(features: any): Record<string, any> {
+    if (!features) return {};
+    if (typeof features === 'object') return features;
+    if (typeof features === 'string') {
+      try {
+        return JSON.parse(features);
+      } catch (e) {
+        console.warn('Failed to parse features:', e);
+        return {};
+      }
+    }
+    return {};
+  }
+
+  // Helper function to safely format dates
+  function safeFormatDate(dateValue: any, formatStr: string = 'MMM dd, yyyy'): string {
+    if (!dateValue) return 'N/A';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return format(date, formatStr);
+    } catch (e) {
+      console.warn('Failed to format date:', dateValue, e);
+      return 'Invalid date';
+    }
+  }
+
   // Function to render individual order cards
   function renderOrderCard(order: any) {
     const isSelected = selectedCard === order.orderId;
     const modelId = order.stockModelId || order.modelId;
-    const materialType = order.features?.material_type;
+    const parsedFeatures = safeParseFeatures(order.features);
+    const materialType = parsedFeatures?.material_type;
     const customerInfo = getOrderShippingCustomerInfo(order);
     const customerAddress = getOrderShippingAddress(order);
     const specialShippingText = getSpecialShippingText(order);
@@ -1284,12 +1324,12 @@ export default function ShippingQueuePage() {
               </div>
               <div className="text-gray-600">
                 <span className="font-medium">Order Date:</span>{' '}
-                {format(new Date(order.orderDate), 'MMM dd, yyyy')}
+                {safeFormatDate(order.orderDate)}
               </div>
               {order.dueDate && (
                 <div className="text-gray-600">
                   <span className="font-medium">Due Date:</span>{' '}
-                  {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                  {safeFormatDate(order.dueDate)}
                 </div>
               )}
             </div>

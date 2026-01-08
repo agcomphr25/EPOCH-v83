@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertFollowupOrderSchema } from '../../schema';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
-import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
+import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
 import { createMagicLink } from '../../utils/magicLink';
@@ -514,23 +514,32 @@ router.post('/', async (req, res) => {
       orderSummary,
     });
 
-    // Send email
-    const emailData = {
+    // Send email via unified notification function (with deduplication)
+    // forceResend is NOT set - automatic create flow respects deduplication
+    const emailResult = await sendOrderConfirmationNotification({
       orderId: order.orderId,
-      customerName: customer.name,
+      customerId: order.customerId || '',
       customerEmail: customer.email,
-      orderDate: new Date(order.orderDate).toLocaleDateString(),
-      dueDate: new Date(order.dueDate).toLocaleDateString(),
-      customerPO: order.customerPO || undefined,
-      modelId: order.modelId || undefined,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      signatureLink,
-    };
-
-    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
+      customerPhone: customer.phone,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod,
+      signatureToken,
+      pdfPath,
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        signatureLink,
+      },
+      // forceResend: false - automatic sends respect deduplication
+    });
 
     if (emailResult.success) {
       await storage.updateFollowupOrder(followupOrder.id, {
@@ -543,6 +552,7 @@ router.post('/', async (req, res) => {
         success: true,
         followupOrder,
         emailSent: true,
+        skipped: emailResult.skipped || false,
         messageId: emailResult.messageId,
       });
     } else {

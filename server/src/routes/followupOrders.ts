@@ -1446,10 +1446,11 @@ router.post('/:orderId/resend-email', async (req, res) => {
     const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
 
     if (emailResult.success) {
-      // Update email sent timestamp
+      // Update email sent timestamp and clear any previous error
       await storage.updateFollowupOrder(followupOrder.id, {
         emailSent: true,
         emailSentAt: new Date(),
+        emailError: null,
       });
 
       res.json({

@@ -1,0 +1,89 @@
+index-C7zUbwJe.js:4067 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-C7zUbwJe.js:4067 React hooks: {useState: ƒ, useEffect: ƒ}
+index-C7zUbwJe.js:4064 App component is rendering...
+index-C7zUbwJe.js:4064 Environment: production
+index-C7zUbwJe.js:4064 Base URL: /
+index-C7zUbwJe.js:1726 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-C7zUbwJe.js:4064 App component is rendering...
+index-C7zUbwJe.js:4064 Environment: production
+index-C7zUbwJe.js:4064 Base URL: /
+index-C7zUbwJe.js:4064 App component is rendering...
+index-C7zUbwJe.js:4064 Environment: production
+index-C7zUbwJe.js:4064 Base URL: /
+index-C7zUbwJe.js:4067 TypeError: Cannot read properties of null (reading 'toString')
+    at index-C7zUbwJe.js:3290:34089
+    at Array.find (<anonymous>)
+    at xe (index-C7zUbwJe.js:3290:34058)
+    at ve (index-C7zUbwJe.js:3290:34968)
+    at index-C7zUbwJe.js:3290:35107
+    at Array.map (<anonymous>)
+    at index-C7zUbwJe.js:3290:35047
+    at Object.cPe [as useMemo] (index-C7zUbwJe.js:38:21513)
+    at Pl.useMemo (index-C7zUbwJe.js:9:6302)
+    at sJr (index-C7zUbwJe.js:3290:34991)
+console.error @ index-C7zUbwJe.js:4067
+aee @ index-C7zUbwJe.js:40
+n.callback @ index-C7zUbwJe.js:40
+w0e @ index-C7zUbwJe.js:38
+L0e @ index-C7zUbwJe.js:40
+BPe @ index-C7zUbwJe.js:40
+Wot @ index-C7zUbwJe.js:40
+elt @ index-C7zUbwJe.js:40
+R4 @ index-C7zUbwJe.js:40
+q0e @ index-C7zUbwJe.js:40
+XC @ index-C7zUbwJe.js:38
+(anonymous) @ index-C7zUbwJe.js:40
+setTimeout
+Uct @ index-C7zUbwJe.js:51
+o @ index-C7zUbwJe.js:51
+batch @ index-C7zUbwJe.js:51
+Lj @ index-C7zUbwJe.js:51
+setData @ index-C7zUbwJe.js:51
+fetch @ index-C7zUbwJe.js:51
+await in fetch
+pP @ index-C7zUbwJe.js:51
+onSubscribe @ index-C7zUbwJe.js:51
+subscribe @ index-C7zUbwJe.js:51
+(anonymous) @ index-C7zUbwJe.js:51
+ePe @ index-C7zUbwJe.js:38
+iz @ index-C7zUbwJe.js:40
+j_ @ index-C7zUbwJe.js:40
+(anonymous) @ index-C7zUbwJe.js:40
+j @ index-C7zUbwJe.js:25
+E @ index-C7zUbwJe.js:25
+index-C7zUbwJe.js:4067 Global error caught: TypeError: Cannot read properties of null (reading 'toString')
+    at index-C7zUbwJe.js:3290:34089
+    at Array.find (<anonymous>)
+    at xe (index-C7zUbwJe.js:3290:34058)
+    at ve (index-C7zUbwJe.js:3290:34968)
+    at index-C7zUbwJe.js:3290:35107
+    at Array.map (<anonymous>)
+    at index-C7zUbwJe.js:3290:35047
+    at Object.cPe [as useMemo] (index-C7zUbwJe.js:38:21513)
+    at Pl.useMemo (index-C7zUbwJe.js:9:6302)
+    at sJr (index-C7zUbwJe.js:3290:34991)
+console.error @ index-C7zUbwJe.js:4067
+n @ index-C7zUbwJe.js:4064
+setTimeout
+Uct @ index-C7zUbwJe.js:51
+o @ index-C7zUbwJe.js:51
+batch @ index-C7zUbwJe.js:51
+Lj @ index-C7zUbwJe.js:51
+setData @ index-C7zUbwJe.js:51
+fetch @ index-C7zUbwJe.js:51
+await in fetch
+pP @ index-C7zUbwJe.js:51
+onSubscribe @ index-C7zUbwJe.js:51
+subscribe @ index-C7zUbwJe.js:51
+(anonymous) @ index-C7zUbwJe.js:51
+ePe @ index-C7zUbwJe.js:38
+iz @ index-C7zUbwJe.js:40
+j_ @ index-C7zUbwJe.js:40
+(anonymous) @ index-C7zUbwJe.js:40
+j @ index-C7zUbwJe.js:25
+E @ index-C7zUbwJe.js:25

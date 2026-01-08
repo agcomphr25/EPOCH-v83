@@ -441,10 +441,11 @@ export default function ShippingQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
-  const getCustomerInfo = (customerId: string) => {
+  const getCustomerInfo = (customerId: string | null | undefined) => {
+    if (!customerId) return null;
     const customerList = customers as any[];
     return customerList.find(
-      (c: any) => c.id.toString() === customerId.toString()
+      (c: any) => c.id?.toString() === customerId.toString()
     );
   };
 

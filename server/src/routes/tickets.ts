@@ -152,18 +152,32 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
     if (assignedUserId !== undefined && assignedUserId !== existingTicket.assignedUserId) {
       const previousAssignee = existingTicket.assignedUserId;
       
-      await storage.createTicketActivity({
-        ticketId: req.params.id,
-        activityType: 'assignment',
-        message: assignedUserId 
-          ? `Ticket assigned to user ${assignedUserId}`
-          : 'Ticket unassigned',
-        previousValue: previousAssignee ? String(previousAssignee) : null,
-        newValue: assignedUserId ? String(assignedUserId) : null,
-        createdBy: user.id,
-      });
+      // Get user names for better activity messages
+      let assigneeName = 'Unknown';
+      let previousAssigneeName = null;
+      if (assignedUserId) {
+        const assigneeResult = await pool.query(
+          `SELECT username, first_name, last_name FROM users WHERE id = $1`,
+          [assignedUserId]
+        );
+        if (assigneeResult.rows.length > 0) {
+          const u = assigneeResult.rows[0];
+          assigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+        }
+      }
+      if (previousAssignee) {
+        const prevResult = await pool.query(
+          `SELECT username, first_name, last_name FROM users WHERE id = $1`,
+          [previousAssignee]
+        );
+        if (prevResult.rows.length > 0) {
+          const u = prevResult.rows[0];
+          previousAssigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+        }
+      }
 
-      // Send internal message notification to new assignee
+      // Send internal message notification to new assignee (do this first to track if it was sent)
+      let notificationSent = false;
       if (assignedUserId && assignedUserId !== user.id) {
         try {
           await pool.query(
@@ -178,11 +192,38 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
               req.params.id
             ]
           );
+          notificationSent = true;
           console.log(`📧 Sent ticket assignment notification to user ${assignedUserId} for ticket ${req.params.id}`);
         } catch (msgErr) {
           console.error('Failed to send assignment notification:', msgErr);
         }
       }
+      
+      // Build activity message with user names and notification status
+      let activityMessage = '';
+      if (assignedUserId) {
+        if (previousAssignee) {
+          activityMessage = `Ticket reassigned from ${previousAssigneeName} to ${assigneeName}`;
+        } else {
+          activityMessage = `Ticket assigned to ${assigneeName}`;
+        }
+        if (notificationSent) {
+          activityMessage += ` (notification sent)`;
+        }
+      } else {
+        activityMessage = previousAssigneeName 
+          ? `Ticket unassigned from ${previousAssigneeName}` 
+          : 'Ticket unassigned';
+      }
+      
+      await storage.createTicketActivity({
+        ticketId: req.params.id,
+        activityType: 'assignment',
+        message: activityMessage,
+        previousValue: previousAssignee ? String(previousAssignee) : null,
+        newValue: assignedUserId ? String(assignedUserId) : null,
+        createdBy: user.id,
+      });
     }
 
     const ticket = await storage.updateTicket(req.params.id, {

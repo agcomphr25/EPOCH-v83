@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { useLocation } from 'wouter';
 
 interface Ticket {
   id: string;
@@ -110,6 +111,7 @@ const CATEGORIES = [
 
 export default function TicketsPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -663,9 +665,17 @@ export default function TicketsPage() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {ticketOrders.map(to => (
                       <Badge key={to.id} variant="outline" className="flex items-center gap-1">
-                        {to.orderId}
                         <button
-                          onClick={() => unlinkOrderMutation.mutate({ ticketId: selectedTicket.id, orderId: to.orderId })}
+                          onClick={() => navigate(`/order-entry/${to.orderId}`)}
+                          className="hover:underline hover:text-blue-600 cursor-pointer"
+                        >
+                          {to.orderId}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            unlinkOrderMutation.mutate({ ticketId: selectedTicket.id, orderId: to.orderId });
+                          }}
                           className="ml-1 hover:text-red-500"
                         >
                           <X className="h-3 w-3" />

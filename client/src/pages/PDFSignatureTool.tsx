@@ -26,6 +26,7 @@ export default function PDFSignatureTool() {
   
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const originalPdfBytesRef = useRef<Uint8Array | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfScale, setPdfScale] = useState(1);
@@ -131,6 +132,7 @@ export default function PDFSignatureTool() {
     pdfDocRef.current = null;
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
+    originalPdfBytesRef.current = new Uint8Array(bytes);
     setPdfBytes(bytes);
     setCurrentPage(1);
     setSignatureImage(null);
@@ -163,6 +165,7 @@ export default function PDFSignatureTool() {
     setPdfFile(null);
     setPdfBytes(null);
     pdfDocRef.current = null;
+    originalPdfBytesRef.current = null;
     setTotalPages(0);
     setCurrentPage(1);
     setSignatureImage(null);
@@ -228,7 +231,7 @@ export default function PDFSignatureTool() {
   }, [signatureScale]);
 
   const handleDownload = async () => {
-    if (!pdfBytes || !signatureImage) {
+    if (!originalPdfBytesRef.current || !signatureImage) {
       toast({
         title: 'Missing Requirements',
         description: 'Please upload a PDF and add your signature.',
@@ -240,7 +243,8 @@ export default function PDFSignatureTool() {
     setIsProcessing(true);
     
     try {
-      const pdfDoc = await PDFDocument.load(pdfBytes);
+      const pdfDataCopy = new Uint8Array(originalPdfBytesRef.current);
+      const pdfDoc = await PDFDocument.load(pdfDataCopy);
       const pages = pdfDoc.getPages();
       const page = pages[currentPage - 1];
       

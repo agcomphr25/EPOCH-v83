@@ -156,23 +156,31 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       let assigneeName = 'Unknown';
       let previousAssigneeName = null;
       if (assignedUserId) {
-        const assigneeResult = await pool.query(
-          `SELECT username, first_name, last_name FROM users WHERE id = $1`,
-          [assignedUserId]
-        );
-        if (assigneeResult.rows.length > 0) {
-          const u = assigneeResult.rows[0];
-          assigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+        try {
+          const assigneeResult = await pool.query(
+            `SELECT username, first_name, last_name FROM users WHERE id = $1`,
+            [assignedUserId]
+          );
+          if (assigneeResult?.rows && assigneeResult.rows.length > 0) {
+            const u = assigneeResult.rows[0];
+            assigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+          }
+        } catch (e) {
+          console.error('Error fetching assignee name:', e);
         }
       }
       if (previousAssignee) {
-        const prevResult = await pool.query(
-          `SELECT username, first_name, last_name FROM users WHERE id = $1`,
-          [previousAssignee]
-        );
-        if (prevResult.rows.length > 0) {
-          const u = prevResult.rows[0];
-          previousAssigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+        try {
+          const prevResult = await pool.query(
+            `SELECT username, first_name, last_name FROM users WHERE id = $1`,
+            [previousAssignee]
+          );
+          if (prevResult?.rows && prevResult.rows.length > 0) {
+            const u = prevResult.rows[0];
+            previousAssigneeName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+          }
+        } catch (e) {
+          console.error('Error fetching previous assignee name:', e);
         }
       }
 

@@ -37,8 +37,10 @@ interface Ticket {
   description: string | null;
   customerId: number | null;
   ownerUserId: number;
+  assignedUserId: number | null;
   slaDueAt: string | null;
   slaBreached: boolean;
+  lastActivityAt: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -569,7 +571,7 @@ export default function TicketsPage() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-xs text-gray-500">Status</Label>
                     <Select
@@ -603,7 +605,7 @@ export default function TicketsPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Owner</Label>
+                    <Label className="text-xs text-gray-500">Owner (Created By)</Label>
                     <Select
                       value={String(selectedTicket.ownerUserId)}
                       onValueChange={(v) => updateTicketMutation.mutate({ id: selectedTicket.id, data: { ownerUserId: parseInt(v) } })}
@@ -612,6 +614,28 @@ export default function TicketsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Assigned To</Label>
+                    <Select
+                      value={selectedTicket.assignedUserId ? String(selectedTicket.assignedUserId) : 'unassigned'}
+                      onValueChange={(v) => updateTicketMutation.mutate({ 
+                        id: selectedTicket.id, 
+                        data: { assignedUserId: v === 'unassigned' ? null : parseInt(v) } 
+                      })}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="select-update-assignee">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {users.map(u => (
                           <SelectItem key={u.id} value={String(u.id)}>
                             {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}

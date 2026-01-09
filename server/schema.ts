@@ -9532,9 +9532,13 @@ export const tickets = pgTable('tickets', {
   title: text('title').notNull(),
   description: text('description'),
   customerId: integer('customer_id'), // Nullable - tickets may not have a customer
-  ownerUserId: integer('owner_user_id').notNull(),
+  ownerUserId: integer('owner_user_id').notNull(), // Original creator of the ticket
+  assignedUserId: integer('assigned_user_id'), // Person currently assigned to work on the ticket
   slaDueAt: timestamp('sla_due_at'),
   slaBreached: boolean('sla_breached').default(false),
+  lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented
+  reminderCount: integer('reminder_count').default(0), // Number of stale reminders sent
+  lastReminderAt: timestamp('last_reminder_at'), // When last reminder was sent
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
@@ -9542,6 +9546,7 @@ export const tickets = pgTable('tickets', {
   statusIdx: index('tickets_status_idx').on(table.status),
   priorityIdx: index('tickets_priority_idx').on(table.priority),
   ownerIdx: index('tickets_owner_idx').on(table.ownerUserId),
+  assignedIdx: index('tickets_assigned_idx').on(table.assignedUserId),
   slaIdx: index('tickets_sla_idx').on(table.slaDueAt),
   typeIdx: index('tickets_type_idx').on(table.ticketType),
 }));
@@ -9550,6 +9555,9 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  lastActivityAt: true,
+  reminderCount: true,
+  lastReminderAt: true,
 });
 
 export type Ticket = typeof tickets.$inferSelect;

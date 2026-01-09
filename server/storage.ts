@@ -16441,6 +16441,7 @@ export class DatabaseStorage implements IStorage {
     ticketType?: string;
     priority?: string;
     ownerUserId?: number;
+    assignedUserId?: number;
     slaBreached?: boolean;
     archived?: boolean;
   }): Promise<Ticket[]> {
@@ -16464,6 +16465,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.ownerUserId) {
       conditions.push(eq(tickets.ownerUserId, filters.ownerUserId));
+    }
+    if (filters?.assignedUserId) {
+      conditions.push(eq(tickets.assignedUserId, filters.assignedUserId));
     }
     if (filters?.slaBreached !== undefined) {
       conditions.push(eq(tickets.slaBreached, filters.slaBreached));
@@ -16493,11 +16497,20 @@ export class DatabaseStorage implements IStorage {
     return ticket;
   }
 
-  async updateTicket(id: string, data: Partial<InsertTicket>): Promise<Ticket> {
-    const [ticket] = await db.update(tickets).set({
+  async updateTicket(id: string, data: Partial<InsertTicket>, options?: { updateActivity?: boolean }): Promise<Ticket> {
+    const now = new Date();
+    const updateData: any = {
       ...data,
-      updatedAt: new Date(),
-    }).where(eq(tickets.id, id)).returning();
+      updatedAt: now,
+    };
+    
+    // Only update lastActivityAt for real user activity (status changes, comments, etc.)
+    // Don't update for system operations like reminder updates
+    if (options?.updateActivity !== false) {
+      updateData.lastActivityAt = now;
+    }
+    
+    const [ticket] = await db.update(tickets).set(updateData).where(eq(tickets.id, id)).returning();
     return ticket;
   }
 

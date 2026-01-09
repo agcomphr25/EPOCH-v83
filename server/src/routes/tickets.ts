@@ -3,6 +3,7 @@ import { storage } from '../../storage';
 import { sessionAwareAuth, requireRole } from '../../middleware/auth';
 import { insertTicketSchema, insertTicketActivitySchema } from '../../schema';
 import { z } from 'zod';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -112,7 +113,7 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    const { status, priority, ownerUserId, ...rest } = req.body;
+    const { status, priority, ownerUserId, assignedUserId, ...rest } = req.body;
 
     if (status && status !== existingTicket.status) {
       await storage.createTicketActivity({
@@ -147,10 +148,48 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       });
     }
 
+    // Handle assignee changes - different from owner changes
+    if (assignedUserId !== undefined && assignedUserId !== existingTicket.assignedUserId) {
+      const previousAssignee = existingTicket.assignedUserId;
+      
+      await storage.createTicketActivity({
+        ticketId: req.params.id,
+        activityType: 'assignment',
+        message: assignedUserId 
+          ? `Ticket assigned to user ${assignedUserId}`
+          : 'Ticket unassigned',
+        previousValue: previousAssignee ? String(previousAssignee) : null,
+        newValue: assignedUserId ? String(assignedUserId) : null,
+        createdBy: user.id,
+      });
+
+      // Send internal message notification to new assignee
+      if (assignedUserId && assignedUserId !== user.id) {
+        try {
+          await pool.query(
+            `INSERT INTO internal_messages (sender_id, recipient_id, subject, body, related_entity_type, related_entity_id)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              user.id,
+              assignedUserId,
+              `Ticket Assigned: ${existingTicket.title}`,
+              `You have been assigned to ticket "${existingTicket.title}" (${existingTicket.ticketType} - ${existingTicket.priority} priority).\n\nDescription: ${existingTicket.description || 'No description provided'}`,
+              'ticket',
+              req.params.id
+            ]
+          );
+          console.log(`📧 Sent ticket assignment notification to user ${assignedUserId} for ticket ${req.params.id}`);
+        } catch (msgErr) {
+          console.error('Failed to send assignment notification:', msgErr);
+        }
+      }
+    }
+
     const ticket = await storage.updateTicket(req.params.id, {
       status,
       priority,
       ownerUserId,
+      assignedUserId,
       ...rest,
     });
 

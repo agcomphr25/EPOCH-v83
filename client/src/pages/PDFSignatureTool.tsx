@@ -243,8 +243,14 @@ export default function PDFSignatureTool() {
       const pages = pdfDoc.getPages();
       const page = pages[currentPage - 1];
       
-      const pngImageBytes = await fetch(signatureImage).then(res => res.arrayBuffer());
-      const pngImage = await pdfDoc.embedPng(pngImageBytes);
+      const base64Data = signatureImage.split(',')[1];
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const pngImage = await pdfDoc.embedPng(bytes);
       
       const pageHeight = page.getHeight();
       const pageWidth = page.getWidth();
@@ -277,11 +283,12 @@ export default function PDFSignatureTool() {
         title: 'Success',
         description: 'Signed PDF downloaded successfully!'
       });
-    } catch (error) {
-      console.error('Error creating signed PDF:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error creating signed PDF:', errorMessage, error);
       toast({
         title: 'Error',
-        description: 'Failed to create signed PDF. Please try again.',
+        description: `Failed to create signed PDF: ${errorMessage}`,
         variant: 'destructive'
       });
     } finally {

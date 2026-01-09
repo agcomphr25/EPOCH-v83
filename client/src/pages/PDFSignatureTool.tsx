@@ -45,15 +45,27 @@ export default function PDFSignatureTool() {
   const [intrinsicDimensions, setIntrinsicDimensions] = useState({ width: 0, height: 0 });
   const [viewportDimensions, setViewportDimensions] = useState({ width: 0, height: 0 });
   const dragStartRef = useRef({ x: 0, y: 0, xPercent: 0, yPercent: 0 });
+  const renderIdRef = useRef(0);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
 
   const renderPdfPage = useCallback(async (pageNum: number) => {
     if (!pdfBytes || !canvasRef.current) return;
     
+    const currentRenderId = ++renderIdRef.current;
+    
     try {
-      const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+      if (!pdfDocRef.current) {
+        pdfDocRef.current = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+      }
+      const pdf = pdfDocRef.current;
+      
+      if (currentRenderId !== renderIdRef.current) return;
+      
       setTotalPages(pdf.numPages);
       
       const page = await pdf.getPage(pageNum);
+      
+      if (currentRenderId !== renderIdRef.current) return;
       
       const baseViewport = page.getViewport({ scale: 1 });
       setIntrinsicDimensions({ width: baseViewport.width, height: baseViewport.height });
@@ -61,6 +73,7 @@ export default function PDFSignatureTool() {
       const viewport = page.getViewport({ scale: pdfScale });
       
       const canvas = canvasRef.current;
+      if (!canvas) return;
       const context = canvas.getContext('2d');
       if (!context) return;
       
@@ -72,13 +85,17 @@ export default function PDFSignatureTool() {
         canvasContext: context,
         viewport: viewport
       }).promise;
-    } catch (error) {
-      console.error('Error rendering PDF:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to render PDF page',
-        variant: 'destructive'
-      });
+    } catch (error: unknown) {
+      if (currentRenderId !== renderIdRef.current) return;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (!errorMessage.includes('cancelled')) {
+        console.error('Error rendering PDF:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to render PDF page',
+          variant: 'destructive'
+        });
+      }
     }
   }, [pdfBytes, pdfScale, toast]);
 
@@ -111,6 +128,7 @@ export default function PDFSignatureTool() {
     }
 
     setPdfFile(file);
+    pdfDocRef.current = null;
     const bytes = await file.arrayBuffer();
     setPdfBytes(bytes);
     setCurrentPage(1);
@@ -143,6 +161,7 @@ export default function PDFSignatureTool() {
   const handleClearFile = () => {
     setPdfFile(null);
     setPdfBytes(null);
+    pdfDocRef.current = null;
     setTotalPages(0);
     setCurrentPage(1);
     setSignatureImage(null);

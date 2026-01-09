@@ -47,6 +47,7 @@ The application is a full-stack TypeScript monorepo, emphasizing type safety, da
 - **Filtered Orders Report**: Advanced order filtering and export tool with multi-select status, date range, customer exclusion, and CSV export.
 - **Survey Engine**: Generic, reusable survey system with UUID-based tables, respondent and context abstraction, designed for broad reuse.
 - **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement, project manager assignments, reminders, activity logging, and automatic notifications.
+- **Ticket Assignment System**: Separate owner (creator) and assignee tracking for tickets, with internal message notifications on assignment and automated stale ticket reminders (48-hour inactivity threshold, 24-hour cooldown, max 3 reminders).
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

@@ -14,7 +14,7 @@ export interface UserPermissions {
 export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
 // Universal routes that ALL authenticated users can access regardless of permissions
-export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help'];
+export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths
@@ -103,6 +103,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/projects',
   '/help',
   '/signature-workflow',
+  '/pdf-signature-tool',
   '/media-library',
   '/signed-documents',
   '/reference-docs',

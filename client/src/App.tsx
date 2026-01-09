@@ -43,6 +43,7 @@ import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
 import FieldPage from './pages/FieldPage';
 import TicketsPage from './pages/TicketsPage';
+import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
@@ -383,6 +384,7 @@ function App() {
 
                   {/* Ticketing System - Internal CSR Tool */}
                   <Route path="/tickets" component={TicketsPage} />
+                  <Route path="/pdf-signature-tool" component={PDFSignatureTool} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

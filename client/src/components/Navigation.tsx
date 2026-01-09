@@ -473,6 +473,12 @@ export default function Navigation() {
       description: 'Create and manage digital signature routing workflows',
     },
     {
+      path: '/pdf-signature-tool',
+      label: 'PDF Signature Tool',
+      icon: FileSignature,
+      description: 'Upload a PDF, position your signature, and download the signed document',
+    },
+    {
       path: '/calendar',
       label: 'Calendar',
       icon: Calendar,

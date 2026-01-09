@@ -25,7 +25,7 @@ export default function PDFSignatureTool() {
   const containerRef = useRef<HTMLDivElement>(null);
   
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfScale, setPdfScale] = useState(1);
@@ -129,7 +129,8 @@ export default function PDFSignatureTool() {
 
     setPdfFile(file);
     pdfDocRef.current = null;
-    const bytes = await file.arrayBuffer();
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
     setPdfBytes(bytes);
     setCurrentPage(1);
     setSignatureImage(null);

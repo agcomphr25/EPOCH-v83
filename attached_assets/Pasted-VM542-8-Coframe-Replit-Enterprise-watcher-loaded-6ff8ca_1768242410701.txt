@@ -1,0 +1,60 @@
+VM542:8 [Coframe] Replit Enterprise watcher loaded
+6ff8ca6c79caf708.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+6ff8ca6c79caf708.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+6ff8ca6c79caf708.js:2 [LaunchDarkly] LaunchDarkly client initialized
+6ff8ca6c79caf708.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 6ff8ca6c79caf708.js:2
+6ff8ca6c79caf708.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:4c2b032c-c28a-4494-beda-131f7083caaf"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:4c2b032c-c28a-4494-beda-131f7083caaf"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 6ff8ca6c79caf708.js:2
+6ff8ca6c79caf708.js:2 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ 6ff8ca6c79caf708.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /

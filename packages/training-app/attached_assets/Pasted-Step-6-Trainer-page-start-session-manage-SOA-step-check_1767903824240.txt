@@ -1,0 +1,164 @@
+Step 6) Trainer page (start session + manage SOA + step checks)
+client/src/pages/TrainerToday.tsx
+import React, { useEffect, useState } from "react";
+import { Link } from "wouter";
+
+type Trainee = { id: string; name: string; roleId?: string | null };
+type SessionResp = { session: any; trainee: any; blocks: any[] };
+
+export default function TrainerToday() {
+  const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [traineeId, setTraineeId] = useState("");
+  const [trainerName, setTrainerName] = useState("Trainer");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [facilityTopicCode, setFacilityTopicCode] = useState("PPE");
+
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionData, setSessionData] = useState<SessionResp | null>(null);
+
+  async function loadTrainees() {
+    const r = await fetch("/api/trainees"); // we’ll add this endpoint in Phase 4
+    if (r.ok) setTrainees(await r.json());
+  }
+
+  async function startSession() {
+    const r = await fetch("/api/training/sessions/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ traineeId, trainerName, date, facilityTopicCode })
+    });
+    const data = await r.json();
+    setSessionId(data.sessionId);
+  }
+
+  async function loadSession(id: string) {
+    const r = await fetch(`/api/training/sessions/${id}`);
+    setSessionData(await r.json());
+  }
+
+  async function patchBlock(blockId: string, patch: any) {
+    await fetch(`/api/training/task-blocks/${blockId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    if (sessionId) await loadSession(sessionId);
+  }
+
+  useEffect(() => { loadTrainees(); }, []);
+  useEffect(() => { if (sessionId) loadSession(sessionId); }, [sessionId]);
+
+  return (
+    <div>
+      <h2>Trainer Daily Session</h2>
+
+      <div style={{ display: "grid", gap: 8, maxWidth: 520 }}>
+        <label>
+          Trainee
+          <select value={traineeId} onChange={(e) => setTraineeId(e.target.value)} style={{ width: "100%" }}>
+            <option value="">Select trainee...</option>
+            {trainees.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+
+        <label>
+          Trainer name
+          <input value={trainerName} onChange={(e) => setTrainerName(e.target.value)} style={{ width: "100%" }} />
+        </label>
+
+        <label>
+          Date
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
+        </label>
+
+        <label>
+          Facility topic today
+          <select value={facilityTopicCode} onChange={(e) => setFacilityTopicCode(e.target.value)} style={{ width: "100%" }}>
+            {["PPE","FOD","COUNTERFEIT","CHEM","FIRE","ITAR"].map(code => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </label>
+
+        <button disabled={!traineeId} onClick={startSession}>Start Today’s Session</button>
+      </div>
+
+      {sessionId && (
+        <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+          <Link href={`/print/${sessionId}`}>Print Sheet</Link>
+          <Link href={`/quiz/${sessionId}`}>Trainee Quiz</Link>
+        </div>
+      )}
+
+      {sessionData && (
+        <div style={{ marginTop: 16 }}>
+          <h3>Tasks for Today</h3>
+
+          {sessionData.blocks.map((b) => (
+            <div key={b.id} style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <b>{b.taskName}</b>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    {b.wiCode ? `${b.wiCode} - ${b.wiTitle}` : "No WI linked"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+                {(["step1","step2","step3","step4"] as const).map((s, idx) => (
+                  <label key={s} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!b[s]}
+                      onChange={(e) => patchBlock(b.id, { [s]: e.target.checked })}
+                    />
+                    Step {idx + 1}
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>SOA Coaching</div>
+                <textarea
+                  placeholder="Strength"
+                  value={b.strength ?? ""}
+                  onChange={(e) => patchBlock(b.id, { strength: e.target.value })}
+                  style={{ width: "100%", marginTop: 6 }}
+                />
+                <textarea
+                  placeholder="Opportunity"
+                  value={b.opportunity ?? ""}
+                  onChange={(e) => patchBlock(b.id, { opportunity: e.target.value })}
+                  style={{ width: "100%", marginTop: 6 }}
+                />
+                <textarea
+                  placeholder="Action"
+                  value={b.action ?? ""}
+                  onChange={(e) => patchBlock(b.id, { action: e.target.value })}
+                  style={{ width: "100%", marginTop: 6 }}
+                />
+              </div>
+
+              {b.criticalPoints?.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Critical Points</div>
+                  <ul>
+                    {b.criticalPoints.map((cp: any) => (
+                      <li key={cp.id}>
+                        <b>{cp.label}</b> — {cp.detail}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+This page expects /api/trainees to exist — we’ll add it next.

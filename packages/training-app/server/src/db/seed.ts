@@ -1,0 +1,55 @@
+import "dotenv/config";
+import { db } from "./index";
+import { facilityTopics, quizQuestions } from "./schema";
+
+async function main() {
+  // Facility Essentials Topics
+  const topics = [
+    { code: "PPE", title: "PPE", overview: "Personal protective equipment requirements." },
+    { code: "FOD", title: "FOD Prevention", overview: "Foreign Object Debris prevention and housekeeping." },
+    { code: "COUNTERFEIT", title: "Counterfeit Awareness", overview: "How to detect, prevent, and escalate counterfeit concerns." },
+    { code: "CHEM", title: "Chemical Handling", overview: "Storage, labeling, SDS, disposal procedures." },
+    { code: "FIRE", title: "Fire Safety", overview: "Evacuation, extinguisher basics, reporting." },
+    { code: "ITAR", title: "ITAR Awareness", overview: "Export-controlled information handling and restrictions." }
+  ];
+
+  const insertedTopics = await db.insert(facilityTopics).values(topics).onConflictDoNothing().returning();
+
+  // map code -> id (include any existing ones too by re-selecting)
+  const allTopics = await db.select().from(facilityTopics);
+  const topicIdByCode = new Map(allTopics.map(t => [t.code, t.id]));
+
+  // Starter question bank
+  const questions = [
+    {
+      topicId: topicIdByCode.get("PPE"),
+      question: "When must PPE be worn on the production floor?",
+      type: "MCQ",
+      meta: { choices: ["Only during inspections", "Only when a supervisor is present", "Whenever required by the task/area signage", "Only during training"], answer: "Whenever required by the task/area signage" },
+      active: true
+    },
+    {
+      topicId: topicIdByCode.get("FOD"),
+      question: "True or False: You should report FOD hazards immediately, even if you are not sure it is a problem.",
+      type: "TF",
+      meta: { answer: "True" },
+      active: true
+    },
+    {
+      topicId: topicIdByCode.get("ITAR"),
+      question: "Name one example of ITAR-controlled information you should not share outside authorized channels.",
+      type: "SHORT",
+      meta: { rubric: "Any valid example: drawings, specs, photos of controlled parts/processes, customer data, etc." },
+      active: true
+    }
+  ];
+
+  await db.insert(quizQuestions).values(questions as any).onConflictDoNothing();
+
+  console.log("✅ Seed complete");
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

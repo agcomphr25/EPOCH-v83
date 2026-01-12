@@ -36,8 +36,12 @@ export async function testDatabaseConnection() {
   }
 }
 
-// Export a dummy pool for compatibility with existing code
+// Export a pool wrapper for compatibility with existing code that uses pool.query(sql, params) pattern
 export const pool = {
-  query: sql,
+  query: async (queryString: string, params?: any[]) => {
+    // Use the Neon sql function with the proper call syntax
+    const result = await sql(queryString, params || []);
+    return result;
+  },
   end: () => Promise.resolve(),
 };

@@ -2,8 +2,10 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { eq, sql } from 'drizzle-orm';
 
-import { pool } from '../../db';
+import { pool, db } from '../../db';
+import { users } from '../../schema';
 
 const router = Router();
 
@@ -379,13 +381,14 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         .json({ error: 'Username and password are required' });
     }
 
-    // Try to find user in database first
-    const dbUserResult = await pool.query(
-      `SELECT id, username, password_hash, role, is_active 
-       FROM users 
-       WHERE LOWER(username) = LOWER($1)`,
-      [username]
-    );
+    // Try to find user in database first using Drizzle ORM
+    const dbUserResult = await db.select({
+      id: users.id,
+      username: users.username,
+      passwordHash: users.passwordHash,
+      role: users.role,
+      isActive: users.isActive,
+    }).from(users).where(sql`LOWER(${users.username}) = LOWER(${username})`);
 
     let user: any;
     let isValidPassword = false;
@@ -394,13 +397,14 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       // User exists in database
       const dbUser = dbUserResult[0];
 
-      // Check if user is active
-      if (!dbUser.is_active) {
+      // Check if user is active - skip check in dev mode with auth bypass enabled
+      const devAuthBypass = process.env.DEV_AUTH_BYPASS === 'true';
+      if (dbUser.isActive === false && !devAuthBypass) {
         return res.status(401).json({ error: 'Account is inactive' });
       }
 
       // Verify password against database hash
-      isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+      isValidPassword = await bcrypt.compare(password, dbUser.passwordHash);
 
       if (isValidPassword) {
         user = {

@@ -115,6 +115,15 @@ import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
 import TrainingControlCenter from '@/pages/TrainingControlCenter';
 import TrainingModule from '@/pages/TrainingModule';
+import {
+  ProgramsPage,
+  ProgramBuilderPage,
+  AssignProgramPage,
+  SessionDailySheetPage,
+  WorkInstructionsPage,
+  QuizManagementPage,
+  DailyQuizSelectionPage,
+} from '@/modules/training-builder';
 import ImportCertifications from '@/pages/ImportCertifications';
 import CertificationBacklog from '@/pages/CertificationBacklog';
 import Calendar from './pages/Calendar';
@@ -742,9 +751,16 @@ function App() {
                   <Route path="/import-certifications" component={ImportCertifications} />
                   <Route path="/certification-backlog" component={CertificationBacklog} />
                   <Route path="/p2-certifications">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
-                  <Route path="/training/:moduleId" component={TrainingModule} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
+                  <Route path="/training/programs" component={ProgramsPage} />
+                  <Route path="/training/programs/:id" component={ProgramBuilderPage} />
+                  <Route path="/training/work-instructions" component={WorkInstructionsPage} />
+                  <Route path="/training/quizzes" component={QuizManagementPage} />
+                  <Route path="/training/daily-quizzes" component={DailyQuizSelectionPage} />
+                  <Route path="/training/assign" component={AssignProgramPage} />
+                  <Route path="/training/sessions/:sessionId" component={SessionDailySheetPage} />
+                  <Route path="/training/:moduleId" component={TrainingModule} />
 
                   <Route path="/calendar" component={Calendar} />
 

@@ -695,6 +695,25 @@ router.get('/debug/email-test', async (req, res) => {
   }
 });
 
+// Get all communication logs (admin view)
+router.get('/logs', async (req, res) => {
+  try {
+    const logs = await db
+      .select()
+      .from(communicationLogs)
+      .orderBy(desc(communicationLogs.sentAt))
+      .limit(500);
+
+    res.json(logs);
+  } catch (error: any) {
+    console.error('Error fetching communication logs:', error);
+    res.status(500).json({
+      error: 'Failed to fetch communication logs',
+      details: error.message,
+    });
+  }
+});
+
 // Get notification history for a specific order
 router.get('/order/:orderId/history', async (req, res) => {
   try {

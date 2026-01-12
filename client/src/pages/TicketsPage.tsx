@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { useLocation } from 'wouter';
 
 interface Ticket {
   id: string;
@@ -37,8 +38,10 @@ interface Ticket {
   description: string | null;
   customerId: number | null;
   ownerUserId: number;
+  assignedUserId: number | null;
   slaDueAt: string | null;
   slaBreached: boolean;
+  lastActivityAt: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -108,6 +111,7 @@ const CATEGORIES = [
 
 export default function TicketsPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -569,7 +573,7 @@ export default function TicketsPage() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-xs text-gray-500">Status</Label>
                     <Select
@@ -603,7 +607,7 @@ export default function TicketsPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Owner</Label>
+                    <Label className="text-xs text-gray-500">Owner (Created By)</Label>
                     <Select
                       value={String(selectedTicket.ownerUserId)}
                       onValueChange={(v) => updateTicketMutation.mutate({ id: selectedTicket.id, data: { ownerUserId: parseInt(v) } })}
@@ -612,6 +616,28 @@ export default function TicketsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Assigned To</Label>
+                    <Select
+                      value={selectedTicket.assignedUserId ? String(selectedTicket.assignedUserId) : 'unassigned'}
+                      onValueChange={(v) => updateTicketMutation.mutate({ 
+                        id: selectedTicket.id, 
+                        data: { assignedUserId: v === 'unassigned' ? null : parseInt(v) } 
+                      })}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="select-update-assignee">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {users.map(u => (
                           <SelectItem key={u.id} value={String(u.id)}>
                             {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
@@ -639,9 +665,17 @@ export default function TicketsPage() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {ticketOrders.map(to => (
                       <Badge key={to.id} variant="outline" className="flex items-center gap-1">
-                        {to.orderId}
                         <button
-                          onClick={() => unlinkOrderMutation.mutate({ ticketId: selectedTicket.id, orderId: to.orderId })}
+                          onClick={() => navigate(`/order-entry/${to.orderId}`)}
+                          className="hover:underline hover:text-blue-600 cursor-pointer"
+                        >
+                          {to.orderId}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            unlinkOrderMutation.mutate({ ticketId: selectedTicket.id, orderId: to.orderId });
+                          }}
                           className="ml-1 hover:text-red-500"
                         >
                           <X className="h-3 w-3" />

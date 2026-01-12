@@ -1,0 +1,104 @@
+COPY-PASTE THIS TO THE REPLIT AGENT
+
+(Magic Link Email Intermittency Diagnostic — Read Only)
+
+Magic Link Email Intermittency Diagnostic (Read Only)
+
+The automatic email containing a magic link for order confirmation
+is intermittently NOT being sent when "Create Order" is clicked.
+
+Do NOT fix anything yet.
+Do NOT change schema, email templates, or auth logic.
+
+Collect and return the following diagnostics verbatim:
+
+--------------------------------------------------
+1) EVENT TRIGGER CONFIRMATION
+--------------------------------------------------
+- Identify the exact code path triggered when "Create Order" is clicked:
+  - frontend file + function
+  - backend route handler
+- Confirm whether the email send is:
+  a) synchronous in the request
+  b) async / background
+  c) conditional on order fields
+
+--------------------------------------------------
+2) EMAIL SEND EXECUTION LOG
+--------------------------------------------------
+Instrument (temporarily, with console logs) the email send path and report:
+
+For the LAST 5 "Create Order" attempts:
+- order_id
+- customer_email
+- was sendEmail() invoked? (yes/no)
+- magic link token generated? (yes/no)
+- email provider response (success / error / skipped)
+
+Paste the logs exactly as printed.
+
+--------------------------------------------------
+3) MAGIC LINK TOKEN AUDIT
+--------------------------------------------------
+For the same 5 orders:
+- confirm whether a record was written to magic_link_tokens (or equivalent)
+- include:
+  - order_id
+  - token
+  - expires_at
+  - used_at
+- confirm whether token creation ever fails silently
+
+--------------------------------------------------
+4) CONDITIONAL SKIP CHECK
+--------------------------------------------------
+Identify ALL conditions that cause the email to NOT send, including:
+- missing customer email
+- order status
+- environment checks (prod/dev)
+- feature flags
+- deduplication / throttling logic
+- "already sent" guards
+
+Paste the conditional logic exactly.
+
+--------------------------------------------------
+5) EMAIL PROVIDER RESPONSE
+--------------------------------------------------
+From the email provider SDK (SendGrid / Resend / SMTP):
+
+- raw response for success cases
+- raw response for failure cases
+- any 2xx responses where email was NOT delivered
+- rate limit or suppression warnings
+
+--------------------------------------------------
+6) ENVIRONMENT & CONFIG CHECK
+--------------------------------------------------
+Report the runtime values (redact secrets) for:
+- EMAIL_ENABLED
+- FROM_EMAIL
+- BASE_URL / APP_URL used in magic link
+- REPLIT_DOMAINS / PROD_DOMAIN
+- NODE_ENV
+
+--------------------------------------------------
+7) FAILURE PATTERN IDENTIFICATION
+--------------------------------------------------
+Based on logs, answer:
+- Does failure correlate with:
+  a) time of day
+  b) repeated customer email
+  c) same order clicked twice
+  d) order status at creation
+  e) republish / restart window
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+- Use section headers exactly as above
+- Paste raw logs and JSON
+- No explanations
+- No fixes yet
+
+Stop after collecting diagnostics.

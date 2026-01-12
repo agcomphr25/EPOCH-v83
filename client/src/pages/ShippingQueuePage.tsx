@@ -8,6 +8,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { ShippingActions } from '@/components/ShippingActions';
 import { BulkShippingActions } from '@/components/BulkShippingActions';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
+import OrderCardErrorBoundary from '@/components/OrderCardErrorBoundary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -270,6 +271,18 @@ export default function ShippingQueuePage() {
     },
   });
 
+  // Helper to safely parse date values - returns null if invalid
+  const safeParseDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return null;
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
   // Get orders in Shipping department, categorized by due date
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
@@ -285,8 +298,10 @@ export default function ShippingQueuePage() {
 
     // Sort by due date - most urgent first (RMAs without due date go to end)
     return allShippingItems.sort((a: any, b: any) => {
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : (a.isRma ? Date.now() : 0);
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : (b.isRma ? Date.now() : 0);
+      const parsedA = safeParseDate(a.dueDate);
+      const parsedB = safeParseDate(b.dueDate);
+      const dateA = parsedA ? parsedA.getTime() : (a.isRma ? Date.now() : 0);
+      const dateB = parsedB ? parsedB.getTime() : (b.isRma ? Date.now() : 0);
       return dateA - dateB; // Earliest due date first (most urgent)
     });
   }, [allOrders, rmasReadyToShip]);
@@ -309,21 +324,25 @@ export default function ShippingQueuePage() {
     const dueLater: any[] = [];
 
     shippingOrders.forEach((order: any) => {
-      if (!order.dueDate) {
+      const dueDate = safeParseDate(order.dueDate);
+      
+      // If no valid due date, put in dueLater
+      if (!dueDate) {
         dueLater.push(order);
         return;
       }
 
-      const dueDate = new Date(order.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      // Normalize to start of day for comparison
+      const normalizedDueDate = new Date(dueDate);
+      normalizedDueDate.setHours(0, 0, 0, 0);
 
-      if (dueDate < today) {
+      if (normalizedDueDate < today) {
         overdue.push(order);
-      } else if (dueDate.getTime() === today.getTime()) {
+      } else if (normalizedDueDate.getTime() === today.getTime()) {
         dueToday.push(order);
-      } else if (dueDate.getTime() === tomorrow.getTime()) {
+      } else if (normalizedDueDate.getTime() === tomorrow.getTime()) {
         dueTomorrow.push(order);
-      } else if (dueDate <= nextWeek) {
+      } else if (normalizedDueDate <= nextWeek) {
         dueThisWeek.push(order);
       } else {
         dueLater.push(order);
@@ -422,10 +441,11 @@ export default function ShippingQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
-  const getCustomerInfo = (customerId: string) => {
+  const getCustomerInfo = (customerId: string | null | undefined) => {
+    if (!customerId) return null;
     const customerList = customers as any[];
     return customerList.find(
-      (c: any) => c.id.toString() === customerId.toString()
+      (c: any) => c.id?.toString() === customerId.toString()
     );
   };
 
@@ -1083,9 +1103,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.overdue.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.overdue.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1101,9 +1123,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueToday.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueToday.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1119,9 +1143,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueTomorrow.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueTomorrow.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1137,9 +1163,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueThisWeek.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueThisWeek.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1155,9 +1183,11 @@ export default function ShippingQueuePage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid gap-3">
-                    {categorizedOrders.dueLater.map((order: any) =>
-                      renderOrderCard(order)
-                    )}
+                    {categorizedOrders.dueLater.map((order: any) => (
+                      <OrderCardErrorBoundary key={`error-${order.orderId}`} orderId={order.orderId}>
+                        {renderOrderCard(order)}
+                      </OrderCardErrorBoundary>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -1191,11 +1221,40 @@ export default function ShippingQueuePage() {
     );
   }
 
+  // Helper function to safely parse features that may be a string or object
+  function safeParseFeatures(features: any): Record<string, any> {
+    if (!features) return {};
+    if (typeof features === 'object') return features;
+    if (typeof features === 'string') {
+      try {
+        return JSON.parse(features);
+      } catch (e) {
+        console.warn('Failed to parse features:', e);
+        return {};
+      }
+    }
+    return {};
+  }
+
+  // Helper function to safely format dates
+  function safeFormatDate(dateValue: any, formatStr: string = 'MMM dd, yyyy'): string {
+    if (!dateValue) return 'N/A';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return format(date, formatStr);
+    } catch (e) {
+      console.warn('Failed to format date:', dateValue, e);
+      return 'Invalid date';
+    }
+  }
+
   // Function to render individual order cards
   function renderOrderCard(order: any) {
     const isSelected = selectedCard === order.orderId;
     const modelId = order.stockModelId || order.modelId;
-    const materialType = order.features?.material_type;
+    const parsedFeatures = safeParseFeatures(order.features);
+    const materialType = parsedFeatures?.material_type;
     const customerInfo = getOrderShippingCustomerInfo(order);
     const customerAddress = getOrderShippingAddress(order);
     const specialShippingText = getSpecialShippingText(order);
@@ -1284,12 +1343,12 @@ export default function ShippingQueuePage() {
               </div>
               <div className="text-gray-600">
                 <span className="font-medium">Order Date:</span>{' '}
-                {format(new Date(order.orderDate), 'MMM dd, yyyy')}
+                {safeFormatDate(order.orderDate)}
               </div>
               {order.dueDate && (
                 <div className="text-gray-600">
                   <span className="font-medium">Due Date:</span>{' '}
-                  {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                  {safeFormatDate(order.dueDate)}
                 </div>
               )}
             </div>

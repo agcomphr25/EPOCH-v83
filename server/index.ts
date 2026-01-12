@@ -289,6 +289,20 @@ async function initializeBackgroundServices() {
     
     console.log('📧 Daily follow-up order reminders scheduled (every day at 9:00 AM)');
 
+    // Set up ticket stale reminder check (runs daily at 10:00 AM)
+    cron.schedule('0 10 * * *', async () => {
+      try {
+        console.log('🎫 Running daily ticket stale reminder check...');
+        const { sendStaleTicketReminders } = await import('./utils/ticketReminder.js');
+        const result = await sendStaleTicketReminders();
+        console.log(`✅ Ticket reminder check complete: ${result.sent} sent, ${result.skipped} skipped`);
+      } catch (error) {
+        console.error('❌ Failed to send ticket reminders:', error);
+      }
+    });
+    
+    console.log('🎫 Daily ticket stale reminders scheduled (every day at 10:00 AM)');
+
     // Set up dynamic health checks scheduler (checks every minute if it's time to run)
     // This allows the scheduled time to be changed via the UI without restarting the server
     cron.schedule('* * * * *', async () => {

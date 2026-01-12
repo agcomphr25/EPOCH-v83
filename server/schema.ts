@@ -23,7 +23,7 @@ import { z } from 'zod';
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const orderDepartmentTypes = pgTable('order_department_types', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true),
@@ -34,7 +34,7 @@ export const orderDepartmentTypes = pgTable('order_department_types', {
 // Order Status Types Reference Table
 export const orderStatusTypes = pgTable('order_status_types', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true),
@@ -45,7 +45,7 @@ export const orderStatusTypes = pgTable('order_status_types', {
 // All finalized orders - production table
 export const allOrders = pgTable('all_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(),
+  orderId: text('order_id').notNull(),
   orderDate: timestamp('order_date').notNull(),
   dueDate: timestamp('due_date').notNull(),
   customerId: text('customer_id'),
@@ -73,7 +73,7 @@ export const allOrders = pgTable('all_orders', {
   tikkaOption: text('tikka_option'),
   status: text('status').default('FINALIZED'), // Legacy - will be removed after migration
   statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
-  barcode: text('barcode').unique(), // Code 39 barcode for order identification
+  barcode: text('barcode'), // Code 39 barcode for order identification
   // Department Progression Fields
   currentDepartment: text('current_department').default('P1 Production Queue'), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer('current_department_id').references(
@@ -171,7 +171,7 @@ export const allOrders = pgTable('all_orders', {
 // Legacy orders table - keeping for compatibility
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(),
+  orderId: text('order_id').notNull(),
   customer: text('customer').notNull(),
   product: text('product').notNull(),
   quantity: integer('quantity').notNull(),
@@ -234,7 +234,7 @@ export const linkedOrders = pgTable('linked_orders', {
 // Follow-up Orders - New orders that require customer signature before production
 export const followupOrders = pgTable('followup_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(),
+  orderId: text('order_id').notNull(),
   customerId: text('customer_id').notNull(),
   customerEmail: text('customer_email').notNull(),
   // Email Tracking
@@ -246,7 +246,7 @@ export const followupOrders = pgTable('followup_orders', {
   pdfPath: text('pdf_path'),
   pdfGeneratedAt: timestamp('pdf_generated_at'),
   // Signature Tracking
-  signatureToken: text('signature_token').unique(), // Unique token for signature link
+  signatureToken: text('signature_token'), // Unique token for signature link
   signatureSigned: boolean('signature_signed').default(false),
   signatureData: text('signature_data'), // Base64 signature image
   signedAt: timestamp('signed_at'),
@@ -257,6 +257,7 @@ export const followupOrders = pgTable('followup_orders', {
   // Reminder Tracking
   reminderSent: boolean('reminder_sent').default(false),
   reminderSentAt: timestamp('reminder_sent_at'),
+  reminderCount: integer('reminder_count').default(0), // Number of reminder emails sent
   // Order Summary for Email Display
   orderSummary: jsonb('order_summary'), // Contains order details for email body
   createdAt: timestamp('created_at').defaultNow(),
@@ -416,7 +417,7 @@ export const creditCardTransactions = pgTable('credit_card_transactions', {
     .references(() => payments.id)
     .notNull(),
   orderId: text('order_id').notNull(),
-  transactionId: text('transaction_id').notNull().unique(), // Authorize.Net transaction ID
+  transactionId: text('transaction_id').notNull(), // Authorize.Net transaction ID
   authCode: text('auth_code'), // Authorization code from Authorize.Net
   responseCode: text('response_code'), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
   responseReasonCode: text('response_reason_code'), // Detailed reason code
@@ -636,30 +637,11 @@ export const inventoryScans = pgTable('inventory_scans', {
   lotNumber: text('lot_number'),
   batchNumber: text('batch_number'),
   aluminumHeatNumber: text('aluminum_heat_number'), // New field for P2 products
-  barcode: text('barcode').unique(), // 39-line barcode for P2 products
+  barcode: text('barcode'), // 39-line barcode for P2 products
   receivingDate: date('receiving_date'), // Date when received
   technicianId: text('technician_id'),
   scannedAt: timestamp('scanned_at').defaultNow(),
 });
-
-// Department-specific consumption rates for parts
-export const departmentConsumptionRates = pgTable('department_consumption_rates', {
-  id: serial('id').primaryKey(),
-  agPartNumber: text('ag_part_number')
-    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
-    .notNull(),
-  departmentId: integer('department_id')
-    .references(() => departments.id, { onDelete: 'cascade' })
-    .notNull(),
-  consumptionRate: real('consumption_rate').notNull(), // Units consumed per time period
-  ratePeriod: text('rate_period').default('weekly'), // daily, weekly, monthly
-  usageUnit: text('usage_unit'), // Unit of measurement (ea, lbs, oz, etc.)
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => ({
-  uniquePartDepartment: unique().on(table.agPartNumber, table.departmentId),
-}));
 
 export const partsRequests = pgTable('parts_requests', {
   id: serial('id').primaryKey(),
@@ -734,7 +716,7 @@ export const rtsInventoryHistory = pgTable('rts_inventory_history', {
 // RTS Sales Transactions - Track sales of RTS inventory to customers
 export const rtsSales = pgTable('rts_sales', {
   id: uuid('id').defaultRandom().primaryKey(),
-  saleNumber: text('sale_number').notNull().unique(), // e.g., RTS-2024-001
+  saleNumber: text('sale_number').notNull(), // e.g., RTS-2024-001
   customerId: text('customer_id').notNull(),
   orderId: text('order_id'), // Reference to order created for this sale
   // Shipping Information
@@ -830,10 +812,10 @@ export const punchEvents = pgTable('punch_events', {
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
-  employeeCode: text('employee_code').unique(),
+  employeeCode: text('employee_code'), // Constraint exists in production as employees_employee_code_unique
   canonicalId: uuid('canonical_id'), // Link to canonical identity for cross-system deduplication
   name: text('name').notNull(),
-  email: text('email').unique(),
+  email: text('email'),
   phone: text('phone'),
   jobTitle: text('job_title'), // Informational only - e.g., "Department Manager", "HR Specialist"
   userRole: text('user_role').notNull().default('EMPLOYEE'), // ADMIN, EMPLOYEE, OWNER - system access level
@@ -848,7 +830,7 @@ export const employees = pgTable('employees', {
   buildingKeyAccess: boolean('building_key_access').default(false),
   tciAccess: boolean('tci_access').default(false),
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT
-  portalToken: text('portal_token').unique(), // UUID for employee portal access
+  portalToken: text('portal_token'), // UUID for employee portal access
   portalTokenExpiry: timestamp('portal_token_expiry'),
   isFinishTechnician: boolean('is_finish_technician').default(false), // Mark employee as Finish technician for department assignments
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
@@ -873,36 +855,6 @@ export const certifications = pgTable('certifications', {
   isActive: boolean('is_active'),
   requirementsData: jsonb('requirements_data'),
   workInstructions: text('work_instructions'),
-});
-
-// Employee-Certification Junction Table
-export const employeeCertifications = pgTable('employee_certifications', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
-  employeeId: integer('employee_id')
-    .references(() => employees.id)
-    .notNull(),
-  certificationId: integer('certification_id')
-    .references(() => certifications.id)
-    .notNull(),
-  dateObtained: date('date_obtained').notNull(),
-  expiryDate: date('expiry_date'),
-  certificateNumber: varchar('certificate_number'),
-  issuingAuthority: varchar('issuing_authority'),
-  status: varchar('status'),
-  createdAt: timestamp('created_at'),
-  updatedAt: timestamp('updated_at'),
-  dateExpiry: date('date_expiry'),
-  documentUrl: text('document_url'),
-  isActive: boolean('is_active'),
-  notes: text('notes'),
-  trainerName: varchar('trainer_name'),
-  trainerSignature: varchar('trainer_signature'),
-  trainingDate: date('training_date'),
-  criticalPointsCompleted: jsonb('critical_points_completed'),
-  completedByUserId: integer('completed_by_user_id'),
-  formCompletedAt: timestamp('form_completed_at'),
-  workInstructionsCompleted: jsonb('work_instructions_completed'),
-  uploadedFiles: jsonb('uploaded_files').default(sql`'[]'::jsonb`),
 });
 
 // Employee Evaluations
@@ -1137,7 +1089,7 @@ export const users = pgTable('users', {
 // User Sessions Table
 export const userSessions = pgTable('user_sessions', {
   id: serial('id').primaryKey(),
-  sessionToken: text('session_token').notNull().unique(),
+  sessionToken: text('session_token').notNull(),
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
@@ -1170,7 +1122,7 @@ export const userIntegrations = pgTable('user_integrations', {
 // Capability-Based Permission System
 export const capabilities = pgTable('capabilities', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS"
+  name: text('name').notNull(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS" (constraint exists in production as capabilities_name_key)
   displayName: text('display_name').notNull(), // e.g., "View Orders", "Edit Inventory"
   category: text('category').notNull(), // e.g., "ORDERS", "INVENTORY", "EMPLOYEES", "REPORTS"
   description: text('description'),
@@ -1180,28 +1132,22 @@ export const capabilities = pgTable('capabilities', {
 });
 
 // Employee-Capability Junction Table with toggle for hardcoded capabilities
-export const employeeCapabilities = pgTable(
-  'employee_capabilities',
-  {
-    id: serial('id').primaryKey(),
-    employeeId: integer('employee_id')
-      .references(() => employees.id)
-      .notNull(),
-    capabilityId: integer('capability_id')
-      .references(() => capabilities.id)
-      .notNull(),
-    grantedBy: text('granted_by'), // Username or system that granted this capability
-    isHardcoded: boolean('is_hardcoded').default(false), // True if this is a hardcoded capability
-    useHardcodedValue: boolean('use_hardcoded_value').default(true), // Toggle to enable/disable hardcoded capabilities
-    notes: text('notes'),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
-  },
-  (table) => ({
-    // Unique constraint to prevent duplicate capability grants
-    uniqueEmployeeCapability: unique().on(table.employeeId, table.capabilityId),
-  })
-);
+export const employeeCapabilities = pgTable('employee_capabilities', {
+  id: serial('id').primaryKey(),
+  employeeId: integer('employee_id')
+    .references(() => employees.id)
+    .notNull(),
+  capabilityId: integer('capability_id')
+    .references(() => capabilities.id)
+    .notNull(),
+  grantedBy: text('granted_by'), // Username or system that granted this capability
+  isHardcoded: boolean('is_hardcoded').default(false), // True if this is a hardcoded capability
+  useHardcodedValue: boolean('use_hardcoded_value').default(true), // Toggle to enable/disable hardcoded capabilities
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  // Unique constraint exists in production as unique_employee_capability
+});
 
 // User-Capability Junction Table with toggle for hardcoded capabilities
 export const userCapabilities = pgTable(
@@ -1878,25 +1824,6 @@ export const insertCertificationSchema = createInsertSchema(certifications)
     isActive: z.boolean().default(true),
   });
 
-export const insertEmployeeCertificationSchema = createInsertSchema(
-  employeeCertifications
-)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    employeeId: z.number().min(1, 'Employee ID is required'),
-    certificationId: z.number().min(1, 'Certification ID is required'),
-    dateObtained: z.coerce.date(),
-    expiryDate: z.coerce.date().optional().nullable(),
-    certificateNumber: z.string().optional().nullable(),
-    documentUrl: z.string().optional().nullable(),
-    notes: z.string().optional().nullable(),
-    isActive: z.boolean().default(true),
-  });
-
 // Evaluations schemas
 export const insertEvaluationSchema = createInsertSchema(evaluations)
   .omit({
@@ -2269,21 +2196,6 @@ export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs)
     signatureDataURL: z.string().optional().nullable(),
   });
 
-export const insertDepartmentConsumptionRateSchema = createInsertSchema(departmentConsumptionRates)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    agPartNumber: z.string().min(1, 'Part number is required'),
-    departmentId: z.number().positive('Department ID is required'),
-    consumptionRate: z.number().positive('Consumption rate must be positive'),
-    ratePeriod: z.enum(['daily', 'weekly', 'monthly']).default('weekly'),
-    usageUnit: z.string().optional().nullable(),
-    notes: z.string().optional().nullable(),
-  });
-
 export const insertPartsRequestSchema = createInsertSchema(partsRequests)
   .omit({
     id: true,
@@ -2427,10 +2339,6 @@ export type UserIntegration = typeof userIntegrations.$inferSelect;
 // New employee-related types
 export type InsertCertification = z.infer<typeof insertCertificationSchema>;
 export type Certification = typeof certifications.$inferSelect;
-export type InsertEmployeeCertification = z.infer<
-  typeof insertEmployeeCertificationSchema
->;
-export type EmployeeCertification = typeof employeeCertifications.$inferSelect;
 export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
 export type Evaluation = typeof evaluations.$inferSelect;
 // User session types removed with authentication system
@@ -2494,8 +2402,6 @@ export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
-export type InsertDepartmentConsumptionRate = z.infer<typeof insertDepartmentConsumptionRateSchema>;
-export type DepartmentConsumptionRate = typeof departmentConsumptionRates.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 
@@ -2580,7 +2486,7 @@ export type ManufacturersCertificate =
 // Layup Scheduler Tables
 export const molds = pgTable('molds', {
   id: serial('id').primaryKey(),
-  moldId: text('mold_id').notNull().unique(),
+  moldId: text('mold_id').notNull(),
   modelName: text('model_name').notNull(),
   stockModels: text('stock_models').array().default([]), // Array of associated stock model IDs
   instanceNumber: integer('instance_number').notNull(),
@@ -2766,18 +2672,18 @@ export const customers = pgTable('customers', {
 
 export const customerAddresses = pgTable('customer_addresses', {
   id: serial('id').primaryKey(),
-  customerId: text('customer_id').notNull(),
+  customerId: integer('customer_id').notNull(),
   street: text('street').notNull(),
-  street2: text('street2'), // Suite, Apt, Unit number
+  street2: text('street2'),
   city: text('city').notNull(),
   state: text('state').notNull(),
   zipCode: text('zip_code').notNull(),
-  country: text('country').notNull().default('United States'),
-  type: text('type').notNull().default('shipping'), // shipping, billing, both
-  isDefault: boolean('is_default').default(false),
-  isValidated: boolean('is_validated').default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  country: text('country'),
+  type: text('type'),
+  isDefault: boolean('is_default'),
+  isValidated: boolean('is_validated'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
 });
 
 // Vendors table for supplier management
@@ -2847,9 +2753,7 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniqueVendorMonthYear: unique().on(table.vendorId, table.month, table.year),
-}));
+});
 
 // Enhanced Inventory MRP Tables
 
@@ -2867,9 +2771,7 @@ export const inventoryBalances = pgTable('inventory_balances', {
   lastCountedAt: timestamp('last_counted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePartLocation: unique().on(table.agPartNumber, table.locationId),
-}));
+});
 
 // Department-Location Mapping for derived department tracking
 // Department-Location Mapping for physical staging locations
@@ -2961,7 +2863,7 @@ export const vendorParts = pgTable('vendor_parts', {
 // Vendor Purchase Orders
 export const vendorPOs = pgTable('vendor_pos', {
   id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull().unique(),
+  poNumber: text('po_number').notNull(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
@@ -3016,9 +2918,7 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
-}));
+});
 
 // Central Company Settings (singleton table for company-wide information)
 export const companySettings = pgTable('company_settings', {
@@ -3072,9 +2972,7 @@ export const poOptionalSettings = pgTable('po_optional_settings', {
     .references(() => optionalSettings.id, { onDelete: 'cascade' })
     .notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePoSetting: unique().on(table.vendorPoId, table.optionalSettingId),
-}));
+});
 
 // Vendor PO Attachments - Files attached to vendor POs (emails, reference docs, etc.)
 export const vendorPoAttachments = pgTable('vendor_po_attachments', {
@@ -3098,15 +2996,19 @@ export const communicationLogs = pgTable('communication_logs', {
   messageType: text('message_type').notNull().default('transactional'), // transactional, marketing, notification
   customerId: text('customer_id').notNull(),
   type: text('type').notNull(), // order-confirmation, shipping-notification, quality-alert
+  context: text('context'), // initial, resend, reminder - for order confirmation emails
   method: text('method').notNull(), // email, sms
   recipient: text('recipient').notNull(), // email address or phone number
   sender: text('sender'), // sender email/phone for inbound messages
   subject: text('subject'),
   message: text('message'),
   status: text('status').notNull().default('pending'), // pending, sent, failed, received
+  skipReason: text('skip_reason'), // For skipped outcomes: dedup, cooldown, max_attempts
   error: text('error'),
   direction: text('direction').default('outbound'), // inbound, outbound
   externalId: text('external_id'), // External message ID from Twilio/SendGrid
+  trackingNumber: text('tracking_number'), // For shipping notifications - enables structured deduplication
+  signatureToken: text('signature_token'), // For order confirmations - enables structured deduplication
   isRead: boolean('is_read').default(false), // Whether message has been read
   sentAt: timestamp('sent_at'),
   receivedAt: timestamp('received_at'), // For inbound messages
@@ -3673,7 +3575,7 @@ export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
 // Purchase Order Management Tables
 export const purchaseOrders = pgTable('purchase_orders', {
   id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull().unique(),
+  poNumber: text('po_number').notNull(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(), // Denormalized for performance
   itemType: text('item_type').notNull().default('single'), // single, multiple
@@ -3716,7 +3618,7 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
 // P2 Customer Management - separate customer database for P2 operations
 export const p2Customers = pgTable('p2_customers', {
   id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
-  customerId: text('customer_id').notNull().unique(),
+  customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   contactEmail: text('contact_email'),
   contactPhone: text('contact_phone'),
@@ -3779,7 +3681,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
 // RFQ Risk Assessments - stores RFQ risk assessment records
 export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   id: serial('id').primaryKey(),
-  rfqNumber: text('rfq_number').notNull().unique(),
+  rfqNumber: text('rfq_number').notNull(),
   customerId: text('customer_id')
     .references(() => p2Customers.customerId)
     .notNull(),
@@ -3847,8 +3749,8 @@ export type P2DepartmentStage = typeof P2_DEPARTMENT_STAGES[number];
 // P2 Serialized Items - Individual tracked items from P2 PO items
 export const p2SerializedItems = pgTable('p2_serialized_items', {
   id: uuid('id').defaultRandom().primaryKey(),
-  serialNumber: text('serial_number').notNull().unique(), // Unique serial for this item
-  barcode: text('barcode').notNull().unique(), // Format: {PONumber}-{PartNumber}-{Sequence}
+  serialNumber: text('serial_number').notNull(), // Unique serial for this item (constraint exists in production as p2_serialized_items_serial_number_key)
+  barcode: text('barcode').notNull(), // Format: {PONumber}-{PartNumber}-{Sequence} (constraint exists in production as p2_serialized_items_barcode_key)
   poId: integer('po_id')
     .references(() => p2PurchaseOrders.id)
     .notNull(),
@@ -4097,34 +3999,30 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
 
 // Travelers - Header/controlled record for production execution
 export const travelers = pgTable('travelers', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerNumber: text('traveler_number').notNull().unique(), // TRV-2025-000123
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerNumber: varchar('traveler_number', { length: 255 }).notNull().unique(),
   travelerRevision: integer('traveler_revision').default(1).notNull(),
 
-  // What are we building?
-  inventoryItemId: text('inventory_item_id').notNull(),
-  partNumber: text('part_number').notNull(),
-  partName: text('part_name').notNull(),
+  inventoryItemId: varchar('inventory_item_id', { length: 255 }),
+  partNumber: varchar('part_number', { length: 255 }),
+  partName: varchar('part_name', { length: 255 }),
 
-  // Optional linkage to orders
-  salesOrderId: text('sales_order_id'),
-  workOrderId: text('work_order_id'),
+  salesOrderId: varchar('sales_order_id', { length: 255 }),
+  workOrderId: varchar('work_order_id', { length: 255 }),
 
-  // Traceability at traveler level
-  lotNumber: text('lot_number'),
-  serialNumber: text('serial_number'),
-  internalControlNumber: text('internal_control_number'), // ICN for the unit/lot
-  quantity: integer('quantity').default(1).notNull(),
+  lotNumber: varchar('lot_number', { length: 255 }),
+  serialNumber: varchar('serial_number', { length: 255 }),
+  internalControlNumber: varchar('internal_control_number', { length: 255 }),
+  quantity: integer('quantity').default(1),
 
-  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | BLOCKED | CANCELED
+  status: varchar('status', { length: 50 }).default('DRAFT').notNull(),
 
-  // Which routing template created this traveler?
-  partRoutingId: uuid('part_routing_id'),
-  partRoutingRevision: integer('part_routing_revision'), // Snapshot of routing revision at creation
+  partRoutingId: varchar('part_routing_id', { length: 255 }),
+  partRoutingRevision: integer('part_routing_revision'),
 
-  createdBy: text('created_by').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: varchar('created_by', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
 }, (table) => ({
   travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
   statusIdx: index('travelers_status_idx').on(table.status),
@@ -4134,21 +4032,24 @@ export const travelers = pgTable('travelers', {
 
 // Traveler Steps - Departments in sequence
 export const travelerSteps = pgTable('traveler_steps', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerId: uuid('traveler_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id', { length: 255 })
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  departmentName: text('department_name').notNull(), // "Layup"
-  stepNumber: integer('step_number').notNull(), // 10,20,30 (makes insertions easy)
-  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | BLOCKED
+  departmentName: varchar('department_name', { length: 255 }).notNull(),
+  stepNumber: integer('step_number').notNull(),
+  status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
 
-  assignedTechnicianId: integer('assigned_technician_id'), // Optional preferred technician
+  assignedTechnicianId: varchar('assigned_technician_id', { length: 255 }),
   
-  startedAt: timestamp('started_at'),
-  startedBy: text('started_by'),
-  completedAt: timestamp('completed_at'),
-  completedBy: text('completed_by'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  startedBy: varchar('started_by', { length: 255 }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedBy: varchar('completed_by', { length: 255 }),
+  blockedAt: timestamp('blocked_at', { withTimezone: true }),
+  blockedReason: text('blocked_reason'),
+  notes: text('notes'),
 }, (table) => ({
   travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
   stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
@@ -4156,22 +4057,22 @@ export const travelerSteps = pgTable('traveler_steps', {
 
 // Traveler Tasks - Start/end tasks, QC tasks, special process tasks per step
 export const travelerTasks = pgTable('traveler_tasks', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerStepId: uuid('traveler_step_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  taskType: text('task_type').notNull(), // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
-  taskPhase: text('task_phase').notNull().default('WORK'), // START | WORK | FINISH - controls execution order enforcement
+  taskType: varchar('task_type', { length: 100 }).notNull(),
+  taskPhase: text('task_phase').notNull().default('WORK'),
 
-  title: text('title').notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
   instructions: text('instructions'),
-  required: boolean('required').default(true).notNull(),
-  sortOrder: integer('sort_order').default(0).notNull(),
+  required: boolean('required').default(true),
+  sortOrder: integer('sort_order').default(0),
 
-  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | FAILED | SKIPPED
-  completedAt: timestamp('completed_at'),
-  completedBy: text('completed_by'), // employee id/username
+  status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedBy: varchar('completed_by', { length: 255 }),
 }, (table) => ({
   stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
   taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
@@ -4180,57 +4081,57 @@ export const travelerTasks = pgTable('traveler_tasks', {
 
 // Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
 export const travelerTaskFields = pgTable('traveler_task_fields', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerTaskId: uuid('traveler_task_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerTaskId: varchar('traveler_task_id', { length: 255 })
     .references(() => travelerTasks.id, { onDelete: 'cascade' })
     .notNull(),
 
-  fieldKey: text('field_key').notNull(), // "lot_number", "vacuum_start", etc.
-  fieldLabel: text('field_label').notNull(), // UI label
-  fieldType: text('field_type').notNull(), // text|number|date|yes_no|dropdown|barcode|attachment|json
-  required: boolean('required').default(false).notNull(),
+  fieldKey: varchar('field_key', { length: 255 }).notNull(),
+  fieldLabel: varchar('field_label', { length: 255 }).notNull(),
+  fieldType: varchar('field_type', { length: 50 }).default('text'),
+  required: boolean('required').default(false),
 
-  value: jsonb('value'), // Store values in a consistent flexible format
-  validation: jsonb('validation'), // min/max/options/regex/etc.
+  value: text('value'),
+  validation: jsonb('validation'),
   
-  recordedBy: text('recorded_by'),
-  recordedAt: timestamp('recorded_at'),
+  recordedBy: varchar('recorded_by', { length: 255 }),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }),
 }, (table) => ({
   taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
 }));
 
 // Traveler Signatures - Digital signature required for step completion
 export const travelerSignatures = pgTable('traveler_signatures', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerStepId: uuid('traveler_step_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  signedBy: text('signed_by').notNull(), // employee id/username
-  signedByName: text('signed_by_name'), // Display name
-  badgeScan: text('badge_scan'), // Optional badge scan value
-  signedAt: timestamp('signed_at').defaultNow(),
+  signedBy: varchar('signed_by', { length: 255 }).notNull(),
+  signedByName: varchar('signed_by_name', { length: 255 }),
+  badgeScan: varchar('badge_scan', { length: 255 }),
+  signedAt: timestamp('signed_at', { withTimezone: true }).default(sql`now()`),
 
-  meaning: text('meaning').notNull(), // PERFORMED | INSPECTED | VERIFIED | RELEASED
-  signatureHash: text('signature_hash'), // Optional integrity hash
+  meaning: varchar('meaning', { length: 100 }).notNull(),
   notes: text('notes'),
+  signatureHash: text('signature_hash'),
 }, (table) => ({
   stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
 }));
 
 // Traveler Events - Audit trail for all actions
 export const travelerEvents = pgTable('traveler_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerId: uuid('traveler_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id', { length: 255 })
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  actor: text('actor').notNull(), // Who performed the action
-  actorName: text('actor_name'), // Display name
-  action: text('action').notNull(), // CREATED|EDITED|TASK_COMPLETED|SIGNED|STATUS_CHANGED|BLOCKED|UNBLOCKED|...
-  details: jsonb('details'), // Before/after deltas, context data
+  actor: varchar('actor', { length: 255 }).notNull(),
+  actorName: varchar('actor_name', { length: 255 }),
+  action: varchar('action', { length: 100 }).notNull(),
+  details: jsonb('details'),
 
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
 }, (table) => ({
   travelerIdIdx: index('traveler_events_traveler_id_idx').on(table.travelerId),
   actionIdx: index('traveler_events_action_idx').on(table.action),
@@ -4594,7 +4495,7 @@ export const p2TestForConformanceReports = pgTable('p2_test_for_conformance_repo
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // Customer-based format: ABC00199-0001
+  orderId: text('order_id').notNull(), // Customer-based format: ABC00199-0001
   poId: integer('po_id')
     .references(() => purchaseOrders.id, { onDelete: 'cascade' })
     .notNull(),
@@ -5510,6 +5411,31 @@ export const orderStatusEnum = pgEnum('order_status', [
   'FINALIZED',
   'CANCELLED',
   'RESERVED',
+  'FULFILLED',
+]);
+
+// Missing production enums
+export const frequencyTypeEnum = pgEnum('frequency_type', [
+  'DAILY',
+  'WEEKLY',
+  'MONTHLY',
+  'ONGOING',
+]);
+
+export const taskTypeEnum = pgEnum('task_type', [
+  'RECURRING',
+  'DYNAMIC',
+  'MANUAL',
+]);
+
+export const surveyQuestionTypeEnum = pgEnum('survey_question_type', [
+  'multiple_choice',
+  'rating_scale',
+  'text',
+  'yes_no',
+  'dropdown',
+  'matrix',
+  'nps',
 ]);
 
 // Survey Engine Enums - Generic survey system for reuse across applications
@@ -5777,7 +5703,7 @@ export type InsertBomLine = z.infer<typeof insertBomLineSchema>;
 // Order ID Reservation System - Eliminates race conditions for concurrent order creation
 export const orderIdReservations = pgTable('order_id_reservations', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // The reserved Order ID (e.g., AG003)
+  orderId: text('order_id').notNull(), // The reserved Order ID (e.g., AG003)
   yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., AG)
   sequenceNumber: integer('sequence_number').notNull(), // Sequential number (e.g., 3 for AG003)
   reservedAt: timestamp('reserved_at').defaultNow().notNull(), // When ID was reserved
@@ -5807,7 +5733,7 @@ export type OrderIdReservation = typeof orderIdReservations.$inferSelect;
 // Replaces the reservation system with a simpler, faster, and 100% reliable approach
 export const orderIdSequences = pgTable('order_id_sequences', {
   id: serial('id').primaryKey(),
-  yearMonthPrefix: text('year_month_prefix').notNull().unique(), // Year-month prefix (e.g., EH for Aug 2025)
+  yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., EH for Aug 2025)
   currentSequence: integer('current_sequence').notNull().default(0), // Current sequence number
   lastUsedAt: timestamp('last_used_at').defaultNow().notNull(), // Last time this prefix was used
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -5828,7 +5754,7 @@ export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 // P2 Production Orders - Generated from P2 Purchase Orders based on BOM
 export const p2ProductionOrders = pgTable('p2_production_orders', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // P2-PO123-001, P2-PO123-002, etc.
+  orderId: text('order_id').notNull(), // P2-PO123-001, P2-PO123-002, etc.
   p2PoId: integer('p2_po_id')
     .references(() => p2PurchaseOrders.id)
     .notNull(),
@@ -5944,26 +5870,20 @@ export type InsertShipmentRecord = z.infer<typeof insertShipmentRecordSchema>;
 export type ShipmentRecord = typeof shipmentRecords.$inferSelect;
 
 // Shipment Items - Join table linking shipments to PO items and production orders
-export const shipmentItems = pgTable(
-  'shipment_items',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    shipmentId: uuid('shipment_id')
-      .references(() => shipmentRecords.id, { onDelete: 'cascade' })
-      .notNull(),
-    poItemId: integer('po_item_id')
-      .references(() => purchaseOrderItems.id)
-      .notNull(),
-    orderId: text('order_id').notNull(), // Production order ID (e.g., "AG123-1")
-    quantity: integer('quantity').notNull().default(1),
-    weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
-    notes: text('notes'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  (table) => ({
-    uniqueShipmentItem: unique().on(table.shipmentId, table.orderId),
-  })
-);
+export const shipmentItems = pgTable('shipment_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shipmentId: uuid('shipment_id')
+    .references(() => shipmentRecords.id, { onDelete: 'cascade' })
+    .notNull(),
+  poItemId: integer('po_item_id')
+    .references(() => purchaseOrderItems.id)
+    .notNull(),
+  orderId: text('order_id').notNull(), // Production order ID (e.g., "AG123-1")
+  quantity: integer('quantity').notNull().default(1),
+  weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 export const insertShipmentItemSchema = createInsertSchema(shipmentItems)
   .omit({
@@ -6128,7 +6048,7 @@ export const documents = pgTable('documents', {
 
 export const documentTags = pgTable('document_tags', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   category: text('category'), // 'project', 'customer', 'po_number', 'status', 'document_type'
   color: text('color').default('#3B82F6'), // Hex color for UI
   description: text('description'),
@@ -6457,47 +6377,33 @@ export const surveys = pgTable('surveys', {
   id: uuid('id').defaultRandom().primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
+  category: text('category').notNull(),
   isActive: boolean('is_active').default(true),
-  questions: jsonb('questions').notNull().default('[]'),
-  settings: jsonb('settings').default('{}'),
-  createdBy: text('created_by'),
+  isTemplate: boolean('is_template').default(false),
+  welcomeMessage: text('welcome_message'),
+  thankYouMessage: text('thank_you_message').default('Thank you for your feedback!'),
+  createdById: integer('created_by_id'),
+  createdByName: text('created_by_name'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Generic Survey Responses table - uses respondent/context abstraction
+// Generic Survey Responses table
 export const surveyResponses = pgTable('survey_responses', {
   id: uuid('id').defaultRandom().primaryKey(),
   surveyId: uuid('survey_id')
     .references(() => surveys.id)
     .notNull(),
-  // Respondent abstraction - who is responding
-  respondentId: text('respondent_id').notNull(),
-  respondentType: surveyRespondentTypeEnum('respondent_type')
-    .notNull()
-    .default('customer'),
-  respondentName: text('respondent_name'),
-  respondentEmail: text('respondent_email'),
-  // Context abstraction - what the survey is about
-  contextId: text('context_id'),
-  contextType: surveyContextTypeEnum('context_type').default('general'),
-  // Survey responses stored as JSON
-  responses: jsonb('responses').notNull().default('{}'),
-  // Calculated scores
-  overallSatisfaction: integer('overall_satisfaction'),
-  npsScore: integer('nps_score'),
-  aggregateScore: integer('aggregate_score'),
-  // Metadata
-  responseTimeSeconds: integer('response_time_seconds'),
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  submittedBy: text('submitted_by'),
-  surveyDate: timestamp('survey_date'),
-  // Status tracking
+  orderId: text('order_id'),
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  customerEmail: text('customer_email'),
+  responseToken: text('response_token'),
   isComplete: boolean('is_complete').default(false),
-  submittedAt: timestamp('submitted_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+  triggerId: uuid('trigger_id'),
+  metadata: jsonb('metadata'),
 });
 
 // Insert schema for Generic Surveys
@@ -6775,7 +6681,7 @@ export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;
 // Departments table for internal messaging and parts requests
 export const departments = pgTable('departments', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name'), // Display name for UI
   description: text('description'),
   locationId: text('location_id'), // Physical location/storage area for parts
@@ -6936,7 +6842,7 @@ export type InsertFeatureSelection = z.infer<
 // Magic Link Tokens - Passwordless authentication and secure actions
 export const magicLinkTokens = pgTable('magic_link_tokens', {
   id: serial('id').primaryKey(),
-  token: text('token').notNull().unique(), // Unique cryptographic token
+  token: text('token').notNull(), // Unique cryptographic token (constraint exists in production as magic_link_tokens_token_key)
   email: text('email').notNull(), // Email address to send link to
   purpose: text('purpose').notNull(), // e.g., 'login', 'order_confirmation', 'password_reset', 'customer_action'
   metadata: jsonb('metadata'), // Additional data (userId, orderId, customerId, etc.)
@@ -6956,25 +6862,6 @@ export const insertMagicLinkTokenSchema = createInsertSchema(
 
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
-
-// OAuth State Tokens - Secure OAuth CSRF protection
-export const oauthStates = pgTable('oauth_states', {
-  id: serial('id').primaryKey(),
-  state: text('state').notNull().unique(), // Cryptographically random state token
-  userId: integer('user_id').references(() => users.id).notNull(),
-  integrationType: text('integration_type').notNull(), // e.g., 'google-gmail', 'google-calendar'
-  expiresAt: timestamp('expires_at').notNull(), // State token expiration (5 minutes)
-  used: boolean('used').default(false), // Prevent state reuse
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const insertOAuthStateSchema = createInsertSchema(oauthStates).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type OAuthState = typeof oauthStates.$inferSelect;
-export type InsertOAuthState = z.infer<typeof insertOAuthStateSchema>;
 
 // Bulk Shipping Schemas - For API requests/responses (not stored in DB)
 export const receiverAccountSchema = z.object({
@@ -7065,7 +6952,7 @@ export const cuttingMaterials = pgTable('cutting_materials', {
 // Cutting Table - Production Lines
 export const cuttingProductionLines = pgTable('cutting_production_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
-  lineName: text('line_name').notNull().unique(), // "Production Line 1", "Production Line 2"
+  lineName: text('line_name').notNull(), // "Production Line 1", "Production Line 2"
   lineNumber: integer('line_number').notNull(), // 1 or 2
   description: text('description'), // "Gun stock products", "Aircraft products"
   isActive: boolean('is_active').default(true),
@@ -7244,7 +7131,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   quantityInStock: integer('quantity_in_stock').notNull().default(0),
   squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric
   lowStockThreshold: integer('low_stock_threshold').default(10),
-  barcode: text('barcode').unique(), // Auto-generated for P2 items
+  barcode: text('barcode'), // Auto-generated for P2 items
   notes: text('notes'),
   status: text('status').default('active'), // active, depleted - for traceability
   depletedAt: timestamp('depleted_at'), // When the roll was marked as depleted
@@ -7574,7 +7461,7 @@ export type InsertManufacturingQueue = z.infer<typeof insertManufacturingQueueSc
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
-  documentNumber: text('document_number').notNull().unique(), // e.g., DOC-001
+  documentNumber: text('document_number').notNull(), // e.g., DOC-001
   documentName: text('document_name').notNull(),
   documentType: text('document_type').notNull(), // SOP, Work Instruction, Form, etc.
   department: text('department').notNull(), // P1, P2, Quality, etc.
@@ -7655,7 +7542,7 @@ export type InsertInvoiceNumber = z.infer<typeof insertInvoiceNumberSchema>;
 // Quotes - Customer quotes for P2 business (stub for future implementation)
 export const quotes = pgTable('quotes', {
   id: uuid('id').defaultRandom().primaryKey(),
-  quoteNumber: text('quote_number').notNull().unique(),
+  quoteNumber: text('quote_number').notNull(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   description: text('description'),
@@ -7707,7 +7594,7 @@ export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
 // Cost Centers - Track business units, departments, and projects for expense allocation
 export const costCenters = pgTable('cost_centers', {
   id: uuid('id').defaultRandom().primaryKey(),
-  code: text('code').notNull().unique(), // Short identifier (e.g., LAYUP, ADMIN)
+  code: text('code').notNull(), // Short identifier (e.g., LAYUP, ADMIN)
   name: text('name').notNull(), // Full name (e.g., Layup Department)
   type: text('type').notNull(), // DEPARTMENT, PROJECT, OVERHEAD, ADMINISTRATIVE
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE
@@ -7941,15 +7828,15 @@ export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSche
 
 // Account Categories - Classifications for chart of accounts
 export const accountCategories = pgTable('account_categories', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull().unique(), // e.g., 'Assets', 'Liabilities', 'Revenue', 'COGS', 'Operating Expenses'
-  code: text('code').notNull().unique(), // e.g., '1000', '2000', '3000', '4000', '5000'
-  type: text('type').notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  name: varchar('name', { length: 255 }).notNull().unique(),
+  code: varchar('code', { length: 10 }).notNull().unique(),
+  type: varchar('type', { length: 50 }).notNull(),
   description: text('description'),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({
@@ -7963,16 +7850,16 @@ export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
 
 // Chart of Accounts - Individual accounting line items
 export const accounts = pgTable('accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  accountNumber: text('account_number').notNull().unique(), // Auto-generated (e.g., '5100-001')
-  name: text('name').notNull(), // e.g., 'Direct Materials - Carbon Fiber'
-  categoryId: uuid('category_id').references(() => accountCategories.id).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountNumber: varchar('account_number', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  categoryId: varchar('category_id', { length: 255 }).references(() => accountCategories.id).notNull(),
   description: text('description'),
-  isAllocated: boolean('is_allocated').default(false), // True for items like overhead, indirect materials
-  allocationBasis: text('allocation_basis'), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  isAllocated: boolean('is_allocated').default(false),
+  allocationBasis: varchar('allocation_basis', { length: 100 }),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   categoryIdIdx: index('accounts_category_id_idx').on(table.categoryId),
   isActiveIdx: index('accounts_is_active_idx').on(table.isActive),
@@ -7990,15 +7877,15 @@ export type InsertAccount = z.infer<typeof insertAccountSchema>;
 
 // Monthly Account Entries - Actual monthly amounts for each account
 export const monthlyAccountEntries = pgTable('monthly_account_entries', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountId: varchar('account_id', { length: 255 }).references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
-  month: integer('month').notNull(), // 1-12
+  month: integer('month').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
   notes: text('notes'),
-  source: text('source').default('manual'), // 'manual', 'quickbooks', 'imported'
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  source: varchar('source', { length: 50 }).default('manual'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   accountIdIdx: index('monthly_entries_account_id_idx').on(table.accountId),
   yearMonthIdx: index('monthly_entries_year_month_idx').on(table.year, table.month),
@@ -8016,16 +7903,15 @@ export type InsertMonthlyAccountEntry = z.infer<typeof insertMonthlyAccountEntry
 
 // Allocation Rules - Define how to allocate overhead, indirect materials, etc.
 export const allocationRules = pgTable('allocation_rules', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // e.g., 'Manufacturing Overhead Allocation'
-  sourceAccountId: uuid('source_account_id').references(() => accounts.id).notNull(), // Account to allocate from
-  allocationBasis: text('allocation_basis').notNull(), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
-  targetAccountIds: uuid('target_account_ids').array(), // Accounts to allocate to
-  allocationMethod: text('allocation_method').notNull(), // 'proportional', 'equal', 'custom'
-  customRatios: jsonb('custom_ratios'), // Custom allocation ratios if method is 'custom'
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  name: varchar('name', { length: 255 }).notNull(),
+  sourceAccountId: varchar('source_account_id', { length: 255 }).references(() => accounts.id).notNull(),
+  targetAccountId: varchar('target_account_id', { length: 255 }).references(() => accounts.id).notNull(),
+  allocationMethod: varchar('allocation_method', { length: 100 }).notNull(),
+  allocationValue: numeric('allocation_value', { precision: 12, scale: 2 }).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   sourceAccountIdIdx: index('allocation_rules_source_account_id_idx').on(table.sourceAccountId),
   isActiveIdx: index('allocation_rules_is_active_idx').on(table.isActive),
@@ -8042,22 +7928,21 @@ export type InsertAllocationRule = z.infer<typeof insertAllocationRuleSchema>;
 
 // Allocation Results - Store calculated allocations for each period
 export const allocationResults = pgTable('allocation_results', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  ruleId: uuid('rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  allocationRuleId: varchar('allocation_rule_id', { length: 255 }).references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
   month: integer('month').notNull(),
-  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
-  allocations: jsonb('allocations').notNull(), // { accountId: amount, ... }
-  calculatedAt: timestamp('calculated_at').defaultNow(),
+  allocatedAmount: numeric('allocated_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
-  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.ruleId),
+  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.allocationRuleId),
   yearMonthIdx: index('allocation_results_year_month_idx').on(table.year, table.month),
-  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.ruleId, table.year, table.month),
+  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.allocationRuleId, table.year, table.month),
 }));
 
 export const insertAllocationResultSchema = createInsertSchema(allocationResults).omit({
   id: true,
-  calculatedAt: true,
+  createdAt: true,
 });
 
 export type AllocationResult = typeof allocationResults.$inferSelect;
@@ -8369,7 +8254,7 @@ export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2Departm
 // sourceType: 'manual' = manual adjustment, 'overpayment' = order overpayment, 'return' = returned item/refund not sent to payment method
 export const creditMemos = pgTable('credit_memos', {
   id: serial('id').primaryKey(),
-  memoNumber: text('memo_number').notNull().unique(),
+  memoNumber: text('memo_number').notNull(),
   customerId: text('customer_id').notNull(),
   amount: real('amount').notNull(),
   appliedAmount: real('applied_amount').default(0),
@@ -9594,38 +9479,7 @@ export const epochOutreachAttempts = pgTable('epoch_outreach_attempts', {
 export type EpochOutreachAttempt = typeof epochOutreachAttempts.$inferSelect;
 export type InsertEpochOutreachAttempt = typeof epochOutreachAttempts.$inferInsert;
 
-// Timer Programs - Configurable step-based timing programs
-export const programs = pgTable('programs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  steps: jsonb('steps').notNull().default([]), // Array of step definitions
-  isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
 
-export type Program = typeof programs.$inferSelect;
-export type InsertProgram = typeof programs.$inferInsert;
-
-// Timer Program Runs - Active instances of running programs
-export const programRuns = pgTable('program_runs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  programId: uuid('program_id').references(() => programs.id), // Nullable for external timer entries
-  programName: text('program_name').notNull(),
-  steps: jsonb('steps').notNull().default([]),
-  currentStepIndex: integer('current_step_index').default(0).notNull(),
-  status: text('status').default('running').notNull(), // 'running' | 'paused' | 'completed'
-  instanceName: text('instance_name'),
-  sku: text('sku'),
-  notes: text('notes'),
-  lastUpdated: timestamp('last_updated').defaultNow(),
-  startedAt: timestamp('started_at').defaultNow().notNull(),
-  completedAt: timestamp('completed_at'),
-});
-
-export type ProgramRun = typeof programRuns.$inferSelect;
-export type InsertProgramRun = typeof programRuns.$inferInsert;
 
 // ============================================================
 // FIELD - Calm Thinking Surface (Unstructured, Opaque)
@@ -9678,9 +9532,13 @@ export const tickets = pgTable('tickets', {
   title: text('title').notNull(),
   description: text('description'),
   customerId: integer('customer_id'), // Nullable - tickets may not have a customer
-  ownerUserId: integer('owner_user_id').notNull(),
+  ownerUserId: integer('owner_user_id').notNull(), // Original creator of the ticket
+  assignedUserId: integer('assigned_user_id'), // Person currently assigned to work on the ticket
   slaDueAt: timestamp('sla_due_at'),
   slaBreached: boolean('sla_breached').default(false),
+  lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented
+  reminderCount: integer('reminder_count').default(0), // Number of stale reminders sent
+  lastReminderAt: timestamp('last_reminder_at'), // When last reminder was sent
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
@@ -9688,6 +9546,7 @@ export const tickets = pgTable('tickets', {
   statusIdx: index('tickets_status_idx').on(table.status),
   priorityIdx: index('tickets_priority_idx').on(table.priority),
   ownerIdx: index('tickets_owner_idx').on(table.ownerUserId),
+  assignedIdx: index('tickets_assigned_idx').on(table.assignedUserId),
   slaIdx: index('tickets_sla_idx').on(table.slaDueAt),
   typeIdx: index('tickets_type_idx').on(table.ticketType),
 }));
@@ -9696,6 +9555,9 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  lastActivityAt: true,
+  reminderCount: true,
+  lastReminderAt: true,
 });
 
 export type Ticket = typeof tickets.$inferSelect;
@@ -9738,5 +9600,792 @@ export const insertTicketActivitySchema = createInsertSchema(ticketActivity).omi
 
 export type TicketActivity = typeof ticketActivity.$inferSelect;
 export type InsertTicketActivity = z.infer<typeof insertTicketActivitySchema>;
+
+// ========================================================================
+// MISSING PRODUCTION TABLES - Added for schema alignment
+// ========================================================================
+
+// Additional stocks for order drafts
+export const additionalStocks = pgTable('additional_stocks', {
+  id: integer('id').primaryKey(),
+  orderDraftId: integer('order_draft_id').notNull(),
+  stockNumber: integer('stock_number').notNull(),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  shankLength: text('shank_length'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  tikkaOption: text('tikka_option'),
+  priceOverride: real('price_override'),
+  currentDepartment: text('current_department'),
+  departmentHistory: jsonb('department_history'),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  status: text('status'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  isCustomOrder: text('is_custom_order'),
+});
+
+// Chatbot conversations
+export const chatbotConversations = pgTable('chatbot_conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id'),
+  username: text('username'),
+  query: text('query').notNull(),
+  response: text('response').notNull(),
+  queryType: text('query_type'),
+  referencedInventoryIds: text('referenced_inventory_ids').array(),
+  referencedKnowledgeIds: text('referenced_knowledge_ids').array(),
+  wasHelpful: boolean('was_helpful'),
+  feedbackNotes: text('feedback_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Chatbot knowledge base
+export const chatbotKnowledgeBase = pgTable('chatbot_knowledge_base', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  documentType: text('document_type').notNull(),
+  category: text('category'),
+  filePath: text('file_path'),
+  fileName: text('file_name'),
+  fileSize: integer('file_size'),
+  extractedText: text('extracted_text'),
+  keywords: text('keywords').array(),
+  relatedPartNumbers: text('related_part_numbers').array(),
+  relatedMaterials: text('related_materials').array(),
+  isActive: boolean('is_active').notNull().default(true),
+  uploadedBy: text('uploaded_by'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  lastAccessedAt: timestamp('last_accessed_at'),
+  accessCount: integer('access_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Checklist metadata
+export const checklistMetadata = pgTable('checklist_metadata', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  frequency: frequencyTypeEnum('frequency').notNull().default('DAILY'),
+  reportRecipients: integer('report_recipients').array(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cut yield configs
+export const cutYieldConfigs = pgTable('cut_yield_configs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  partNumber: text('part_number'),
+  partName: text('part_name').notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  fabricType: text('fabric_type'),
+  cutsPerRoll: integer('cuts_per_roll'),
+  yieldPerCut: integer('yield_per_cut').notNull().default(1),
+  squareMetersPerCut: numeric('square_meters_per_cut', { precision: 10, scale: 4 }),
+  wasteFactor: numeric('waste_factor', { precision: 5, scale: 4 }).default('0.05'),
+  isActive: boolean('is_active').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting packet schedule
+export const cuttingPacketSchedule = pgTable('cutting_packet_schedule', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetType: varchar('packet_type').notNull(),
+  packetBomId: uuid('packet_bom_id'),
+  mfgQueueItemId: integer('mfg_queue_item_id'),
+  partNumber: varchar('part_number'),
+  partName: varchar('part_name'),
+  quantityNeeded: integer('quantity_needed').default(1),
+  quantityCompleted: integer('quantity_completed').default(0),
+  priority: integer('priority').default(50),
+  scheduledDate: date('scheduled_date'),
+  scheduledBy: varchar('scheduled_by'),
+  assignedOperator: varchar('assigned_operator'),
+  status: varchar('status').default('SCHEDULED'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting run log
+export const cuttingRunLog = pgTable('cutting_run_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetScheduleId: uuid('packet_schedule_id').references(() => cuttingPacketSchedule.id),
+  plyScheduleId: uuid('ply_schedule_id').references(() => plySchedule.id),
+  operatorName: varchar('operator_name').notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id'),
+  fabricType: varchar('fabric_type'),
+  fabricLot: varchar('fabric_lot'),
+  fabricBatch: varchar('fabric_batch'),
+  fabricRoll: varchar('fabric_roll'),
+  freezerLocation: varchar('freezer_location'),
+  sessionStartedAt: timestamp('session_started_at').defaultNow(),
+  sessionCompletedAt: timestamp('session_completed_at'),
+  cutsCompleted: integer('cuts_completed').default(0),
+  partsYielded: integer('parts_yielded').default(0),
+  squareMetersUsed: numeric('square_meters_used'),
+  isRollEmpty: boolean('is_roll_empty').default(false),
+  rollRemainingMeters: numeric('roll_remaining_meters'),
+  labelsGenerated: integer('labels_generated').default(0),
+  labelsPrinted: boolean('labels_printed').default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Daily task notifications
+export const dailyTaskNotifications = pgTable('daily_task_notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  notifyUserId: integer('notify_user_id').notNull().references(() => users.id),
+  taskDate: date('task_date').notNull(),
+  notificationTime: text('notification_time').notNull(),
+  message: text('message'),
+  sent: boolean('sent').notNull().default(false),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily tasks
+export const dailyTasks = pgTable('daily_tasks', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  taskDate: date('task_date').notNull(),
+  taskType: taskTypeEnum('task_type').notNull().default('RECURRING'),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category').notNull(),
+  priority: integer('priority').notNull().default(3),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  completedAt: timestamp('completed_at'),
+  dueTime: text('due_time'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Fabric receiving log
+export const fabricReceivingLog = pgTable('fabric_receiving_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id),
+  receivedDate: timestamp('received_date').notNull().defaultNow(),
+  receivedBy: text('received_by'),
+  vendorName: text('vendor_name'),
+  purchaseOrderNumber: text('purchase_order_number'),
+  materialType: text('material_type').notNull(),
+  fabricName: text('fabric_name'),
+  lotNumber: text('lot_number').notNull(),
+  batchNumber: text('batch_number'),
+  rollNumber: text('roll_number'),
+  manufactureDate: date('manufacture_date'),
+  expirationDate: date('expiration_date'),
+  quantityReceived: integer('quantity_received').notNull().default(1),
+  squareMeters: numeric('square_meters', { precision: 10, scale: 2 }),
+  freezerNumber: integer('freezer_number'),
+  conformanceDocumentPath: text('conformance_document_path'),
+  inspectionStatus: text('inspection_status').default('PENDING'),
+  inspectedBy: text('inspected_by'),
+  inspectedAt: timestamp('inspected_at'),
+  notes: text('notes'),
+  barcode: text('barcode'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Freezer locations
+export const freezerLocations = pgTable('freezer_locations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  freezerNumber: integer('freezer_number').notNull(),
+  name: text('name'),
+  description: text('description'),
+  temperature: numeric('temperature', { precision: 4, scale: 1 }),
+  isActive: boolean('is_active').notNull().default(true),
+  capacity: integer('capacity'),
+  currentItemCount: integer('current_item_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Layup orders
+export const layupOrders = pgTable('layup_orders', {
+  id: integer('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  priorityScore: integer('priority_score').notNull(),
+  department: text('department').notNull(),
+  status: text('status').notNull(),
+  customer: text('customer').notNull(),
+  product: text('product').notNull(),
+  isActive: boolean('is_active'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+});
+
+// Migration audit
+export const migrationAudit = pgTable('migration_audit', {
+  id: serial('id').primaryKey(),
+  tableSource: text('table_source').notNull(),
+  orderId: text('order_id'),
+  action: text('action').notNull(),
+  reason: text('reason'),
+  originalData: jsonb('original_data'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Non-conforming items
+export const nonConformingItems = pgTable('non_conforming_items', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  p1OrP2: text('p1_or_p2').notNull(),
+  customer: text('customer').notNull(),
+  sku: text('sku').notNull(),
+  qty: integer('qty').notNull().default(1),
+  issueCause: text('issue_cause').notNull(),
+  manufacturerDefect: boolean('manufacturer_defect').notNull().default(false),
+  disposition: text('disposition').notNull(),
+  authorization: text('authorization').notNull(),
+  serialTagNumber: text('serial_tag_number'),
+  dispositionDate: date('disposition_date'),
+  correctiveActionNotes: text('corrective_action_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Notification triggers
+export const notificationTriggers = pgTable('notification_triggers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  customerId: integer('customer_id'),
+  customerName: text('customer_name'),
+  targetDepartment: text('target_department').notNull(),
+  recipientUserId: integer('recipient_user_id').references(() => users.id),
+  recipientUsername: text('recipient_username').notNull(),
+  triggerOnFirstEntry: boolean('trigger_on_first_entry').default(false),
+  isActive: boolean('is_active').default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Order departments tracking
+export const orderDepartments = pgTable('order_departments', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().references(() => ordersUnified.orderId),
+  department: text('department').notNull(),
+  completedAt: timestamp('completed_at').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Order drafts
+export const orderDrafts = pgTable('order_drafts', {
+  id: integer('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  customerId: text('customer_id'),
+  customerPO: text('customer_po'),
+  fbOrderNumber: text('fb_order_number'),
+  agrOrderDetails: text('agr_order_details'),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  discountCode: text('discount_code'),
+  shipping: real('shipping'),
+  status: text('status'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  shankLength: text('shank_length'),
+  tikkaOption: text('tikka_option'),
+  customDiscountType: text('custom_discount_type'),
+  customDiscountValue: real('custom_discount_value'),
+  showCustomDiscount: boolean('show_custom_discount'),
+  isCustomOrder: text('is_custom_order'),
+  priceOverride: real('price_override'),
+  barcode: text('barcode'),
+  currentDepartment: text('current_department').default('P1 Production Queue'),
+  departmentHistory: jsonb('department_history'),
+  scrappedQuantity: integer('scrapped_quantity'),
+  totalProduced: integer('total_produced'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  isReplacement: boolean('is_replacement'),
+  replacedOrderId: text('replaced_order_id'),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  notes: text('notes'),
+  isPaid: boolean('is_paid'),
+  paymentType: text('payment_type'),
+  paymentAmount: real('payment_amount'),
+  paymentDate: timestamp('payment_date'),
+  paymentTimestamp: timestamp('payment_timestamp'),
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier'),
+  shippingMethod: text('shipping_method'),
+  shippedDate: timestamp('shipped_date'),
+  estimatedDelivery: timestamp('estimated_delivery'),
+  shippingLabelGenerated: boolean('shipping_label_generated'),
+  customerNotified: boolean('customer_notified'),
+  notificationMethod: text('notification_method'),
+  notificationSentAt: timestamp('notification_sent_at'),
+  deliveryConfirmed: boolean('delivery_confirmed'),
+  deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
+  p1ProductionQueueCompletedAt: timestamp('p1_production_queue_completed_at'),
+  layupPluggingCompletedAt: timestamp('layup_plugging_completed_at'),
+  barcodeCompletedAt: timestamp('barcode_completed_at'),
+  finishAssignmentCompletedAt: timestamp('finish_assignment_completed_at'),
+  qcFinishCompletedAt: timestamp('qc_finish_completed_at'),
+  qcShippingCompletedAt: timestamp('qc_shipping_completed_at'),
+  source: text('source'),
+  isFlattop: boolean('is_flattop'),
+  isVerified: boolean('is_verified'),
+  assignedTechnician: text('assigned_technician'),
+  isManualDueDate: boolean('is_manual_due_date'),
+  isManualOrderDate: boolean('is_manual_order_date'),
+  hasAltShipTo: boolean('has_alt_ship_to'),
+  altShipToCustomerId: text('alt_ship_to_customer_id'),
+  altShipToName: text('alt_ship_to_name'),
+  altShipToCompany: text('alt_ship_to_company'),
+  altShipToEmail: text('alt_ship_to_email'),
+  altShipToPhone: text('alt_ship_to_phone'),
+  altShipToAddress: jsonb('alt_ship_to_address'),
+  specialShippingInternational: boolean('special_shipping_international'),
+  specialShippingNextDayAir: boolean('special_shipping_next_day_air'),
+  specialShippingBillToReceiver: boolean('special_shipping_bill_to_receiver'),
+  statusId: integer('status_id').references(() => orderStatuses.id),
+  currentDepartmentId: integer('current_department_id').references(() => orderDepartments.id),
+  qdSameSideConfirmed: boolean('qd_same_side_confirmed').default(false),
+  qdSameSideConfirmedBy: text('qd_same_side_confirmed_by'),
+  qdSameSideConfirmedAt: timestamp('qd_same_side_confirmed_at'),
+});
+
+// Order statuses
+export const orderStatuses = pgTable('order_statuses', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  displayName: text('display_name').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Orders unified
+export const ordersUnified = pgTable('orders_unified', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date'),
+  customerId: text('customer_id'),
+  customerPO: text('customer_po'),
+  fbOrderNumber: text('fb_order_number'),
+  agrOrderDetails: text('agr_order_details'),
+  isFlattop: boolean('is_flattop').default(false),
+  isCustomOrder: text('is_custom_order'),
+  modelId: text('model_id'),
+  handedness: text('handedness'),
+  shankLength: text('shank_length'),
+  features: jsonb('features'),
+  featureQuantities: jsonb('feature_quantities'),
+  discountCode: text('discount_code'),
+  notes: text('notes'),
+  customDiscountType: text('custom_discount_type').default('percent'),
+  customDiscountValue: real('custom_discount_value').default(0),
+  showCustomDiscount: boolean('show_custom_discount').default(false),
+  priceOverride: real('price_override'),
+  shipping: real('shipping').default(0),
+  tikkaOption: text('tikka_option'),
+  status: orderStatusEnum('status').notNull(),
+  barcode: text('barcode'),
+  currentDepartment: text('current_department'),
+  scrappedQuantity: integer('scrapped_quantity').default(0),
+  totalProduced: integer('total_produced').default(0),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  pluggingCompletedAt: timestamp('plugging_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
+  scrapDate: timestamp('scrap_date'),
+  scrapReason: text('scrap_reason'),
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
+  isReplacement: boolean('is_replacement').default(false),
+  replacedOrderId: text('replaced_order_id'),
+  isPaid: boolean('is_paid').default(false),
+  paymentType: text('payment_type'),
+  paymentAmount: real('payment_amount'),
+  paymentDate: timestamp('payment_date'),
+  paymentTimestamp: timestamp('payment_timestamp'),
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier').default('UPS'),
+  shippingMethod: text('shipping_method').default('Ground'),
+  shippedDate: timestamp('shipped_date'),
+  estimatedDelivery: timestamp('estimated_delivery'),
+  shippingLabelGenerated: boolean('shipping_label_generated').default(false),
+  customerNotified: boolean('customer_notified').default(false),
+  notificationMethod: text('notification_method'),
+  notificationSentAt: timestamp('notification_sent_at'),
+  deliveryConfirmed: boolean('delivery_confirmed').default(false),
+  deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
+  isCancelled: boolean('is_cancelled').default(false),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelReason: text('cancel_reason'),
+  isVerified: boolean('is_verified').default(false),
+  isManualDueDate: boolean('is_manual_due_date').default(false),
+  isManualOrderDate: boolean('is_manual_order_date').default(false),
+  hasAltShipTo: boolean('has_alt_ship_to').default(false),
+  altShipToCustomerId: text('alt_ship_to_customer_id'),
+  altShipToName: text('alt_ship_to_name'),
+  altShipToCompany: text('alt_ship_to_company'),
+  altShipToEmail: text('alt_ship_to_email'),
+  altShipToPhone: text('alt_ship_to_phone'),
+  altShipToAddress: jsonb('alt_ship_to_address'),
+  specialShippingInternational: boolean('special_shipping_international').default(false),
+  specialShippingNextDayAir: boolean('special_shipping_next_day_air').default(false),
+  specialShippingBillToReceiver: boolean('special_shipping_bill_to_receiver').default(false),
+  assignedTechnician: text('assigned_technician'),
+  customer: text('customer'),
+  product: text('product'),
+  quantity: integer('quantity'),
+  date: timestamp('date'),
+  isOnSchedule: boolean('is_on_schedule').default(true),
+  priorityScore: integer('priority_score').default(50),
+  rushTier: text('rush_tier'),
+  poId: integer('po_id'),
+  itemId: text('item_id'),
+  stockModelId: text('stock_model_id'),
+});
+
+// P1 packet inventory
+export const p1PacketInventory = pgTable('p1_packet_inventory', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetType: text('packet_type').notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  quantityOnHand: integer('quantity_on_hand').notNull().default(0),
+  minimumThreshold: integer('minimum_threshold').notNull().default(400),
+  reorderPoint: integer('reorder_point').default(450),
+  maxCapacity: integer('max_capacity'),
+  location: text('location'),
+  lastCountDate: date('last_count_date'),
+  lastCountedBy: text('last_counted_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P1 packet manufacturing queue
+export const p1PacketManufacturingQueue = pgTable('p1_packet_manufacturing_queue', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  weekStartDate: date('week_start_date').notNull(),
+  packetInventoryId: uuid('packet_inventory_id').references(() => p1PacketInventory.id),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  packetType: text('packet_type').notNull(),
+  quantityScheduled: integer('quantity_scheduled').notNull(),
+  quantityProduced: integer('quantity_produced').default(0),
+  quantityRemainingFromPrevious: integer('quantity_remaining_from_previous').default(0),
+  status: text('status').notNull().default('PENDING'),
+  priority: integer('priority').default(50),
+  dueDate: date('due_date'),
+  assignedTo: text('assigned_to'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P1 packet production records
+export const p1PacketProductionRecords = pgTable('p1_packet_production_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  queueItemId: uuid('queue_item_id').references(() => p1PacketManufacturingQueue.id),
+  packetInventoryId: uuid('packet_inventory_id').references(() => p1PacketInventory.id),
+  productionDate: date('production_date').notNull(),
+  quantityProduced: integer('quantity_produced').notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id),
+  fabricLot: text('fabric_lot'),
+  fabricBatch: text('fabric_batch'),
+  fabricRoll: text('fabric_roll'),
+  fabricExpirationDate: date('fabric_expiration_date'),
+  cutYieldConfigId: uuid('cut_yield_config_id').references(() => cutYieldConfigs.id),
+  cutsPerformed: integer('cuts_performed'),
+  squareMetersUsed: numeric('square_meters_used', { precision: 10, scale: 4 }),
+  producedBy: text('produced_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Packet compositions
+export const packetCompositions = pgTable('packet_compositions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').notNull().references(() => cuttingProductCategories.id),
+  componentId: uuid('component_id').notNull().references(() => cuttingComponents.id),
+  quantityPerPacket: integer('quantity_per_packet').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Ply schedule
+export const plySchedule = pgTable('ply_schedule', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name'),
+  packetBomId: uuid('packet_bom_id'),
+  packetScheduleId: uuid('packet_schedule_id').references(() => cuttingPacketSchedule.id),
+  totalPlies: integer('total_plies').default(0),
+  totalCuts: integer('total_cuts').default(0),
+  status: varchar('status').default('DRAFT'),
+  createdBy: varchar('created_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Ply schedule items
+export const plyScheduleItems = pgTable('ply_schedule_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  plyScheduleId: uuid('ply_schedule_id').notNull().references(() => plySchedule.id),
+  sortOrder: integer('sort_order').default(0),
+  partNumber: varchar('part_number'),
+  partDescription: varchar('part_description'),
+  fabricType: varchar('fabric_type'),
+  materialPartNumber: varchar('material_part_number'),
+  cutsNeeded: integer('cuts_needed').default(1),
+  cutsCompleted: integer('cuts_completed').default(0),
+  partsPerCut: integer('parts_per_cut').default(1),
+  status: varchar('status').default('PENDING'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Sessions
+export const sessions = pgTable('sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  sessionToken: text('session_token').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Survey questions (for generic survey engine)
+export const surveyQuestions = pgTable('survey_questions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  questionText: text('question_text').notNull(),
+  questionType: surveyQuestionTypeEnum('question_type').notNull(),
+  isRequired: boolean('is_required').default(false),
+  sortOrder: integer('sort_order').default(0),
+  options: jsonb('options'),
+  settings: jsonb('settings'),
+  conditionalLogic: jsonb('conditional_logic'),
+  placeholder: text('placeholder'),
+  helpText: text('help_text'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Survey response answers
+export const surveyResponseAnswers = pgTable('survey_response_answers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  responseId: uuid('response_id').notNull().references(() => surveyResponses.id),
+  questionId: uuid('question_id').notNull().references(() => surveyQuestions.id),
+  answerValue: text('answer_value'),
+  answerNumeric: real('answer_numeric'),
+  answerJson: jsonb('answer_json'),
+  answeredAt: timestamp('answered_at').defaultNow(),
+});
+
+// Survey send log
+export const surveySendLog = pgTable('survey_send_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  triggerId: uuid('trigger_id').references(() => surveyTriggers.id),
+  orderId: text('order_id').notNull(),
+  customerId: text('customer_id'),
+  customerEmail: text('customer_email'),
+  responseId: uuid('response_id').references(() => surveyResponses.id),
+  sentAt: timestamp('sent_at').defaultNow(),
+  sentVia: text('sent_via').default('email'),
+  status: text('status').default('sent'),
+});
+
+// Survey triggers
+export const surveyTriggers = pgTable('survey_triggers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id').notNull().references(() => surveys.id),
+  triggerStatus: text('trigger_status').notNull(),
+  delayDays: integer('delay_days').default(0),
+  emailSubject: text('email_subject').default("We'd love your feedback!"),
+  emailBody: text('email_body'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Task templates
+export const taskTemplates = pgTable('task_templates', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category').notNull(),
+  priority: integer('priority').notNull().default(3),
+  dueTime: text('due_time'),
+  isActive: boolean('is_active').notNull().default(true),
+  daysOfWeek: text('days_of_week').array(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  checklistId: integer('checklist_id').references(() => checklistMetadata.id),
+  dayOfMonth: integer('day_of_month'),
+});
+
+// Training attendees
+export const trainingAttendees = pgTable('training_attendees', {
+  id: serial('id').primaryKey(),
+  attendeeId: text('attendee_id').notNull(),
+  sessionId: text('session_id').notNull().references(() => trainingSessions.sessionId),
+  employeeId: integer('employee_id'),
+  employeeName: text('employee_name').notNull(),
+  employeeNumber: text('employee_number'),
+  department: text('department'),
+  signedInAt: timestamp('signed_in_at').defaultNow(),
+  signedOutAt: timestamp('signed_out_at'),
+  attendanceStatus: text('attendance_status').notNull().default('PRESENT'),
+  quizStartedAt: timestamp('quiz_started_at'),
+  quizCompletedAt: timestamp('quiz_completed_at'),
+  quizScore: integer('quiz_score'),
+  quizResponses: jsonb('quiz_responses'),
+  passed: boolean('passed').default(false),
+  certificateGenerated: boolean('certificate_generated').default(false),
+  certificateGeneratedAt: timestamp('certificate_generated_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training completions
+export const trainingCompletions = pgTable('training_completions', {
+  id: serial('id').primaryKey(),
+  moduleId: integer('module_id').notNull().references(() => trainingModules.id),
+  employeeId: varchar('employee_id', { length: 50 }).notNull(),
+  employeeName: varchar('employee_name', { length: 255 }).notNull(),
+  score: integer('score').notNull(),
+  passed: boolean('passed').notNull(),
+  answers: jsonb('answers').notNull(),
+  certificateIssued: boolean('certificate_issued').default(false),
+  completedAt: timestamp('completed_at').defaultNow(),
+  expiresAt: timestamp('expires_at'),
+});
+
+// Training quiz answers
+export const trainingQuizAnswers = pgTable('training_quiz_answers', {
+  id: serial('id').primaryKey(),
+  questionId: integer('question_id').notNull().references(() => trainingQuizQuestions.id),
+  answerText: text('answer_text').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isCorrect: boolean('is_correct').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training quiz questions
+export const trainingQuizQuestions = pgTable('training_quiz_questions', {
+  id: serial('id').primaryKey(),
+  moduleId: integer('module_id').notNull().references(() => trainingModules.id),
+  question: text('question').notNull(),
+  questionType: text('question_type').notNull().default('multiple_choice'),
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training sessions
+export const trainingSessions = pgTable('training_sessions', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  topic: text('topic').notNull(),
+  description: text('description'),
+  instructorId: integer('instructor_id'),
+  instructorName: text('instructor_name').notNull(),
+  sessionDate: timestamp('session_date').notNull(),
+  startTime: text('start_time').notNull(),
+  endTime: text('end_time'),
+  location: text('location').default('Conference Room'),
+  maxAttendees: integer('max_attendees').default(50),
+  materials: jsonb('materials'),
+  quizQuestions: jsonb('quiz_questions'),
+  passingScore: integer('passing_score').default(80),
+  status: text('status').notNull().default('SCHEDULED'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Vendor evaluations
+export const vendorEvaluations = pgTable('vendor_evaluations', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id),
+  evaluationMonth: date('evaluation_month').notNull(),
+  qualityScore: integer('quality_score'),
+  deliveryRating: integer('delivery_rating'),
+  deliveryOccurrence: integer('delivery_occurrence'),
+  costScore: integer('cost_score'),
+  communicationScore: integer('communication_score'),
+  aggregateScore: real('aggregate_score'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Vendor PO optional settings
+export const vendorPoOptionalSettings = pgTable('vendor_po_optional_settings', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Vendor PO specific settings
+export const vendorPoSpecificSettings = pgTable('vendor_po_specific_settings', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id').notNull().references(() => vendorPOs.id),
+  selectedOptionalSettings: integer('selected_optional_settings').array().default([]),
+  adHocSettings: text('ad_hoc_settings'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
 export * from './calendar.schema';

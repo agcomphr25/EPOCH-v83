@@ -163,8 +163,39 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     setAccessChecked(true);
   }, [location, currentUser, isLoading]);
 
-  if (isLoading || !accessChecked) {
-    return null;
+  // Show loading spinner ONLY while query is in progress
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // After loading completes, if accessChecked hasn't been set yet by useEffect,
+  // compute access synchronously to avoid white screen on auth failure
+  if (!accessChecked) {
+    // Public routes - allow access
+    if (isPublicRoute(location)) {
+      return <>{children}</>;
+    }
+    // No user after auth check = auth failure, show Access Denied
+    if (!currentUser) {
+      return <AccessDenied />;
+    }
+    // User exists but access not yet computed - will be handled by useEffect on next render
+    // For now, show loading briefly while effect runs
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking permissions...</p>
+        </div>
+      </div>
+    );
   }
 
   if (isPublicRoute(location)) {

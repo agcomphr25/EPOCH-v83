@@ -1,0 +1,100 @@
+EXACT PROMPT — COPY & PASTE
+Harden ALL order confirmation email flows (initial, resend, reminder) with a mandatory outcome contract.
+
+Scope:
+- Initial order confirmation
+- Manual resend
+- Automated reminder emails
+
+DO NOT add new features. This is structural hardening only.
+
+---
+
+1) SINGLE SHARED SEND FUNCTION
+Create or refactor to a single function:
+
+sendOrderConfirmationNotification({
+  orderId,
+  customerId,
+  email,
+  preferredChannel,
+  signatureToken,
+  context: 'initial' | 'resend' | 'reminder',
+  forceResend?: boolean
+})
+
+This function MUST:
+- Attempt to send OR intentionally skip
+- ALWAYS return one of:
+  { outcome: 'sent' | 'skipped' | 'failed', reason?, messageId?, error? }
+
+No silent exits allowed.
+
+---
+
+2) COMMUNICATION LOG CONTRACT
+For EVERY invocation:
+- Write EXACTLY ONE communication_logs row
+- type = 'order-confirmation'
+- context = 'initial' | 'resend' | 'reminder'
+- status = 'sent' | 'skipped' | 'failed'
+- Include:
+  - signature_token
+  - provider_message_id (if sent)
+  - error (if failed)
+  - reason (if skipped)
+
+If no log is written → THROW.
+
+---
+
+3) INITIAL CONFIRMATION (ORDER FINALIZATION)
+- Use existing signature_token
+- Deduplication ON (order + token)
+- If outcome === 'failed':
+  - Abort order finalization
+  - Return HTTP 500
+- If outcome === 'skipped':
+  - Require reason
+- Finalization MUST NOT succeed without a log entry
+
+---
+
+4) MANUAL RESEND
+- ALWAYS regenerate signature_token
+- ALWAYS bypass deduplication (forceResend = true)
+- UI success toast ONLY if outcome === 'sent'
+- UI error toast if outcome === 'failed'
+- Never return 200 if email was not attempted
+
+---
+
+5) AUTOMATED REMINDERS
+- Only run if order NOT signed
+- Use existing signature_token
+- Enforce:
+  - Cooldown (e.g. 48h since last reminder)
+  - Max attempts (e.g. 3)
+- If cooldown/max prevents sending:
+  - outcome = 'skipped'
+  - reason = 'cooldown' or 'max_attempts'
+- DO NOT regenerate token
+- DO NOT bypass dedupe
+
+---
+
+6) FAIL-FAST RULE
+If ANY flow exits without producing:
+- a send attempt
+- OR an intentional skip
+- OR a failure
+
+→ THROW and log an error.
+
+---
+
+RESULT:
+- Every confirmation-related email attempt has a provable outcome
+- No silent failures
+- Resend and reminder behavior is deterministic and auditable
+- Trust restored

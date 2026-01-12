@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertFollowupOrderSchema } from '../../schema';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
-import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
+import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
 import { createMagicLink } from '../../utils/magicLink';
@@ -514,37 +514,73 @@ router.post('/', async (req, res) => {
       orderSummary,
     });
 
-    // Send email
-    const emailData = {
+    // Send email via unified notification function (with deduplication)
+    // forceResend is NOT set - automatic create flow respects deduplication
+    const emailResult = await sendOrderConfirmationNotification({
       orderId: order.orderId,
-      customerName: customer.name,
+      customerId: order.customerId || '',
       customerEmail: customer.email,
-      orderDate: new Date(order.orderDate).toLocaleDateString(),
-      dueDate: new Date(order.dueDate).toLocaleDateString(),
-      customerPO: order.customerPO || undefined,
-      modelId: order.modelId || undefined,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      signatureLink,
-    };
+      customerPhone: customer.phone,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod,
+      signatureToken,
+      pdfPath,
+      context: 'initial', // Initial order finalization
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        signatureLink,
+      },
+      // forceResend: false - automatic sends respect deduplication
+    });
 
-    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
+    // MANDATORY OUTCOME HANDLING: Every finalization must have a recorded email outcome
+    // Fail fast if we receive an unknown outcome
+    const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+    if (!validOutcomes.includes(emailResult.outcome)) {
+      console.error(`❌ [FINALIZE-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+      return res.status(500).json({
+        success: false,
+        error: `Order finalization failed: Unknown email outcome "${emailResult.outcome}"`,
+        followupOrder,
+      });
+    }
 
-    if (emailResult.success) {
+    if (emailResult.outcome === 'sent') {
+      // Email was actually sent - update timestamp
       await storage.updateFollowupOrder(followupOrder.id, {
         emailSent: true,
         emailSentAt: new Date(),
+        emailError: null, // Clear any previous error on success
       });
 
       res.json({
         success: true,
         followupOrder,
+        emailOutcome: 'sent',
         emailSent: true,
         messageId: emailResult.messageId,
       });
+    } else if (emailResult.outcome === 'skipped') {
+      // Email was skipped due to deduplication - followup order already has email_sent=true
+      res.json({
+        success: true,
+        followupOrder,
+        emailOutcome: 'skipped',
+        emailSent: false, // Not sent this time
+        skipped: true,
+        messageId: emailResult.messageId,
+      });
     } else {
+      // Email failed - record the error and return failure
       await storage.updateFollowupOrder(followupOrder.id, {
         emailError: emailResult.error,
       });
@@ -552,6 +588,7 @@ router.post('/', async (req, res) => {
       res.status(500).json({
         success: false,
         followupOrder,
+        emailOutcome: 'failed',
         emailSent: false,
         error: emailResult.error,
       });
@@ -1427,38 +1464,71 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
-    // Send the SAME email that was originally sent (Review and Sign with PDF)
-    const emailData = {
+    // Send email via unified notification function with forceResend=true (bypass deduplication)
+    // Manual resends intentionally bypass deduplication since user explicitly requested it
+    const emailResult = await sendOrderConfirmationNotification({
       orderId: order.orderId,
-      customerName: customer.name,
+      customerId: order.customerId || '',
       customerEmail: customer.email,
-      orderDate: new Date(order.orderDate).toLocaleDateString(),
-      dueDate: new Date(order.dueDate).toLocaleDateString(),
-      customerPO: order.customerPO || undefined,
-      modelId: order.modelId || undefined,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      signatureLink,
-    };
+      customerPhone: customer.phone,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod,
+      signatureToken: followupOrder.signatureToken || '',
+      pdfPath,
+      context: 'resend', // Manual resend by user
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        signatureLink,
+      },
+      forceResend: true, // MANUAL RESEND - bypass deduplication intentionally
+    });
 
-    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
+    // MANDATORY OUTCOME HANDLING: Every resend must have a recorded email outcome
+    // Fail fast if we receive an unknown outcome
+    const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+    if (!validOutcomes.includes(emailResult.outcome)) {
+      console.error(`❌ [RESEND-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+      return res.status(500).json({
+        success: false,
+        error: `Email resend failed: Unknown email outcome "${emailResult.outcome}"`,
+      });
+    }
 
-    if (emailResult.success) {
-      // Update email sent timestamp
+    if (emailResult.outcome === 'sent') {
+      // Update email sent timestamp and clear any previous error
       await storage.updateFollowupOrder(followupOrder.id, {
         emailSent: true,
         emailSentAt: new Date(),
+        emailError: null,
       });
 
       res.json({
         success: true,
         message: 'Review and sign email has been resent successfully.',
+        emailOutcome: 'sent',
         emailSent: true,
         messageId: emailResult.messageId,
       });
+    } else if (emailResult.outcome === 'skipped') {
+      // This shouldn't happen with forceResend=true, but handle it gracefully
+      res.json({
+        success: true,
+        message: 'Email was skipped (deduplication).',
+        emailOutcome: 'skipped',
+        emailSent: false,
+        skipped: true,
+      });
     } else {
+      // Email failed - record the error and return failure
       await storage.updateFollowupOrder(followupOrder.id, {
         emailError: emailResult.error,
       });
@@ -1466,6 +1536,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       res.status(500).json({
         success: false,
         message: 'Failed to send email.',
+        emailOutcome: 'failed',
         error: emailResult.error,
       });
     }

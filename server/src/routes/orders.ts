@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { pool } from '../../db';
-import { payments, allOrders, orders, customerAddresses } from '../../../shared/schema';
+import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
@@ -24,6 +24,7 @@ import {
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
 import { createMagicLink } from '../../utils/magicLink';
+import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
 
 const router = Router();
 
@@ -430,6 +431,10 @@ router.post('/finalized', async (req: Request, res: Response) => {
       console.log(`📧 Order ${order.orderId} created as FINALIZED (no stock) - sending thank you email to customer...`);
     }
     
+    // Track email outcome for API response (declared outside inner try block for scoping)
+    let emailOutcome: OrderConfirmationOutcome | undefined;
+    let emailError: string | undefined;
+    
     // Automatically create followup order and send email
     try {
       // Import dependencies
@@ -443,8 +448,31 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Get customer details
       const customer = await storage.getCustomerById(orderData.customerId || '');
       if (!customer || !customer.email) {
+        // MANDATORY OUTCOME: Record explicit 'skipped' outcome when customer has no email
+        // Write communication log entry to ensure every finalization has a logged outcome
         console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping email`);
-        return res.status(201).json(order);
+        emailOutcome = 'skipped';
+        emailError = 'Customer has no email address on file';
+        
+        // Write communication log entry for audit trail
+        await db.insert(communicationLogs).values({
+          orderId: order.orderId,
+          customerId: orderData.customerId || '',
+          messageType: 'transactional',
+          method: 'email',
+          type: 'order-confirmation',
+          recipient: 'N/A - no email on file',
+          status: 'skipped',
+          error: emailError,
+          message: `Order confirmation skipped for ${order.orderId}: no customer email on file`,
+          sentAt: new Date(),
+        });
+        
+        return res.status(201).json({
+          ...order,
+          emailOutcome,
+          emailError,
+        });
       }
       
       // Get customer address
@@ -683,39 +711,79 @@ router.post('/finalized', async (req: Request, res: Response) => {
           orderSummary,
         });
         
-        console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email...`);
+        console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email via unified function...`);
         
-        // Prepare email data using unified URL resolution
-        const emailData = {
+        // Generate signature link
+        const signatureLink = createMagicLink(signatureToken);
+        
+        // Send email via unified notification function with mandatory outcome tracking
+        // forceResend=false for automatic order creation (respects deduplication)
+        const emailResult = await sendOrderConfirmationNotification({
           orderId: order.orderId,
-          customerName: customer.name,
+          customerId: order.customerId || '',
           customerEmail: customer.email,
-          customerPO: order.customerPO || '',
-          modelId: stockModel?.displayName || order.modelId || 'Custom',
-          orderDate: new Date(order.orderDate).toISOString().split('T')[0],
-          dueDate: new Date(order.dueDate).toISOString().split('T')[0],
-          signatureLink: createMagicLink(signatureToken),
-          features: order.features as Record<string, any> || undefined,
-        };
+          customerPhone: customer.phone || undefined,
+          preferredCommunicationMethod: customer.preferredCommunicationMethod,
+          signatureToken,
+          pdfPath,
+          context: 'initial', // Initial order finalization
+          orderData: {
+            orderId: order.orderId,
+            customerName: customer.name,
+            customerEmail: customer.email,
+            orderDate: new Date(order.orderDate).toLocaleDateString(),
+            dueDate: new Date(order.dueDate).toLocaleDateString(),
+            customerPO: order.customerPO || undefined,
+            modelId: order.modelId || undefined,
+            handedness: order.handedness || undefined,
+            features: order.features as Record<string, any> || undefined,
+            notes: order.notes || undefined,
+            shipping: typeof order.shipping === 'number' ? order.shipping : parseFloat(String(order.shipping)) || 0,
+            signatureLink,
+          },
+          // forceResend: false - automatic sends respect deduplication
+        });
         
-        // Send signature email
-        const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
+        // MANDATORY OUTCOME HANDLING: Validate we received a valid outcome
+        const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+        if (!validOutcomes.includes(emailResult.outcome)) {
+          console.error(`❌ [FINALIZE-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+          // Still return the order but flag the error
+          emailOutcome = 'failed';
+          emailError = `Unknown email outcome: ${emailResult.outcome}`;
+        } else {
+          emailOutcome = emailResult.outcome;
+          emailError = emailResult.error;
+        }
         
-        if (emailResult.success) {
+        if (emailResult.outcome === 'sent') {
           // Update followup order to mark email as sent
           await storage.updateFollowupOrder(followupOrder.id, {
             emailSent: true,
             emailSentAt: new Date(),
+            emailError: null,
           });
-          
           console.log(`📧 Signature email sent for order ${order.orderId}`);
+        } else if (emailResult.outcome === 'skipped') {
+          // Email was skipped due to deduplication - reason must be provided
+          console.log(`⏭️ Signature email skipped for order ${order.orderId} (reason: ${emailResult.reason || 'unknown'})`);
         } else {
-          // Update followup order with error
+          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
+          // Order is created but marked as requiring manual intervention
           await storage.updateFollowupOrder(followupOrder.id, {
             emailError: emailResult.error,
           });
-          
           console.error(`❌ Failed to send signature email for order ${order.orderId}: ${emailResult.error}`);
+          
+          // Return HTTP 500 to indicate finalization failure
+          return res.status(500).json({
+            success: false,
+            error: `Order created but email failed: ${emailResult.error}`,
+            order, // Return order data so it can be tracked
+            emailOutcome: 'failed',
+            emailError: emailResult.error,
+            message: 'Order finalization failed due to email delivery failure. Please resend the confirmation email manually.',
+          });
         }
       } else {
         // Order without stock - send thank you email (no signature required)
@@ -730,13 +798,103 @@ router.post('/finalized', async (req: Request, res: Response) => {
         };
         
         // Send thank you email
-        await sendThankYouOrderEmail(emailData, pdfPath);
+        const thankYouResult = await sendThankYouOrderEmail(emailData, pdfPath);
         
-        console.log(`📧 Thank you email sent for order ${order.orderId} (no signature required)`);
+        if (thankYouResult.success) {
+          emailOutcome = 'sent';
+          console.log(`📧 Thank you email sent for order ${order.orderId} (no signature required)`);
+          
+          // Write communication log entry for thank-you email success
+          // signatureToken is null for no-stock orders (no signature required)
+          await db.insert(communicationLogs).values({
+            orderId: order.orderId,
+            customerId: order.customerId || '',
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'initial',
+            recipient: customer.email,
+            status: 'sent',
+            signatureToken: null, // No signature required for no-stock orders
+            externalId: thankYouResult.messageId,
+            message: `Thank you email sent for ${order.orderId} (no signature required)`,
+            sentAt: new Date(),
+          });
+        } else {
+          emailOutcome = 'failed';
+          emailError = thankYouResult.error;
+          console.error(`❌ Failed to send thank you email for order ${order.orderId}: ${thankYouResult.error}`);
+          
+          // Write communication log entry for thank-you email failure
+          // signatureToken is null for no-stock orders (no signature required)
+          await db.insert(communicationLogs).values({
+            orderId: order.orderId,
+            customerId: order.customerId || '',
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'initial',
+            recipient: customer.email,
+            status: 'failed',
+            signatureToken: null, // No signature required for no-stock orders
+            error: thankYouResult.error,
+            message: `Failed thank you email for ${order.orderId}: ${thankYouResult.error}`,
+            sentAt: new Date(),
+          });
+          
+          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
+          return res.status(500).json({
+            success: false,
+            error: `Order created but thank you email failed: ${thankYouResult.error}`,
+            order, // Return order data so it can be tracked
+            emailOutcome: 'failed',
+            emailError: thankYouResult.error,
+            message: 'Order finalization failed due to email delivery failure.',
+          });
+        }
       }
-    } catch (emailError) {
-      console.error('Error sending email:', emailError);
-      // Don't fail the order creation if email fails
+    } catch (sendError: any) {
+      // MANDATORY OUTCOME: Any thrown error results in 'failed' outcome
+      // NOTE: sendOrderConfirmationNotification handles its own logging internally
+      // This catch block only handles exceptions from PDF generation or other pre-send errors
+      const errorMessage = sendError instanceof Error ? sendError.message : 'Unknown email error';
+      console.error('Error in email preparation/send flow:', errorMessage);
+      
+      // Only log if we haven't already gone through the notification function
+      if (emailOutcome === undefined) {
+        emailOutcome = 'failed';
+        emailError = errorMessage;
+        
+        // Write communication log only if we didn't go through the notification function
+        try {
+          await db.insert(communicationLogs).values({
+            orderId: order.orderId,
+            customerId: orderData.customerId || '',
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'initial',
+            recipient: 'N/A - exception during preparation',
+            status: 'failed',
+            signatureToken: signatureToken || null, // May be null if exception occurred before token generation
+            error: errorMessage,
+            message: `Order confirmation failed for ${order.orderId}: ${errorMessage}`,
+            sentAt: new Date(),
+          });
+        } catch (logError) {
+          console.error('Failed to write communication log for exception:', logError);
+        }
+      }
+      
+      // FAIL-FAST: Return HTTP 500 for any exception in email flow
+      return res.status(500).json({
+        success: false,
+        error: `Order created but email preparation failed: ${errorMessage}`,
+        order, // Return order data so it can be tracked
+        emailOutcome: 'failed',
+        emailError: errorMessage,
+        message: 'Order finalization failed due to email error. Please resend the confirmation email manually.',
+      });
     }
     
     // Log audit event for order creation
@@ -772,7 +930,12 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Don't fail the order creation if audit logging fails
     }
     
-    res.status(201).json(order);
+    // Return order with explicit email outcome for frontend to display warnings
+    res.status(201).json({
+      ...order,
+      emailOutcome,
+      emailError,
+    });
   } catch (error) {
     console.error('Create order error:', error);
     if (error instanceof Error) {

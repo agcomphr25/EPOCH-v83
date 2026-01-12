@@ -1,0 +1,142 @@
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EL584: 82 days until due, needs 5 days remaining, 0 days in Awaiting Customer Signature (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EJ272: 26 days until due, needs 5 days remaining, 0 days in Awaiting Customer Signature (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG077: CRITICAL - Over dept time AND cannot meet due date (178 > 5 days in Fulfilled, needs 5 days, has -114)
+2026-01-08 14:59:05.40
+c74599b6
+User
+Order EL482: No valid entry date found, using current time
+2026-01-08 14:59:05.40
+c74599b6
+User
+🟢 Order EL624: ON-SCHEDULE - Good timing (0 ≤ 5 days in dept, can meet due date)
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EH095: -30 days until due, needs 5 days remaining, 143 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG024: -100 days until due, needs 5 days remaining, 179 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EL624: 89 days until due, needs 50 days remaining, 0 days in P1 Production Queue (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EK104: 49 days until due, needs 5 days remaining, 0 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+Order EK166: No valid entry date found, using current time
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG136: CRITICAL - Over dept time AND cannot meet due date (177 > 5 days in Shipping Management, needs 5 days, has -135)
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EL016: 61 days until due, needs 40 days remaining, 0 days in Barcode (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG059: -107 days until due, needs 5 days remaining, 178 days in Shipping (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG098: CRITICAL - Over dept time AND cannot meet due date (177 > 5 days in Shipping Management, needs 5 days, has -121)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG124: CRITICAL - Over dept time AND cannot meet due date (177 > 5 days in Shipping Management, needs 5 days, has -121)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG297: CRITICAL - Over dept time AND cannot meet due date (171 > 5 days in Shipping Management, needs 5 days, has -162)
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AH017: -247 days until due, needs 5 days remaining, 161 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG077: -114 days until due, needs 5 days remaining, 178 days in Fulfilled (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+🟠 Order EJ176: CANNOT-MEET-DUE - Cannot meet due date (needs 5 days, has -93)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG024: CRITICAL - Over dept time AND cannot meet due date (179 > 5 days in Shipping Management, needs 5 days, has -100)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG045: CRITICAL - Over dept time AND cannot meet due date (178 > 5 days in Shipping Management, needs 5 days, has -107)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG826: CRITICAL - Over dept time AND cannot meet due date (162 > 5 days in Fulfilled, needs 5 days, has -131)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🟢 Order EJ272: ON-SCHEDULE - Good timing (0 ≤ 5 days in dept, can meet due date)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🟢 Order EK104: ON-SCHEDULE - Good timing (0 ≤ 5 days in dept, can meet due date)
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG136: -135 days until due, needs 5 days remaining, 177 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG045: -107 days until due, needs 5 days remaining, 178 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG093: -121 days until due, needs 5 days remaining, 177 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG060: -107 days until due, needs 5 days remaining, 178 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG049: CRITICAL - Over dept time AND cannot meet due date (178 > 5 days in Shipping Management, needs 5 days, has -107)
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG018: CRITICAL - Over dept time AND cannot meet due date (179 > 5 days in Shipping Management, needs 5 days, has -100)
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order AG297: -162 days until due, needs 5 days remaining, 171 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+📊 Order EJ176: -93 days until due, needs 5 days remaining, 0 days in Shipping Management (limit: 5), isAdj: false
+2026-01-08 14:59:05.40
+c74599b6
+User
+🔴 Order AG060: CRITICAL - Over dept time AND cannot meet due date (178 > 5 days in Shipping Management, needs 5 days, has -107)
+2026-01-08 14:59:06.25
+c74599b6
+User
+8:59:06 PM [express] GET /api/kickbacks 304 in 33ms :: [{"id":1,"orderId":"AG001","kickbackDept":"La…
+2026-01-08 14:59:07.76
+60127032
+System
+system: received signal terminated
+Wrap
+Colors

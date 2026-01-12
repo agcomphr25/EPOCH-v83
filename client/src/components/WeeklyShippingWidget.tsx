@@ -32,9 +32,15 @@ export default function WeeklyShippingWidget() {
       ) {
         return false;
       }
-      // Use updatedAt as the fulfillment date
-      const fulfillmentDate = new Date(order.updatedAt);
-      return isDateInCompanyWeek(fulfillmentDate, currentWeek, currentYear);
+      // Use updatedAt as the fulfillment date - with safety check
+      if (!order.updatedAt) return false;
+      try {
+        const fulfillmentDate = new Date(order.updatedAt);
+        if (isNaN(fulfillmentDate.getTime())) return false;
+        return isDateInCompanyWeek(fulfillmentDate, currentWeek, currentYear);
+      } catch {
+        return false;
+      }
     }).length || 0;
 
   return (

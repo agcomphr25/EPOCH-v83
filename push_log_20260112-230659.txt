@@ -1,3 +1,172 @@
 Your branch is ahead of 'origin/main' by 118 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20260112-2307-my-change 49f35efd] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20260112-230659.txt
+branch 'feature-20260112-2307-my-change' set up to track 'origin/feature-20260112-2307-my-change'.
+> 49f35efd (HEAD -> feature-20260112-2307-my-change, origin/feature-20260112-2307-my-change) feat: my-change
+> 593370c1 (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD, main) Prevent PDF data corruption by creating an independent copy for signing
+> 5fefab58 Improve PDF signing process by preventing data loss
+> f76ec054 Improve signing process and error handling for PDFs
+> f3fe7404 Improve PDF rendering by caching and managing render operations
+> 2e406e4b Improve PDF tool by updating the PDF worker source
+> 75d97b10 Add internal tool for signing PDF documents with drag-and-drop functionality
+> 1882ed7d Add a tool for signing and downloading PDF documents
+> d681cb2d Transitioned from Plan to Build mode
+> bda4a602 Update ticket assignments to display full names and handle errors
+> caf86088 Improve ticket assignment notifications and linked order navigation
+> bd47a77d Add system to assign tickets and send reminders to users
+> d8700d52 Add assignment functionality and automate ticket reminders
+> f4ac0115 Published your App
+> 00eb8fd2 Update production queue to include pending orders
+> 7427d966 Published your App
+> 4930196b Add detailed diagnostics for production queue order filtering
+> 8c2b24d7 Add detailed order status and department tracking logs for production
+> 4d1bffb7 Published your App
+> 93a8b0ce Add diagnostic logging to production queue endpoint for debugging
+> ab2f0994 Saved progress at the end of the loop
+> 6d7f105c Add cutoff date to prevent reminders for old orders
+> 42b46d28 Transitioned from Plan to Build mode
+> bb98536b Published your App
+> 6c968c8f Fix error when displaying customer information in shipping queue
+> e844f600 Published your App
+> d689c290 Improve shipping page stability by safely handling invalid date values
+> b0e66f4b Published your App
+> 20f9918e Add a page to view communication logs and their statuses
+> efc6ad05 Published your App
+> 0e30f65a Improve order confirmation and reminder email logging
+> a2f99aea Refactor reminder flow to enforce cooldown and attempt limits
+> ddd038e5 Improve order finalization by handling email failures and adding context
+> 70691225 Improve order confirmation emails with detailed logging and context
+> 50418c2a Saved progress at the end of the loop
+> b2234ca8 Enforce order confirmation email outcomes and logging
+> 7a4d1b3f Published your App
+> 3b9aa10a Saved progress at the end of the loop
+> 2e9830c3 Add error handling to prevent crashes when displaying order information
+> 54ca9480 Transitioned from Plan to Build mode
+> c334df20 Saved progress at the end of the loop
+> 1001a80d Update order follow-up email sending logic to prevent unnecessary timestamp updates
+> 69c15ee2 Improve order confirmation notification system by unifying sending logic
+> 01e1c941 Update order confirmation notifications to include deduplication logic
+> 7a925a5d Add structured deduplication for order confirmation emails
+> c7f441a0 Add structured logging and deduplication for order confirmation emails
+> ab5ec049 Fix error logging for sent order confirmation emails
+> b5da7c5e Saved progress at the end of the loop
+> 70527a23 Improve shipment notification deduplication using tracking numbers
+> 32f92f92 Improve shipment notification deduplication using tracking numbers
+> 4f821db7 Saved progress at the end of the loop
+> be7d5a40 Improve notification deduplication for customer shipments
+> 1530cb73 Published your App
+> 13c7b201 Clear previous email errors when resending orders successfully
+> dc944031 Published your App
+> c17bca7c Update SendGrid email sender configuration and logging
+> 2f03e77c Published your App
+> a31934dc Provide diagnostic instructions for intermittent email failures
+> 37c70dae Improve production queue display to show filtered results accurately
+> f760811c Published your App
+> 14b585c8 Fix route guard to prevent infinite loading on authentication failure
+> 929ddebe Published your App
+> e03c9108 Add loading indicator to prevent white screen during authentication checks
+> 5c05223a Published your App
+> cb3f21b5 Published your App
+> 7f9c6dbc Update credit memos to align with production schema uniqueness
+> 2100bbcd Update fabric inventory schema to match production settings
+> ff699a8e Remove unique constraint from vendor purchase order items
+> f8744dad Update vendor purchase order to match production schema
+> 7a2cf515 Remove quote number uniqueness constraint from schema to match production
+> 5292eabb Align order ID uniqueness enforcement with production database
+> 8ddfc837 Remove composite unique constraint from shipment items table
+> 40c04d21 Remove redundant uniqueness constraint from department names
+> aa9686d3 Update rfq risk assessments to match production schema
+> 04ad776d Update cost centers schema to match production constraints
+> 001e627f Update document number constraint to match production settings
+> 32d9c31f Adjust order ID sequence uniqueness to match production system
+> a7c21f78 Align inventory balances table with production schema
+> 1a669f98 Update sales table schema to remove redundant uniqueness constraint
+> 2e2707bf Resolve schema mismatch for optional settings unique constraint
+> efb7fe08 Update production line schema to match existing database constraints
+> 951b1672 Remove unnecessary unique constraint from vendor evaluations table
+> df941f83 Adjust database schema to match production constraints for signatures
+> bc48a312 Remove unique constraint from followup orders ID
+> c808f0c7 Align user session token uniqueness with production database constraints
+> 816cad84 Remove unique constraint from purchase order number in schema
+> 0d859d8c Remove unique constraint from order ID to match production database
+> 50eea47d Update production orders schema to match database uniqueness
+> 02e95583 Update customer schema to match production uniqueness
+> e1e95027 Update order status table definition to match production
+> e0528587 Remove unique constraint from order ID reservations table schema
+> bbf4e9e8 Remove unique constraint from order department types name column
+> 132ea733 Remove unique constraint from mold ID to match production database
+> bd5489c6 Remove unique constraint from inventory barcode
+> 6858e9e3 Remove unique constraint from employee portal token
+> 464a24c4 Align employee table schema with production database constraints
+> a059a24e Align employee capabilities schema with production database
+> e4d0745f Remove unique constraint from document tags name
+> 19f2c827 Update credit card transaction schema to match production database
+> 0c1a9745 Remove unique constraint from barcode column in all_orders table
+> 392471ec Update order table definition to match production schema
+> 97e18450 Update capabilities table to match production schema
+> edcf0083 Update item tracking to prevent duplicate serial numbers and barcodes
+> b1481645 Update token uniqueness constraint for magic link tokens
+> 699ef4ef Update survey response table definition to match production data
+> 54708008 Update surveys table definition to match production database
+> 1ca744f6 Add missing production tables and update enums to align with database schema
+> 58cce972 Disable program run and department consumption rate features
+> 64e29e6b Remove unused OAuth state table definition from database schema
+> a4d7659d Remove unused employee certification table and related schemas
+> 54f824b4 Remove unused department consumption rates table and related types
+> 753d5c53 Add precise data constraints to database schema definitions
+> dd205095 Update data handling for customer addresses to use Drizzle ORM
+> f32261d6 Update database schema to align with production environment
+> c475a341 Update account IDs to match database string type
+> 5ee19c94 Revert schema changes and adjust storage for address lookup
+> 5c303093 Fix customer address lookup when creating shipping labels
+> c7a12ab9 Published your App
+> 51b717ab Published your App
+ ...599b6-User-Order-EL584-82-day_1767905996615.txt |  142 ++
+ ...LIT-AGENT-Apply-structured-id_1767832650586.txt |   68 +
+ ...LIT-AGENT-Magic-Link-Email-In_1767826237696.txt |  104 ++
+ ...rden-ALL-order-confirmation-e_1767883766190.txt |  100 ++
+ ...Paste-These-Verbatim-Ask-the-_1767885541639.txt |  137 ++
+ ...ct-initialized-Object-index-B_1767892161503.txt |   89 ++
+ ...ct-initialized-Children-Fragm_1767893235511.txt |   89 ++
+ attached_assets/image_1767737771622.png            |  Bin 0 -> 129504 bytes
+ attached_assets/image_1767737983310.png            |  Bin 0 -> 129504 bytes
+ attached_assets/image_1767980309414.png            |  Bin 0 -> 89017 bytes
+ attached_assets/image_1767982407775.png            |  Bin 0 -> 119165 bytes
+ attached_assets/image_1767982790000.png            |  Bin 0 -> 192272 bytes
+ attached_assets/image_1767983060689.png            |  Bin 0 -> 148710 bytes
+ attached_assets/image_1767984320945.png            |  Bin 0 -> 125310 bytes
+ attached_assets/image_1767984578257.png            |  Bin 0 -> 402709 bytes
+ client/src/App.tsx                                 |    4 +
+ client/src/components/Navigation.tsx               |    6 +
+ client/src/components/OrderCardErrorBoundary.tsx   |   68 +
+ client/src/components/OrderEntry.tsx               |   41 +-
+ client/src/components/ProductionQueueManager.tsx   |   22 +-
+ client/src/components/WeeklyShippingWidget.tsx     |   12 +-
+ client/src/components/auth/RouteGuard.tsx          |   35 +-
+ client/src/config/userPermissions.ts               |    4 +-
+ client/src/pages/CommunicationLogsPage.tsx         |  437 ++++++
+ client/src/pages/PDFSignatureTool.tsx              |  508 +++++++
+ client/src/pages/ShippingQueuePage.tsx             |  117 +-
+ client/src/pages/TicketsPage.tsx                   |   42 +-
+ push_log_20260112-230659.txt                       |    3 +
+ replit.md                                          |    2 +
+ server/index.ts                                    |   14 +
+ server/schema.ts                                   | 1389 ++++++++++++++------
+ server/src/routes/communications.ts                |   19 +
+ server/src/routes/followupOrders.ts                |  135 +-
+ server/src/routes/inventory.ts                     |   70 +-
+ server/src/routes/orders.ts                        |  213 ++-
+ server/src/routes/productionQueue.ts               |   41 +-
+ server/src/routes/shipping.ts                      |   17 +-
+ server/src/routes/tickets.ts                       |   90 +-
+ server/src/routes/timer.ts                         |  122 +-
+ server/storage.ts                                  |  167 +--
+ server/utils/followupOrderReminder.ts              |  385 ++++--
+ server/utils/notifications.ts                      |  252 +++-
+ server/utils/sendgrid.ts                           |   12 +-
+ server/utils/ticketReminder.ts                     |  129 ++
+ 44 files changed, 4186 insertions(+), 899 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20260112-2307-my-change?expand=1

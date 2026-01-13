@@ -426,47 +426,59 @@ export default function TicketsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Link Orders</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newTicketOrderInput}
-                    onChange={(e) => setNewTicketOrderInput(e.target.value)}
-                    placeholder="Order ID (e.g., AG589)"
-                    data-testid="input-link-order-create"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const orderId = newTicketOrderInput.trim().toUpperCase();
-                      if (orderId && !newTicketOrderIds.includes(orderId)) {
-                        setNewTicketOrderIds([...newTicketOrderIds, orderId]);
-                        setNewTicketOrderInput('');
-                      }
-                    }}
-                    disabled={!newTicketOrderInput.trim()}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                {newTicketOrderIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {newTicketOrderIds.map(orderId => (
-                      <Badge key={orderId} variant="secondary" className="flex items-center gap-1">
-                        <Link2 className="h-3 w-3" />
-                        {orderId}
-                        <button
-                          type="button"
-                          onClick={() => setNewTicketOrderIds(newTicketOrderIds.filter(id => id !== orderId))}
-                          className="ml-1 hover:text-red-500"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                <Label className="text-xs text-gray-500 flex items-center gap-2">
+                  <Link2 className="h-3 w-3" />
+                  Link Orders ({newTicketOrderIds.length})
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {newTicketOrderIds.map(orderId => (
+                    <Badge key={orderId} variant="outline" className="flex items-center gap-1">
+                      {orderId}
+                      <button
+                        type="button"
+                        onClick={() => setNewTicketOrderIds(newTicketOrderIds.filter(id => id !== orderId))}
+                        className="ml-1 hover:text-red-500"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  <div className="flex items-center gap-1">
+                    <Input
+                      placeholder="Order ID..."
+                      value={newTicketOrderInput}
+                      onChange={(e) => setNewTicketOrderInput(e.target.value)}
+                      className="h-6 w-24 text-xs"
+                      data-testid="input-link-order-create"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const orderId = newTicketOrderInput.trim().toUpperCase();
+                          if (orderId && !newTicketOrderIds.includes(orderId)) {
+                            setNewTicketOrderIds([...newTicketOrderIds, orderId]);
+                            setNewTicketOrderInput('');
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2"
+                      onClick={() => {
+                        const orderId = newTicketOrderInput.trim().toUpperCase();
+                        if (orderId && !newTicketOrderIds.includes(orderId)) {
+                          setNewTicketOrderIds([...newTicketOrderIds, orderId]);
+                          setNewTicketOrderInput('');
+                        }
+                      }}
+                      disabled={!newTicketOrderInput.trim()}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
             <DialogFooter>

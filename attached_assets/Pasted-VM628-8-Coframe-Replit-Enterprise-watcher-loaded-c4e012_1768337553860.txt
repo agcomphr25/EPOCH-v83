@@ -1,0 +1,141 @@
+VM628:8 [Coframe] Replit Enterprise watcher loaded
+c4e012fa8958473c.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+c4e012fa8958473c.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+c4e012fa8958473c.js:2 [LaunchDarkly] LaunchDarkly client initialized
+c4e012fa8958473c.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:904f486d-8f29-47f2-b813-2df76bd05f3b"},{"__ref":"OrgPresenceSession:2d97cb2c-84c5-42d1-9934-0b6fac63562c"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:2d97cb2c-84c5-42d1-9934-0b6fac63562c"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Invalid href 'https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/Cannot%20read%20properties%20of%20undefined%20(reading%20'replace')%20%20Stack%20trace:%20TypeError:%20Cannot%20read%20properties%20of%20undefined%20(reading%20'replace')%20%20%20%20%20at%20https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/src/pages/RoutingDocumentManagement.tsx:603:372%20%20%20%20%20at%20Array.map%20(%3Canonymous%3E)%20%20%20%20%20at%20RoutingDocumentManagement%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/src/pages/RoutingDocumentManagement.tsx:559:23)%20%20%20%20%20at%20renderWithHooks%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:11548:26)%20%20%20%20%20at%20updateFunctionComponent%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:14582:28)%20%20%20%20%20at%20beginWork%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:15924:22)%20%20%20%20%20at%20beginWork$1%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:19753:22)%20%20%20%20%20at%20performUnitOfWork%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:19198:20)%20%20%20%20%20at%20workLoopSync%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:19137:13)%20%20%20%20%20at%20renderRootSync%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js%3Fv=806e75ee:19116:15)%20Reload%20Application' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Invalid href 'https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev//routing-document-management' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Cache data may be lost when replacing the currentUserReplAgentStatuses field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), define a custom merge function for the Subscription.currentUserReplAgentStatuses field, so InMemoryCache can safely merge these objects:
+
+  existing: [{"__typename":"AgentStatusUpdate","replId":"440269c8-0edc-43c0-9370-d129337b85b5","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-12T23:21:38.848Z","appImageUrl":null},{"__typename":"AgentStatusUpdate","replId":"8bd8b2f6-526a-47a3-9cfa-6e3e8c15f605","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-12T17:54:30.551Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/8bd8b2f6-526a-47a3-9cfa-6e3e8c15f605/0f8f42fe-21bf-4ece-aa3f-0e7ef871a997/Ipk6v04"},{"__typename":"AgentStatusUpdate","replId":"0ce1429f-ab65-4d48-bef3-611aab96e0df","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-13T17:21:21.976Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/0ce1429f-ab65-4d48-bef3-611aab96e0df/7aa52b4c-3911-4ce5-b224-9a0ffc0eef4f/c4YPa8A"},{"__typename":"AgentStatusUpdate","replId":"8d794bd8-051d-45a2-9579-2e9cd1fc2839","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-1
+  incoming: [{"__typename":"AgentStatusUpdate","replId":"440269c8-0edc-43c0-9370-d129337b85b5","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-12T23:21:38.848Z","appImageUrl":null},{"__typename":"AgentStatusUpdate","replId":"0ce1429f-ab65-4d48-bef3-611aab96e0df","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-13T17:21:21.976Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/0ce1429f-ab65-4d48-bef3-611aab96e0df/7aa52b4c-3911-4ce5-b224-9a0ffc0eef4f/c4YPa8A"},{"__typename":"AgentStatusUpdate","replId":"8d794bd8-051d-45a2-9579-2e9cd1fc2839","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-13T17:30:25.823Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/8d794bd8-051d-45a2-9579-2e9cd1fc2839/39f4e0f4-25ab-44c8-9776-1d91928df8b5/zGlT3B2"}]
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Invalid href 'https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev//routing-document-management' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Invalid href 'https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/Application%20Error%20An%20error%20occurred%20while%20loading%20the%20application:%20%20SyntaxError:%20Failed%20to%20construct%20'WebSocket':%20The%20URL%20'wss://localhost:undefined/%3Ftoken=UUNE0r1HZ8gO'%20is%20invalid.%20%20Stack%20trace:%20Error:%20SyntaxError:%20Failed%20to%20construct%20'WebSocket':%20The%20URL%20'wss://localhost:undefined/%3Ftoken=UUNE0r1HZ8gO'%20is%20invalid.%20%20%20%20%20at%20handleUnhandledRejection%20(https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev/src/App.tsx%3Fv=KlCKbBzxA4POlOT4ZSyrX:302:16)%20Reload%20Application' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ c4e012fa8958473c.js:2
+c4e012fa8958473c.js:2 Invalid href 'https://8d794bd8-051d-45a2-9579-2e9cd1fc2839-00-2u4p1z01um788.picard.replit.dev//routing-document-management' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ c4e012fa8958473c.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 🔍 Fetching production queue...
+injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/production-queue/attention: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch orders needing attention","details":"Cannot read properties of null (reading 'map')"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch open P1 purchase orders","details":"column \"is_fulfilled\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p1-po-queue/purchase-orders/open: Error: Failed to fetch open P1 purchase orders
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/production-queue/prioritized: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.production_readiness_status does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at apiRequest (queryClient.ts:133:13)
+    at async queryFn (ProductionQueueManager.tsx:169:22)
+(anonymous) @ injected.js:37
+injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/production-queue/attention: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch orders needing attention","details":"Cannot read properties of null (reading 'map')"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch open P1 purchase orders","details":"column \"is_fulfilled\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p1-po-queue/purchase-orders/open: Error: Failed to fetch open P1 purchase orders
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+injected.js:37 🔍 Fetching production queue...
+injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/production-queue/prioritized: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.production_readiness_status does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at apiRequest (queryClient.ts:133:13)
+    at async queryFn (ProductionQueueManager.tsx:169:22)
+(anonymous) @ injected.js:37
+injected.js:37 ❌ Production queue fetch error: Error: Failed to fetch prioritized production queue
+    at apiRequest (queryClient.ts:133:13)
+    at async queryFn (ProductionQueueManager.tsx:169:22)
+(anonymous) @ injected.js:37
+injected.js:37 ❌ Production queue fetch error: Error: Failed to fetch prioritized production queue
+    at apiRequest (queryClient.ts:133:13)
+    at async queryFn (ProductionQueueManager.tsx:169:22)
+(anonymous) @ injected.js:37

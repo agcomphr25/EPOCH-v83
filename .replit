@@ -75,4 +75,4 @@ VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
 
 [agent]
 expertMode = true
-integrations = ["javascript_object_storage:2.0.0"]
+integrations = ["javascript_object_storage:2.0.0", "javascript_openai_ai_integrations:2.0.0"]

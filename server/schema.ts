@@ -4095,6 +4095,11 @@ export const partRoutings = pgTable('part_routings', {
   departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
   traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
   departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
+  // Special Process Configuration - Same structure as department config for special processes
+  specialProcessConfig: jsonb('special_process_config'), // { "processName": { materials: [{partId, partNumber, requiredFields}], qcStandards: [{standard, tolerance}], customFields: [{fieldName, fieldType, isRequired}] } }
+  materialsConfig: jsonb('materials_config'), // Materials requiring traceability: [{partId, partNumber, partName, requiresLotNumber, requiresExpiration, entryMethod}]
+  qcStandards: jsonb('qc_standards'), // QC standards configuration: [{standardName, specification, tolerance, requirement, measurementType}]
+  customFields: jsonb('custom_fields'), // Custom data entry fields: [{fieldName, fieldLabel, fieldType, isRequired, options, defaultValue}]
   isActive: boolean('is_active').default(true).notNull(),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),
@@ -10664,3 +10669,273 @@ export const vendorPoSpecificSettings = pgTable('vendor_po_specific_settings', {
 });
 
 export * from './calendar.schema';
+
+// ============================================================================
+// DOCUMENT MANAGEMENT SYSTEM - Routing Documents, Spec Sheets, Templates
+// ============================================================================
+
+// Routing Documents - Uploaded or system-generated documents linked to routings
+export const routingDocuments = pgTable('routing_documents', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  partRoutingId: uuid('part_routing_id'),
+  partNumber: varchar('part_number', { length: 255 }),
+  departmentName: varchar('department_name', { length: 255 }),
+  
+  title: varchar('title', { length: 500 }).notNull(),
+  description: text('description'),
+  version: integer('version').default(1).notNull(),
+  
+  documentType: varchar('document_type', { length: 100 }).notNull().default('work_instruction'),
+  sourceType: varchar('source_type', { length: 50 }).notNull().default('uploaded'),
+  
+  fileUrl: text('file_url'),
+  fileName: varchar('file_name', { length: 500 }),
+  fileType: varchar('file_type', { length: 100 }),
+  fileSize: integer('file_size'),
+  
+  aiExtractedContent: jsonb('ai_extracted_content'),
+  aiExtractedFields: jsonb('ai_extracted_fields'),
+  aiProcessedAt: timestamp('ai_processed_at', { withTimezone: true }),
+  
+  isTemplate: boolean('is_template').default(false),
+  isActive: boolean('is_active').default(true),
+  
+  createdBy: varchar('created_by', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  partRoutingIdx: index('routing_documents_part_routing_idx').on(table.partRoutingId),
+  partNumberIdx: index('routing_documents_part_number_idx').on(table.partNumber),
+  departmentIdx: index('routing_documents_department_idx').on(table.departmentName),
+}));
+
+// Spec Sheets - Generalized specification documents
+export const specSheets = pgTable('spec_sheets', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  partRoutingId: uuid('part_routing_id'),
+  partNumber: varchar('part_number', { length: 255 }),
+  
+  title: varchar('title', { length: 500 }).notNull(),
+  description: text('description'),
+  version: integer('version').default(1).notNull(),
+  
+  sourceType: varchar('source_type', { length: 50 }).notNull().default('uploaded'),
+  
+  fileUrl: text('file_url'),
+  fileName: varchar('file_name', { length: 500 }),
+  fileType: varchar('file_type', { length: 100 }),
+  fileSize: integer('file_size'),
+  
+  specifications: jsonb('specifications'),
+  aiExtractedContent: jsonb('ai_extracted_content'),
+  aiExtractedFields: jsonb('ai_extracted_fields'),
+  aiProcessedAt: timestamp('ai_processed_at', { withTimezone: true }),
+  
+  isTemplate: boolean('is_template').default(false),
+  isActive: boolean('is_active').default(true),
+  
+  createdBy: varchar('created_by', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  partRoutingIdx: index('spec_sheets_part_routing_idx').on(table.partRoutingId),
+  partNumberIdx: index('spec_sheets_part_number_idx').on(table.partNumber),
+}));
+
+// Document Templates - AI-learned templates from past documents
+export const documentTemplates = pgTable('document_templates', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  
+  templateName: varchar('template_name', { length: 500 }).notNull(),
+  templateType: varchar('template_type', { length: 100 }).notNull(),
+  description: text('description'),
+  
+  sourceDocumentIds: text('source_document_ids').array(),
+  learnedFromCount: integer('learned_from_count').default(0),
+  
+  structure: jsonb('structure'),
+  sections: jsonb('sections'),
+  defaultFields: jsonb('default_fields'),
+  
+  aiGeneratedPrompt: text('ai_generated_prompt'),
+  
+  isActive: boolean('is_active').default(true),
+  
+  createdBy: varchar('created_by', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  templateTypeIdx: index('document_templates_type_idx').on(table.templateType),
+}));
+
+// Template Fields - Configurable fields for document templates
+export const templateFields = pgTable('template_fields', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  templateId: uuid('template_id').references(() => documentTemplates.id, { onDelete: 'cascade' }).notNull(),
+  
+  fieldName: varchar('field_name', { length: 255 }).notNull(),
+  fieldLabel: varchar('field_label', { length: 255 }).notNull(),
+  fieldType: varchar('field_type', { length: 50 }).notNull().default('text'),
+  
+  isRequired: boolean('is_required').default(false),
+  isUniquePerSerial: boolean('is_unique_per_serial').default(false),
+  
+  defaultValue: text('default_value'),
+  validationRules: jsonb('validation_rules'),
+  options: jsonb('options'),
+  
+  sectionName: varchar('section_name', { length: 255 }),
+  sortOrder: integer('sort_order').default(0),
+  
+  aiSuggested: boolean('ai_suggested').default(false),
+  
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  templateIdx: index('template_fields_template_idx').on(table.templateId),
+}));
+
+// Routing Document Links - Links documents to routing steps
+export const routingDocumentLinks = pgTable('routing_document_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  partRoutingId: uuid('part_routing_id').notNull(),
+  departmentName: varchar('department_name', { length: 255 }),
+  
+  documentType: varchar('document_type', { length: 100 }).notNull(),
+  documentId: uuid('document_id').notNull(),
+  
+  isPrimary: boolean('is_primary').default(false),
+  sortOrder: integer('sort_order').default(0),
+  
+  createdBy: varchar('created_by', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  partRoutingIdx: index('routing_document_links_routing_idx').on(table.partRoutingId),
+  documentIdx: index('routing_document_links_document_idx').on(table.documentId),
+}));
+
+// Certification Task Links - Links certifications to specific tasks/steps
+export const certificationTaskLinks = pgTable('certification_task_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  certificationId: integer('certification_id').notNull(),
+  
+  partRoutingId: uuid('part_routing_id'),
+  departmentName: varchar('department_name', { length: 255 }),
+  
+  routingDocumentId: uuid('routing_document_id'),
+  travelerStepId: uuid('traveler_step_id'),
+  travelerTaskId: uuid('traveler_task_id'),
+  
+  taskDescription: text('task_description'),
+  
+  isRequired: boolean('is_required').default(true),
+  
+  createdBy: varchar('created_by', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  certificationIdx: index('certification_task_links_cert_idx').on(table.certificationId),
+  routingIdx: index('certification_task_links_routing_idx').on(table.partRoutingId),
+}));
+
+// Document Distribution Logs - Track printing/distribution of documents
+export const documentDistributionLogs = pgTable('document_distribution_logs', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  
+  poId: integer('po_id'),
+  poNumber: varchar('po_number', { length: 255 }),
+  
+  documentType: varchar('document_type', { length: 100 }).notNull(),
+  documentId: uuid('document_id').notNull(),
+  documentTitle: varchar('document_title', { length: 500 }),
+  
+  departmentName: varchar('department_name', { length: 255 }),
+  recipientId: integer('recipient_id'),
+  recipientName: varchar('recipient_name', { length: 255 }),
+  
+  distributionMethod: varchar('distribution_method', { length: 50 }).notNull().default('print'),
+  
+  printedAt: timestamp('printed_at', { withTimezone: true }).default(sql`now()`),
+  printedBy: varchar('printed_by', { length: 255 }),
+  
+  acknowledged: boolean('acknowledged').default(false),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+  acknowledgedBy: varchar('acknowledged_by', { length: 255 }),
+  
+  notes: text('notes'),
+}, (table) => ({
+  poIdx: index('document_distribution_logs_po_idx').on(table.poId),
+  departmentIdx: index('document_distribution_logs_dept_idx').on(table.departmentName),
+  documentIdx: index('document_distribution_logs_doc_idx').on(table.documentId),
+}));
+
+// ============================================================================
+// DOCUMENT MANAGEMENT - Insert Schemas and Types
+// ============================================================================
+
+export const insertRoutingDocumentSchema = createInsertSchema(routingDocuments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    title: z.string().min(1, 'Title is required'),
+    documentType: z.enum(['work_instruction', 'procedure', 'specification', 'reference', 'traveler_template']).default('work_instruction'),
+    sourceType: z.enum(['uploaded', 'generated', 'imported']).default('uploaded'),
+  });
+
+export const insertSpecSheetSchema = createInsertSchema(specSheets)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    title: z.string().min(1, 'Title is required'),
+    sourceType: z.enum(['uploaded', 'generated', 'imported']).default('uploaded'),
+  });
+
+export const insertDocumentTemplateSchema = createInsertSchema(documentTemplates)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    templateName: z.string().min(1, 'Template name is required'),
+    templateType: z.enum(['work_instruction', 'spec_sheet', 'traveler', 'mixed']),
+  });
+
+export const insertTemplateFieldSchema = createInsertSchema(templateFields)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    templateId: z.string().uuid('Invalid template ID'),
+    fieldName: z.string().min(1, 'Field name is required'),
+    fieldLabel: z.string().min(1, 'Field label is required'),
+    fieldType: z.enum(['text', 'number', 'date', 'textarea', 'dropdown', 'checkbox', 'barcode', 'signature']),
+  });
+
+export const insertRoutingDocumentLinkSchema = createInsertSchema(routingDocumentLinks)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    partRoutingId: z.string().uuid('Invalid routing ID'),
+    documentType: z.enum(['work_instruction', 'spec_sheet', 'traveler_template']),
+    documentId: z.string().uuid('Invalid document ID'),
+  });
+
+export const insertCertificationTaskLinkSchema = createInsertSchema(certificationTaskLinks)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    certificationId: z.number().int().positive('Invalid certification ID'),
+  });
+
+export const insertDocumentDistributionLogSchema = createInsertSchema(documentDistributionLogs)
+  .omit({ id: true, printedAt: true })
+  .extend({
+    documentType: z.enum(['work_instruction', 'spec_sheet', 'traveler']),
+    documentId: z.string().uuid('Invalid document ID'),
+    distributionMethod: z.enum(['print', 'email', 'digital']).default('print'),
+  });
+
+// Types
+export type RoutingDocument = typeof routingDocuments.$inferSelect;
+export type InsertRoutingDocument = z.infer<typeof insertRoutingDocumentSchema>;
+export type SpecSheet = typeof specSheets.$inferSelect;
+export type InsertSpecSheet = z.infer<typeof insertSpecSheetSchema>;
+export type DocumentTemplate = typeof documentTemplates.$inferSelect;
+export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
+export type TemplateField = typeof templateFields.$inferSelect;
+export type InsertTemplateField = z.infer<typeof insertTemplateFieldSchema>;
+export type RoutingDocumentLink = typeof routingDocumentLinks.$inferSelect;
+export type InsertRoutingDocumentLink = z.infer<typeof insertRoutingDocumentLinkSchema>;
+export type CertificationTaskLink = typeof certificationTaskLinks.$inferSelect;
+export type InsertCertificationTaskLink = z.infer<typeof insertCertificationTaskLinkSchema>;
+export type DocumentDistributionLog = typeof documentDistributionLogs.$inferSelect;
+export type InsertDocumentDistributionLog = z.infer<typeof insertDocumentDistributionLogSchema>;

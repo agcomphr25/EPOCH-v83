@@ -30,7 +30,8 @@ import {
   Trash2,
   Mail,
   Phone,
-  Building
+  Building,
+  FolderOpen
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -40,6 +41,7 @@ import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
 import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
+import RoutingDocumentManagement from './RoutingDocumentManagement';
 import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -336,7 +338,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -364,6 +366,10 @@ export default function P2ControlCenter() {
           <TabsTrigger value="travelers" className="flex items-center gap-2" data-testid="tab-travelers">
             <ScrollText className="h-4 w-4" />
             Travelers
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="flex items-center gap-2" data-testid="tab-documents">
+            <FolderOpen className="h-4 w-4" />
+            Docs
           </TabsTrigger>
           <TabsTrigger value="routing" className="flex items-center gap-2" data-testid="tab-routing">
             <Route className="h-4 w-4" />
@@ -464,6 +470,10 @@ export default function P2ControlCenter() {
 
         <TabsContent value="travelers">
           <P2TravelersTab />
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <RoutingDocumentManagement />
         </TabsContent>
 
         <TabsContent value="routing">

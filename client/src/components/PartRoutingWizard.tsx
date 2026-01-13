@@ -92,12 +92,22 @@ interface CustomDataField {
   isRequired: boolean; // Whether the field is required
 }
 
+interface SpecialProcessConfig {
+  processName: string; // Name of the special process
+  notes: string; // Process instructions/notes
+  requiredTechnicianId: number | null; // REQUIRED technician for special process
+  materials: MaterialRequirement[]; // Materials requiring traceability
+  qcStandards: QCStandard[]; // QC standards for special process
+  customDataFields: CustomDataField[]; // Custom data entry fields
+}
+
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
   assignedTechnicianId: number | null; // Assigned technician (employee) for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
   ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
   specialProcess?: string; // Special process notes (for Assembly/Disassembly)
+  specialProcessConfig?: SpecialProcessConfig; // Full special process configuration
   customDataFields?: CustomDataField[]; // Custom data entry fields for technicians to fill in
 }
 
@@ -148,6 +158,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   // UI state for special process dialog
   const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
   const [specialProcessDept, setSpecialProcessDept] = useState<string>('');
+  
+  // UI state for special process config inputs
+  const [spProcessName, setSpProcessName] = useState<string>('');
+  const [spTechnicianId, setSpTechnicianId] = useState<string>('');
+  const [spMaterialSearch, setSpMaterialSearch] = useState<string>('');
+  const [spQcStandard, setSpQcStandard] = useState<string>('');
+  const [spQcTolerance, setSpQcTolerance] = useState<string>('');
+  const [spQcRequirement, setSpQcRequirement] = useState<string>('');
+  const [spFieldName, setSpFieldName] = useState<string>('');
+  const [spFieldType, setSpFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
+  const [spFieldRequired, setSpFieldRequired] = useState<boolean>(false);
   
   // UI state for custom data fields input
   const [customFieldName, setCustomFieldName] = useState<string>('');
@@ -278,6 +299,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setCustomFieldName('');
     setCustomFieldType('text');
     setCustomFieldRequired(false);
+    clearSpInputState();
+    setSpecialProcessDept('');
+    setShowSpecialProcessDialog(false);
   };
 
   const handleClose = () => {
@@ -614,6 +638,155 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
         specialProcess: value,
       },
     });
+  };
+
+  // Get or create special process config for a department
+  const getOrCreateSpConfig = (dept: string): SpecialProcessConfig => {
+    const config = getOrCreateDeptConfig(dept);
+    return config.specialProcessConfig || {
+      processName: '',
+      notes: '',
+      requiredTechnicianId: null,
+      materials: [],
+      qcStandards: [],
+      customDataFields: [],
+    };
+  };
+
+  // Update special process config
+  const updateSpConfig = (dept: string, updates: Partial<SpecialProcessConfig>) => {
+    const config = getOrCreateDeptConfig(dept);
+    const spConfig = getOrCreateSpConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        specialProcessConfig: {
+          ...spConfig,
+          ...updates,
+        },
+      },
+    });
+  };
+
+  // Add material to special process
+  const addSpMaterial = (dept: string, item: InventoryItem) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    if (spConfig.materials.some(m => m.partId === item.id)) {
+      toast({ title: 'Material already added', variant: 'destructive' });
+      return;
+    }
+    const newMaterial: MaterialRequirement = {
+      partId: item.id,
+      partNumber: item.agPartNumber,
+      partName: item.name,
+      requiredFields: [],
+      entryMethod: 'manual',
+    };
+    updateSpConfig(dept, {
+      materials: [...spConfig.materials, newMaterial],
+    });
+    setSpMaterialSearch('');
+  };
+
+  // Remove material from special process
+  const removeSpMaterial = (dept: string, partId: string) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      materials: spConfig.materials.filter(m => m.partId !== partId),
+    });
+  };
+
+  // Toggle traceability field for special process material
+  const toggleSpMaterialField = (dept: string, partId: string, fieldId: string) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      materials: spConfig.materials.map(m => {
+        if (m.partId === partId) {
+          const fields = m.requiredFields.includes(fieldId)
+            ? m.requiredFields.filter(f => f !== fieldId)
+            : [...m.requiredFields, fieldId];
+          return { ...m, requiredFields: fields };
+        }
+        return m;
+      }),
+    });
+  };
+
+  // Add QC standard to special process
+  const addSpQcStandard = (dept: string) => {
+    if (!spQcStandard.trim() || !spQcTolerance.trim() || !spQcRequirement.trim()) {
+      toast({ title: 'Fill all QC fields', variant: 'destructive' });
+      return;
+    }
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      qcStandards: [...spConfig.qcStandards, {
+        standard: spQcStandard.trim(),
+        tolerance: spQcTolerance.trim(),
+        requirement: spQcRequirement.trim(),
+      }],
+    });
+    setSpQcStandard('');
+    setSpQcTolerance('');
+    setSpQcRequirement('');
+  };
+
+  // Remove QC standard from special process
+  const removeSpQcStandard = (dept: string, index: number) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      qcStandards: spConfig.qcStandards.filter((_, i) => i !== index),
+    });
+  };
+
+  // Add custom field to special process
+  const addSpCustomField = (dept: string) => {
+    if (!spFieldName.trim()) {
+      toast({ title: 'Enter field name', variant: 'destructive' });
+      return;
+    }
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      customDataFields: [...spConfig.customDataFields, {
+        fieldName: spFieldName.trim(),
+        fieldType: spFieldType,
+        isRequired: spFieldRequired,
+      }],
+    });
+    setSpFieldName('');
+    setSpFieldType('text');
+    setSpFieldRequired(false);
+  };
+
+  // Remove custom field from special process
+  const removeSpCustomField = (dept: string, index: number) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    updateSpConfig(dept, {
+      customDataFields: spConfig.customDataFields.filter((_, i) => i !== index),
+    });
+  };
+
+  // Load special process config into state when dialog opens
+  const openSpecialProcessDialog = (dept: string) => {
+    const spConfig = getOrCreateSpConfig(dept);
+    setSpProcessName(spConfig.processName);
+    setSpTechnicianId(spConfig.requiredTechnicianId?.toString() || '');
+    setSpecialProcessDept(dept);
+    setShowSpecialProcessDialog(true);
+  };
+
+  // Clear special process input state
+  const clearSpInputState = () => {
+    setSpProcessName('');
+    setSpTechnicianId('');
+    setSpMaterialSearch('');
+    setSpQcStandard('');
+    setSpQcTolerance('');
+    setSpQcRequirement('');
+    setSpFieldName('');
+    setSpFieldType('text');
+    setSpFieldRequired(false);
   };
 
   const addCustomDataField = (dept: string) => {
@@ -1340,25 +1513,40 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                               Special Process
                             </h4>
                             <p className="text-sm text-muted-foreground mb-3">
-                              Configure special process requirements for this department
+                              Configure special process requirements for this department (technician required)
                             </p>
                             <div className="space-y-2">
-                              {config.specialProcess && (
-                                <Card className="p-3 bg-muted/30">
-                                  <p className="text-sm whitespace-pre-wrap">{config.specialProcess}</p>
+                              {config.specialProcessConfig?.processName && (
+                                <Card className="p-3 bg-muted/30 border-l-4 border-l-primary">
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <p className="font-medium">{config.specialProcessConfig.processName}</p>
+                                      {config.specialProcessConfig.requiredTechnicianId && (
+                                        <Badge variant="default" className="text-xs">
+                                          <UserCheck className="h-3 w-3 mr-1" />
+                                          Tech Assigned
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {config.specialProcessConfig.notes && (
+                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{config.specialProcessConfig.notes}</p>
+                                    )}
+                                    <div className="flex gap-4 text-xs text-muted-foreground">
+                                      <span>Materials: {config.specialProcessConfig.materials?.length || 0}</span>
+                                      <span>QC Standards: {config.specialProcessConfig.qcStandards?.length || 0}</span>
+                                      <span>Custom Fields: {config.specialProcessConfig.customDataFields?.length || 0}</span>
+                                    </div>
+                                  </div>
                                 </Card>
                               )}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  setSpecialProcessDept(dept);
-                                  setShowSpecialProcessDialog(true);
-                                }}
+                                onClick={() => openSpecialProcessDialog(dept)}
                                 data-testid={`button-configure-special-process-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
                               >
                                 <FileText className="mr-2 h-4 w-4" />
-                                {config.specialProcess ? 'Edit Special Process' : 'Configure Special Process'}
+                                {config.specialProcessConfig?.processName ? 'Edit Special Process' : 'Configure Special Process'}
                               </Button>
                             </div>
                           </div>
@@ -1408,68 +1596,354 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     </Dialog>
 
       {/* Special Process Configuration Dialog */}
-      <Dialog open={showSpecialProcessDialog} onOpenChange={setShowSpecialProcessDialog}>
-        <DialogContent className="max-w-2xl" data-testid="dialog-special-process">
+      <Dialog open={showSpecialProcessDialog} onOpenChange={(open) => {
+        if (!open) {
+          clearSpInputState();
+          setSpecialProcessDept('');
+        }
+        setShowSpecialProcessDialog(open);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-special-process">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               Configure Special Process
             </DialogTitle>
             <DialogDescription>
-              Define special process requirements and instructions for this department
+              Configure special process with materials, QC standards, and required technician assignment
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="rounded-lg border p-4 bg-muted/30">
-              <p className="text-sm text-muted-foreground">
-                This section will be expanded with detailed special process configuration options.
-                For now, you can add general notes.
-              </p>
-            </div>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-6 py-4">
+              {/* Process Name & Technician (Required) */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sp-process-name">Process Name *</Label>
+                  <Input
+                    id="sp-process-name"
+                    data-testid="input-sp-process-name"
+                    placeholder="e.g., Heat Treatment, Anodizing, Plating..."
+                    value={spProcessName}
+                    onChange={(e) => {
+                      setSpProcessName(e.target.value);
+                      if (specialProcessDept) {
+                        updateSpConfig(specialProcessDept, { processName: e.target.value });
+                      }
+                    }}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="special-process-notes">Special Process Notes</Label>
-              <Textarea
-                id="special-process-notes"
-                data-testid="input-special-process-notes"
-                placeholder="Enter special process details, requirements, and instructions..."
-                value={specialProcessDept ? (departmentConfig[specialProcessDept]?.specialProcess || '') : ''}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                  if (specialProcessDept) {
-                    updateSpecialProcess(specialProcessDept, e.target.value);
-                  }
-                }}
-                rows={6}
-                className="resize-none"
-              />
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4" />
+                    Assigned Technician *
+                    <Badge variant="destructive" className="text-xs">Required</Badge>
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Special processes require a designated technician to be assigned
+                  </p>
+                  <Select
+                    value={spTechnicianId || 'NONE'}
+                    onValueChange={(val) => {
+                      setSpTechnicianId(val);
+                      if (specialProcessDept) {
+                        updateSpConfig(specialProcessDept, {
+                          requiredTechnicianId: val === 'NONE' ? null : parseInt(val),
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-sp-technician">
+                      <SelectValue placeholder="Select technician (required)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">-- Select Technician --</SelectItem>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          {emp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!spTechnicianId && (
+                    <p className="text-sm text-red-500">A technician must be assigned for special processes</p>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Process Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="sp-notes">Process Instructions</Label>
+                <Textarea
+                  id="sp-notes"
+                  data-testid="input-sp-notes"
+                  placeholder="Enter special process details, requirements, and instructions..."
+                  value={specialProcessDept ? (getOrCreateSpConfig(specialProcessDept).notes || '') : ''}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                    if (specialProcessDept) {
+                      updateSpConfig(specialProcessDept, { notes: e.target.value });
+                    }
+                  }}
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+
+              <Separator />
+
+              {/* Materials Requiring Traceability */}
+              <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Materials Requiring Traceability ({specialProcessDept ? getOrCreateSpConfig(specialProcessDept).materials.length : 0})
+                </h4>
+                
+                {specialProcessDept && getOrCreateSpConfig(specialProcessDept).materials.length > 0 && (
+                  <div className="space-y-2">
+                    {getOrCreateSpConfig(specialProcessDept).materials.map((material) => (
+                      <Card key={material.partId} className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-mono text-sm">{material.partNumber}</p>
+                            <p className="text-xs text-muted-foreground">{material.partName}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => removeSpMaterial(specialProcessDept, material.partId)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {TRACEABILITY_FIELDS.map((field) => (
+                            <Badge
+                              key={field.id}
+                              variant={material.requiredFields.includes(field.id) ? "default" : "outline"}
+                              className="cursor-pointer text-xs"
+                              onClick={() => toggleSpMaterialField(specialProcessDept, material.partId, field.id)}
+                            >
+                              {field.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-sm mb-2 block">Add Material:</Label>
+                  <Input
+                    placeholder="Search inventory..."
+                    value={spMaterialSearch}
+                    onChange={(e) => setSpMaterialSearch(e.target.value)}
+                    className="mb-2"
+                  />
+                  {spMaterialSearch && (
+                    <ScrollArea className="h-32 border rounded">
+                      {inventoryItems
+                        .filter(item =>
+                          (item.agPartNumber?.toLowerCase() || '').includes(spMaterialSearch.toLowerCase()) ||
+                          (item.name?.toLowerCase() || '').includes(spMaterialSearch.toLowerCase())
+                        )
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-2 hover:bg-muted cursor-pointer"
+                            onClick={() => specialProcessDept && addSpMaterial(specialProcessDept, item)}
+                          >
+                            <p className="font-mono text-sm">{item.agPartNumber}</p>
+                            <p className="text-xs text-muted-foreground">{item.name}</p>
+                          </div>
+                        ))}
+                    </ScrollArea>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* QC Standards */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">QC Standards ({specialProcessDept ? getOrCreateSpConfig(specialProcessDept).qcStandards.length : 0})</h4>
+                
+                {specialProcessDept && getOrCreateSpConfig(specialProcessDept).qcStandards.length > 0 && (
+                  <div className="space-y-2">
+                    {getOrCreateSpConfig(specialProcessDept).qcStandards.map((qc, idx) => (
+                      <Card key={idx} className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-sm">{qc.standard}</p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => removeSpQcStandard(specialProcessDept, idx)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Tolerance:</span>
+                            <p className="font-mono">{qc.tolerance}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Requirement:</span>
+                            <p className="font-mono">{qc.requirement}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="QC Standard (e.g., Surface Finish)"
+                    value={spQcStandard}
+                    onChange={(e) => setSpQcStandard(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Tolerance (e.g., ±0.001 in)"
+                    value={spQcTolerance}
+                    onChange={(e) => setSpQcTolerance(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Requirement (e.g., 32 Ra max)"
+                    value={spQcRequirement}
+                    onChange={(e) => setSpQcRequirement(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => specialProcessDept && addSpQcStandard(specialProcessDept)}
+                    disabled={!spQcStandard.trim() || !spQcTolerance.trim() || !spQcRequirement.trim()}
+                  >
+                    Add QC Standard
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Custom Data Fields */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">Custom Data Fields ({specialProcessDept ? getOrCreateSpConfig(specialProcessDept).customDataFields.length : 0})</h4>
+                <p className="text-sm text-muted-foreground">
+                  Define custom data entry fields technicians must complete during the special process
+                </p>
+
+                {specialProcessDept && getOrCreateSpConfig(specialProcessDept).customDataFields.length > 0 && (
+                  <div className="space-y-2">
+                    {getOrCreateSpConfig(specialProcessDept).customDataFields.map((field, idx) => (
+                      <Card key={idx} className="p-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{field.fieldName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Type: {field.fieldType} {field.isRequired && <Badge variant="secondary" className="ml-1">Required</Badge>}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => removeSpCustomField(specialProcessDept, idx)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Field Name (e.g., Temperature Reading)"
+                    value={spFieldName}
+                    onChange={(e) => setSpFieldName(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Select value={spFieldType} onValueChange={(v: 'text' | 'number' | 'date' | 'textarea') => setSpFieldType(v)}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="textarea">Text Area</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sp-field-required"
+                        checked={spFieldRequired}
+                        onCheckedChange={(checked) => setSpFieldRequired(checked === true)}
+                      />
+                      <Label htmlFor="sp-field-required" className="text-sm">Required</Label>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => specialProcessDept && addSpCustomField(specialProcessDept)}
+                    disabled={!spFieldName.trim()}
+                  >
+                    Add Custom Field
+                  </Button>
+                </div>
+              </div>
             </div>
-          </div>
+          </ScrollArea>
 
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
+                clearSpInputState();
                 setShowSpecialProcessDialog(false);
                 setSpecialProcessDept('');
               }}
               data-testid="button-cancel-special-process"
             >
-              Close
+              Cancel
             </Button>
             <Button
               onClick={() => {
+                const spConfig = specialProcessDept ? getOrCreateSpConfig(specialProcessDept) : null;
+                if (!spConfig?.processName?.trim()) {
+                  toast({
+                    title: 'Process Name Required',
+                    description: 'Please enter a process name',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                if (!spConfig?.requiredTechnicianId) {
+                  toast({
+                    title: 'Technician Required',
+                    description: 'Special processes require a designated technician',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                clearSpInputState();
                 setShowSpecialProcessDialog(false);
                 setSpecialProcessDept('');
                 toast({
                   title: 'Special Process Saved',
-                  description: 'Special process configuration has been updated',
+                  description: `"${spConfig.processName}" configured with assigned technician`,
                 });
               }}
               data-testid="button-save-special-process"
             >
               <Check className="mr-2 h-4 w-4" />
-              Save
+              Save Special Process
             </Button>
           </DialogFooter>
         </DialogContent>

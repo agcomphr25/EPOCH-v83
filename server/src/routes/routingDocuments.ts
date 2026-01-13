@@ -16,10 +16,48 @@ import {
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
-import * as pdfParse from 'pdf-parse';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
+
+// Helper to format UUID bytes to string if needed
+function formatUuid(value: any): string {
+  if (!value) return '';
+  // If it's a proper UUID string (with dashes), return it
+  if (typeof value === 'string' && value.includes('-') && value.length === 36) {
+    return value;
+  }
+  // If it's a comma-separated byte string like "111,95,164,137,..."
+  if (typeof value === 'string' && value.includes(',')) {
+    const byteArray = value.split(',').map(b => parseInt(b.trim(), 10));
+    if (byteArray.length === 16) {
+      const bytes = Buffer.from(byteArray);
+      const hex = bytes.toString('hex');
+      return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+    }
+  }
+  // If it's a Buffer or byte array, convert to UUID format
+  if (Buffer.isBuffer(value) || (Array.isArray(value) && value.length === 16)) {
+    const bytes = Buffer.from(value);
+    const hex = bytes.toString('hex');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
+  return String(value);
+}
+
+// Transform row UUIDs to string format
+function transformRow(row: any): any {
+  if (!row) return row;
+  const transformed = { ...row };
+  if (transformed.id) transformed.id = formatUuid(transformed.id);
+  if (transformed.template_id) transformed.template_id = formatUuid(transformed.template_id);
+  if (transformed.document_id) transformed.document_id = formatUuid(transformed.document_id);
+  if (transformed.part_id) transformed.part_id = formatUuid(transformed.part_id);
+  return transformed;
+}
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -34,9 +72,10 @@ router.get('/', async (req: Request, res: Response) => {
     // Use raw SQL template to avoid Neon HTTP driver issues with empty tables
     const results = await db.execute(sql`SELECT * FROM routing_documents WHERE is_active = true ORDER BY created_at DESC`);
     
-    // Extract rows from the raw result
+    // Extract rows from the raw result and transform UUIDs
     const rows = (results as any)?.rows || results || [];
-    res.json(Array.isArray(rows) ? rows : []);
+    const transformed = Array.isArray(rows) ? rows.map(transformRow) : [];
+    res.json(transformed);
   } catch (error: any) {
     console.error('Error fetching routing documents:', error);
     // Return empty array on error (for new/empty tables)
@@ -49,7 +88,8 @@ router.get('/spec-sheets', async (req: Request, res: Response) => {
   try {
     const results = await db.execute(sql`SELECT * FROM spec_sheets WHERE is_active = true ORDER BY created_at DESC`);
     const rows = (results as any)?.rows || results || [];
-    res.json(Array.isArray(rows) ? rows : []);
+    const transformed = Array.isArray(rows) ? rows.map(transformRow) : [];
+    res.json(transformed);
   } catch (error) {
     console.error('Error fetching spec sheets:', error);
     res.json([]);
@@ -61,7 +101,8 @@ router.get('/templates/list', async (req: Request, res: Response) => {
   try {
     const results = await db.execute(sql`SELECT * FROM document_templates WHERE is_active = true ORDER BY created_at DESC`);
     const rows = (results as any)?.rows || results || [];
-    res.json(Array.isArray(rows) ? rows : []);
+    const transformed = Array.isArray(rows) ? rows.map(transformRow) : [];
+    res.json(transformed);
   } catch (error) {
     console.error('Error fetching templates:', error);
     res.json([]);
@@ -241,8 +282,7 @@ router.post('/extract-text', async (req: Request, res: Response) => {
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
       try {
-        const pdfParser = (pdfParse as any).default || pdfParse;
-        const pdfData = await pdfParser(fileBuffer);
+        const pdfData = await pdfParse(fileBuffer);
         extractedText = pdfData.text || '';
         console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
       } catch (pdfError) {
@@ -309,8 +349,7 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
       try {
-        const pdfParser = (pdfParse as any).default || pdfParse;
-        const pdfData = await pdfParser(fileBuffer);
+        const pdfData = await pdfParse(fileBuffer);
         extractedText = pdfData.text || '';
         console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
       } catch (pdfError) {

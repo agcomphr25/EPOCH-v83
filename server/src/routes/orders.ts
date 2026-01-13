@@ -1344,7 +1344,9 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     let order = await storage.getOrderById(orderId);
 
     // If not found in regular orders, check production_orders table (P1/PO orders)
-    if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
+    // Case-insensitive check for PO- or P1- prefixes
+    const upperOrderId = orderId.toUpperCase();
+    if (!order && (upperOrderId.startsWith('P1-') || upperOrderId.startsWith('PO-'))) {
       console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
       const { pool } = await import('../../db');
       

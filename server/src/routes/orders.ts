@@ -1343,9 +1343,9 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     // Try to find the order in both drafts and finalized tables
     let order = await storage.getOrderById(orderId);
 
-    // If not found in regular orders, check production_orders table (P1 orders)
-    if (!order && orderId.startsWith('P1-')) {
-      console.log(`🔍 P1 order detected: ${orderId}, querying production_orders table`);
+    // If not found in regular orders, check production_orders table (P1/PO orders)
+    if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
+      console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
       const { pool } = await import('../../db');
       
       try {
@@ -1372,7 +1372,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
         
         if (productionOrderResult && productionOrderResult.length > 0) {
           const po = productionOrderResult[0];
-          console.log(`✅ Found P1 production order:`, po);
+          console.log(`✅ Found production order:`, po);
           order = {
             orderId: po.order_id,
             customerId: po.customer_id,

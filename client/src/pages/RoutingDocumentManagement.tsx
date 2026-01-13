@@ -146,12 +146,41 @@ export default function RoutingDocumentManagement() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (data: { file: File; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean }) => {
+    mutationFn: async (data: { file: File | null; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean }) => {
+      // If no file, create metadata-only document
+      if (!data.file) {
+        return apiRequest('/api/routing-documents/create', {
+          method: 'POST',
+          body: {
+            title: data.title,
+            partNumber: data.partNumber,
+            departmentName: data.departmentName,
+            documentType: data.documentType,
+            isTemplate: data.isTemplate,
+          },
+        });
+      }
+      
       // Step 1: Request upload URL
       const urlResponse = await apiRequest('/api/routing-documents/request-upload-url', {
         method: 'POST',
         body: { name: data.file.name, size: data.file.size, contentType: data.file.type },
       });
+      
+      // Handle fallback mode when Object Storage is unavailable
+      if (urlResponse.fallbackMode) {
+        return apiRequest('/api/routing-documents/create', {
+          method: 'POST',
+          body: {
+            title: data.title || data.file.name,
+            partNumber: data.partNumber,
+            departmentName: data.departmentName,
+            documentType: data.documentType,
+            isTemplate: data.isTemplate,
+            description: `Original file: ${data.file.name} (${Math.round((data.file.size || 0) / 1024)}KB)`,
+          },
+        });
+      }
       
       // Step 2: Upload file to presigned URL
       const uploadRes = await fetch(urlResponse.uploadURL, {
@@ -178,8 +207,9 @@ export default function RoutingDocumentManagement() {
         },
       });
     },
-    onSuccess: () => {
-      toast({ title: 'Success', description: 'Document uploaded successfully' });
+    onSuccess: (_data, variables) => {
+      const message = variables.file ? 'Document uploaded successfully' : 'Document created successfully';
+      toast({ title: 'Success', description: message });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowUploadDialog(false);
       setUploadForm({ title: '', partNumber: '', departmentName: '', documentType: 'work_instruction', isTemplate: false, file: null });
@@ -245,14 +275,15 @@ export default function RoutingDocumentManagement() {
   });
 
   const handleUpload = () => {
-    if (!uploadForm.file) {
-      toast({ title: 'Error', description: 'Please select a file', variant: 'destructive' });
+    // Either file or title is required
+    if (!uploadForm.file && !uploadForm.title.trim()) {
+      toast({ title: 'Error', description: 'Please enter a title or select a file', variant: 'destructive' });
       return;
     }
     
     uploadMutation.mutate({
       file: uploadForm.file,
-      title: uploadForm.title,
+      title: uploadForm.title || (uploadForm.file?.name || 'Untitled Document'),
       partNumber: uploadForm.partNumber,
       departmentName: uploadForm.departmentName,
       documentType: uploadForm.documentType,

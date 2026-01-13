@@ -198,17 +198,57 @@ router.post('/request-upload-url', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required field: name' });
     }
     
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-    
-    res.json({
-      uploadURL,
-      objectPath,
-      metadata: { name, size, contentType },
-    });
+    try {
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      
+      res.json({
+        uploadURL,
+        objectPath,
+        metadata: { name, size, contentType },
+      });
+    } catch (storageError: any) {
+      // Object Storage not available - provide alternative response
+      console.warn('Object Storage unavailable, using metadata-only mode:', storageError.message);
+      res.json({
+        uploadURL: null,
+        objectPath: null,
+        metadata: { name, size, contentType },
+        fallbackMode: true,
+        message: 'File storage temporarily unavailable. Document will be created with metadata only.',
+      });
+    }
   } catch (error) {
     console.error('Error generating upload URL:', error);
     res.status(500).json({ error: 'Failed to generate upload URL' });
+  }
+});
+
+// Create document without file (metadata only)
+router.post('/create', async (req: Request, res: Response) => {
+  try {
+    const { title, partNumber, departmentName, documentType, isTemplate, description } = req.body;
+    const user = (req as any).user;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    
+    const [document] = await db.insert(routingDocuments).values({
+      title,
+      partNumber: partNumber || null,
+      departmentName: departmentName || null,
+      documentType: documentType || 'work_instruction',
+      sourceType: 'uploaded',
+      description: description || null,
+      isTemplate: isTemplate === true || isTemplate === 'true',
+      createdBy: user?.username || 'system',
+    }).returning();
+    
+    res.status(201).json(document);
+  } catch (error) {
+    console.error('Error creating document:', error);
+    res.status(500).json({ error: 'Failed to create document' });
   }
 });
 
@@ -334,10 +374,13 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
     // Validate and get reference documents
     let referenceContent = '';
     if (referenceDocumentIds && referenceDocumentIds.length > 0) {
-      // Build a parameterized query for multiple IDs
-      const placeholders = referenceDocumentIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
-      const refDocsResult = await db.execute(sql.raw(`SELECT * FROM routing_documents WHERE id IN (${placeholders})`, referenceDocumentIds));
-      const refDocs = ((refDocsResult as any)?.rows || refDocsResult || []) as any[];
+      // Build individual queries for each document ID to avoid SQL injection
+      const refDocs: any[] = [];
+      for (const docId of referenceDocumentIds) {
+        const result = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${docId}`);
+        const rows = (result as any)?.rows || result || [];
+        if (rows.length > 0) refDocs.push(rows[0]);
+      }
       
       // Validate that all referenced documents exist
       if (refDocs.length !== referenceDocumentIds.length) {
@@ -429,10 +472,13 @@ router.post('/templates/learn', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one reference document is required' });
     }
     
-    // Get reference documents and validate all exist using raw SQL
-    const placeholders = referenceDocumentIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
-    const refDocsResult = await db.execute(sql.raw(`SELECT * FROM routing_documents WHERE id IN (${placeholders})`, referenceDocumentIds));
-    const refDocs = ((refDocsResult as any)?.rows || refDocsResult || []) as any[];
+    // Get reference documents and validate all exist
+    const refDocs: any[] = [];
+    for (const docId of referenceDocumentIds) {
+      const result = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${docId}`);
+      const rows = (result as any)?.rows || result || [];
+      if (rows.length > 0) refDocs.push(rows[0]);
+    }
     
     if (refDocs.length === 0) {
       return res.status(404).json({ error: 'No reference documents found' });

@@ -111,6 +111,7 @@ import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
+import RoutingDocumentManagement from './pages/RoutingDocumentManagement';
 import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
 import TrainingControlCenter from '@/pages/TrainingControlCenter';
@@ -735,6 +736,10 @@ function App() {
                   <Route
                     path="/document-management"
                     component={DocumentManagement}
+                  />
+                  <Route
+                    path="/routing-document-management"
+                    component={RoutingDocumentManagement}
                   />
                   <Route
                     path="/document-intelligence"

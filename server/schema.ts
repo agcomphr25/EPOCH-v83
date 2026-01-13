@@ -4095,6 +4095,11 @@ export const partRoutings = pgTable('part_routings', {
   departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
   traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
   departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
+  // Special Process Configuration - Same structure as department config for special processes
+  specialProcessConfig: jsonb('special_process_config'), // { "processName": { materials: [{partId, partNumber, requiredFields}], qcStandards: [{standard, tolerance}], customFields: [{fieldName, fieldType, isRequired}] } }
+  materialsConfig: jsonb('materials_config'), // Materials requiring traceability: [{partId, partNumber, partName, requiresLotNumber, requiresExpiration, entryMethod}]
+  qcStandards: jsonb('qc_standards'), // QC standards configuration: [{standardName, specification, tolerance, requirement, measurementType}]
+  customFields: jsonb('custom_fields'), // Custom data entry fields: [{fieldName, fieldLabel, fieldType, isRequired, options, defaultValue}]
   isActive: boolean('is_active').default(true).notNull(),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),

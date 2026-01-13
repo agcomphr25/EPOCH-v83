@@ -1351,6 +1351,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
       const { pool } = await import('../../db');
       
       try {
+        // Use UPPER() for case-insensitive matching
         const productionOrderResult = await pool.query`
           SELECT 
             order_id,
@@ -1366,7 +1367,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
             created_at,
             updated_at
           FROM production_orders
-          WHERE order_id = ${orderId}
+          WHERE UPPER(order_id) = ${upperOrderId}
           LIMIT 1
         `;
         

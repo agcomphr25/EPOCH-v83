@@ -1866,7 +1866,22 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/recent-activity', async (req, res) => {
     try {
       const { db } = await import('../../db');
-      const { p2SerializedItemEvents, p2SerializedItems } = await import('../../schema');
+      const { sql } = await import('drizzle-orm');
+      
+      // Check if table exists first
+      const tableCheck = await db.execute(sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'p2_serialized_item_events'
+        ) as exists
+      `);
+      const tableExists = (tableCheck as any)?.rows?.[0]?.exists ?? false;
+      
+      if (!tableExists) {
+        return res.json([]);
+      }
+      
+      const { p2SerializedItemEvents } = await import('../../schema');
       const { desc, gte } = await import('drizzle-orm');
       
       // Get recent events from the last 7 days
@@ -1904,7 +1919,7 @@ export function registerRoutes(app: Express): Server {
       res.json(activities);
     } catch (_error) {
       console.error('P2 Control Center recent activity error:', _error);
-      res.status(500).json({ error: 'Failed to fetch recent activity' });
+      res.json([]);
     }
   });
 

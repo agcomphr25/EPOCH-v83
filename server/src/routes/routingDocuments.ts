@@ -703,18 +703,23 @@ Return a JSON object with:
     const learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
     
     // Create template
-    const [template] = await db.insert(documentTemplates).values({
+    const templateResult = await db.insert(documentTemplates).values({
       templateName: templateName || 'Learned Template',
       templateType: templateType || 'mixed',
       description: description || 'Template learned from reference documents',
       sourceDocumentIds: referenceDocumentIds,
       learnedFromCount: referenceDocumentIds.length,
-      structure: learnedContent.structure,
-      sections: learnedContent.sections,
-      defaultFields: learnedContent.defaultFields,
-      aiGeneratedPrompt: learnedContent.aiGeneratedPrompt,
+      structure: learnedContent.structure || null,
+      sections: learnedContent.sections || null,
+      defaultFields: learnedContent.defaultFields || null,
+      aiGeneratedPrompt: learnedContent.aiGeneratedPrompt || null,
       createdBy: (req as any).user?.username || 'system',
     }).returning();
+    
+    const template = templateResult[0];
+    if (!template) {
+      return res.status(500).json({ error: 'Failed to create template' });
+    }
     
     // Create template fields
     if (learnedContent.defaultFields && learnedContent.defaultFields.length > 0) {

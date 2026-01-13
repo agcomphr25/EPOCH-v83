@@ -21,7 +21,12 @@ import { ObjectStorageService } from '../../replit_integrations/object_storage';
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    // pdf-parse exports PDFParse as the main function
+    const pdfParse = pdfParseModule.PDFParse || pdfParseModule.default || pdfParseModule;
+    if (typeof pdfParse !== 'function') {
+      console.error('pdf-parse module structure:', Object.keys(pdfParseModule));
+      throw new Error('Could not find PDF parse function');
+    }
     const pdfData = await pdfParse(buffer);
     return pdfData.text || '';
   } catch (error) {

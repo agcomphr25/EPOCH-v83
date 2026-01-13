@@ -702,23 +702,31 @@ Return a JSON object with:
     
     const learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
     
-    // Create template
-    const templateResult = await db.insert(documentTemplates).values({
-      templateName: templateName || 'Learned Template',
-      templateType: templateType || 'mixed',
-      description: description || 'Template learned from reference documents',
-      sourceDocumentIds: referenceDocumentIds,
-      learnedFromCount: referenceDocumentIds.length,
-      structure: learnedContent.structure || null,
-      sections: learnedContent.sections || null,
-      defaultFields: learnedContent.defaultFields || null,
-      aiGeneratedPrompt: learnedContent.aiGeneratedPrompt || null,
-      createdBy: (req as any).user?.username || 'system',
-    }).returning();
+    // Create template with explicit error handling
+    let template: any;
+    try {
+      const templateResult = await db.insert(documentTemplates).values({
+        templateName: templateName || 'Learned Template',
+        templateType: templateType || 'mixed',
+        description: description || 'Template learned from reference documents',
+        sourceDocumentIds: referenceDocumentIds,
+        learnedFromCount: referenceDocumentIds.length,
+        structure: learnedContent.structure || null,
+        sections: learnedContent.sections || null,
+        defaultFields: learnedContent.defaultFields || null,
+        aiGeneratedPrompt: learnedContent.aiGeneratedPrompt || null,
+        createdBy: (req as any).user?.username || 'system',
+      }).returning();
+      
+      template = templateResult[0];
+    } catch (insertError) {
+      console.error('Template insert error:', insertError);
+      return res.status(500).json({ error: 'Failed to insert template into database' });
+    }
     
-    const template = templateResult[0];
     if (!template) {
-      return res.status(500).json({ error: 'Failed to create template' });
+      console.error('Template insert returned empty result');
+      return res.status(500).json({ error: 'Template creation returned empty result' });
     }
     
     // Create template fields

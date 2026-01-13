@@ -21,11 +21,11 @@ import { ObjectStorageService } from '../../replit_integrations/object_storage';
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfParseModule = await import('pdf-parse');
-    // pdf-parse v2.x exports PDFParse as a class
+    // pdf-parse v2.x exports PDFParse as a class that takes options with data
     const PDFParse = pdfParseModule.PDFParse;
-    const parser = new PDFParse();
-    const pdfData = await parser.loadPDF(buffer);
-    return pdfData.text || '';
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const textResult = await parser.text();
+    return textResult.text || '';
   } catch (error) {
     console.error('Error parsing PDF:', error);
     return '';

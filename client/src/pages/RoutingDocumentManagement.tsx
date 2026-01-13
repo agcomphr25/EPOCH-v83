@@ -26,7 +26,8 @@ import {
   BookOpen,
   Loader2,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Route
 } from 'lucide-react';
 
 interface RoutingDocument {
@@ -97,6 +98,13 @@ export default function RoutingDocumentManagement() {
     templateName: '',
     templateType: 'work_instruction',
     description: '',
+  });
+  const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
+  const [generateRoutingForm, setGenerateRoutingForm] = useState({
+    partNumber: '',
+    partName: '',
+    inventoryItemId: '',
+    routingName: '',
   });
   
   const { toast } = useToast();
@@ -262,6 +270,44 @@ export default function RoutingDocumentManagement() {
       toast({ title: 'Error', description: error.message || 'Failed to create template', variant: 'destructive' });
     },
   });
+
+  const generateRoutingMutation = useMutation({
+    mutationFn: async (data: { documentId: string; partNumber: string; partName: string; inventoryItemId: string; routingName?: string }) => {
+      return apiRequest(`/api/routing-documents/${data.documentId}/generate-routing`, {
+        method: 'POST',
+        body: {
+          partNumber: data.partNumber,
+          partName: data.partName,
+          inventoryItemId: data.inventoryItemId,
+          routingName: data.routingName,
+        },
+      });
+    },
+    onSuccess: (result: any) => {
+      toast({ 
+        title: 'Part Routing Created', 
+        description: `Created routing with ${result.summary?.departmentsCreated || 0} departments and ${result.summary?.operationsExtracted || 0} operations` 
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+      setShowGenerateRoutingDialog(false);
+      setGenerateRoutingForm({ partNumber: '', partName: '', inventoryItemId: '', routingName: '' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to generate part routing', variant: 'destructive' });
+    },
+  });
+
+  const handleGenerateRouting = () => {
+    if (!selectedDocument) return;
+    if (!generateRoutingForm.partNumber || !generateRoutingForm.partName || !generateRoutingForm.inventoryItemId) {
+      toast({ title: 'Error', description: 'Please fill in all required fields', variant: 'destructive' });
+      return;
+    }
+    generateRoutingMutation.mutate({
+      documentId: selectedDocument.id,
+      ...generateRoutingForm,
+    });
+  };
 
   const handleUpload = () => {
     // Either file or title is required
@@ -1071,6 +1117,93 @@ export default function RoutingDocumentManagement() {
                 Analyze with AI
               </Button>
             )}
+            {selectedDocument && selectedDocument.aiExtractedContent?.routingSteps?.length > 0 && (
+              <Button onClick={() => {
+                setShowViewDialog(false);
+                setShowGenerateRoutingDialog(true);
+              }}>
+                <Route className="h-4 w-4 mr-2" />
+                Generate Part Routing
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Part Routing Dialog */}
+      <Dialog open={showGenerateRoutingDialog} onOpenChange={setShowGenerateRoutingDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Generate Part Routing</DialogTitle>
+            <DialogDescription>
+              Create a part routing from the AI-extracted steps in "{selectedDocument?.title}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedDocument?.aiExtractedContent?.routingSteps && (
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                <div className="font-medium mb-1">Extracted Routing Steps:</div>
+                <div className="text-muted-foreground">
+                  {selectedDocument.aiExtractedContent.routingSteps.length} steps across{' '}
+                  {new Set(selectedDocument.aiExtractedContent.routingSteps.map((s: any) => s.department)).size} departments
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="routing-part-number">Part Number *</Label>
+              <Input
+                id="routing-part-number"
+                value={generateRoutingForm.partNumber}
+                onChange={(e) => setGenerateRoutingForm(prev => ({ ...prev, partNumber: e.target.value }))}
+                placeholder="e.g., PL2-TUBE-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routing-part-name">Part Name *</Label>
+              <Input
+                id="routing-part-name"
+                value={generateRoutingForm.partName}
+                onChange={(e) => setGenerateRoutingForm(prev => ({ ...prev, partName: e.target.value }))}
+                placeholder="e.g., 12-inch Disruptor Tube"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routing-inventory-id">Inventory Item ID *</Label>
+              <Input
+                id="routing-inventory-id"
+                value={generateRoutingForm.inventoryItemId}
+                onChange={(e) => setGenerateRoutingForm(prev => ({ ...prev, inventoryItemId: e.target.value }))}
+                placeholder="e.g., INV-001 or existing inventory ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routing-name">Routing Name (optional)</Label>
+              <Input
+                id="routing-name"
+                value={generateRoutingForm.routingName}
+                onChange={(e) => setGenerateRoutingForm(prev => ({ ...prev, routingName: e.target.value }))}
+                placeholder="Leave blank to use document title"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGenerateRoutingDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleGenerateRouting}
+              disabled={generateRoutingMutation.isPending}
+            >
+              {generateRoutingMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Route className="h-4 w-4 mr-2" />
+                  Create Part Routing
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

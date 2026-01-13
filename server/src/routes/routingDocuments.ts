@@ -904,4 +904,151 @@ router.post('/certification-links', async (req: Request, res: Response) => {
   }
 });
 
+// Generate Part Routing from analyzed document
+// Converts AI-extracted routing steps into an actual part routing
+router.post('/:id/generate-routing', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { partNumber, partName, inventoryItemId, routingName } = req.body;
+    
+    if (!partNumber || !partName || !inventoryItemId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: partNumber, partName, and inventoryItemId are required' 
+      });
+    }
+    
+    // Fetch the document with AI-extracted content
+    const [document] = await db.select().from(routingDocuments).where(eq(routingDocuments.id, id));
+    
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    // Parse AI content - handle both string and object types
+    let aiContent: any = document.aiExtractedContent;
+    if (typeof aiContent === 'string') {
+      try {
+        aiContent = JSON.parse(aiContent);
+      } catch (e) {
+        aiContent = null;
+      }
+    }
+    
+    // Guard: ensure we have valid routing steps
+    const routingSteps = Array.isArray(aiContent?.routingSteps) ? aiContent.routingSteps : [];
+    
+    if (routingSteps.length === 0) {
+      return res.status(400).json({ 
+        error: 'Document has not been analyzed or has no routing steps extracted',
+        hint: 'Please analyze the document with AI first to extract routing steps'
+      });
+    }
+    
+    // Get unique departments in order of appearance
+    const departmentSequence: string[] = [];
+    const departmentConfig: Record<string, any> = {};
+    const traceabilityConfig: Record<string, string[]> = {};
+    
+    for (const step of routingSteps) {
+      const dept = step.department || 'General';
+      
+      if (!departmentSequence.includes(dept)) {
+        departmentSequence.push(dept);
+        
+        // Build department config with operations and quality checkpoints
+        departmentConfig[dept] = {
+          operations: [],
+          qcStandards: [],
+          technicianRequired: true,
+          materials: []
+        };
+        
+        // Default traceability requirements
+        traceabilityConfig[dept] = ['operator', 'timestamp'];
+      }
+      
+      // Add operation to department
+      departmentConfig[dept].operations.push({
+        stepNumber: step.stepNumber,
+        operation: step.operation,
+        description: step.description || ''
+      });
+      
+      // Add quality checkpoints if present
+      if (step.qualityCheckpoints && step.qualityCheckpoints.length > 0) {
+        for (const qc of step.qualityCheckpoints) {
+          departmentConfig[dept].qcStandards.push({
+            standard: qc,
+            requirement: 'Pass/Fail'
+          });
+        }
+      }
+    }
+    
+    // Add quality checkpoints from aiContent if available (with guard)
+    const qualityCheckpoints = Array.isArray(aiContent?.qualityCheckpoints) ? aiContent.qualityCheckpoints : [];
+    for (const qc of qualityCheckpoints) {
+      const dept = qc.department || departmentSequence[0] || 'Quality';
+      if (!departmentConfig[dept]) {
+        if (!departmentSequence.includes(dept)) {
+          departmentSequence.push(dept);
+        }
+        departmentConfig[dept] = { operations: [], qcStandards: [], technicianRequired: true, materials: [] };
+        traceabilityConfig[dept] = ['operator', 'timestamp'];
+      }
+      departmentConfig[dept].qcStandards.push({
+        standard: qc.checkpoint,
+        requirement: 'Pass/Fail'
+      });
+    }
+    
+    // Create the part routing using storage interface
+    const { storage } = await import('../../storage');
+    
+    const newRouting = await storage.createPartRouting({
+      inventoryItemId,
+      partNumber,
+      partName,
+      routingName: routingName || document.title || 'Generated from Document',
+      routingRevision: 1,
+      departmentSequence,
+      traceabilityConfig,
+      departmentConfig,
+      isActive: true,
+      createdBy: (req as any).user?.username || 'system',
+    });
+    
+    // Link the document to the new routing
+    await db.insert(routingDocumentLinks).values({
+      partRoutingId: newRouting.id,
+      departmentName: departmentSequence[0] || 'General',
+      documentType: document.documentType,
+      documentId: document.id,
+      isPrimary: true,
+      sortOrder: 0,
+      createdBy: (req as any).user?.username || 'system',
+    });
+    
+    // Count certification requirements for summary (not linked - requires existing certification IDs)
+    const certifications = Array.isArray(aiContent?.certificationRequirements) ? aiContent.certificationRequirements : [];
+    
+    res.status(201).json({
+      message: 'Part routing generated successfully from document',
+      routing: newRouting,
+      summary: {
+        departmentsCreated: departmentSequence.length,
+        operationsExtracted: routingSteps.length,
+        qualityCheckpointsLinked: qualityCheckpoints.length,
+        certificationRequirementsFound: certifications.length
+      }
+    });
+  } catch (error: any) {
+    console.error('Error generating routing from document:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate routing from document',
+      message: error.message 
+    });
+  }
+});
+
 export default router;

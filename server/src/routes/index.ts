@@ -4914,12 +4914,16 @@ export function registerRoutes(app: Express): Server {
 
       // Get all items for this purchase order
       const poItems = await storage.getPurchaseOrderItems(poId);
-      const stockModelItems = poItems.filter(
-        (item) => item.itemId && item.itemId.trim() && item.itemType === 'stock_model'
-      );
+      // Include items that have a valid stock model ID (not 'no_stock' or empty)
+      // This covers both 'stock_model' and 'custom_model' item types
+      const stockModelItems = poItems.filter((item) => {
+        const stockModelId = item.stockModelId || '';
+        const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
+        return hasValidStockModel;
+      });
 
       console.log(
-        `🏭 Found ${stockModelItems.length} stock model items to convert to production orders (filtered out ${poItems.length - stockModelItems.length} non-stock items)`
+        `🏭 Found ${stockModelItems.length} items with valid stock models to convert to production orders (filtered out ${poItems.length - stockModelItems.length} items without stock models)`
       );
 
       const createdOrders = [];
@@ -4927,14 +4931,16 @@ export function registerRoutes(app: Express): Server {
       for (const item of stockModelItems) {
         // Create individual production orders for each quantity
         for (let i = 0; i < item.quantity; i++) {
+          // Use stockModelId for proper mold/schedule matching, fallback to itemId
+          const stockModelForOrder = item.stockModelId || item.itemId || '';
           const productionOrderData = {
             orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
             customerId: purchaseOrder.customerId.toString(),
             customerName: purchaseOrder.customerName,
             poNumber: purchaseOrder.poNumber,
             itemType: 'stock_model' as const,
-            itemId: item.itemId,
-            itemName: item.itemId,
+            itemId: stockModelForOrder,
+            itemName: item.stockModelName || item.itemName || stockModelForOrder,
             orderDate: new Date(),
             dueDate: (() => {
               const expectedDue = purchaseOrder.expectedDelivery
@@ -4964,7 +4970,7 @@ export function registerRoutes(app: Express): Server {
           createdOrders.push(_createdOrder);
 
           console.log(
-            `🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`
+            `🏭 Created production order: ${productionOrderData.orderId} for ${stockModelForOrder}`
           );
         }
       }

@@ -72,6 +72,7 @@ export default function RoutingDocumentManagement() {
   const [showParseDialog, setShowParseDialog] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [showLearnDialog, setShowLearnDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<RoutingDocument | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   
@@ -487,7 +488,14 @@ export default function RoutingDocumentManagement() {
                             >
                               <Brain className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedDocument(doc);
+                                setShowViewDialog(true);
+                              }}
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </div>
@@ -836,6 +844,162 @@ export default function RoutingDocumentManagement() {
               {learnMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Brain className="h-4 w-4 mr-2" />}
               Learn & Create Template
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Document Details
+            </DialogTitle>
+            <DialogDescription>
+              View document information and AI-extracted content
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDocument && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Title</Label>
+                  <div className="font-medium">{selectedDocument.title}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Document Type</Label>
+                  <Badge variant="outline">{selectedDocument.documentType.replace('_', ' ')}</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Part Number</Label>
+                  <div>{selectedDocument.partNumber || '-'}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Department</Label>
+                  <div>{selectedDocument.departmentName || '-'}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Source</Label>
+                  <Badge variant="secondary">{selectedDocument.sourceType}</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">AI Status</Label>
+                  {selectedDocument.aiProcessedAt ? (
+                    <Badge className="bg-green-100 text-green-800">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Analyzed
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Not Analyzed</Badge>
+                  )}
+                </div>
+              </div>
+
+              {selectedDocument.aiExtractedContent && Object.keys(selectedDocument.aiExtractedContent).length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg border-b pb-2">AI Extracted Content</h3>
+                  
+                  {selectedDocument.aiExtractedContent.routingSteps?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Routing Steps</Label>
+                      <div className="space-y-2">
+                        {selectedDocument.aiExtractedContent.routingSteps.map((step: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Badge>{step.stepNumber || idx + 1}</Badge>
+                              <span className="font-medium">{step.department}</span>
+                            </div>
+                            <div className="text-sm mt-1">{step.operation}</div>
+                            {step.description && <div className="text-sm text-muted-foreground mt-1">{step.description}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedDocument.aiExtractedContent.dataFields?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Data Fields</Label>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Field Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Required</TableHead>
+                            <TableHead>Department</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedDocument.aiExtractedContent.dataFields.map((field: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{field.fieldLabel || field.fieldName}</TableCell>
+                              <TableCell><Badge variant="outline">{field.fieldType}</Badge></TableCell>
+                              <TableCell>{field.isRequired ? 'Yes' : 'No'}</TableCell>
+                              <TableCell>{field.department || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {selectedDocument.aiExtractedContent.qualityCheckpoints?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Quality Checkpoints</Label>
+                      <div className="space-y-2">
+                        {selectedDocument.aiExtractedContent.qualityCheckpoints.map((cp: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted rounded-lg flex justify-between">
+                            <div>
+                              <div className="font-medium">{cp.checkpoint}</div>
+                              <div className="text-sm text-muted-foreground">Standard: {cp.standard}</div>
+                            </div>
+                            <Badge variant="secondary">{cp.department}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedDocument.aiExtractedContent.certificationRequirements?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Certification Requirements</Label>
+                      <div className="space-y-2">
+                        {selectedDocument.aiExtractedContent.certificationRequirements.map((cert: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted rounded-lg">
+                            <div className="font-medium">{cert.certification}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {cert.department} - {cert.task}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(!selectedDocument.aiExtractedContent || Object.keys(selectedDocument.aiExtractedContent).length === 0) && (
+                <div className="p-6 text-center bg-muted/50 rounded-lg">
+                  <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <h4 className="font-medium">No AI Analysis Available</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Click the "Analyze with AI" button in the actions column to extract routing information from this document.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowViewDialog(false)}>Close</Button>
+            {selectedDocument && !selectedDocument.aiProcessedAt && (
+              <Button onClick={() => {
+                setShowViewDialog(false);
+                setShowParseDialog(true);
+              }}>
+                <Brain className="h-4 w-4 mr-2" />
+                Analyze with AI
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

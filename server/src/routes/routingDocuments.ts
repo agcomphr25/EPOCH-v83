@@ -1051,4 +1051,422 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================
+// FULL CRUD OPERATIONS FOR ROUTING DOCUMENTS
+// ============================================
+
+// Update routing document
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+
+    const { title, partNumber, departmentName, documentType, description, isTemplate, isActive } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (title !== undefined) updateData.title = title;
+    if (partNumber !== undefined) updateData.partNumber = partNumber;
+    if (departmentName !== undefined) updateData.departmentName = departmentName;
+    if (documentType !== undefined) updateData.documentType = documentType;
+    if (description !== undefined) updateData.description = description;
+    if (isTemplate !== undefined) updateData.isTemplate = isTemplate === true || isTemplate === 'true';
+    if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
+
+    const [updated] = await db.update(routingDocuments)
+      .set(updateData)
+      .where(eq(routingDocuments.id, req.params.id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating routing document:', error);
+    res.status(500).json({ error: 'Failed to update routing document' });
+  }
+});
+
+// Delete routing document (soft delete)
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+
+    const [deleted] = await db.update(routingDocuments)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(routingDocuments.id, req.params.id))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json({ message: 'Document deleted successfully', document: deleted });
+  } catch (error) {
+    console.error('Error deleting routing document:', error);
+    res.status(500).json({ error: 'Failed to delete routing document' });
+  }
+});
+
+// Hard delete routing document (permanent)
+router.delete('/:id/permanent', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+
+    // First delete related links
+    await db.delete(routingDocumentLinks).where(eq(routingDocumentLinks.documentId, req.params.id));
+    
+    // Then delete the document
+    const result = await db.delete(routingDocuments).where(eq(routingDocuments.id, req.params.id));
+
+    res.json({ message: 'Document permanently deleted' });
+  } catch (error) {
+    console.error('Error permanently deleting routing document:', error);
+    res.status(500).json({ error: 'Failed to permanently delete routing document' });
+  }
+});
+
+// ============================================
+// FULL CRUD OPERATIONS FOR SPEC SHEETS
+// ============================================
+
+// Create spec sheet
+router.post('/spec-sheets', async (req: Request, res: Response) => {
+  try {
+    const { partNumber, title, version, description, specifications, sourceType } = req.body;
+    const user = (req as any).user;
+
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const [specSheet] = await db.insert(specSheets).values({
+      partNumber: partNumber || null,
+      title,
+      version: version || 1,
+      description: description || null,
+      specifications: specifications || null,
+      sourceType: sourceType || 'uploaded',
+      createdBy: user?.username || 'system',
+    }).returning();
+
+    res.status(201).json(specSheet);
+  } catch (error) {
+    console.error('Error creating spec sheet:', error);
+    res.status(500).json({ error: 'Failed to create spec sheet' });
+  }
+});
+
+// Get single spec sheet
+router.get('/spec-sheets/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+
+    const results = await db.execute(sql`SELECT * FROM spec_sheets WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Spec sheet not found' });
+    }
+
+    res.json(transformRow(rows[0]));
+  } catch (error) {
+    console.error('Error fetching spec sheet:', error);
+    res.status(500).json({ error: 'Failed to fetch spec sheet' });
+  }
+});
+
+// Update spec sheet
+router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+
+    const { partNumber, title, version, description, specifications, isActive } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (partNumber !== undefined) updateData.partNumber = partNumber;
+    if (title !== undefined) updateData.title = title;
+    if (version !== undefined) updateData.version = version;
+    if (description !== undefined) updateData.description = description;
+    if (specifications !== undefined) updateData.specifications = specifications;
+    if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
+
+    const [updated] = await db.update(specSheets)
+      .set(updateData)
+      .where(eq(specSheets.id, req.params.id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Spec sheet not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating spec sheet:', error);
+    res.status(500).json({ error: 'Failed to update spec sheet' });
+  }
+});
+
+// Delete spec sheet (soft delete)
+router.delete('/spec-sheets/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+
+    const [deleted] = await db.update(specSheets)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(specSheets.id, req.params.id))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Spec sheet not found' });
+    }
+
+    res.json({ message: 'Spec sheet deleted successfully', specSheet: deleted });
+  } catch (error) {
+    console.error('Error deleting spec sheet:', error);
+    res.status(500).json({ error: 'Failed to delete spec sheet' });
+  }
+});
+
+// ============================================
+// FULL CRUD OPERATIONS FOR DOCUMENT TEMPLATES
+// ============================================
+
+// Create template
+router.post('/templates', async (req: Request, res: Response) => {
+  try {
+    const { templateName, templateType, description, structure, sections, defaultFields, fields } = req.body;
+    const user = (req as any).user;
+
+    if (!templateName || !templateType) {
+      return res.status(400).json({ error: 'Template name and type are required' });
+    }
+
+    const [template] = await db.insert(documentTemplates).values({
+      templateName,
+      templateType,
+      description: description || null,
+      structure: structure || null,
+      sections: sections || null,
+      defaultFields: defaultFields || null,
+      createdBy: user?.username || 'system',
+    }).returning();
+
+    // Create template fields if provided
+    if (fields && Array.isArray(fields) && fields.length > 0) {
+      const fieldValues = fields.map((field: any, index: number) => ({
+        templateId: template.id,
+        fieldName: field.fieldName,
+        fieldLabel: field.fieldLabel || field.fieldName,
+        fieldType: field.fieldType || 'text',
+        isRequired: field.isRequired || false,
+        defaultValue: field.defaultValue || null,
+        sortOrder: field.sortOrder ?? index,
+      }));
+      
+      await db.insert(templateFields).values(fieldValues);
+    }
+
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Error creating template:', error);
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+});
+
+// Update template
+router.put('/templates/:templateId', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.templateId)) {
+      return res.status(400).json({ error: 'Invalid template ID format' });
+    }
+
+    const { templateName, templateType, description, structure, sections, defaultFields, isActive, fields } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (templateName !== undefined) updateData.templateName = templateName;
+    if (templateType !== undefined) updateData.templateType = templateType;
+    if (description !== undefined) updateData.description = description;
+    if (structure !== undefined) updateData.structure = structure;
+    if (sections !== undefined) updateData.sections = sections;
+    if (defaultFields !== undefined) updateData.defaultFields = defaultFields;
+    if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
+
+    const [updated] = await db.update(documentTemplates)
+      .set(updateData)
+      .where(eq(documentTemplates.id, req.params.templateId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    // Update fields if provided
+    if (fields && Array.isArray(fields)) {
+      // Delete existing fields and recreate
+      await db.delete(templateFields).where(eq(templateFields.templateId, req.params.templateId));
+      
+      if (fields.length > 0) {
+        const fieldValues = fields.map((field: any, index: number) => ({
+          templateId: req.params.templateId,
+          fieldName: field.fieldName,
+          fieldLabel: field.fieldLabel || field.fieldName,
+          fieldType: field.fieldType || 'text',
+          isRequired: field.isRequired || false,
+          defaultValue: field.defaultValue || null,
+          sortOrder: field.sortOrder ?? index,
+        }));
+        
+        await db.insert(templateFields).values(fieldValues);
+      }
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating template:', error);
+    res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// Delete template (soft delete)
+router.delete('/templates/:templateId', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.templateId)) {
+      return res.status(400).json({ error: 'Invalid template ID format' });
+    }
+
+    const [deleted] = await db.update(documentTemplates)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(documentTemplates.id, req.params.templateId))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    res.json({ message: 'Template deleted successfully', template: deleted });
+  } catch (error) {
+    console.error('Error deleting template:', error);
+    res.status(500).json({ error: 'Failed to delete template' });
+  }
+});
+
+// ============================================
+// CRUD OPERATIONS FOR ROUTING DOCUMENT LINKS
+// ============================================
+
+// Create routing document link
+router.post('/routing-links', async (req: Request, res: Response) => {
+  try {
+    const { partRoutingId, departmentName, documentType, documentId, isPrimary, sortOrder } = req.body;
+    const user = (req as any).user;
+
+    if (!partRoutingId || !documentId) {
+      return res.status(400).json({ error: 'Part routing ID and document ID are required' });
+    }
+
+    const [link] = await db.insert(routingDocumentLinks).values({
+      partRoutingId,
+      departmentName: departmentName || 'General',
+      documentType: documentType || 'work_instruction',
+      documentId,
+      isPrimary: isPrimary || false,
+      sortOrder: sortOrder ?? 0,
+      createdBy: user?.username || 'system',
+    }).returning();
+
+    res.status(201).json(link);
+  } catch (error) {
+    console.error('Error creating routing document link:', error);
+    res.status(500).json({ error: 'Failed to create routing document link' });
+  }
+});
+
+// Delete routing document link
+router.delete('/routing-links/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid link ID format' });
+    }
+
+    const result = await db.delete(routingDocumentLinks).where(eq(routingDocumentLinks.id, req.params.id));
+
+    res.json({ message: 'Link deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting routing document link:', error);
+    res.status(500).json({ error: 'Failed to delete routing document link' });
+  }
+});
+
+// ============================================
+// CRUD OPERATIONS FOR CERTIFICATION TASK LINKS
+// ============================================
+
+// Create certification task link
+router.post('/certification-links', async (req: Request, res: Response) => {
+  try {
+    const { certificationId, partRoutingId, departmentName, routingDocumentId, travelerStepId, travelerTaskId, taskDescription, isRequired } = req.body;
+    const user = (req as any).user;
+
+    if (certificationId === undefined || certificationId === null) {
+      return res.status(400).json({ error: 'Certification ID is required' });
+    }
+
+    const [link] = await db.insert(certificationTaskLinks).values({
+      certificationId: Number(certificationId),
+      partRoutingId: partRoutingId || null,
+      departmentName: departmentName || null,
+      routingDocumentId: routingDocumentId || null,
+      travelerStepId: travelerStepId || null,
+      travelerTaskId: travelerTaskId || null,
+      taskDescription: taskDescription || null,
+      isRequired: isRequired !== false,
+      createdBy: user?.username || 'system',
+    }).returning();
+
+    res.status(201).json(link);
+  } catch (error) {
+    console.error('Error creating certification task link:', error);
+    res.status(500).json({ error: 'Failed to create certification task link' });
+  }
+});
+
+// Delete certification task link (uses UUID)
+router.delete('/certification-links/:id', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid link ID format' });
+    }
+
+    await db.delete(certificationTaskLinks).where(eq(certificationTaskLinks.id, req.params.id));
+
+    res.json({ message: 'Certification link deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting certification task link:', error);
+    res.status(500).json({ error: 'Failed to delete certification task link' });
+  }
+});
+
 export default router;

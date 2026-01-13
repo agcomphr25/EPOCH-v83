@@ -16,9 +16,19 @@ import {
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+
+// Dynamic PDF parser function
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  try {
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
+    const pdfData = await pdfParse(buffer);
+    return pdfData.text || '';
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    return '';
+  }
+}
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
@@ -281,14 +291,8 @@ router.post('/extract-text', async (req: Request, res: Response) => {
     
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
-      try {
-        const pdfData = await pdfParse(fileBuffer);
-        extractedText = pdfData.text || '';
-        console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
-      } catch (pdfError) {
-        console.error('Error parsing PDF:', pdfError);
-        extractedText = '';
-      }
+      extractedText = await extractPdfText(fileBuffer);
+      console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
     } else if (mimeType?.startsWith('text/') || fileName.match(/\.(txt|md|csv|json|xml)$/i)) {
       extractedText = fileBuffer.toString('utf-8');
     }
@@ -348,14 +352,8 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
     
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
-      try {
-        const pdfData = await pdfParse(fileBuffer);
-        extractedText = pdfData.text || '';
-        console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
-      } catch (pdfError) {
-        console.error('Error parsing PDF:', pdfError);
-        extractedText = '';
-      }
+      extractedText = await extractPdfText(fileBuffer);
+      console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
     } else if (mimeType?.startsWith('text/') || fileName.match(/\.(txt|md|csv|json|xml)$/i)) {
       extractedText = fileBuffer.toString('utf-8');
     }

@@ -44,6 +44,23 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get ALL orders including production orders - for department queue views
+// This endpoint combines orders from all_orders table with production_orders table
+// Note: storage.getAllOrders() already performs this merge internally
+router.get('/all', async (req: Request, res: Response) => {
+  try {
+    // getAllOrders already combines all_orders and production_orders tables
+    const allOrdersCombined = await storage.getAllOrders();
+    res.json(allOrdersCombined);
+  } catch (error) {
+    console.error('Error retrieving all orders:', error);
+    res.status(500).json({
+      error: 'Failed to fetch all orders',
+      details: (error as any).message,
+    });
+  }
+});
+
 // Get order stats for dashboard
 router.get('/stats', async (req: Request, res: Response) => {
   try {

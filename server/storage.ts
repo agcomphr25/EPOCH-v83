@@ -9885,9 +9885,11 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Try to update in productionOrders table (for P1 purchase orders)
+      // FIXED: Also update currentDepartment for production orders, not just status
       const productionOrdersResult = await db
         .update(productionOrders)
         .set({
+          currentDepartment: department,
           productionStatus: status,
           updatedAt: new Date(),
         })

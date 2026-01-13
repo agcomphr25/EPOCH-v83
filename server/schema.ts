@@ -1067,6 +1067,281 @@ export const trainingMatrix = pgTable('training_matrix', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Training Programs - Structured training program definitions
+export const trainingPrograms = pgTable('training_programs', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  department: text('department').notNull(),
+  role: text('role').notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Program Tasks - Individual tasks within a program
+export const trainingProgramTasks = pgTable('training_program_tasks', {
+  id: serial('id').primaryKey(),
+  programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  sortOrder: integer('sort_order').default(0),
+  estimatedMinutes: integer('estimated_minutes'),
+  dayNumber: integer('day_number').default(1), // Which day of training this task is on
+  requiresObservation: boolean('requires_observation').default(false), // Trainer must observe for certification
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Assignments - Assign programs to employees
+export const trainingAssignments = pgTable('training_assignments', {
+  id: serial('id').primaryKey(),
+  programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  assignedBy: integer('assigned_by'),
+  startDate: timestamp('start_date').defaultNow(),
+  dueDate: timestamp('due_date'),
+  status: text('status').default('pending'), // pending, in_progress, completed
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Builder Sessions - Active sessions for training program execution
+export const trainingBuilderSessions = pgTable('training_builder_sessions', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull().unique(),
+  assignmentId: integer('assignment_id').references(() => trainingAssignments.id).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
+  status: text('status').default('active'), // active, completed
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+  supervisorSignoff: integer('supervisor_signoff'),
+  signoffNotes: text('signoff_notes'),
+  signoffAt: timestamp('signoff_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Builder Task Progress - Track completion of individual tasks in a session
+export const trainingBuilderTaskProgress = pgTable('training_builder_task_progress', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id').references(() => trainingBuilderSessions.id).notNull(),
+  taskId: integer('task_id').references(() => trainingProgramTasks.id).notNull(),
+  status: text('status').default('pending'), // pending, completed
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Program Quiz References - Link programs/tasks to quiz questions
+export const trainingProgramQuizRefs = pgTable('training_program_quiz_refs', {
+  id: serial('id').primaryKey(),
+  programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
+  taskId: integer('task_id').references(() => trainingProgramTasks.id), // Optional: link to specific task
+  dayNumber: integer('day_number').notNull(), // Which day this quiz appears
+  quizQuestionId: integer('quiz_question_id').references(() => trainingQuestions.id), // Preferred: link to existing question
+  questionDraft: jsonb('question_draft'), // Fallback: store question draft as JSON
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert schemas for training program tables
+export const insertTrainingProgramSchema = createInsertSchema(trainingPrograms).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingProgramTaskSchema = createInsertSchema(trainingProgramTasks).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingAssignmentSchema = createInsertSchema(trainingAssignments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingBuilderSessionSchema = createInsertSchema(trainingBuilderSessions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingBuilderTaskProgressSchema = createInsertSchema(trainingBuilderTaskProgress).omit({ id: true, createdAt: true });
+export const insertTrainingProgramQuizRefSchema = createInsertSchema(trainingProgramQuizRefs).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertTrainingProgram = z.infer<typeof insertTrainingProgramSchema>;
+export type InsertTrainingProgramTask = z.infer<typeof insertTrainingProgramTaskSchema>;
+export type InsertTrainingAssignment = z.infer<typeof insertTrainingAssignmentSchema>;
+export type InsertTrainingBuilderSession = z.infer<typeof insertTrainingBuilderSessionSchema>;
+export type InsertTrainingBuilderTaskProgress = z.infer<typeof insertTrainingBuilderTaskProgressSchema>;
+
+export type TrainingProgram = typeof trainingPrograms.$inferSelect;
+export type TrainingProgramTask = typeof trainingProgramTasks.$inferSelect;
+export type TrainingAssignment = typeof trainingAssignments.$inferSelect;
+export type TrainingBuilderSession = typeof trainingBuilderSessions.$inferSelect;
+export type TrainingBuilderTaskProgress = typeof trainingBuilderTaskProgress.$inferSelect;
+export type TrainingProgramQuizRef = typeof trainingProgramQuizRefs.$inferSelect;
+export type InsertTrainingProgramQuizRef = z.infer<typeof insertTrainingProgramQuizRefSchema>;
+
+// Work Instructions - Task-specific procedural documents with critical points and safety considerations
+export const workInstructions = pgTable('work_instructions', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  department: text('department').notNull(),
+  processArea: text('process_area'), // Specific area like "Layup", "CNC", "Paint"
+  documentNumber: text('document_number'), // WI-001, WI-002 format
+  version: integer('version').default(1),
+  status: text('status').default('draft'), // draft, active, archived
+  // Structured content
+  objective: text('objective'), // What the trainee will learn
+  prerequisites: jsonb('prerequisites').$type<string[]>(), // Required prior training
+  ppeRequired: jsonb('ppe_required').$type<string[]>(), // Safety equipment needed
+  tools: jsonb('tools').$type<string[]>(), // Tools and materials needed
+  steps: jsonb('steps').$type<{
+    stepNumber: number;
+    instruction: string;
+    criticalPoint?: string;
+    safetyNote?: string;
+    imageUrl?: string;
+  }[]>(), // Step-by-step procedures with critical points
+  criticalPoints: jsonb('critical_points').$type<string[]>(), // Summary of all critical points
+  safetyConsiderations: jsonb('safety_considerations').$type<string[]>(), // Summary of safety items
+  qualityCheckpoints: jsonb('quality_checkpoints').$type<string[]>(), // Quality verification points
+  estimatedMinutes: integer('estimated_minutes').default(30),
+  createdBy: integer('created_by'),
+  approvedBy: integer('approved_by'),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Task Work Instruction Links - Connect tasks to work instructions
+export const trainingTaskWorkInstructions = pgTable('training_task_work_instructions', {
+  id: serial('id').primaryKey(),
+  taskId: integer('task_id').references(() => trainingProgramTasks.id).notNull(),
+  workInstructionId: integer('work_instruction_id').references(() => workInstructions.id).notNull(),
+  // 4-Step Training Model tracking
+  trainingStep: integer('training_step').default(1), // 1-4 corresponding to the 4-step model
+  stepDescription: text('step_description'), // e.g., "Trainer Does / Trainer Explains"
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// S-O-A Coaching Feedback - Track coaching feedback during training sessions
+export const trainingSOAFeedback = pgTable('training_soa_feedback', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id').references(() => trainingBuilderSessions.id).notNull(),
+  taskId: integer('task_id').references(() => trainingProgramTasks.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  // S-O-A Model fields
+  strength: text('strength'), // What did the trainee do well?
+  opportunity: text('opportunity'), // What could be improved?
+  action: text('action'), // What will we do differently next time?
+  // 4-Step Model tracking
+  currentStep: integer('current_step').default(1), // Which step of 4-step model
+  stepCompleted: boolean('step_completed').default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Builder Quizzes - Quiz definitions for competency verification (Training Builder module)
+export const trainingBuilderQuizzes = pgTable('training_builder_quizzes', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  programId: integer('program_id').references(() => trainingPrograms.id), // Optional link to program
+  taskId: integer('task_id').references(() => trainingProgramTasks.id), // Optional link to specific task
+  passingScore: integer('passing_score').default(80), // Percentage needed to pass
+  maxAttempts: integer('max_attempts').default(3),
+  timeLimitMinutes: integer('time_limit_minutes'),
+  isActive: boolean('is_active').default(true),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Builder Quiz Questions - Individual quiz questions (Training Builder module)
+export const trainingBuilderQuizQuestions = pgTable('training_builder_quiz_questions', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => trainingBuilderQuizzes.id).notNull(),
+  questionText: text('question_text').notNull(),
+  questionType: text('question_type').default('multiple_choice'), // multiple_choice, true_false, short_answer
+  options: jsonb('options').$type<string[]>(), // Array of options for multiple choice
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'), // Shown after answer
+  points: integer('points').default(1),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily Quiz Selections - Facility selects which quizzes to give each day
+export const trainingDailyQuizSelections = pgTable('training_daily_quiz_selections', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => trainingBuilderQuizzes.id).notNull(),
+  scheduledDate: timestamp('scheduled_date').notNull(),
+  department: text('department'),
+  selectedBy: integer('selected_by').references(() => employees.id),
+  notes: text('notes'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Builder Quiz Attempts - Track employee quiz attempts (Training Builder module)
+export const trainingBuilderQuizAttempts = pgTable('training_builder_quiz_attempts', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => trainingBuilderQuizzes.id).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  sessionId: integer('session_id').references(() => trainingBuilderSessions.id),
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+  score: integer('score'), // Percentage score
+  passed: boolean('passed'),
+  attemptNumber: integer('attempt_number').default(1),
+  answers: jsonb('answers').$type<Record<number, string>>(), // questionId -> answer
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Certifications - Final certification when trainer observes trainee
+export const trainingCertifications = pgTable('training_certifications', {
+  id: serial('id').primaryKey(),
+  assignmentId: integer('assignment_id').references(() => trainingAssignments.id).notNull(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
+  // Certification details
+  observationDate: timestamp('observation_date').notNull(),
+  allQuizzesPassed: boolean('all_quizzes_passed').default(false),
+  allTasksCompleted: boolean('all_tasks_completed').default(false),
+  trainerSignoff: boolean('trainer_signoff').default(false),
+  trainerNotes: text('trainer_notes'),
+  traineeSignoff: boolean('trainee_signoff').default(false),
+  traineeNotes: text('trainee_notes'),
+  // Status tracking
+  status: text('status').default('pending'), // pending, certified, failed, revoked
+  certifiedAt: timestamp('certified_at'),
+  expiresAt: timestamp('expires_at'), // Optional expiration
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert schemas for Work Instructions and S-O-A tables
+export const insertWorkInstructionSchema = createInsertSchema(workInstructions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingTaskWorkInstructionSchema = createInsertSchema(trainingTaskWorkInstructions).omit({ id: true, createdAt: true });
+export const insertTrainingSOAFeedbackSchema = createInsertSchema(trainingSOAFeedback).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingBuilderQuizSchema = createInsertSchema(trainingBuilderQuizzes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingBuilderQuizQuestionSchema = createInsertSchema(trainingBuilderQuizQuestions).omit({ id: true, createdAt: true });
+export const insertTrainingDailyQuizSelectionSchema = createInsertSchema(trainingDailyQuizSelections).omit({ id: true, createdAt: true });
+export const insertTrainingBuilderQuizAttemptSchema = createInsertSchema(trainingBuilderQuizAttempts).omit({ id: true, createdAt: true });
+export const insertTrainingCertificationSchema = createInsertSchema(trainingCertifications).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type WorkInstruction = typeof workInstructions.$inferSelect;
+export type InsertWorkInstruction = z.infer<typeof insertWorkInstructionSchema>;
+export type TrainingTaskWorkInstruction = typeof trainingTaskWorkInstructions.$inferSelect;
+export type InsertTrainingTaskWorkInstruction = z.infer<typeof insertTrainingTaskWorkInstructionSchema>;
+export type TrainingSOAFeedback = typeof trainingSOAFeedback.$inferSelect;
+export type InsertTrainingSOAFeedback = z.infer<typeof insertTrainingSOAFeedbackSchema>;
+export type TrainingBuilderQuiz = typeof trainingBuilderQuizzes.$inferSelect;
+export type InsertTrainingBuilderQuiz = z.infer<typeof insertTrainingBuilderQuizSchema>;
+export type TrainingBuilderQuizQuestion = typeof trainingBuilderQuizQuestions.$inferSelect;
+export type InsertTrainingBuilderQuizQuestion = z.infer<typeof insertTrainingBuilderQuizQuestionSchema>;
+export type TrainingDailyQuizSelection = typeof trainingDailyQuizSelections.$inferSelect;
+export type InsertTrainingDailyQuizSelection = z.infer<typeof insertTrainingDailyQuizSelectionSchema>;
+export type TrainingBuilderQuizAttempt = typeof trainingBuilderQuizAttempts.$inferSelect;
+export type InsertTrainingBuilderQuizAttempt = z.infer<typeof insertTrainingBuilderQuizAttemptSchema>;
+export type TrainingCertification = typeof trainingCertifications.$inferSelect;
+export type InsertTrainingCertification = z.infer<typeof insertTrainingCertificationSchema>;
+
 // User Authentication Table
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),

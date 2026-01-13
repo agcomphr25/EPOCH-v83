@@ -1,0 +1,61 @@
+entrypoint = "index.js"
+modules = ["nodejs-20", "web"]
+hidden = [".config", "package-lock.json"]
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix", "package.json", "package-lock.json"]
+
+[nix]
+channel = "stable-25_05"
+packages = ["rsync"]
+
+[deployment]
+run = ["npm", "run", "start"]
+deploymentTarget = "autoscale"
+ignorePorts = false
+build = ["npm", "run", "build"]
+
+[agent]
+expertMode = true
+integrations = ["javascript_openai_ai_integrations:2.0.0"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Development Server"
+
+[[workflows.workflow]]
+name = "Development Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+NODE_ENV = "development"

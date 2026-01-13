@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +13,8 @@ import {
   Users,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Wrench
 } from 'lucide-react';
 
 import Training from './Training';
@@ -49,6 +51,12 @@ export default function TrainingControlCenter() {
             Unified training management: modules, matrix, and assignments
           </p>
         </div>
+        <Link href="/training/programs">
+          <Button>
+            <Wrench className="h-4 w-4 mr-2" />
+            Program Builder
+          </Button>
+        </Link>
       </div>
 
       <Card className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 border-none">

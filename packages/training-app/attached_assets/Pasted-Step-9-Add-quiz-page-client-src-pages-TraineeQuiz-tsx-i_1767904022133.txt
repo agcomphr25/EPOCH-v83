@@ -1,0 +1,113 @@
+Step 9) Add quiz page
+client/src/pages/TraineeQuiz.tsx
+import React, { useEffect, useState } from "react";
+import { useRoute } from "wouter";
+
+export default function TraineeQuiz() {
+  const [, params] = useRoute("/quiz/:sessionId");
+  const sessionId = params?.sessionId!;
+  const [quiz, setQuiz] = useState<any>(null);
+  const [quizId, setQuizId] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<any>(null);
+
+  async function generate() {
+    const r = await fetch(`/api/training/sessions/${sessionId}/quiz/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facilityTopicCode: "PPE" }) // you can pass from Trainer later
+    });
+    const data = await r.json();
+    setQuiz(data);
+    setQuizId(data.quizId);
+  }
+
+  async function submit() {
+    if (!quizId) return;
+    const payload = {
+      answers: quiz.questions.map((q: any) => ({
+        questionId: q.id,
+        answer: answers[q.id] ?? ""
+      }))
+    };
+    const r = await fetch(`/api/training/quizzes/${quizId}/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    setResult(await r.json());
+  }
+
+  useEffect(() => { generate(); }, [sessionId]);
+
+  if (!quiz) return <div>Loading quiz...</div>;
+
+  return (
+    <div>
+      <h2>Daily Quiz</h2>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>Session: {sessionId}</div>
+
+      {quiz.questions.map((q: any, idx: number) => (
+        <div key={q.id} style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8, marginTop: 12 }}>
+          <b>{idx + 1}. {q.question}</b>
+
+          {q.type === "MCQ" && (
+            <div style={{ marginTop: 8 }}>
+              {(q.meta?.choices ?? []).map((c: string) => (
+                <label key={c} style={{ display: "block", marginTop: 4 }}>
+                  <input
+                    type="radio"
+                    name={q.id}
+                    value={c}
+                    checked={answers[q.id] === c}
+                    onChange={(e) => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                  />
+                  {" "}{c}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {q.type === "TF" && (
+            <div style={{ marginTop: 8 }}>
+              {["True", "False"].map(v => (
+                <label key={v} style={{ marginRight: 12 }}>
+                  <input
+                    type="radio"
+                    name={q.id}
+                    value={v}
+                    checked={answers[q.id] === v}
+                    onChange={(e) => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                  />
+                  {" "}{v}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {q.type === "SHORT" && (
+            <textarea
+              style={{ width: "100%", marginTop: 8 }}
+              placeholder="Answer…"
+              value={answers[q.id] ?? ""}
+              onChange={(e) => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+            />
+          )}
+        </div>
+      ))}
+
+      <button style={{ marginTop: 16 }} onClick={submit}>Submit Quiz</button>
+
+      {result && (
+        <div style={{ marginTop: 16 }}>
+          <h3>Result</h3>
+          <div>Score: {result.quiz.score} / {result.quiz.total}</div>
+          <div>Passed: {String(result.quiz.passed)}</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            Note: SHORT answers aren’t auto-graded in MVP.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

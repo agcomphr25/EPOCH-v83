@@ -18,6 +18,17 @@ import {
   inventoryItems,
   capabilities,
   employeeCapabilities,
+  trainingPrograms,
+  trainingProgramTasks,
+  trainingAssignments,
+  trainingBuilderSessions,
+  trainingBuilderTaskProgress,
+  trainingProgramQuizRefs,
+  trainingBuilderQuizzes,
+  trainingBuilderQuizQuestions,
+  trainingDailyQuizSelections,
+  trainingBuilderQuizAttempts,
+  trainingCertifications,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -26,6 +37,17 @@ import {
   insertTrainingMatrixSchema,
   insertP2PartCertificationSchema,
   insertP2EmployeePartCertificationSchema,
+  insertTrainingProgramSchema,
+  insertTrainingProgramTaskSchema,
+  insertTrainingAssignmentSchema,
+  insertTrainingBuilderSessionSchema,
+  insertTrainingBuilderTaskProgressSchema,
+  insertTrainingProgramQuizRefSchema,
+  insertTrainingBuilderQuizSchema,
+  insertTrainingBuilderQuizQuestionSchema,
+  insertTrainingDailyQuizSelectionSchema,
+  insertTrainingBuilderQuizAttemptSchema,
+  insertTrainingCertificationSchema,
   type InsertTrainingModule,
   type InsertTrainingQuestion,
   type InsertTrainingQuestionOption,
@@ -34,8 +56,14 @@ import {
   type InsertTrainingMatrix,
   type InsertP2PartCertification,
   type InsertP2EmployeePartCertification,
+  type InsertTrainingProgram,
+  type InsertTrainingProgramTask,
+  type InsertTrainingAssignment,
+  type InsertTrainingBuilderSession,
+  type InsertTrainingBuilderTaskProgress,
+  type InsertTrainingProgramQuizRef,
 } from '../../schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,
@@ -321,6 +349,20 @@ router.post('/modules/import-pdf', upload.single('file'), async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error importing training PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all training questions (for content library)
+router.get('/questions', async (req, res) => {
+  try {
+    const allQuestions = await db
+      .select()
+      .from(trainingQuestions)
+      .orderBy(trainingQuestions.moduleId, trainingQuestions.sortOrder);
+    res.json(allQuestions);
+  } catch (error: any) {
+    console.error('Error fetching questions:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1579,6 +1621,1578 @@ router.delete('/p2-employee-certifications/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting employee certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINING PROGRAMS (Training Builder Module)
+// ============================================================================
+
+// Get all training programs
+router.get('/programs', async (req, res) => {
+  try {
+    const programs = await db
+      .select()
+      .from(trainingPrograms)
+      .orderBy(desc(trainingPrograms.createdAt));
+    res.json(programs);
+  } catch (error: any) {
+    console.error('Error fetching training programs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a new training program
+router.post('/programs', async (req, res) => {
+  try {
+    const parsed = insertTrainingProgramSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [program] = await db.insert(trainingPrograms).values(parsed.data).returning();
+    res.status(201).json(program);
+  } catch (error: any) {
+    console.error('Error creating training program:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single training program with tasks
+router.get('/programs/:id', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    const [program] = await db
+      .select()
+      .from(trainingPrograms)
+      .where(eq(trainingPrograms.id, programId));
+
+    if (!program) {
+      return res.status(404).json({ error: 'Training program not found' });
+    }
+
+    let tasks: any[] = [];
+    try {
+      tasks = await db
+        .select()
+        .from(trainingProgramTasks)
+        .where(eq(trainingProgramTasks.programId, programId))
+        .orderBy(trainingProgramTasks.sortOrder);
+    } catch (taskErr) {
+      console.log('No tasks found for program:', programId);
+    }
+
+    res.json({ ...program, tasks });
+  } catch (error: any) {
+    console.error('Error fetching training program:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a training program
+router.patch('/programs/:id', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    const [updated] = await db
+      .update(trainingPrograms)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(trainingPrograms.id, programId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Training program not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating training program:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a training program
+router.delete('/programs/:id', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    await db.delete(trainingProgramTasks).where(eq(trainingProgramTasks.programId, programId));
+    await db.delete(trainingPrograms).where(eq(trainingPrograms.id, programId));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting training program:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get tasks for a training program
+router.get('/programs/:id/tasks', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    let tasks: any[] = [];
+    try {
+      tasks = await db
+        .select()
+        .from(trainingProgramTasks)
+        .where(eq(trainingProgramTasks.programId, programId))
+        .orderBy(trainingProgramTasks.sortOrder);
+    } catch (e) {
+      // Neon returns null for empty result sets sometimes
+      tasks = [];
+    }
+    res.json(tasks || []);
+  } catch (error: any) {
+    console.error('Error fetching tasks:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add a task to a training program
+router.post('/programs/:id/tasks', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    const parsed = insertTrainingProgramTaskSchema.safeParse({ ...req.body, programId });
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [task] = await db.insert(trainingProgramTasks).values(parsed.data).returning();
+    res.status(201).json(task);
+  } catch (error: any) {
+    console.error('Error adding task to training program:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a task
+router.patch('/programs/:programId/tasks/:taskId', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    const [updated] = await db
+      .update(trainingProgramTasks)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(trainingProgramTasks.id, taskId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a task
+router.delete('/programs/:programId/tasks/:taskId', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    await db.delete(trainingProgramTasks).where(eq(trainingProgramTasks.id, taskId));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINING ASSIGNMENTS
+// ============================================================================
+
+// Get all training assignments
+router.get('/assignments', async (req, res) => {
+  try {
+    const assignments = await db
+      .select()
+      .from(trainingAssignments)
+      .orderBy(desc(trainingAssignments.createdAt));
+    res.json(assignments);
+  } catch (error: any) {
+    console.error('Error fetching assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a training assignment (and session)
+router.post('/assignments', async (req, res) => {
+  try {
+    const parsed = insertTrainingAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [assignment] = await db.insert(trainingAssignments).values(parsed.data).returning();
+
+    // Create a session for this assignment
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const [session] = await db
+      .insert(trainingBuilderSessions)
+      .values({
+        sessionId,
+        assignmentId: assignment.id,
+        employeeId: assignment.employeeId,
+        programId: assignment.programId,
+      })
+      .returning();
+
+    // Create task progress entries for each task in the program
+    const tasks = await db
+      .select()
+      .from(trainingProgramTasks)
+      .where(eq(trainingProgramTasks.programId, assignment.programId));
+
+    if (tasks.length > 0) {
+      await db.insert(trainingBuilderTaskProgress).values(
+        tasks.map((task) => ({
+          sessionId: session.id,
+          taskId: task.id,
+          status: 'pending',
+        }))
+      );
+    }
+
+    res.status(201).json({ assignment, session });
+  } catch (error: any) {
+    console.error('Error creating assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINING SESSIONS
+// ============================================================================
+
+// Get a training session by sessionId
+router.get('/sessions/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get the program with tasks
+    const [program] = await db
+      .select()
+      .from(trainingPrograms)
+      .where(eq(trainingPrograms.id, session.programId));
+
+    const tasks = await db
+      .select()
+      .from(trainingProgramTasks)
+      .where(eq(trainingProgramTasks.programId, session.programId))
+      .orderBy(trainingProgramTasks.sortOrder);
+
+    // Get task progress
+    const taskProgress = await db
+      .select()
+      .from(trainingBuilderTaskProgress)
+      .where(eq(trainingBuilderTaskProgress.sessionId, session.id));
+
+    // Get employee info
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, session.employeeId));
+
+    res.json({
+      session,
+      program: { ...program, tasks },
+      taskProgress,
+      employee,
+    });
+  } catch (error: any) {
+    console.error('Error fetching session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update task progress (mark task complete)
+router.patch('/sessions/:sessionId/tasks/:taskId', async (req, res) => {
+  try {
+    const { sessionId, taskId } = req.params;
+    const { status } = req.body;
+
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const [progress] = await db
+      .update(trainingBuilderTaskProgress)
+      .set({
+        status,
+        completedAt: status === 'completed' ? new Date() : null,
+      })
+      .where(
+        and(
+          eq(trainingBuilderTaskProgress.sessionId, session.id),
+          eq(trainingBuilderTaskProgress.taskId, parseInt(taskId))
+        )
+      )
+      .returning();
+
+    res.json(progress);
+  } catch (error: any) {
+    console.error('Error updating task progress:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Signoff a session (supervisor approval)
+router.post('/sessions/:sessionId/signoff', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { supervisorId, notes, pin } = req.body;
+
+    // Verify supervisor PIN if provided
+    if (pin) {
+      const [supervisor] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, supervisorId));
+
+      if (!supervisor) {
+        return res.status(404).json({ error: 'Supervisor not found' });
+      }
+    }
+
+    const [session] = await db
+      .update(trainingBuilderSessions)
+      .set({
+        supervisorSignoff: supervisorId,
+        signoffNotes: notes,
+        signoffAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingBuilderSessions.sessionId, sessionId))
+      .returning();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    res.json(session);
+  } catch (error: any) {
+    console.error('Error signing off session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete a session
+router.post('/sessions/:sessionId/complete', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Get the current session
+    const [existingSession] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+
+    if (!existingSession) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Validate supervisor signoff exists
+    if (!existingSession.supervisorSignoff) {
+      return res.status(400).json({ 
+        error: 'Supervisor signoff required before completing session' 
+      });
+    }
+
+    // Update session to completed
+    const [session] = await db
+      .update(trainingBuilderSessions)
+      .set({
+        status: 'completed',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingBuilderSessions.sessionId, sessionId))
+      .returning();
+
+    // Update the assignment status
+    await db
+      .update(trainingAssignments)
+      .set({
+        status: 'completed',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingAssignments.id, session.assignmentId));
+
+    // Get program details to record in training matrix
+    const [program] = await db
+      .select()
+      .from(trainingPrograms)
+      .where(eq(trainingPrograms.id, session.programId));
+
+    // Get employee details
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, session.employeeId));
+
+    // Record completion in training matrix
+    if (program && employee) {
+      const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 
+                           employee.email || 
+                           `Employee ${employee.id}`;
+
+      // Check if matrix entry exists for this employee/program
+      const existingMatrix = await db
+        .select()
+        .from(trainingMatrix)
+        .where(
+          and(
+            eq(trainingMatrix.employeeId, employee.id),
+            eq(trainingMatrix.trainingName, program.title)
+          )
+        );
+
+      if (existingMatrix.length > 0) {
+        // Update existing entry
+        await db
+          .update(trainingMatrix)
+          .set({
+            lastCompleted: new Date(),
+            status: 'COMPLETED',
+            updatedAt: new Date(),
+          })
+          .where(eq(trainingMatrix.id, existingMatrix[0].id));
+      } else {
+        // Create new matrix entry
+        await db
+          .insert(trainingMatrix)
+          .values({
+            employeeId: employee.id,
+            employeeName: employeeName,
+            jobTitle: employee.jobTitle || program.role,
+            department: program.department,
+            trainingName: program.title,
+            requiredBy: 'PROGRAM_BUILDER',
+            frequency: 'ONCE',
+            lastCompleted: new Date(),
+            status: 'COMPLETED',
+            notes: `Completed via Training Builder. Session: ${sessionId}`,
+          });
+      }
+    }
+
+    res.json({ 
+      session, 
+      message: 'Session completed and recorded in Training Matrix' 
+    });
+  } catch (error: any) {
+    console.error('Error completing session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============== QUIZ REFS ENDPOINTS ==============
+
+// Get quiz refs for a program
+router.get('/programs/:id/quiz-refs', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    
+    // Handle Neon serverless null returns for empty result sets
+    let refs: any[] = [];
+    try {
+      const result = await db
+        .select()
+        .from(trainingProgramQuizRefs)
+        .where(eq(trainingProgramQuizRefs.programId, programId))
+        .orderBy(trainingProgramQuizRefs.dayNumber, trainingProgramQuizRefs.sortOrder);
+      refs = result || [];
+    } catch (queryError: any) {
+      // Handle Neon driver null result issue
+      if (queryError.message?.includes("null") || queryError.message?.includes("map")) {
+        refs = [];
+      } else {
+        throw queryError;
+      }
+    }
+    
+    // Then get question details for each ref
+    const refsWithQuestions = await Promise.all(
+      refs.map(async (ref) => {
+        if (ref.quizQuestionId) {
+          try {
+            const questions = await db
+              .select()
+              .from(trainingQuestions)
+              .where(eq(trainingQuestions.id, ref.quizQuestionId));
+            return { 
+              ...ref, 
+              question: questions && questions.length > 0 ? questions[0] : null 
+            };
+          } catch {
+            return { ...ref, question: null };
+          }
+        }
+        return { ...ref, question: null };
+      })
+    );
+
+    res.json(refsWithQuestions);
+  } catch (error: any) {
+    console.error('Error fetching quiz refs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a quiz ref (link program to existing question or store draft)
+router.post('/programs/:id/quiz-refs', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    const { dayNumber, taskId, quizQuestionId, questionDraft } = req.body;
+
+    if (!quizQuestionId && !questionDraft) {
+      return res.status(400).json({ 
+        error: 'Either quizQuestionId or questionDraft is required' 
+      });
+    }
+
+    // Build values object, only include defined fields
+    const values: any = {
+      programId,
+      dayNumber,
+      sortOrder: 0,
+      isActive: true,
+    };
+
+    if (taskId) values.taskId = parseInt(taskId);
+    if (quizQuestionId) values.quizQuestionId = parseInt(quizQuestionId);
+    if (questionDraft) values.questionDraft = questionDraft;
+
+    const [ref] = await db
+      .insert(trainingProgramQuizRefs)
+      .values(values)
+      .returning();
+
+    res.status(201).json(ref);
+  } catch (error: any) {
+    console.error('Error creating quiz ref:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a new question and link it to the program
+router.post('/programs/:id/quiz-refs/create-question', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.id);
+    const { dayNumber, taskId, moduleId, questionText, questionType, correctAnswer, explanation, options } = req.body;
+
+    if (!moduleId) {
+      return res.status(400).json({ error: 'moduleId is required to create a question' });
+    }
+
+    // Create the question in trainingQuestions table
+    const [question] = await db
+      .insert(trainingQuestions)
+      .values({
+        moduleId,
+        questionText,
+        questionType: questionType || 'MULTIPLE_CHOICE',
+        correctAnswer,
+        explanation,
+        isActive: true,
+      })
+      .returning();
+
+    // If multiple choice, add options
+    if (options && Array.isArray(options) && options.length > 0) {
+      for (let i = 0; i < options.length; i++) {
+        await db.insert(trainingQuestionOptions).values({
+          questionId: question.id,
+          optionText: options[i].text,
+          isCorrect: options[i].isCorrect || false,
+          sortOrder: i,
+        });
+      }
+    }
+
+    // Link to the program
+    const refValues: any = {
+      programId,
+      dayNumber,
+      quizQuestionId: question.id,
+      sortOrder: 0,
+      isActive: true,
+    };
+    if (taskId) refValues.taskId = parseInt(taskId);
+
+    const [ref] = await db
+      .insert(trainingProgramQuizRefs)
+      .values(refValues)
+      .returning();
+
+    res.status(201).json({ ref, question });
+  } catch (error: any) {
+    console.error('Error creating question and quiz ref:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a quiz ref
+router.patch('/programs/:programId/quiz-refs/:refId', async (req, res) => {
+  try {
+    const refId = parseInt(req.params.refId);
+    const updates = req.body;
+
+    const [ref] = await db
+      .update(trainingProgramQuizRefs)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingProgramQuizRefs.id, refId))
+      .returning();
+
+    if (!ref) {
+      return res.status(404).json({ error: 'Quiz ref not found' });
+    }
+
+    res.json(ref);
+  } catch (error: any) {
+    console.error('Error updating quiz ref:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a quiz ref
+router.delete('/programs/:programId/quiz-refs/:refId', async (req, res) => {
+  try {
+    const refId = parseInt(req.params.refId);
+
+    const deleted = await db
+      .delete(trainingProgramQuizRefs)
+      .where(eq(trainingProgramQuizRefs.id, refId))
+      .returning();
+
+    if (deleted.length === 0) {
+      return res.status(404).json({ error: 'Quiz ref not found' });
+    }
+
+    res.json({ success: true, deleted: deleted[0] });
+  } catch (error: any) {
+    console.error('Error deleting quiz ref:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get quiz questions for a session (by day)
+router.get('/sessions/:sessionId/quiz', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Get session to find program and current day
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get quiz refs for this program and day
+    const refs = await db
+      .select({
+        id: trainingProgramQuizRefs.id,
+        dayNumber: trainingProgramQuizRefs.dayNumber,
+        quizQuestionId: trainingProgramQuizRefs.quizQuestionId,
+        questionDraft: trainingProgramQuizRefs.questionDraft,
+        question: {
+          id: trainingQuestions.id,
+          questionText: trainingQuestions.questionText,
+          questionType: trainingQuestions.questionType,
+          correctAnswer: trainingQuestions.correctAnswer,
+          explanation: trainingQuestions.explanation,
+        },
+      })
+      .from(trainingProgramQuizRefs)
+      .leftJoin(trainingQuestions, eq(trainingProgramQuizRefs.quizQuestionId, trainingQuestions.id))
+      .where(
+        and(
+          eq(trainingProgramQuizRefs.programId, session.programId),
+          eq(trainingProgramQuizRefs.dayNumber, session.currentDay),
+          eq(trainingProgramQuizRefs.isActive, true)
+        )
+      )
+      .orderBy(trainingProgramQuizRefs.sortOrder);
+
+    // For each question, get its options if it's multiple choice
+    const safeRefs = refs || [];
+    const questionsWithOptions = await Promise.all(
+      safeRefs.map(async (ref) => {
+        if (ref.quizQuestionId) {
+          const options = await db
+            .select()
+            .from(trainingQuestionOptions)
+            .where(eq(trainingQuestionOptions.questionId, ref.quizQuestionId))
+            .orderBy(trainingQuestionOptions.sortOrder);
+          return { ...ref, options: options || [] };
+        }
+        return { ...ref, options: [] };
+      })
+    );
+
+    res.json(questionsWithOptions);
+  } catch (error: any) {
+    console.error('Error fetching session quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// WORK INSTRUCTIONS - Task-specific procedural documents
+// ============================================================================
+
+import { workInstructions, trainingTaskWorkInstructions, trainingSOAFeedback, insertWorkInstructionSchema } from '@shared/schema';
+
+// Get all work instructions
+router.get('/work-instructions', async (req, res) => {
+  try {
+    const { department, status } = req.query;
+    let query = db.select().from(workInstructions);
+    
+    // Apply filters
+    const conditions = [];
+    if (department && department !== 'all') {
+      conditions.push(eq(workInstructions.department, department as string));
+    }
+    if (status && status !== 'all') {
+      conditions.push(eq(workInstructions.status, status as string));
+    }
+    
+    let instructions: any[] = [];
+    try {
+      if (conditions.length > 0) {
+        instructions = await db.select().from(workInstructions).where(and(...conditions)).orderBy(desc(workInstructions.updatedAt));
+      } else {
+        instructions = await db.select().from(workInstructions).orderBy(desc(workInstructions.updatedAt));
+      }
+    } catch (e) {
+      instructions = [];
+    }
+    res.json(instructions || []);
+  } catch (error: any) {
+    console.error('Error fetching work instructions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single work instruction
+router.get('/work-instructions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [instruction] = await db
+      .select()
+      .from(workInstructions)
+      .where(eq(workInstructions.id, id));
+    
+    if (!instruction) {
+      return res.status(404).json({ error: 'Work instruction not found' });
+    }
+    res.json(instruction);
+  } catch (error: any) {
+    console.error('Error fetching work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create work instruction
+router.post('/work-instructions', async (req, res) => {
+  try {
+    const parsed = insertWorkInstructionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    
+    // Generate document number if not provided
+    let docNumber = parsed.data.documentNumber;
+    if (!docNumber) {
+      let count: any[] = [];
+      try {
+        count = await db.select().from(workInstructions);
+      } catch (e) {
+        count = [];
+      }
+      docNumber = `WI-${String((count?.length || 0) + 1).padStart(3, '0')}`;
+    }
+    
+    const [instruction] = await db
+      .insert(workInstructions)
+      .values({ ...parsed.data, documentNumber: docNumber })
+      .returning();
+    
+    res.status(201).json(instruction);
+  } catch (error: any) {
+    console.error('Error creating work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update work instruction
+router.put('/work-instructions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db
+      .update(workInstructions)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(workInstructions.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Work instruction not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete work instruction
+router.delete('/work-instructions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(workInstructions).where(eq(workInstructions.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Link work instruction to a training task
+router.post('/tasks/:taskId/work-instructions', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    const { workInstructionId, trainingStep, stepDescription } = req.body;
+    
+    const [link] = await db
+      .insert(trainingTaskWorkInstructions)
+      .values({
+        taskId,
+        workInstructionId,
+        trainingStep: trainingStep || 1,
+        stepDescription: stepDescription || getStepDescription(trainingStep || 1),
+      })
+      .returning();
+    
+    res.status(201).json(link);
+  } catch (error: any) {
+    console.error('Error linking work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get work instructions for a task
+router.get('/tasks/:taskId/work-instructions', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    let links: any[] = [];
+    try {
+      links = await db
+        .select({
+          id: trainingTaskWorkInstructions.id,
+          taskId: trainingTaskWorkInstructions.taskId,
+          workInstructionId: trainingTaskWorkInstructions.workInstructionId,
+          trainingStep: trainingTaskWorkInstructions.trainingStep,
+          stepDescription: trainingTaskWorkInstructions.stepDescription,
+          workInstruction: {
+            id: workInstructions.id,
+            title: workInstructions.title,
+            department: workInstructions.department,
+            documentNumber: workInstructions.documentNumber,
+            status: workInstructions.status,
+          },
+        })
+        .from(trainingTaskWorkInstructions)
+        .leftJoin(workInstructions, eq(trainingTaskWorkInstructions.workInstructionId, workInstructions.id))
+        .where(eq(trainingTaskWorkInstructions.taskId, taskId));
+    } catch (e) {
+      links = [];
+    }
+    res.json(links || []);
+  } catch (error: any) {
+    console.error('Error fetching task work instructions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// S-O-A COACHING FEEDBACK
+// ============================================================================
+
+// Add S-O-A feedback for a session task
+router.post('/sessions/:sessionId/soa-feedback', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { taskId, trainerId, traineeId, strength, opportunity, action, currentStep, notes } = req.body;
+    
+    // Find session by sessionId string
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const [feedback] = await db
+      .insert(trainingSOAFeedback)
+      .values({
+        sessionId: session.id,
+        taskId,
+        trainerId,
+        traineeId,
+        strength,
+        opportunity,
+        action,
+        currentStep: currentStep || 1,
+        notes,
+      })
+      .returning();
+    
+    res.status(201).json(feedback);
+  } catch (error: any) {
+    console.error('Error creating S-O-A feedback:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get S-O-A feedback for a session
+router.get('/sessions/:sessionId/soa-feedback', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    let feedback: any[] = [];
+    try {
+      feedback = await db
+        .select()
+        .from(trainingSOAFeedback)
+        .where(eq(trainingSOAFeedback.sessionId, session.id))
+        .orderBy(desc(trainingSOAFeedback.createdAt));
+    } catch (e) {
+      feedback = [];
+    }
+    res.json(feedback || []);
+  } catch (error: any) {
+    console.error('Error fetching S-O-A feedback:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get work instructions for a training session (trainer view with critical points)
+router.get('/sessions/:sessionId/work-instructions', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    // Get session details
+    const [session] = await db
+      .select()
+      .from(trainingBuilderSessions)
+      .where(eq(trainingBuilderSessions.sessionId, sessionId));
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Get assignment to find program
+    const [assignment] = await db
+      .select()
+      .from(trainingAssignments)
+      .where(eq(trainingAssignments.id, session.assignmentId));
+    
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    
+    // Get all tasks for this program
+    let tasks: any[] = [];
+    try {
+      tasks = await db
+        .select()
+        .from(trainingProgramTasks)
+        .where(eq(trainingProgramTasks.programId, assignment.programId));
+    } catch (e) {
+      tasks = [];
+    }
+    
+    // Get work instructions linked to these tasks
+    const taskIds = tasks.map(t => t.id);
+    
+    let workInstructionLinks: any[] = [];
+    let allWorkInstructions: any[] = [];
+    
+    if (taskIds.length > 0) {
+      try {
+        workInstructionLinks = await db
+          .select({
+            linkId: trainingTaskWorkInstructions.id,
+            taskId: trainingTaskWorkInstructions.taskId,
+            workInstructionId: trainingTaskWorkInstructions.workInstructionId,
+            trainingStep: trainingTaskWorkInstructions.trainingStep,
+            stepDescription: trainingTaskWorkInstructions.stepDescription,
+          })
+          .from(trainingTaskWorkInstructions)
+          .where(inArray(trainingTaskWorkInstructions.taskId, taskIds));
+      } catch (e) {
+        workInstructionLinks = [];
+      }
+      
+      const wiIds = [...new Set(workInstructionLinks.map(l => l.workInstructionId).filter(Boolean))];
+      
+      if (wiIds.length > 0) {
+        try {
+          allWorkInstructions = await db
+            .select()
+            .from(workInstructions)
+            .where(inArray(workInstructions.id, wiIds));
+        } catch (e) {
+          allWorkInstructions = [];
+        }
+      }
+    }
+    
+    // Build response with tasks, their work instructions, and critical points summary
+    const tasksWithInstructions = tasks.map(task => {
+      const taskLinks = workInstructionLinks.filter(l => l.taskId === task.id);
+      const taskWIs = taskLinks.map(link => {
+        const wi = allWorkInstructions.find(w => w.id === link.workInstructionId);
+        return wi ? {
+          ...wi,
+          trainingStep: link.trainingStep,
+          stepDescription: link.stepDescription,
+        } : null;
+      }).filter(Boolean);
+      
+      return {
+        ...task,
+        workInstructions: taskWIs,
+      };
+    });
+    
+    // Aggregate all critical points for daily reflection - use Map to collapse by task
+    const criticalPointsMap = new Map<number, { task: string; points: string[] }>();
+    const safetyConsiderationsMap = new Map<number, { task: string; considerations: string[] }>();
+    
+    tasksWithInstructions.forEach(task => {
+      task.workInstructions.forEach((wi: any) => {
+        // Handle criticalPoints from work instruction summary
+        if (wi.criticalPoints && Array.isArray(wi.criticalPoints) && wi.criticalPoints.length > 0) {
+          if (!criticalPointsMap.has(task.id)) {
+            criticalPointsMap.set(task.id, { task: task.name, points: [] });
+          }
+          criticalPointsMap.get(task.id)!.points.push(...wi.criticalPoints);
+        }
+        
+        // Handle safetyConsiderations from work instruction summary
+        if (wi.safetyConsiderations && Array.isArray(wi.safetyConsiderations) && wi.safetyConsiderations.length > 0) {
+          if (!safetyConsiderationsMap.has(task.id)) {
+            safetyConsiderationsMap.set(task.id, { task: task.name, considerations: [] });
+          }
+          safetyConsiderationsMap.get(task.id)!.considerations.push(...wi.safetyConsiderations);
+        }
+        
+        // Extract from individual steps
+        if (wi.steps && Array.isArray(wi.steps)) {
+          const stepCriticalPoints = wi.steps
+            .filter((s: any) => s.criticalPoint)
+            .map((s: any) => `Step ${s.stepNumber}: ${s.criticalPoint}`);
+          if (stepCriticalPoints.length > 0) {
+            if (!criticalPointsMap.has(task.id)) {
+              criticalPointsMap.set(task.id, { task: task.name, points: [] });
+            }
+            criticalPointsMap.get(task.id)!.points.push(...stepCriticalPoints);
+          }
+          
+          const stepSafetyNotes = wi.steps
+            .filter((s: any) => s.safetyNote)
+            .map((s: any) => `Step ${s.stepNumber}: ${s.safetyNote}`);
+          if (stepSafetyNotes.length > 0) {
+            if (!safetyConsiderationsMap.has(task.id)) {
+              safetyConsiderationsMap.set(task.id, { task: task.name, considerations: [] });
+            }
+            safetyConsiderationsMap.get(task.id)!.considerations.push(...stepSafetyNotes);
+          }
+        }
+      });
+    });
+    
+    res.json({
+      session,
+      assignment,
+      tasks: tasksWithInstructions,
+      dailyReflection: {
+        criticalPoints: Array.from(criticalPointsMap.values()),
+        safetyConsiderations: Array.from(safetyConsiderationsMap.values()),
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching session work instructions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function for 4-Step model descriptions
+function getStepDescription(step: number): string {
+  switch (step) {
+    case 1: return 'Trainer Does / Trainer Explains';
+    case 2: return 'Trainer Does / Trainee Explains';
+    case 3: return 'Trainee Does / Trainer Coaches';
+    case 4: return 'Trainee Does / Trainer Observes';
+    default: return 'Unknown Step';
+  }
+}
+
+// Get 4-Step Training Model reference data
+router.get('/training-model', async (_req, res) => {
+  res.json({
+    steps: [
+      { step: 1, name: 'Trainer Does / Trainer Explains', description: 'Introduce the task and establish correct mental models.' },
+      { step: 2, name: 'Trainer Does / Trainee Explains', description: 'Verify comprehension before hands-on execution.' },
+      { step: 3, name: 'Trainee Does / Trainer Coaches', description: 'Build confidence while preventing bad habits.' },
+      { step: 4, name: 'Trainee Does / Trainer Observes', description: 'Validate independent competence.' },
+    ],
+    soaModel: {
+      S: { name: 'Strength', prompt: 'What did the trainee do well?' },
+      O: { name: 'Opportunity', prompt: 'What could be improved or refined?' },
+      A: { name: 'Action', prompt: 'What will we do differently next time?' },
+    },
+    approvedPhrases: [
+      'Good catch.',
+      "That's exactly what we want.",
+      "Pause here — what's the next critical point?",
+      "You're on the right track — what happens if that spec is missed?",
+      'Your material prep was spot-on.',
+      'One opportunity is checking orientation earlier to avoid rework.',
+      "You're doing this part exactly right — let's build on that.",
+      'This is an opportunity to tighten the process.',
+    ],
+    prohibitedBehaviors: [
+      'Yelling or raised voice',
+      'Public embarrassment',
+      'Sarcasm or ridicule',
+      '"Figure it out" responses',
+      'Withholding help to "test" someone',
+    ],
+  });
+});
+
+// ============= TRAINING BUILDER QUIZZES API =============
+
+// Get all quizzes
+router.get('/quizzes', async (req, res) => {
+  try {
+    const { programId, isActive } = req.query;
+    let quizzes: any[] = [];
+    try {
+      if (programId) {
+        quizzes = await db.select().from(trainingBuilderQuizzes)
+          .where(eq(trainingBuilderQuizzes.programId, parseInt(programId as string)));
+      } else {
+        quizzes = await db.select().from(trainingBuilderQuizzes);
+      }
+    } catch (e) {
+      quizzes = [];
+    }
+    res.json(quizzes || []);
+  } catch (error: any) {
+    console.error('Error fetching quizzes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single quiz with questions
+router.get('/quizzes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [quiz] = await db.select().from(trainingBuilderQuizzes).where(eq(trainingBuilderQuizzes.id, id));
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    let questions: any[] = [];
+    try {
+      questions = await db.select().from(trainingBuilderQuizQuestions)
+        .where(eq(trainingBuilderQuizQuestions.quizId, id))
+        .orderBy(trainingBuilderQuizQuestions.sortOrder);
+    } catch (e) {
+      questions = [];
+    }
+    res.json({ ...quiz, questions: questions || [] });
+  } catch (error: any) {
+    console.error('Error fetching quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create quiz
+router.post('/quizzes', async (req, res) => {
+  try {
+    const parsed = insertTrainingBuilderQuizSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [quiz] = await db.insert(trainingBuilderQuizzes).values(parsed.data).returning();
+    res.status(201).json(quiz);
+  } catch (error: any) {
+    console.error('Error creating quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update quiz
+router.put('/quizzes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(trainingBuilderQuizzes)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(trainingBuilderQuizzes.id, id))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete quiz
+router.delete('/quizzes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingBuilderQuizQuestions).where(eq(trainingBuilderQuizQuestions.quizId, id));
+    await db.delete(trainingBuilderQuizzes).where(eq(trainingBuilderQuizzes.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add question to quiz
+router.post('/quizzes/:quizId/questions', async (req, res) => {
+  try {
+    const quizId = parseInt(req.params.quizId);
+    const parsed = insertTrainingBuilderQuizQuestionSchema.safeParse({ ...req.body, quizId });
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [question] = await db.insert(trainingBuilderQuizQuestions).values(parsed.data).returning();
+    res.status(201).json(question);
+  } catch (error: any) {
+    console.error('Error adding question:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update question
+router.put('/quizzes/:quizId/questions/:questionId', async (req, res) => {
+  try {
+    const questionId = parseInt(req.params.questionId);
+    const [updated] = await db.update(trainingBuilderQuizQuestions)
+      .set(req.body)
+      .where(eq(trainingBuilderQuizQuestions.id, questionId))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating question:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete question
+router.delete('/quizzes/:quizId/questions/:questionId', async (req, res) => {
+  try {
+    const questionId = parseInt(req.params.questionId);
+    await db.delete(trainingBuilderQuizQuestions).where(eq(trainingBuilderQuizQuestions.id, questionId));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting question:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= DAILY QUIZ SELECTION API =============
+
+// Get daily quiz selections for a date
+router.get('/daily-quizzes', async (req, res) => {
+  try {
+    const { date, department } = req.query;
+    let selections: any[] = [];
+    try {
+      if (date) {
+        const targetDate = new Date(date as string);
+        const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+        selections = await db.select().from(trainingDailyQuizSelections)
+          .where(and(
+            sql`${trainingDailyQuizSelections.scheduledDate} >= ${startOfDay}`,
+            sql`${trainingDailyQuizSelections.scheduledDate} <= ${endOfDay}`
+          ));
+      } else {
+        selections = await db.select().from(trainingDailyQuizSelections)
+          .orderBy(desc(trainingDailyQuizSelections.scheduledDate));
+      }
+    } catch (e) {
+      selections = [];
+    }
+    res.json(selections || []);
+  } catch (error: any) {
+    console.error('Error fetching daily quizzes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Select quizzes for a day
+router.post('/daily-quizzes', async (req, res) => {
+  try {
+    // Convert date string to Date object
+    const data = { ...req.body };
+    if (data.scheduledDate && typeof data.scheduledDate === 'string') {
+      data.scheduledDate = new Date(data.scheduledDate);
+    }
+    const parsed = insertTrainingDailyQuizSelectionSchema.safeParse(data);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [selection] = await db.insert(trainingDailyQuizSelections).values(parsed.data).returning();
+    res.status(201).json(selection);
+  } catch (error: any) {
+    console.error('Error creating daily quiz selection:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove daily quiz selection
+router.delete('/daily-quizzes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingDailyQuizSelections).where(eq(trainingDailyQuizSelections.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting daily quiz selection:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= QUIZ ATTEMPTS API =============
+
+// Start quiz attempt
+router.post('/quiz-attempts', async (req, res) => {
+  try {
+    const parsed = insertTrainingBuilderQuizAttemptSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    // Count existing attempts
+    let existingAttempts: any[] = [];
+    try {
+      existingAttempts = await db.select().from(trainingBuilderQuizAttempts)
+        .where(and(
+          eq(trainingBuilderQuizAttempts.quizId, parsed.data.quizId),
+          eq(trainingBuilderQuizAttempts.employeeId, parsed.data.employeeId)
+        ));
+    } catch (e) {
+      existingAttempts = [];
+    }
+    const attemptNumber = (existingAttempts?.length || 0) + 1;
+    const [attempt] = await db.insert(trainingBuilderQuizAttempts)
+      .values({ ...parsed.data, attemptNumber })
+      .returning();
+    res.status(201).json(attempt);
+  } catch (error: any) {
+    console.error('Error starting quiz attempt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Submit quiz attempt
+router.put('/quiz-attempts/:id/submit', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { answers } = req.body;
+    
+    // Get the attempt and quiz details
+    const [attempt] = await db.select().from(trainingBuilderQuizAttempts).where(eq(trainingBuilderQuizAttempts.id, id));
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+    
+    // Get quiz questions
+    let questions: any[] = [];
+    try {
+      questions = await db.select().from(trainingBuilderQuizQuestions)
+        .where(eq(trainingBuilderQuizQuestions.quizId, attempt.quizId));
+    } catch (e) {
+      questions = [];
+    }
+    
+    // Calculate score
+    let correctCount = 0;
+    const totalPoints = questions?.reduce((sum: number, q: any) => sum + (q.points || 1), 0) || 0;
+    for (const q of (questions || [])) {
+      if (answers && answers[q.id] === q.correctAnswer) {
+        correctCount += q.points || 1;
+      }
+    }
+    const score = totalPoints > 0 ? Math.round((correctCount / totalPoints) * 100) : 0;
+    
+    // Get passing score from quiz
+    const [quiz] = await db.select().from(trainingBuilderQuizzes).where(eq(trainingBuilderQuizzes.id, attempt.quizId));
+    const passed = score >= (quiz?.passingScore || 80);
+    
+    const [updated] = await db.update(trainingBuilderQuizAttempts)
+      .set({ answers, score, passed, completedAt: new Date() })
+      .where(eq(trainingBuilderQuizAttempts.id, id))
+      .returning();
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error submitting quiz attempt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get employee quiz attempts
+router.get('/quiz-attempts/employee/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    let attempts: any[] = [];
+    try {
+      attempts = await db.select().from(trainingBuilderQuizAttempts)
+        .where(eq(trainingBuilderQuizAttempts.employeeId, employeeId))
+        .orderBy(desc(trainingBuilderQuizAttempts.createdAt));
+    } catch (e) {
+      attempts = [];
+    }
+    res.json(attempts || []);
+  } catch (error: any) {
+    console.error('Error fetching employee quiz attempts:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= CERTIFICATION API =============
+
+// Get certifications for an employee
+router.get('/certifications/employee/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    let certifications: any[] = [];
+    try {
+      certifications = await db.select().from(trainingCertifications)
+        .where(eq(trainingCertifications.traineeId, employeeId))
+        .orderBy(desc(trainingCertifications.createdAt));
+    } catch (e) {
+      certifications = [];
+    }
+    res.json(certifications || []);
+  } catch (error: any) {
+    console.error('Error fetching certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create certification (trainer observation signoff)
+router.post('/certifications', async (req, res) => {
+  try {
+    // Convert date strings to Date objects
+    const data = { ...req.body };
+    if (data.observationDate && typeof data.observationDate === 'string') {
+      data.observationDate = new Date(data.observationDate);
+    }
+    if (data.expiresAt && typeof data.expiresAt === 'string') {
+      data.expiresAt = new Date(data.expiresAt);
+    }
+    const parsed = insertTrainingCertificationSchema.safeParse(data);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const [certification] = await db.insert(trainingCertifications).values(parsed.data).returning();
+    res.status(201).json(certification);
+  } catch (error: any) {
+    console.error('Error creating certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update certification (for signoffs)
+router.put('/certifications/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const updates = { ...req.body, updatedAt: new Date() };
+    
+    // If both trainer and trainee signed off, update status to certified
+    if (updates.trainerSignoff && updates.traineeSignoff && updates.allQuizzesPassed && updates.allTasksCompleted) {
+      updates.status = 'certified';
+      updates.certifiedAt = new Date();
+    }
+    
+    const [updated] = await db.update(trainingCertifications)
+      .set(updates)
+      .where(eq(trainingCertifications.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get tasks grouped by day for a program
+router.get('/programs/:programId/tasks-by-day', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.programId);
+    let tasks: any[] = [];
+    try {
+      tasks = await db.select().from(trainingProgramTasks)
+        .where(eq(trainingProgramTasks.programId, programId))
+        .orderBy(trainingProgramTasks.dayNumber, trainingProgramTasks.sortOrder);
+    } catch (e) {
+      tasks = [];
+    }
+    
+    // Group by day number
+    const grouped: Record<number, any[]> = {};
+    for (const task of (tasks || [])) {
+      const day = task.dayNumber || 1;
+      if (!grouped[day]) grouped[day] = [];
+      grouped[day].push(task);
+    }
+    
+    res.json(grouped);
+  } catch (error: any) {
+    console.error('Error fetching tasks by day:', error);
     res.status(500).json({ error: error.message });
   }
 });

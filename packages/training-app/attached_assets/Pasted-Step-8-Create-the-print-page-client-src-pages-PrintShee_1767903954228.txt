@@ -1,0 +1,103 @@
+Step 8) Create the print page
+client/src/pages/PrintSheet.tsx
+import React, { useEffect, useState } from "react";
+import { useRoute } from "wouter";
+
+export default function PrintSheet() {
+  const [, params] = useRoute("/print/:sessionId");
+  const sessionId = params?.sessionId!;
+  const [data, setData] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch(`/api/training/sessions/${sessionId}`);
+      setData(await r.json());
+    })();
+  }, [sessionId]);
+
+  if (!data) return <div>Loading...</div>;
+
+  const s = data.session;
+  const t = data.trainee;
+
+  return (
+    <div style={{ padding: 24 }}>
+      <style>{`
+        @media print {
+          button { display: none; }
+          a { display: none; }
+          body { margin: 0; }
+        }
+        .block { border: 1px solid #000; padding: 12px; margin-bottom: 12px; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .small { font-size: 12px; }
+        .sign { display: flex; gap: 24px; margin-top: 10px; }
+        .line { border-bottom: 1px solid #000; min-width: 220px; }
+      `}</style>
+
+      <button onClick={() => window.print()}>Print</button>
+
+      <h2>Daily Training Sheet</h2>
+      <div className="small">
+        <div><b>Trainee:</b> {t?.name}</div>
+        <div><b>Trainer:</b> {s?.trainerName}</div>
+        <div><b>Date:</b> {new Date(s?.sessionDate).toLocaleDateString()}</div>
+      </div>
+
+      <hr />
+
+      {data.blocks.map((b: any, idx: number) => (
+        <div className="block" key={b.id}>
+          <div><b>{idx + 1}. {b.taskName}</b></div>
+          <div className="small">
+            {b.wiCode ? `${b.wiCode} — ${b.wiTitle}` : "No Work Instruction linked"}
+          </div>
+
+          <div className="row" style={{ marginTop: 8 }}>
+            <div>☐ Step 1 Trainer Does/Explains</div>
+            <div>☐ Step 2 Trainer Does/Trainee Explains</div>
+            <div>☐ Step 3 Trainee Does/Trainer Coaches</div>
+            <div>☐ Step 4 Trainee Does/Trainer Observes</div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <b>SOA Coaching</b>
+            <div className="small">Strength: ________________________________</div>
+            <div className="small">Opportunity: _____________________________</div>
+            <div className="small">Action: __________________________________</div>
+          </div>
+
+          {b.criticalPoints?.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <b>Critical Points</b>
+              <ul className="small">
+                {b.criticalPoints.map((cp: any) => (
+                  <li key={cp.id}><b>{cp.label}</b> — {cp.detail}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="sign">
+            <div>
+              Trainer Sign: <span className="line">&nbsp;</span>
+            </div>
+            <div>
+              Trainee Sign: <span className="line">&nbsp;</span>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <hr />
+      <div>
+        <b>Daily Notes / Escalations</b>
+        <div className="small">If unsure at any point: STOP and ask Trainer/Supervisor/QC as applicable.</div>
+        <div style={{ border: "1px solid #000", height: 120, marginTop: 8 }} />
+      </div>
+    </div>
+  );
+}
+
+
+This gives you a clean printable document right now (HTML print). Later, we can convert to PDF server-side.

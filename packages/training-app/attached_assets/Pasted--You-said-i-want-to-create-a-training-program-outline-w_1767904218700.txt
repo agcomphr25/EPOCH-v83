@@ -1,0 +1,502 @@
+
+You said:
+i want to create a training program outline, where each position/task/department has different work instructions and critical points. but all training is done in a 4 step process. 1) trainer does and explains 2) Train Does and Trainee explains/answers critical points 3) trainee does and trainer coaches and still is part of the process 4) trainee does and trainer watches. the whole process is a shadowing, hip to hip. to ensure the trainee is confident in the process, and learns the facility and whom to address for help with certain tasks. This process will allow the trainer to know the trainee will show integrity, accountablity, and comprenhension. to apply the tasks with out second guessing
+ChatGPT said:
+Below is a clean, scalable training program outline you can drop directly into your ERP / onboarding module and reuse across all departments, positions, and tasks. This is structured exactly the way you described—hip-to-hip, shadowing-based, integrity-focused, and AS9100-friendly without being bloated.
+
+Standardized 4-Step Competency Training Program
+(Applies to All Departments, Positions, and Tasks)
+
+Purpose
+To ensure every employee is trained to perform tasks correctly, confidently, and independently, while demonstrating integrity, accountability, and comprehension.
+This program ensures trainees understand how, why, who to ask, and where the task fits in the overall process—eliminating second-guessing and unsafe assumptions.
+
+Training Philosophy
+Hip-to-Hip / Shadowing Based
+
+Hands-On, Not Observational Only
+
+Critical-Point Driven
+
+Confidence Before Independence
+
+Traceable & Repeatable
+
+This training method applies uniformly, regardless of department, complexity, or role.
+
+Training Structure (4 Required Steps)
+Step 1 – Trainer Does / Trainer Explains
+Objective: Introduce the task and establish correct mental models.
+
+Trainer Responsibilities
+
+Perform the task at normal production pace
+
+Verbally explain:
+
+What is being done
+
+Why it matters
+
+How it impacts quality, safety, or downstream departments
+
+Explicitly identify Critical Points
+
+Identify:
+
+Who to contact if something is abnormal
+
+Where documentation, tools, or materials come from
+
+Trainee Responsibilities
+
+Observe without interruption
+
+Ask clarifying questions after the task completes
+
+Listen for critical points and failure modes
+
+✅ No hands-on work by trainee in this step
+
+Step 2 – Trainer Does / Trainee Explains
+Objective: Verify comprehension before hands-on execution.
+
+Trainer Responsibilities
+
+Perform the task again
+
+Pause at critical steps
+
+Ask targeted questions:
+
+“What could go wrong here?”
+
+“What spec or WI applies?”
+
+“What would you do if X is out of tolerance?”
+
+Trainee Responsibilities
+
+Verbally explain each step while the trainer performs it
+
+Answer critical-point questions
+
+Identify risks, controls, and escalation paths
+
+🚫 If trainee cannot explain a critical point → return to Step 1
+
+Step 3 – Trainee Does / Trainer Coaches
+Objective: Build confidence while preventing bad habits.
+
+Trainer Responsibilities
+
+Stay hip-to-hip
+
+Allow trainee to perform the task
+
+Intervene only to:
+
+Prevent errors
+
+Reinforce critical points
+
+Correct technique immediately
+
+Trainee Responsibilities
+
+Perform the task fully
+
+Talk through the steps if needed
+
+Ask questions in real time
+
+Accept coaching and correction
+
+⚠️ Trainer remains part of the process
+
+Step 4 – Trainee Does / Trainer Observes
+Objective: Validate independent competence.
+
+Trainer Responsibilities
+
+Observe without intervention
+
+Confirm:
+
+Proper sequence
+
+Correct use of tools
+
+Adherence to work instructions
+
+Recognition of critical points
+
+Trainee Responsibilities
+
+Perform the task independently
+
+Demonstrate confidence and consistency
+
+Show correct judgment at decision points
+
+✅ Successful completion = Task Competency Achieved
+
+Task Training Record (Digital-Friendly)
+Each Task / WI should capture:
+
+Department
+
+Position / Role
+
+Task Name
+
+Work Instruction ID
+
+Critical Points (checklist)
+
+Trainer Name & Signature
+
+Trainee Name & Signature
+
+Date Completed
+
+Step 4 Pass/Fail
+
+Notes / Observations
+
+⚙️ This maps perfectly to a digital training matrix in your ERP.
+
+Critical Points Definition
+Critical Points are any step that could affect:
+
+Safety
+
+Quality
+
+Compliance
+
+Rework or scrap
+
+Downstream processes
+
+Customer requirements
+
+Each task must explicitly list its critical points.
+
+Integrity, Accountability & Comprehension Built In
+This method ensures:
+
+Integrity
+→ Trainee must explain and perform correctly—no guessing
+
+Accountability
+→ Trainer signs off only after observed competence
+
+Comprehension
+→ Understanding is validated before independence
+
+When Retraining Is Required
+Retraining is required if:
+
+Process changes
+
+WI revision
+
+Quality escape related to the task
+
+Extended time away from the task
+
+Performance concern identified
+
+Retraining follows the same 4-step process.
+
+How This Fits Your ERP (EPOCH-v83)
+This model aligns perfectly with:
+
+Digital travelers
+
+Training certification tracking
+
+Cross-training matrices
+
+AS9100 competence evidence
+
+6-month evaluations
+
+Department-specific WI libraries
+
+You can model this as:
+
+Training Template → Task Instance → Competency Record
+
+Next (Optional – I Can Build These)
+If you want, next I can:
+
+Create a Task Training Template JSON for your database
+
+Design the Training Wizard UI flow
+
+Build a Trainer Evaluation Form
+
+Map this to AS9100 clause 7.2 (Competence)
+
+Create example department-specific task outlines
+
+Turn this into a one-page WI you can issue today
+
+Just tell me which one you want next.
+
+You said:
+I want to take this concept and train a trainer. but i also want to include, how to coach in a positive manner. Using strengthens and opportunities instead of weaknesses and harsh discipline tactics. To instill confidence and increase job moral.
+ChatGPT said:
+This is a very strong next step. What you’re describing is not just “train-the-trainer” — it’s a culture-setting system that ensures consistency, psychological safety, and high performance without sacrificing accountability. Below is a ready-to-deploy Train-the-Trainer program that cleanly layers positive coaching on top of your existing 4-step technical training model.
+
+Train-the-Trainer Program
+Positive Coaching, Competency Assurance, and Cultural Consistency
+
+Purpose
+To certify trainers who can:
+
+Deliver technical training consistently
+
+Coach in a positive, confidence-building manner
+
+Develop trainees using strengths and opportunities, not fear
+
+Reinforce integrity, accountability, and comprehension
+
+Protect morale while maintaining standards
+
+Trainer Mindset (Non-Negotiable)
+A certified trainer must understand:
+
+Discipline corrects behavior. Coaching develops people.
+
+The goal is competence with confidence, not compliance through pressure.
+
+Core Principles of Positive Coaching
+1. Strengths-First Coaching
+Identify what the trainee is doing correctly
+
+Reinforce correct behaviors immediately
+
+Build confidence before addressing gaps
+
+Language shift
+
+❌ “You’re doing this wrong.”
+
+✅ “You’re doing this part exactly right — let’s build on that.”
+
+2. Opportunities, Not Weaknesses
+Mistakes are framed as learning opportunities, not failures.
+
+Language shift
+
+❌ “That’s a mistake.”
+
+✅ “This is an opportunity to tighten the process.”
+
+3. Immediate, Calm, Specific Feedback
+Address issues in the moment
+
+Focus on the task, not the person
+
+Stay factual and unemotional
+
+Rule:
+No sarcasm. No raised voice. No public correction.
+
+4. Psychological Safety with Accountability
+Trainees must feel safe to:
+
+Ask questions
+
+Admit uncertainty
+
+Stop the process when unsure
+
+But also understand:
+
+Standards do not change
+
+Critical points are not optional
+
+Train-the-Trainer Certification Structure
+Phase 1 – Understanding the 4-Step Training Model (Technical Mastery)
+Trainer must demonstrate:
+
+Full understanding of all 4 steps
+
+Ability to explain why each step exists
+
+Commitment to not skipping steps for speed
+
+📌 Rule:
+No trainer is allowed to “shortcut” the process.
+
+Phase 2 – Coaching Fundamentals (People Skills)
+A. Coaching vs Teaching
+Teaching	Coaching
+Explains how	Develops judgment
+Gives answers	Asks questions
+Focuses on steps	Focuses on understanding
+B. Approved Coaching Framework (S-O-A Model)
+S – Strength
+
+“What did the trainee do well?”
+
+O – Opportunity
+
+“What could be improved or refined?”
+
+A – Action
+
+“What will we do differently next time?”
+
+Example
+
+“Your material prep was spot-on. One opportunity is checking orientation earlier to avoid rework. Next time, let’s pause and verify before cutting.”
+
+Phase 3 – Applying Positive Coaching in Each Training Step
+Step 1 – Trainer Does / Explains
+Model calm, professional behavior
+
+Explain why, not just what
+
+Demonstrate patience and confidence
+
+Step 2 – Trainer Does / Trainee Explains
+Encourage thinking, not memorization
+
+Praise correct explanations
+
+Guide unclear answers without embarrassment
+
+“You’re on the right track — what happens if that spec is missed?”
+
+Step 3 – Trainee Does / Trainer Coaches
+This is where positive coaching matters most.
+
+Trainer must:
+
+Correct immediately, but calmly
+
+Use hands-off guidance when possible
+
+Reinforce progress continuously
+
+Approved phrases
+
+“Good catch.”
+
+“That’s exactly what we want.”
+
+“Pause here — what’s the next critical point?”
+
+Step 4 – Trainee Does / Trainer Observes
+No micromanaging
+
+Observe decision-making
+
+Debrief afterward using S-O-A
+
+Phase 4 – Trainer Evaluation & Certification
+To be certified, the trainer must:
+
+Conduct a full 4-step training on a real task
+
+Demonstrate positive coaching language
+
+Maintain calm under trainee mistakes
+
+Complete a post-training debrief using S-O-A
+
+Trainer Certification Record
+
+Trainer Name
+
+Certified By
+
+Date
+
+Departments Approved To Train
+
+Coaching Competency: Pass / Needs Improvement
+
+Notes
+
+Harsh Discipline – Explicitly Prohibited During Training
+The following are not allowed during training:
+
+Yelling or raised voice
+
+Public embarrassment
+
+Sarcasm or ridicule
+
+“Figure it out” responses
+
+Withholding help to “test” someone
+
+📌 Discipline belongs outside the training process and follows formal HR policy — not trainer discretion.
+
+Trainer Escalation Guidance
+If a trainee:
+
+Repeats errors
+
+Appears disengaged
+
+Struggles with comprehension
+
+Trainer must:
+
+Pause the process
+
+Return to an earlier step
+
+Document observations
+
+Escalate to supervisor without judgment
+
+Cultural Impact (Why This Works)
+This system:
+
+Builds trust quickly
+
+Reduces rework and scrap
+
+Increases retention
+
+Encourages speaking up
+
+Produces trainers who lead, not intimidate
+
+ERP Integration (Optional but Powerful)
+You can digitize this as:
+
+Trainer Certification Module
+
+Coaching Evaluation Form
+
+Approved Coaching Language Library
+
+Trainer Scorecard (Technical + Coaching)
+
+Next Steps I Can Build For You
+If you want, I can next:
+
+Create a Train-the-Trainer SOP (printable & ERP-ready)
+
+Design a Trainer Coaching Evaluation Form
+
+Build approved coaching language prompts into your UI
+
+Create a Trainer certification workflow
+
+Tie this directly to AS9100 competence & awareness clauses
+
+Build a “Trainer vs Supervisor” responsibility boundary doc
+
+Just tell me which one you want next — this is already a best-in-class system.

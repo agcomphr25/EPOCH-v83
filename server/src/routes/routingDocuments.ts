@@ -16,6 +16,7 @@ import {
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import * as pdfParse from 'pdf-parse';
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
@@ -249,6 +250,108 @@ router.post('/create', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating document:', error);
     res.status(500).json({ error: 'Failed to create document' });
+  }
+});
+
+// Upload file with content extraction - accepts base64 file content
+router.post('/upload-with-extraction', async (req: Request, res: Response) => {
+  try {
+    const { fileContent, fileName, mimeType, title, partNumber, departmentName, documentType, isTemplate, autoAnalyze } = req.body;
+    const user = (req as any).user;
+    
+    if (!fileContent || !fileName) {
+      return res.status(400).json({ error: 'File content and fileName are required' });
+    }
+    
+    // Decode base64 file content
+    const fileBuffer = Buffer.from(fileContent, 'base64');
+    let extractedText = '';
+    
+    // Extract text based on file type
+    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      try {
+        const pdfParser = (pdfParse as any).default || pdfParse;
+        const pdfData = await pdfParser(fileBuffer);
+        extractedText = pdfData.text || '';
+        console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
+      } catch (pdfError) {
+        console.error('Error parsing PDF:', pdfError);
+        extractedText = '';
+      }
+    } else if (mimeType?.startsWith('text/') || fileName.match(/\.(txt|md|csv|json|xml)$/i)) {
+      extractedText = fileBuffer.toString('utf-8');
+    }
+    
+    // Create the document with extracted content
+    const [document] = await db.insert(routingDocuments).values({
+      title: title || fileName,
+      partNumber: partNumber || null,
+      departmentName: departmentName || null,
+      documentType: documentType || 'work_instruction',
+      sourceType: 'uploaded',
+      fileName: fileName,
+      fileType: mimeType || 'application/octet-stream',
+      fileSize: fileBuffer.length,
+      description: extractedText ? `Extracted ${extractedText.length} characters from file` : `Original file: ${fileName}`,
+      isTemplate: isTemplate === true || isTemplate === 'true',
+      createdBy: user?.username || 'system',
+    }).returning();
+    
+    // If autoAnalyze is true and we have extracted text, run AI analysis
+    let aiResult = null;
+    if (autoAnalyze && extractedText.trim()) {
+      try {
+        const systemPrompt = `You are an expert manufacturing document analyzer. Analyze the provided document content and extract:
+1. Routing steps (operations/departments in order)
+2. Data fields that need to be captured for each part (serial numbers, measurements, dates, signatures, etc.)
+3. Quality checkpoints and standards
+4. Certification requirements
+5. Special process requirements
+
+Return a JSON object with the following structure:
+{
+  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
+  "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string"}],
+  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string"}],
+  "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
+  "specialProcesses": [{"process": "string", "requirements": "string", "department": "string"}]
+}`;
+
+        const response = await openai.chat.completions.create({
+          model: 'gpt-5.1',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Please analyze this document and extract the routing information:\n\n${extractedText.substring(0, 50000)}` }
+          ],
+          response_format: { type: 'json_object' },
+          max_completion_tokens: 4096,
+        });
+        
+        aiResult = JSON.parse(response.choices[0]?.message?.content || '{}');
+        
+        // Update document with AI extracted content
+        await db.update(routingDocuments)
+          .set({
+            aiExtractedContent: aiResult,
+            aiExtractedFields: aiResult.dataFields || [],
+            aiProcessedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(routingDocuments.id, document.id));
+      } catch (aiError) {
+        console.error('Error during auto AI analysis:', aiError);
+      }
+    }
+    
+    res.status(201).json({
+      document,
+      extractedText: extractedText.substring(0, 1000) + (extractedText.length > 1000 ? '...' : ''),
+      extractedLength: extractedText.length,
+      aiAnalysis: aiResult,
+    });
+  } catch (error) {
+    console.error('Error uploading document with extraction:', error);
+    res.status(500).json({ error: 'Failed to upload document' });
   }
 });
 

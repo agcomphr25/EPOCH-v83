@@ -147,7 +147,7 @@ export default function RoutingDocumentManagement() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (data: { file: File | null; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean }) => {
+    mutationFn: async (data: { file: File | null; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean; autoAnalyze?: boolean }) => {
       // If no file, create metadata-only document
       if (!data.file) {
         return apiRequest('/api/routing-documents/create', {
@@ -162,54 +162,40 @@ export default function RoutingDocumentManagement() {
         });
       }
       
-      // Step 1: Request upload URL
-      const urlResponse = await apiRequest('/api/routing-documents/request-upload-url', {
-        method: 'POST',
-        body: { name: data.file.name, size: data.file.size, contentType: data.file.type },
-      });
+      // Convert file to base64 for direct upload with text extraction
+      const fileBuffer = await data.file.arrayBuffer();
+      const base64Content = btoa(
+        new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
       
-      // Handle fallback mode when Object Storage is unavailable
-      if (urlResponse.fallbackMode) {
-        return apiRequest('/api/routing-documents/create', {
-          method: 'POST',
-          body: {
-            title: data.title || data.file.name,
-            partNumber: data.partNumber,
-            departmentName: data.departmentName,
-            documentType: data.documentType,
-            isTemplate: data.isTemplate,
-            description: `Original file: ${data.file.name} (${Math.round((data.file.size || 0) / 1024)}KB)`,
-          },
-        });
-      }
-      
-      // Step 2: Upload file to presigned URL
-      const uploadRes = await fetch(urlResponse.uploadURL, {
-        method: 'PUT',
-        body: data.file,
-        headers: { 'Content-Type': data.file.type || 'application/octet-stream' },
-      });
-      
-      if (!uploadRes.ok) throw new Error('File upload failed');
-      
-      // Step 3: Complete upload with metadata
-      return apiRequest('/api/routing-documents/complete-upload', {
+      // Upload with content extraction and optional auto-analysis
+      return apiRequest('/api/routing-documents/upload-with-extraction', {
         method: 'POST',
         body: {
-          objectPath: urlResponse.objectPath,
-          title: data.title || data.file.name,
-          originalFileName: data.file.name,
-          fileSize: data.file.size,
+          fileContent: base64Content,
+          fileName: data.file.name,
           mimeType: data.file.type,
+          title: data.title || data.file.name,
           partNumber: data.partNumber,
           departmentName: data.departmentName,
           documentType: data.documentType,
           isTemplate: data.isTemplate,
+          autoAnalyze: data.autoAnalyze !== false, // Default to true
         },
       });
     },
-    onSuccess: (_data, variables) => {
-      const message = variables.file ? 'Document uploaded successfully' : 'Document created successfully';
+    onSuccess: (response: any, variables) => {
+      const hasAiAnalysis = response?.aiAnalysis && Object.keys(response.aiAnalysis).length > 0;
+      const extractedLength = response?.extractedLength || 0;
+      
+      let message = variables.file ? 'Document uploaded successfully' : 'Document created successfully';
+      if (extractedLength > 0) {
+        message += `. Extracted ${extractedLength} characters`;
+      }
+      if (hasAiAnalysis) {
+        message += ' and analyzed with AI';
+      }
+      
       toast({ title: 'Success', description: message });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowUploadDialog(false);

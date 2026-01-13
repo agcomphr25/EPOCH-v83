@@ -129,7 +129,10 @@ export default function TicketsPage() {
     ticketType: 'customer' as 'customer' | 'internal',
     category: '',
     priority: 'normal' as 'low' | 'normal' | 'high',
+    assignedUserId: null as number | null,
   });
+  const [newTicketOrderIds, setNewTicketOrderIds] = useState<string[]>([]);
+  const [newTicketOrderInput, setNewTicketOrderInput] = useState('');
 
   const [newComment, setNewComment] = useState('');
   const [newOrderId, setNewOrderId] = useState('');
@@ -178,12 +181,25 @@ export default function TicketsPage() {
 
   const createTicketMutation = useMutation({
     mutationFn: async (data: typeof newTicket) => {
-      return apiRequest('/api/tickets', {
+      const response = await apiRequest('/api/tickets', {
         method: 'POST',
         body: JSON.stringify(data),
       });
+      return response;
     },
-    onSuccess: () => {
+    onSuccess: async (ticket: Ticket) => {
+      if (newTicketOrderIds.length > 0) {
+        for (const orderId of newTicketOrderIds) {
+          try {
+            await apiRequest(`/api/tickets/${ticket.id}/orders`, {
+              method: 'POST',
+              body: JSON.stringify({ orderId }),
+            });
+          } catch (err) {
+            console.error('Failed to link order:', orderId, err);
+          }
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
       setIsCreateDialogOpen(false);
       setNewTicket({
@@ -192,7 +208,10 @@ export default function TicketsPage() {
         ticketType: 'customer',
         category: '',
         priority: 'normal',
+        assignedUserId: null,
       });
+      setNewTicketOrderIds([]);
+      setNewTicketOrderInput('');
       toast({ title: 'Ticket created successfully' });
     },
     onError: () => {
@@ -386,6 +405,68 @@ export default function TicketsPage() {
                   rows={4}
                   data-testid="input-ticket-description"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label>Assigned To</Label>
+                <Select
+                  value={newTicket.assignedUserId?.toString() || 'unassigned'}
+                  onValueChange={(v) => setNewTicket({ ...newTicket, assignedUserId: v === 'unassigned' ? null : parseInt(v) })}
+                >
+                  <SelectTrigger data-testid="select-ticket-assigned">
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {users.map(u => (
+                      <SelectItem key={u.id} value={u.id.toString()}>
+                        {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Link Orders</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newTicketOrderInput}
+                    onChange={(e) => setNewTicketOrderInput(e.target.value)}
+                    placeholder="Order ID (e.g., AG589)"
+                    data-testid="input-link-order-create"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const orderId = newTicketOrderInput.trim().toUpperCase();
+                      if (orderId && !newTicketOrderIds.includes(orderId)) {
+                        setNewTicketOrderIds([...newTicketOrderIds, orderId]);
+                        setNewTicketOrderInput('');
+                      }
+                    }}
+                    disabled={!newTicketOrderInput.trim()}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {newTicketOrderIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {newTicketOrderIds.map(orderId => (
+                      <Badge key={orderId} variant="secondary" className="flex items-center gap-1">
+                        <Link2 className="h-3 w-3" />
+                        {orderId}
+                        <button
+                          type="button"
+                          onClick={() => setNewTicketOrderIds(newTicketOrderIds.filter(id => id !== orderId))}
+                          className="ml-1 hover:text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>

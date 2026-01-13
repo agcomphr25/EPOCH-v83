@@ -174,6 +174,9 @@ export default function FabricInventoryPage() {
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Additional rolls for batch entry (same batch info, different roll numbers)
+  const [additionalRolls, setAdditionalRolls] = useState<Array<{ rollNumber: string; internalControlNumber: string }>>([]);
+
   // File upload hook for object storage
   const { uploadFile, isUploading, progress } = useUpload({
     onSuccess: (response) => {
@@ -246,9 +249,68 @@ export default function FabricInventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       setIsAddDialogOpen(false);
       setForm(emptyForm);
+      setAdditionalRolls([]);
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create fabric inventory item", variant: "destructive" });
+    },
+  });
+
+  const batchCreateMutation = useMutation({
+    mutationFn: async (data: { form: typeof form; additionalRolls: Array<{ rollNumber: string; internalControlNumber: string }> }) => {
+      const baseData = {
+        materialId: data.form.materialId || null,
+        productionLineId: data.form.productionLineId || null,
+        source: data.form.source || null,
+        fabric: data.form.fabric || null,
+        fabricPartNumber: data.form.fabricPartNumber || null,
+        supplierPartNumber: data.form.supplierPartNumber || null,
+        supplierPoNumber: data.form.supplierPoNumber || null,
+        manufacturerPoNumber: data.form.manufacturerPoNumber || null,
+        batchNumber: data.form.batchNumber || null,
+        manufactureDate: data.form.manufactureDate || null,
+        receivedDate: data.form.receivedDate || null,
+        expirationDate: data.form.expirationDate || null,
+        location: data.form.location || null,
+        conformanceDocumentLink: data.form.conformanceDocumentLink || null,
+        quantityInStock: parseInt(data.form.quantityInStock) || 0,
+        squareMeters: data.form.squareMeters || null,
+        lowStockThreshold: parseInt(data.form.lowStockThreshold) || 10,
+        notes: data.form.notes || null,
+      };
+
+      const allRolls = [
+        { rollNumber: data.form.rollNumber || null, internalControlNumber: data.form.internalControlNumber || null },
+        ...data.additionalRolls.map(r => ({
+          rollNumber: r.rollNumber || null,
+          internalControlNumber: r.internalControlNumber || null,
+        }))
+      ];
+
+      const results = await Promise.all(
+        allRolls.map(roll =>
+          apiRequest('/api/cutting-table/fabric-inventory', {
+            method: 'POST',
+            body: JSON.stringify({
+              ...baseData,
+              rollNumber: roll.rollNumber,
+              internalControlNumber: roll.internalControlNumber,
+            }),
+          })
+        )
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      const count = results.length;
+      toast({ title: "Success", description: `Created ${count} fabric rolls from the same batch` });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      setIsAddDialogOpen(false);
+      setForm(emptyForm);
+      setAdditionalRolls([]);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create fabric inventory items", variant: "destructive" });
     },
   });
 
@@ -330,6 +392,7 @@ export default function FabricInventoryPage() {
     setForm(emptyForm);
     setConformanceLinkType("url");
     setUploadedFileName("");
+    setAdditionalRolls([]);
     setIsAddDialogOpen(true);
   };
 
@@ -1070,6 +1133,74 @@ export default function FabricInventoryPage() {
     </div>
   );
 
+  const additionalRollsSection = (
+    <div className="border-t pt-4 mt-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h4 className="text-sm font-medium">Additional Rolls (Same Batch)</h4>
+          <p className="text-xs text-muted-foreground">Add more rolls with the same batch info but different roll numbers</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setAdditionalRolls([...additionalRolls, { rollNumber: "", internalControlNumber: "" }])}
+          data-testid="button-add-another-roll"
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add Another Roll
+        </Button>
+      </div>
+      {additionalRolls.length > 0 && (
+        <div className="space-y-2">
+          {additionalRolls.map((roll, index) => (
+            <div key={index} className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-xs text-muted-foreground w-8">#{index + 2}</span>
+              <Input
+                placeholder="Roll Number"
+                value={roll.rollNumber}
+                onChange={(e) => {
+                  const updated = [...additionalRolls];
+                  updated[index].rollNumber = e.target.value;
+                  setAdditionalRolls(updated);
+                }}
+                className="flex-1"
+                data-testid={`input-additional-roll-${index}`}
+              />
+              <Input
+                placeholder="Internal Control #"
+                value={roll.internalControlNumber}
+                onChange={(e) => {
+                  const updated = [...additionalRolls];
+                  updated[index].internalControlNumber = e.target.value;
+                  setAdditionalRolls(updated);
+                }}
+                className="flex-1"
+                data-testid={`input-additional-icn-${index}`}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const updated = additionalRolls.filter((_, i) => i !== index);
+                  setAdditionalRolls(updated);
+                }}
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                data-testid={`button-remove-roll-${index}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground mt-2">
+            Total rolls to create: {additionalRolls.length + 1} (primary + {additionalRolls.length} additional)
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="fabric-inventory-page">
       <div className="flex items-center justify-between">
@@ -1324,7 +1455,7 @@ export default function FabricInventoryPage() {
       </Card>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Fabric Inventory</DialogTitle>
             <DialogDescription>
@@ -1332,16 +1463,27 @@ export default function FabricInventoryPage() {
             </DialogDescription>
           </DialogHeader>
           {fabricFormContent}
+          {additionalRollsSection}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => createMutation.mutate(form)}
-              disabled={!form.fabric || createMutation.isPending}
+              onClick={() => {
+                if (additionalRolls.length > 0) {
+                  batchCreateMutation.mutate({ form, additionalRolls });
+                } else {
+                  createMutation.mutate(form);
+                }
+              }}
+              disabled={!form.fabric || createMutation.isPending || batchCreateMutation.isPending}
               data-testid="button-save-add"
             >
-              {createMutation.isPending ? "Saving..." : "Add Fabric"}
+              {(createMutation.isPending || batchCreateMutation.isPending) 
+                ? "Saving..." 
+                : additionalRolls.length > 0 
+                  ? `Add ${additionalRolls.length + 1} Rolls`
+                  : "Add Fabric"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -101,14 +101,48 @@ export default function RoutingDocumentManagement() {
 
   const { data: documents = [], isLoading: loadingDocs } = useQuery<RoutingDocument[]>({
     queryKey: ['/api/routing-documents'],
+    select: (data: any[]) => data.map((doc: any) => ({
+      id: doc.id,
+      title: doc.title,
+      partNumber: doc.part_number ?? doc.partNumber,
+      departmentName: doc.department_name ?? doc.departmentName,
+      documentType: doc.document_type ?? doc.documentType ?? 'work_instruction',
+      sourceType: doc.source_type ?? doc.sourceType,
+      fileName: doc.file_name ?? doc.fileName,
+      fileUrl: doc.file_url ?? doc.fileUrl,
+      aiExtractedContent: doc.ai_extracted_content ?? doc.aiExtractedContent,
+      aiExtractedFields: doc.ai_extracted_fields ?? doc.aiExtractedFields ?? [],
+      aiProcessedAt: doc.ai_processed_at ?? doc.aiProcessedAt,
+      isTemplate: doc.is_template ?? doc.isTemplate ?? false,
+      createdAt: doc.created_at ?? doc.createdAt,
+    })),
   });
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery<DocumentTemplate[]>({
     queryKey: ['/api/routing-documents/templates/list'],
+    select: (data: any[]) => data.map((t: any) => ({
+      id: t.id,
+      templateName: t.template_name ?? t.templateName ?? 'Untitled',
+      templateType: t.template_type ?? t.templateType ?? 'work_instruction',
+      description: t.description,
+      learnedFromCount: t.learned_from_count ?? t.learnedFromCount ?? 0,
+      structure: t.structure,
+      sections: t.sections ?? [],
+      defaultFields: t.default_fields ?? t.defaultFields ?? [],
+      createdAt: t.created_at ?? t.createdAt,
+    })),
   });
 
   const { data: specSheets = [], isLoading: loadingSpecs } = useQuery<SpecSheet[]>({
     queryKey: ['/api/routing-documents/spec-sheets'],
+    select: (data: any[]) => data.map((s: any) => ({
+      id: s.id,
+      title: s.title,
+      partNumber: s.part_number ?? s.partNumber,
+      specifications: s.specifications,
+      isTemplate: s.is_template ?? s.isTemplate ?? false,
+      createdAt: s.created_at ?? s.createdAt,
+    })),
   });
 
   const uploadMutation = useMutation({

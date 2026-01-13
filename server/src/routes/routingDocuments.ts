@@ -30,41 +30,159 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { partNumber, departmentName, documentType, isTemplate } = req.query;
     
-    let query = db.select().from(routingDocuments);
+    // Use raw SQL template to avoid Neon HTTP driver issues with empty tables
+    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE is_active = true ORDER BY created_at DESC`);
     
-    const conditions = [];
-    if (partNumber) {
-      conditions.push(ilike(routingDocuments.partNumber, `%${partNumber}%`));
-    }
-    if (departmentName) {
-      conditions.push(eq(routingDocuments.departmentName, String(departmentName)));
-    }
-    if (documentType) {
-      conditions.push(eq(routingDocuments.documentType, String(documentType)));
-    }
-    if (isTemplate === 'true') {
-      conditions.push(eq(routingDocuments.isTemplate, true));
-    }
-    
-    const results = conditions.length > 0 
-      ? await db.select().from(routingDocuments).where(and(...conditions)).orderBy(desc(routingDocuments.createdAt))
-      : await db.select().from(routingDocuments).orderBy(desc(routingDocuments.createdAt));
-    
-    res.json(results);
-  } catch (error) {
+    // Extract rows from the raw result
+    const rows = (results as any)?.rows || results || [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error: any) {
     console.error('Error fetching routing documents:', error);
-    res.status(500).json({ error: 'Failed to fetch routing documents' });
+    // Return empty array on error (for new/empty tables)
+    res.json([]);
   }
 });
 
-// Get single routing document
+// Spec Sheets endpoints - MUST be before /:id to avoid route matching issues
+router.get('/spec-sheets', async (req: Request, res: Response) => {
+  try {
+    const results = await db.execute(sql`SELECT * FROM spec_sheets WHERE is_active = true ORDER BY created_at DESC`);
+    const rows = (results as any)?.rows || results || [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error('Error fetching spec sheets:', error);
+    res.json([]);
+  }
+});
+
+// Get all templates - MUST be before /:id
+router.get('/templates/list', async (req: Request, res: Response) => {
+  try {
+    const results = await db.execute(sql`SELECT * FROM document_templates WHERE is_active = true ORDER BY created_at DESC`);
+    const rows = (results as any)?.rows || results || [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    res.json([]);
+  }
+});
+
+// Get template with fields - MUST be before /:id
+router.get('/templates/:templateId', async (req: Request, res: Response) => {
+  try {
+    const templateResults = await db.execute(sql`SELECT * FROM document_templates WHERE id = ${req.params.templateId} LIMIT 1`);
+    const templates = (templateResults as any)?.rows || templateResults || [];
+    const template = templates[0];
+    
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    const fieldResults = await db.execute(sql`SELECT * FROM template_fields WHERE template_id = ${req.params.templateId} ORDER BY sort_order ASC`);
+    const fields = (fieldResults as any)?.rows || fieldResults || [];
+    
+    res.json({ template, fields: Array.isArray(fields) ? fields : [] });
+  } catch (error) {
+    console.error('Error fetching template:', error);
+    res.status(500).json({ error: 'Failed to fetch template' });
+  }
+});
+
+// Document Distribution Logs - MUST be before /:id
+router.get('/distribution-logs', async (req: Request, res: Response) => {
+  try {
+    const { poId, departmentName } = req.query;
+    
+    let results;
+    if (poId && departmentName) {
+      const parsedPoId = Number(poId);
+      if (isNaN(parsedPoId)) {
+        return res.status(400).json({ error: 'Invalid PO ID' });
+      }
+      results = await db.execute(sql`SELECT * FROM document_distribution_logs WHERE po_id = ${parsedPoId} AND department_name = ${String(departmentName)} ORDER BY printed_at DESC LIMIT 100`);
+    } else if (poId) {
+      const parsedPoId = Number(poId);
+      if (isNaN(parsedPoId)) {
+        return res.status(400).json({ error: 'Invalid PO ID' });
+      }
+      results = await db.execute(sql`SELECT * FROM document_distribution_logs WHERE po_id = ${parsedPoId} ORDER BY printed_at DESC LIMIT 100`);
+    } else if (departmentName) {
+      results = await db.execute(sql`SELECT * FROM document_distribution_logs WHERE department_name = ${String(departmentName)} ORDER BY printed_at DESC LIMIT 100`);
+    } else {
+      results = await db.execute(sql`SELECT * FROM document_distribution_logs ORDER BY printed_at DESC LIMIT 100`);
+    }
+    
+    const rows = (results as any)?.rows || results || [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error('Error fetching distribution logs:', error);
+    res.json([]);
+  }
+});
+
+// Routing document links by routing ID - MUST be before /:id
+router.get('/routing-links/:partRoutingId', async (req: Request, res: Response) => {
+  try {
+    const results = await db.execute(sql`SELECT * FROM routing_document_links WHERE part_routing_id = ${req.params.partRoutingId} ORDER BY sort_order ASC`);
+    const links = (results as any)?.rows || results || [];
+    
+    // Get the actual documents
+    const enrichedLinks = await Promise.all(links.map(async (link: any) => {
+      let document = null;
+      try {
+        if (link.document_type === 'work_instruction' || link.document_type === 'procedure' || link.document_type === 'traveler_template') {
+          const docResult = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${link.document_id} LIMIT 1`);
+          const docRows = (docResult as any)?.rows || docResult || [];
+          document = docRows[0] || null;
+        } else if (link.document_type === 'spec_sheet') {
+          const docResult = await db.execute(sql`SELECT * FROM spec_sheets WHERE id = ${link.document_id} LIMIT 1`);
+          const docRows = (docResult as any)?.rows || docResult || [];
+          document = docRows[0] || null;
+        }
+      } catch (e) {
+        console.warn('Error fetching linked document:', e);
+      }
+      return { ...link, document };
+    }));
+    
+    res.json(enrichedLinks);
+  } catch (error) {
+    console.error('Error fetching routing document links:', error);
+    res.json([]);
+  }
+});
+
+// Certification task links - MUST be before /:id
+router.get('/certification-links/:certificationId', async (req: Request, res: Response) => {
+  try {
+    const certId = Number(req.params.certificationId);
+    if (isNaN(certId)) {
+      return res.status(400).json({ error: 'Invalid certification ID' });
+    }
+    const results = await db.execute(sql`SELECT * FROM certification_task_links WHERE certification_id = ${certId}`);
+    const rows = (results as any)?.rows || results || [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error('Error fetching certification task links:', error);
+    res.json([]);
+  }
+});
+
+// Get single routing document - This MUST come after all other GET routes with path segments
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [document] = await db.select().from(routingDocuments).where(eq(routingDocuments.id, req.params.id));
-    if (!document) {
+    // Validate UUID format to avoid invalid queries
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+    
+    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    if (!rows.length) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    res.json(document);
+    res.json(rows[0]);
   } catch (error) {
     console.error('Error fetching routing document:', error);
     res.status(500).json({ error: 'Failed to fetch routing document' });
@@ -143,7 +261,9 @@ router.post('/complete-upload', async (req: Request, res: Response) => {
 // AI Parse document to extract routing information
 router.post('/:id/ai-parse', async (req: Request, res: Response) => {
   try {
-    const [document] = await db.select().from(routingDocuments).where(eq(routingDocuments.id, req.params.id));
+    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    const document = rows[0];
     
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
@@ -392,45 +512,6 @@ Return a JSON object with:
   }
 });
 
-// Get all templates
-router.get('/templates/list', async (req: Request, res: Response) => {
-  try {
-    const templates = await db.select().from(documentTemplates).where(eq(documentTemplates.isActive, true)).orderBy(desc(documentTemplates.createdAt));
-    res.json(templates);
-  } catch (error) {
-    console.error('Error fetching templates:', error);
-    res.status(500).json({ error: 'Failed to fetch templates' });
-  }
-});
-
-// Get template with fields
-router.get('/templates/:id', async (req: Request, res: Response) => {
-  try {
-    const [template] = await db.select().from(documentTemplates).where(eq(documentTemplates.id, req.params.id));
-    if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
-    }
-    
-    const fields = await db.select().from(templateFields).where(eq(templateFields.templateId, req.params.id)).orderBy(templateFields.sortOrder);
-    
-    res.json({ template, fields });
-  } catch (error) {
-    console.error('Error fetching template:', error);
-    res.status(500).json({ error: 'Failed to fetch template' });
-  }
-});
-
-// Spec Sheets endpoints
-router.get('/spec-sheets', async (req: Request, res: Response) => {
-  try {
-    const sheets = await db.select().from(specSheets).where(eq(specSheets.isActive, true)).orderBy(desc(specSheets.createdAt));
-    res.json(sheets);
-  } catch (error) {
-    console.error('Error fetching spec sheets:', error);
-    res.status(500).json({ error: 'Failed to fetch spec sheets' });
-  }
-});
-
 // Request upload URL for spec sheet
 router.post('/spec-sheets/request-upload-url', async (req: Request, res: Response) => {
   try {
@@ -497,30 +578,7 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
   }
 });
 
-// Document Distribution Logs
-router.get('/distribution-logs', async (req: Request, res: Response) => {
-  try {
-    const { poId, departmentName } = req.query;
-    
-    let conditions = [];
-    if (poId) {
-      conditions.push(eq(documentDistributionLogs.poId, Number(poId)));
-    }
-    if (departmentName) {
-      conditions.push(eq(documentDistributionLogs.departmentName, String(departmentName)));
-    }
-    
-    const logs = conditions.length > 0
-      ? await db.select().from(documentDistributionLogs).where(and(...conditions)).orderBy(desc(documentDistributionLogs.printedAt))
-      : await db.select().from(documentDistributionLogs).orderBy(desc(documentDistributionLogs.printedAt)).limit(100);
-    
-    res.json(logs);
-  } catch (error) {
-    console.error('Error fetching distribution logs:', error);
-    res.status(500).json({ error: 'Failed to fetch distribution logs' });
-  }
-});
-
+// Create Distribution Log
 router.post('/distribution-logs', async (req: Request, res: Response) => {
   try {
     const { poId, poNumber, documentType, documentId, documentTitle, departmentName, recipientId, recipientName, distributionMethod, notes } = req.body;

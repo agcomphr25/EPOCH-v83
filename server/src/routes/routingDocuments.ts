@@ -334,31 +334,35 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
     // Validate and get reference documents
     let referenceContent = '';
     if (referenceDocumentIds && referenceDocumentIds.length > 0) {
-      const refDocs = await db.select().from(routingDocuments).where(
-        sql`${routingDocuments.id} = ANY(${referenceDocumentIds}::uuid[])`
-      );
+      // Build a parameterized query for multiple IDs
+      const placeholders = referenceDocumentIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+      const refDocsResult = await db.execute(sql.raw(`SELECT * FROM routing_documents WHERE id IN (${placeholders})`, referenceDocumentIds));
+      const refDocs = ((refDocsResult as any)?.rows || refDocsResult || []) as any[];
       
       // Validate that all referenced documents exist
       if (refDocs.length !== referenceDocumentIds.length) {
-        const foundIds = refDocs.map(d => d.id);
+        const foundIds = refDocs.map((d: any) => d.id);
         const missingIds = referenceDocumentIds.filter((id: string) => !foundIds.includes(id));
         return res.status(400).json({ error: `Referenced documents not found: ${missingIds.join(', ')}` });
       }
       
-      referenceContent = refDocs.map(doc => {
-        return `Document: ${doc.title}\nExtracted Content: ${JSON.stringify(doc.aiExtractedContent || {})}`;
+      referenceContent = refDocs.map((doc: any) => {
+        return `Document: ${doc.title}\nExtracted Content: ${JSON.stringify(doc.ai_extracted_content || {})}`;
       }).join('\n\n---\n\n');
     }
     
     // Validate and get template if provided
     let templateContent = '';
     if (templateId) {
-      const [template] = await db.select().from(documentTemplates).where(eq(documentTemplates.id, templateId));
+      const templateResult = await db.execute(sql`SELECT * FROM document_templates WHERE id = ${templateId} LIMIT 1`);
+      const templates = ((templateResult as any)?.rows || templateResult || []) as any[];
+      const template = templates[0];
       if (!template) {
         return res.status(400).json({ error: `Template not found: ${templateId}` });
       }
-      const fields = await db.select().from(templateFields).where(eq(templateFields.templateId, templateId));
-      templateContent = `Template: ${template.templateName}\nStructure: ${JSON.stringify(template.structure)}\nSections: ${JSON.stringify(template.sections)}\nFields: ${JSON.stringify(fields)}`;
+      const fieldsResult = await db.execute(sql`SELECT * FROM template_fields WHERE template_id = ${templateId}`);
+      const fields = ((fieldsResult as any)?.rows || fieldsResult || []) as any[];
+      templateContent = `Template: ${template.template_name}\nStructure: ${JSON.stringify(template.structure)}\nSections: ${JSON.stringify(template.sections)}\nFields: ${JSON.stringify(fields)}`;
     }
     
     const systemPrompt = `You are an expert at creating manufacturing work instructions, spec sheets, and travelers. Based on the provided reference documents and template, generate a new document structure with all necessary fields.
@@ -425,10 +429,10 @@ router.post('/templates/learn', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one reference document is required' });
     }
     
-    // Get reference documents and validate all exist
-    const refDocs = await db.select().from(routingDocuments).where(
-      sql`${routingDocuments.id} = ANY(${referenceDocumentIds}::uuid[])`
-    );
+    // Get reference documents and validate all exist using raw SQL
+    const placeholders = referenceDocumentIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+    const refDocsResult = await db.execute(sql.raw(`SELECT * FROM routing_documents WHERE id IN (${placeholders})`, referenceDocumentIds));
+    const refDocs = ((refDocsResult as any)?.rows || refDocsResult || []) as any[];
     
     if (refDocs.length === 0) {
       return res.status(404).json({ error: 'No reference documents found' });
@@ -436,17 +440,17 @@ router.post('/templates/learn', async (req: Request, res: Response) => {
     
     // Validate that all referenced documents exist
     if (refDocs.length !== referenceDocumentIds.length) {
-      const foundIds = refDocs.map(d => d.id);
+      const foundIds = refDocs.map((d: any) => d.id);
       const missingIds = referenceDocumentIds.filter((id: string) => !foundIds.includes(id));
       return res.status(400).json({ error: `Referenced documents not found: ${missingIds.join(', ')}` });
     }
     
-    // Analyze patterns across documents
-    const documentAnalysis = refDocs.map(doc => ({
+    // Analyze patterns across documents - using snake_case for raw SQL result columns
+    const documentAnalysis = refDocs.map((doc: any) => ({
       title: doc.title,
-      documentType: doc.documentType,
-      extractedContent: doc.aiExtractedContent,
-      extractedFields: doc.aiExtractedFields,
+      documentType: doc.document_type,
+      extractedContent: doc.ai_extracted_content,
+      extractedFields: doc.ai_extracted_fields,
     }));
     
     const systemPrompt = `You are an expert at analyzing manufacturing documents and creating templates. Analyze the provided documents and identify common patterns, fields, and structure to create a reusable template.
@@ -503,7 +507,8 @@ Return a JSON object with:
       }
     }
     
-    const fields = await db.select().from(templateFields).where(eq(templateFields.templateId, template.id));
+    const fieldsResult = await db.execute(sql`SELECT * FROM template_fields WHERE template_id = ${template.id} ORDER BY sort_order ASC`);
+    const fields = ((fieldsResult as any)?.rows || fieldsResult || []) as any[];
     
     res.status(201).json({ template, fields, learnedContent });
   } catch (error) {
@@ -648,32 +653,6 @@ router.post('/routing-links', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/routing-links/:partRoutingId', async (req: Request, res: Response) => {
-  try {
-    const links = await db.select().from(routingDocumentLinks)
-      .where(eq(routingDocumentLinks.partRoutingId, req.params.partRoutingId))
-      .orderBy(routingDocumentLinks.sortOrder);
-    
-    // Get the actual documents
-    const enrichedLinks = await Promise.all(links.map(async (link) => {
-      let document = null;
-      if (link.documentType === 'work_instruction' || link.documentType === 'procedure' || link.documentType === 'traveler_template') {
-        const [doc] = await db.select().from(routingDocuments).where(eq(routingDocuments.id, link.documentId));
-        document = doc;
-      } else if (link.documentType === 'spec_sheet') {
-        const [doc] = await db.select().from(specSheets).where(eq(specSheets.id, link.documentId));
-        document = doc;
-      }
-      return { ...link, document };
-    }));
-    
-    res.json(enrichedLinks);
-  } catch (error) {
-    console.error('Error fetching routing document links:', error);
-    res.status(500).json({ error: 'Failed to fetch routing document links' });
-  }
-});
-
 // Certification task links
 router.post('/certification-links', async (req: Request, res: Response) => {
   try {
@@ -695,18 +674,6 @@ router.post('/certification-links', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating certification task link:', error);
     res.status(500).json({ error: 'Failed to link certification to task' });
-  }
-});
-
-router.get('/certification-links/:certificationId', async (req: Request, res: Response) => {
-  try {
-    const links = await db.select().from(certificationTaskLinks)
-      .where(eq(certificationTaskLinks.certificationId, Number(req.params.certificationId)));
-    
-    res.json(links);
-  } catch (error) {
-    console.error('Error fetching certification task links:', error);
-    res.status(500).json({ error: 'Failed to fetch certification task links' });
   }
 });
 

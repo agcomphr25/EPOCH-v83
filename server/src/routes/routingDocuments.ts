@@ -24,7 +24,7 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     // pdf-parse v2.x exports PDFParse as a class that takes options with data
     const PDFParse = pdfParseModule.PDFParse;
     const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const textResult = await parser.text();
+    const textResult = await parser.getText();
     return textResult.text || '';
   } catch (error) {
     console.error('Error parsing PDF:', error);

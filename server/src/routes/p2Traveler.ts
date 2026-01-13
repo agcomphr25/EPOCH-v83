@@ -480,7 +480,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
     };
 
     // Set completion timestamp for current department
-    if (currentDepartment === 'Layup') {
+    if (currentDepartment === 'Layup' || currentDepartment === 'Layup/Plugging') {
       updates.layupCompletedAt = new Date();
     } else if (currentDepartment === 'Assemble/Disassembly') {
       updates.assembleDisassemblyCompletedAt = new Date();

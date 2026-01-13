@@ -10277,6 +10277,7 @@ export class DatabaseStorage implements IStorage {
     // Determine when the order entered the current department
     switch (order.currentDepartment) {
       case 'Layup':
+      case 'Layup/Plugging':
         deptEntryDate = order.createdAt;
         break;
       case 'Plugging':
@@ -11962,7 +11963,7 @@ export class DatabaseStorage implements IStorage {
       };
 
       // Set department-specific completion timestamp
-      if (item.currentDepartment === 'Layup') {
+      if (item.currentDepartment === 'Layup' || item.currentDepartment === 'Layup/Plugging') {
         updateData.layupCompletedAt = new Date();
       } else if (item.currentDepartment === 'Assemble/Disassembly') {
         updateData.assembleDisassemblyCompletedAt = new Date();

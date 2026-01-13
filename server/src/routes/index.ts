@@ -5966,6 +5966,7 @@ export function registerRoutes(app: Express): Server {
           // Set completion timestamp for the department we're leaving
           switch (currentOrder.currentDepartment) {
             case 'Layup':
+            case 'Layup/Plugging':
               completionUpdates.layupCompletedAt = now;
               break;
             case 'Plugging':
@@ -6910,7 +6911,7 @@ export function registerRoutes(app: Express): Server {
           // Set completion timestamp for previous department
           if (currentDept === 'Barcode') {
             updateData.barcodeCompletedAt = currentTimestamp;
-          } else if (currentDept === 'Layup') {
+          } else if (currentDept === 'Layup' || currentDept === 'Layup/Plugging') {
             updateData.layupCompletedAt = currentTimestamp;
           } else if (currentDept === 'CNC') {
             updateData.cncCompletedAt = currentTimestamp;

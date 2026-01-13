@@ -225,6 +225,45 @@ router.post('/request-upload-url', async (req: Request, res: Response) => {
   }
 });
 
+// Extract text from file (for AI analysis)
+router.post('/extract-text', async (req: Request, res: Response) => {
+  try {
+    const { fileContent, fileName, mimeType } = req.body;
+    
+    if (!fileContent || !fileName) {
+      return res.status(400).json({ error: 'File content and fileName are required' });
+    }
+    
+    // Decode base64 file content
+    const fileBuffer = Buffer.from(fileContent, 'base64');
+    let extractedText = '';
+    
+    // Extract text based on file type
+    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      try {
+        const pdfParser = (pdfParse as any).default || pdfParse;
+        const pdfData = await pdfParser(fileBuffer);
+        extractedText = pdfData.text || '';
+        console.log(`Extracted ${extractedText.length} characters from PDF: ${fileName}`);
+      } catch (pdfError) {
+        console.error('Error parsing PDF:', pdfError);
+        extractedText = '';
+      }
+    } else if (mimeType?.startsWith('text/') || fileName.match(/\.(txt|md|csv|json|xml)$/i)) {
+      extractedText = fileBuffer.toString('utf-8');
+    }
+    
+    res.json({
+      extractedText,
+      extractedLength: extractedText.length,
+      fileName,
+    });
+  } catch (error) {
+    console.error('Error extracting text:', error);
+    res.status(500).json({ error: 'Failed to extract text from file' });
+  }
+});
+
 // Create document without file (metadata only)
 router.post('/create', async (req: Request, res: Response) => {
   try {

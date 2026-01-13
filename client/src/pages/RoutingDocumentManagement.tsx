@@ -86,6 +86,8 @@ export default function RoutingDocumentManagement() {
   });
   
   const [parseContent, setParseContent] = useState('');
+  const [parseFile, setParseFile] = useState<File | null>(null);
+  const [isExtractingText, setIsExtractingText] = useState(false);
   const [generateForm, setGenerateForm] = useState({
     partNumber: '',
     partName: '',
@@ -276,6 +278,40 @@ export default function RoutingDocumentManagement() {
       documentType: uploadForm.documentType,
       isTemplate: uploadForm.isTemplate,
     });
+  };
+
+  const handleParseFileSelect = async (file: File) => {
+    setParseFile(file);
+    setIsExtractingText(true);
+    
+    try {
+      // Convert file to base64 and send to server for text extraction
+      const fileBuffer = await file.arrayBuffer();
+      const base64Content = btoa(
+        new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      // Call a simple extraction endpoint
+      const response = await apiRequest('/api/routing-documents/extract-text', {
+        method: 'POST',
+        body: {
+          fileContent: base64Content,
+          fileName: file.name,
+          mimeType: file.type,
+        },
+      });
+      
+      if (response.extractedText) {
+        setParseContent(response.extractedText);
+        toast({ title: 'Text Extracted', description: `Extracted ${response.extractedLength} characters from ${file.name}` });
+      } else {
+        toast({ title: 'No Text Found', description: 'Could not extract text from this file', variant: 'destructive' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Extraction Failed', description: error.message || 'Failed to extract text from file', variant: 'destructive' });
+    } finally {
+      setIsExtractingText(false);
+    }
   };
 
   const handleParse = () => {
@@ -680,12 +716,18 @@ export default function RoutingDocumentManagement() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showParseDialog} onOpenChange={setShowParseDialog}>
+      <Dialog open={showParseDialog} onOpenChange={(open) => {
+        setShowParseDialog(open);
+        if (!open) {
+          setParseContent('');
+          setParseFile(null);
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>AI Document Analysis</DialogTitle>
             <DialogDescription>
-              Paste the document content below for AI to extract routing steps, data fields, and requirements
+              Upload a PDF or paste document content for AI to extract routing steps, data fields, and requirements
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -695,19 +737,62 @@ export default function RoutingDocumentManagement() {
                 <div className="text-sm text-muted-foreground">{selectedDocument.documentType.replace('_', ' ')}</div>
               </div>
             )}
+            <div className="p-4 border-2 border-dashed rounded-lg text-center">
+              <input
+                type="file"
+                accept=".pdf,.txt,.md,.csv"
+                className="hidden"
+                id="parse-file-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleParseFileSelect(file);
+                }}
+              />
+              <label htmlFor="parse-file-input" className="cursor-pointer">
+                {isExtractingText ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground">Extracting text from PDF...</span>
+                  </div>
+                ) : parseFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <FileText className="h-8 w-8 text-green-600" />
+                    <span className="text-sm font-medium">{parseFile.name}</span>
+                    <span className="text-xs text-muted-foreground">Text extracted - click to select different file</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-sm font-medium">Click to upload PDF or text file</span>
+                    <span className="text-xs text-muted-foreground">Text will be automatically extracted</span>
+                  </div>
+                )}
+              </label>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or paste content</span>
+              </div>
+            </div>
             <div>
               <Label>Document Content</Label>
               <Textarea
                 value={parseContent}
                 onChange={(e) => setParseContent(e.target.value)}
                 placeholder="Paste the text content from your document here..."
-                className="min-h-[300px]"
+                className="min-h-[200px]"
               />
+              {parseContent && (
+                <p className="text-xs text-muted-foreground mt-1">{parseContent.length} characters</p>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowParseDialog(false)}>Cancel</Button>
-            <Button onClick={handleParse} disabled={parseMutation.isPending}>
+            <Button onClick={handleParse} disabled={parseMutation.isPending || !parseContent.trim()}>
               {parseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Brain className="h-4 w-4 mr-2" />}
               Analyze with AI
             </Button>

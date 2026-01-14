@@ -10924,6 +10924,35 @@ export const insertDocumentDistributionLogSchema = createInsertSchema(documentDi
     distributionMethod: z.enum(['print', 'email', 'digital']).default('print'),
   });
 
+// Historical Monthly Data - for tracking legacy data from previous systems
+export const historicalMonthlyData = pgTable('historical_monthly_data', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  dataType: text('data_type').notNull(),
+  category: text('category').notNull(),
+  amount: numeric('amount', { precision: 15, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniqueEntry: unique().on(table.year, table.month, table.dataType, table.category),
+}));
+
+export const insertHistoricalMonthlyDataSchema = createInsertSchema(historicalMonthlyData)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    year: z.number().int().min(2020).max(2030),
+    month: z.number().int().min(1).max(12),
+    dataType: z.enum(['credit_card', 'revenue']),
+    category: z.enum(['online', 'phone', 'aerospace', 'combined']),
+    amount: z.string().or(z.number()),
+  });
+
+export type HistoricalMonthlyData = typeof historicalMonthlyData.$inferSelect;
+export type InsertHistoricalMonthlyData = z.infer<typeof insertHistoricalMonthlyDataSchema>;
+
 // Types
 export type RoutingDocument = typeof routingDocuments.$inferSelect;
 export type InsertRoutingDocument = z.infer<typeof insertRoutingDocumentSchema>;

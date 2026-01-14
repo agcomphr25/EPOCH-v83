@@ -114,6 +114,7 @@ import { registerObjectStorageRoutes } from '../../replit_integrations/object_st
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
+import historicalDataRoutes from './historicalData';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -154,6 +155,9 @@ export function registerRoutes(app: Express): Server {
 
   // Labor summary routes (IC-F1) - Derived insights from punch events
   app.use('/api/labor', laborRoutes);
+
+  // Historical Data routes - for tracking legacy system data
+  app.use('/api/historical-data', historicalDataRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);

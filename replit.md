@@ -33,7 +33,7 @@ The application is a full-stack TypeScript monorepo, emphasizing type safety, da
 - **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, demand-filtered BOM assignment, and fabric inventory with conformance document support (external URLs or App Storage uploads).
 - **Barcode Strategy**: CODE128 for serialized items, CODE39 for regular orders, with an automatic helper function.
 - **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable workflows, barcode scanning, fail-closed traceability gating, a Traveler Viewer, and Electronic Signature System.
-- **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, and Refund Request/Queue with Accept.Blue integration.
+- **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module for legacy financial tracking, and Refund Request/Queue with Accept.Blue integration.
 - **Help Center**: FAQ-based system accessible via navbar, covering key workflows.
 - **PDF Management**: Centralized PDF configuration and a flexible Template Library System.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.

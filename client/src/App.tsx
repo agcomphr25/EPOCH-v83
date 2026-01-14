@@ -157,6 +157,7 @@ import P2QuoteForm from './pages/P2QuoteForm';
 import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import PaymentAnalytics from './pages/PaymentAnalytics';
+import HistoricalDataEntry from './pages/HistoricalDataEntry';
 import ShippedOrderDiscountsPage from './pages/ShippedOrderDiscountsPage';
 import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
 import ScrapReportPage from './pages/ScrapReportPage';
@@ -637,6 +638,10 @@ function App() {
                   <Route
                     path="/payment-analytics"
                     component={PaymentAnalytics}
+                  />
+                  <Route
+                    path="/historical-data"
+                    component={HistoricalDataEntry}
                   />
                   <Route
                     path="/finance/shipped-discounts"

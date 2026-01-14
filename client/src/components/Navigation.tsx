@@ -65,6 +65,7 @@ import {
   Filter,
   Layers,
   Ticket,
+  Database,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -731,6 +732,12 @@ export default function Navigation() {
       label: 'Payment Analytics',
       icon: TrendingUp,
       description: 'Track payments by type (Phone/Online) with monthly breakdowns',
+    },
+    {
+      path: '/historical-data',
+      label: 'Historical Data Entry',
+      icon: Database,
+      description: 'Enter legacy financial data for comparison with current analytics',
     },
     {
       path: '/finance/shipped-discounts',

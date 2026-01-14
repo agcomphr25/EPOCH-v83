@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
-import { useRoute } from 'wouter';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import SignatureCanvas from 'react-signature-canvas';
 import { Button } from '@/components/ui/button';
@@ -55,10 +54,8 @@ interface FollowupOrder {
 }
 
 export default function SignOrderPage() {
-  // Accept both /sign-order/:token and /sign-order?token=xxxx
-  const searchToken = new URLSearchParams(window.location.search).get('token');
-  const [, params] = useRoute('/sign-order/:token');
-  const token = params?.token || searchToken;
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
   const { toast } = useToast();
   const signatureRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -115,6 +112,21 @@ export default function SignOrderPage() {
   const handleSignatureEnd = () => {
     setSignatureEmpty(signatureRef.current?.isEmpty() || false);
   };
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600">Invalid Link</CardTitle>
+            <CardDescription>
+              No token provided. Please use the link from your email to sign your order.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

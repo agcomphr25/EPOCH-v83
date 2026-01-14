@@ -9813,7 +9813,8 @@ export const tickets = pgTable('tickets', {
   description: text('description'),
   customerId: integer('customer_id'), // Nullable - tickets may not have a customer
   ownerUserId: integer('owner_user_id').notNull(), // Original creator of the ticket
-  assignedUserId: integer('assigned_user_id'), // Person currently assigned to work on the ticket
+  assignedUserId: integer('assigned_user_id'), // Legacy: single person assigned (kept for backwards compatibility)
+  assignedUserIds: jsonb('assigned_user_ids').$type<number[]>().default(sql`'[]'::jsonb`), // Multiple assignees
   slaDueAt: timestamp('sla_due_at'),
   slaBreached: boolean('sla_breached').default(false),
   lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented

@@ -113,7 +113,7 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    const { status, priority, ownerUserId, assignedUserId, ...rest } = req.body;
+    const { status, priority, ownerUserId, assignedUserId, assignedUserIds, ...rest } = req.body;
 
     if (status && status !== existingTicket.status) {
       await storage.createTicketActivity({
@@ -239,6 +239,7 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       priority,
       ownerUserId,
       assignedUserId,
+      assignedUserIds,
       ...rest,
     });
 

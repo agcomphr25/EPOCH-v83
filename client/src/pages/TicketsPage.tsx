@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
@@ -22,7 +24,9 @@ import {
   Link2,
   X,
   Filter,
-  Search
+  Search,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -39,6 +43,7 @@ interface Ticket {
   customerId: number | null;
   ownerUserId: number;
   assignedUserId: number | null;
+  assignedUserIds: number[];
   slaDueAt: string | null;
   slaBreached: boolean;
   lastActivityAt: string | null;
@@ -129,7 +134,7 @@ export default function TicketsPage() {
     ticketType: 'customer' as 'customer' | 'internal',
     category: '',
     priority: 'normal' as 'low' | 'normal' | 'high',
-    assignedUserId: null as number | null,
+    assignedUserIds: [] as number[],
   });
   const [newTicketOrderIds, setNewTicketOrderIds] = useState<string[]>([]);
   const [newTicketOrderInput, setNewTicketOrderInput] = useState('');
@@ -208,7 +213,7 @@ export default function TicketsPage() {
         ticketType: 'customer',
         category: '',
         priority: 'normal',
-        assignedUserId: null,
+        assignedUserIds: [],
       });
       setNewTicketOrderIds([]);
       setNewTicketOrderInput('');
@@ -408,22 +413,82 @@ export default function TicketsPage() {
               </div>
               <div className="grid gap-2">
                 <Label>Assigned To</Label>
-                <Select
-                  value={newTicket.assignedUserId?.toString() || 'unassigned'}
-                  onValueChange={(v) => setNewTicket({ ...newTicket, assignedUserId: v === 'unassigned' ? null : parseInt(v) })}
-                >
-                  <SelectTrigger data-testid="select-ticket-assigned">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {users.map(u => (
-                      <SelectItem key={u.id} value={u.id.toString()}>
-                        {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      data-testid="select-ticket-assigned"
+                    >
+                      {newTicket.assignedUserIds.length === 0 
+                        ? 'Select assignees...' 
+                        : `${newTicket.assignedUserIds.length} selected`}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0" align="start">
+                    <ScrollArea className="h-64">
+                      <div className="p-2 space-y-1">
+                        {users.map(u => {
+                          const isSelected = newTicket.assignedUserIds.includes(u.id);
+                          const displayName = u.firstName && u.lastName 
+                            ? `${u.firstName} ${u.lastName}` 
+                            : u.username;
+                          return (
+                            <div 
+                              key={u.id} 
+                              className={cn(
+                                "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800",
+                                isSelected && "bg-blue-50 dark:bg-blue-900/20"
+                              )}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setNewTicket({
+                                    ...newTicket,
+                                    assignedUserIds: newTicket.assignedUserIds.filter(id => id !== u.id)
+                                  });
+                                } else {
+                                  setNewTicket({
+                                    ...newTicket,
+                                    assignedUserIds: [...newTicket.assignedUserIds, u.id]
+                                  });
+                                }
+                              }}
+                            >
+                              <Checkbox checked={isSelected} />
+                              <span className="text-sm">{displayName}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+                {newTicket.assignedUserIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {newTicket.assignedUserIds.map(userId => {
+                      const user = users.find(u => u.id === userId);
+                      const displayName = user?.firstName && user?.lastName 
+                        ? `${user.firstName} ${user.lastName}` 
+                        : user?.username || 'Unknown';
+                      return (
+                        <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
+                          {displayName}
+                          <button
+                            type="button"
+                            onClick={() => setNewTicket({
+                              ...newTicket,
+                              assignedUserIds: newTicket.assignedUserIds.filter(id => id !== userId)
+                            })}
+                            className="ml-1 hover:text-red-500"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label className="text-xs text-gray-500 flex items-center gap-2">
@@ -719,25 +784,82 @@ export default function TicketsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-gray-500">Assigned To</Label>
-                    <Select
-                      value={selectedTicket.assignedUserId ? String(selectedTicket.assignedUserId) : 'unassigned'}
-                      onValueChange={(v) => updateTicketMutation.mutate({ 
-                        id: selectedTicket.id, 
-                        data: { assignedUserId: v === 'unassigned' ? null : parseInt(v) } 
-                      })}
-                    >
-                      <SelectTrigger className="mt-1" data-testid="select-update-assignee">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {users.map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between mt-1 h-9 text-sm"
+                          data-testid="select-update-assignee"
+                        >
+                          {(selectedTicket.assignedUserIds?.length || 0) === 0 
+                            ? 'Unassigned' 
+                            : `${selectedTicket.assignedUserIds?.length} assigned`}
+                          <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-0" align="start">
+                        <ScrollArea className="h-64">
+                          <div className="p-2 space-y-1">
+                            {users.map(u => {
+                              const currentIds = selectedTicket.assignedUserIds || [];
+                              const isSelected = currentIds.includes(u.id);
+                              const displayName = u.firstName && u.lastName 
+                                ? `${u.firstName} ${u.lastName}` 
+                                : u.username;
+                              return (
+                                <div 
+                                  key={u.id} 
+                                  className={cn(
+                                    "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800",
+                                    isSelected && "bg-blue-50 dark:bg-blue-900/20"
+                                  )}
+                                  onClick={() => {
+                                    const newIds = isSelected 
+                                      ? currentIds.filter(id => id !== u.id)
+                                      : [...currentIds, u.id];
+                                    updateTicketMutation.mutate({ 
+                                      id: selectedTicket.id, 
+                                      data: { assignedUserIds: newIds } 
+                                    });
+                                  }}
+                                >
+                                  <Checkbox checked={isSelected} />
+                                  <span className="text-sm">{displayName}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </PopoverContent>
+                    </Popover>
+                    {(selectedTicket.assignedUserIds?.length || 0) > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedTicket.assignedUserIds?.map(userId => {
+                          const user = users.find(u => u.id === userId);
+                          const displayName = user?.firstName && user?.lastName 
+                            ? `${user.firstName} ${user.lastName}` 
+                            : user?.username || 'Unknown';
+                          return (
+                            <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
+                              {displayName}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newIds = (selectedTicket.assignedUserIds || []).filter(id => id !== userId);
+                                  updateTicketMutation.mutate({ 
+                                    id: selectedTicket.id, 
+                                    data: { assignedUserIds: newIds } 
+                                  });
+                                }}
+                                className="ml-1 hover:text-red-500"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -7549,6 +7549,7 @@ export function registerRoutes(app: Express): Server {
       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
       
       // Query orders with features and model info for the specified month
+      // Revenue is recognized when stock is fulfilled/shipped, so filter by shipped_date
       const query = `
         SELECT 
           ao.order_id,
@@ -7557,12 +7558,13 @@ export function registerRoutes(app: Express): Server {
           ao.calculated_total,
           ao.price_override,
           ao.shipping,
+          ao.shipped_date,
           sm.price as stock_model_price,
           sm.name as stock_model_name
         FROM all_orders ao
         LEFT JOIN stock_models sm ON ao.model_id = sm.id
-        WHERE ao.order_date >= $1 
-          AND ao.order_date <= $2
+        WHERE ao.shipped_date >= $1 
+          AND ao.shipped_date <= $2
           AND ao.status NOT IN ('CANCELLED', 'SCRAPPED')
       `;
       

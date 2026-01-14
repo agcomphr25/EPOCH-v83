@@ -84,12 +84,74 @@ export function createSignatureLink(token: string): string {
 }
 
 /**
+ * SIGNATURE LINK CONTRACT: Get and validate APP_ENV
+ * FAILS HARD if APP_ENV is not set - this is required for environment safety
+ */
+export function getRequiredAppEnv(): 'prod' | 'dev' {
+  const appEnv = process.env.APP_ENV;
+  if (!appEnv) {
+    console.error('🚨 [FATAL] APP_ENV environment variable is not set. This is required for signature link safety.');
+    throw new Error('APP_ENV environment variable is required but not set');
+  }
+  if (appEnv !== 'prod' && appEnv !== 'dev') {
+    console.error(`🚨 [FATAL] APP_ENV must be 'prod' or 'dev', got: ${appEnv}`);
+    throw new Error(`APP_ENV must be 'prod' or 'dev', got: ${appEnv}`);
+  }
+  return appEnv;
+}
+
+/**
  * Get current environment (prod or dev) for cross-environment safety
+ * Uses APP_ENV strictly, falls back to NODE_ENV only if APP_ENV not set
  */
 export function getCurrentEnvironment(): 'prod' | 'dev' {
-  return process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production' 
-    ? 'prod' 
-    : 'dev';
+  // Try APP_ENV first (strict mode)
+  const appEnv = process.env.APP_ENV;
+  if (appEnv === 'prod' || appEnv === 'dev') {
+    return appEnv;
+  }
+  // Fallback to NODE_ENV for backwards compatibility
+  return process.env.NODE_ENV === 'production' ? 'prod' : 'dev';
+}
+
+/**
+ * SIGNATURE LINK CONTRACT: Environment guard for signature emails
+ * BLOCKS email send if order environment doesn't match current APP_ENV
+ * Returns null if safe to send, or error object if blocked
+ */
+export interface EnvironmentGuardResult {
+  blocked: true;
+  orderId: string;
+  signatureToken: string;
+  orderEnvironment: string;
+  currentEnvironment: string;
+  recipient: string;
+  reason: string;
+}
+
+export function checkEnvironmentGuard(params: {
+  orderId: string;
+  signatureToken: string;
+  orderEnvironment: string | null | undefined;
+  recipient: string;
+}): EnvironmentGuardResult | null {
+  const currentEnv = getCurrentEnvironment();
+  const orderEnv = params.orderEnvironment || 'dev'; // Default to dev for legacy records
+  
+  if (orderEnv !== currentEnv) {
+    const result: EnvironmentGuardResult = {
+      blocked: true,
+      orderId: params.orderId,
+      signatureToken: params.signatureToken,
+      orderEnvironment: orderEnv,
+      currentEnvironment: currentEnv,
+      recipient: params.recipient,
+      reason: `Order was created in ${orderEnv} but server is running in ${currentEnv}. Blocking to prevent broken links.`,
+    };
+    console.error(`🚨 [CROSS-ENV BLOCK] ${result.reason} Order: ${result.orderId}, Token: ${result.signatureToken.substring(0, 8)}..., Recipient: ${result.recipient}`);
+    return result;
+  }
+  return null; // Safe to send
 }
 
 /**
@@ -102,6 +164,7 @@ export interface SignatureLinkForensicLog {
   environment: 'prod' | 'dev';
   fullUrl: string;
   context: 'initial' | 'resend' | 'reminder';
+  recipient: string;
   timestamp: Date;
 }
 
@@ -112,7 +175,7 @@ export function logSignatureEmailSend(data: Omit<SignatureLinkForensicLog, 'time
     fullUrl,
     timestamp: new Date(),
   };
-  console.log(`📧 [SIGNATURE LINK FORENSICS] Order: ${log.orderId} | Token: ${log.signatureToken.substring(0, 8)}... | Env: ${log.environment} | Context: ${log.context} | URL: ${log.fullUrl}`);
+  console.log(`📧 [SIGNATURE LINK FORENSICS] Order: ${log.orderId} | Token: ${log.signatureToken.substring(0, 8)}... | Env: ${log.environment} | Context: ${log.context} | Recipient: ${log.recipient} | URL: ${log.fullUrl}`);
   return log;
 }
 

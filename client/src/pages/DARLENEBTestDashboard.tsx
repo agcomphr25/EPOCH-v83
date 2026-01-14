@@ -27,6 +27,7 @@ import {
   Mail,
   Moon,
   Sun,
+  MessageSquare,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -296,6 +297,20 @@ export default function DARLENEBTestDashboard() {
                 </h3>
                 <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Complete training courses
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/tickets">
+            <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-pink-200 ${isDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
+              <CardContent className="p-4 text-center">
+                <MessageSquare className="w-8 h-8 text-pink-600 mx-auto mb-3" />
+                <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  Tickets
+                </h3>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Support tickets
                 </p>
               </CardContent>
             </Card>

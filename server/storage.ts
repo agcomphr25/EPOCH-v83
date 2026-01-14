@@ -14973,19 +14973,19 @@ export class DatabaseStorage implements IStorage {
   async getMetalAccessoriesDemands(): Promise<any[]> {
     const items = await this.getAllMetalAccessories();
 
-    const ordersInProgress = await db
+    const ordersFinalized = await db
       .select()
       .from(allOrders)
       .where(
         and(
-          eq(allOrders.status, 'IN_PROGRESS'),
+          eq(allOrders.status, 'FINALIZED'),
           eq(allOrders.isCancelled, false)
         )
       );
 
     console.log(
-      '🔍 Metal Accessories Demands - Total IN_PROGRESS orders:',
-      ordersInProgress.length
+      '🔍 Metal Accessories Demands - Total FINALIZED orders:',
+      ordersFinalized.length
     );
 
     const demands = items.map((item) => {
@@ -14996,7 +14996,7 @@ export class DatabaseStorage implements IStorage {
       // Normalize item name for comparison (remove hyphens/underscores, lowercase)
       const normalizedItemName = item.name.toLowerCase().replace(/[-_]/g, '');
 
-      ordersInProgress.forEach((order) => {
+      ordersFinalized.forEach((order) => {
         const features = order.features as any;
         const featureQuantities = order.featureQuantities as any;
 

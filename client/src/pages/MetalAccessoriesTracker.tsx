@@ -266,7 +266,7 @@ export default function MetalAccessoriesTracker() {
             <CardHeader>
               <CardTitle>Production Demand (Next 4 Weeks)</CardTitle>
               <CardDescription>
-                Automatically calculated from current IN_PROGRESS orders only
+                Automatically calculated from FINALIZED orders (before production starts)
               </CardDescription>
             </CardHeader>
             <CardContent>

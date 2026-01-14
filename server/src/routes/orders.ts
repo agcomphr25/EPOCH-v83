@@ -23,7 +23,6 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
-import { createMagicLink } from '../../utils/magicLink';
 import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
 
 const router = Router();
@@ -716,22 +715,36 @@ router.post('/finalized', async (req: Request, res: Response) => {
           shipping: order.shipping,
         };
         
-        // Create followup order record
+        // SIGNATURE LINK CONTRACT: Write environment explicitly on create (not DB defaults)
+        const { getCurrentEnvironment, createSignatureLink, logSignatureEmailSend } = await import('../../utils/magicLink');
+        const orderEnvironment = getCurrentEnvironment();
+        
+        // Create followup order record with explicit environment
         const followupOrder = await storage.createFollowupOrder({
           orderId: order.orderId,
           customerId: order.customerId || '',
           customerEmail: customer.email,
           signatureToken,
+          environment: orderEnvironment, // Explicit environment for cross-environment safety
           pdfGenerated: true,
           pdfPath,
           pdfGeneratedAt: new Date(),
           orderSummary,
         });
         
-        console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email via unified function...`);
+        console.log(`✅ Follow-up order created for ${order.orderId} in ${orderEnvironment} environment, sending signature email via unified function...`);
         
-        // Generate signature link
-        const signatureLink = createMagicLink(signatureToken);
+        // SIGNATURE LINK CONTRACT: Generate signature link using canonical function
+        const signatureLink = createSignatureLink(signatureToken);
+        
+        // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
+        logSignatureEmailSend({
+          orderId: order.orderId,
+          signatureToken,
+          environment: orderEnvironment,
+          context: 'initial',
+          recipient: customer.email,
+        });
         
         // Send email via unified notification function with mandatory outcome tracking
         // forceResend=false for automatic order creation (respects deduplication)

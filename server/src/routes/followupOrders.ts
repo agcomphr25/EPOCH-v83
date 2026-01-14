@@ -9,7 +9,7 @@ import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder'
 import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
-import { createMagicLink } from '../../utils/magicLink';
+import { createSignatureLink } from '../../utils/magicLink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -353,8 +353,8 @@ router.post('/', async (req, res) => {
     // Generate unique signature token
     const signatureToken = nanoid(32);
 
-    // Generate signature link using unified URL resolution
-    const signatureLink = createMagicLink(signatureToken);
+    // SIGNATURE LINK CONTRACT: Generate signature link using canonical function
+    const signatureLink = createSignatureLink(signatureToken);
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
@@ -502,16 +502,30 @@ router.post('/', async (req, res) => {
       } : undefined,
     };
 
-    // Create followup order record
+    // SIGNATURE LINK CONTRACT: Write environment explicitly on create (not DB defaults)
+    const { getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
+    const orderEnvironment = getCurrentEnvironment();
+    
+    // Create followup order record with explicit environment
     const followupOrder = await storage.createFollowupOrder({
       orderId: order.orderId,
       customerId: order.customerId || '',
       customerEmail: customer.email,
       signatureToken,
+      environment: orderEnvironment, // Explicit environment for cross-environment safety
       pdfGenerated: true,
       pdfPath,
       pdfGeneratedAt: new Date(),
       orderSummary,
+    });
+    
+    // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
+    logSignatureEmailSend({
+      orderId: order.orderId,
+      signatureToken,
+      environment: orderEnvironment,
+      context: 'initial',
+      recipient: customer.email,
     });
 
     // Send email via unified notification function (with deduplication)
@@ -1347,6 +1361,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       signatureToken: followupOrder.signatureToken || '',
       environment: currentEnv,
       context: 'resend',
+      recipient: customer.email,
     });
 
     // Extract miscellaneous items from features object

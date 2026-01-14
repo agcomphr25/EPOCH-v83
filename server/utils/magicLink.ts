@@ -64,9 +64,56 @@ export function getMagicLinkBaseUrl(): string {
 
 /**
  * Create a magic link URL for signature/verification
+ * @deprecated Use createSignatureLink() instead for clarity
  */
 export function createMagicLink(token: string): string {
+  return createSignatureLink(token);
+}
+
+/**
+ * SIGNATURE LINK CONTRACT: Single canonical function for generating signature URLs
+ * This is the ONLY way signature URLs should be generated across the codebase.
+ * 
+ * Format: {APP_BASE_URL}/sign-order?token={signature_token}
+ * 
+ * @param token - The immutable signature token from followup_orders.signature_token
+ * @returns Full signature URL
+ */
+export function createSignatureLink(token: string): string {
   return `${getAppBaseUrl()}/sign-order?token=${token}`;
+}
+
+/**
+ * Get current environment (prod or dev) for cross-environment safety
+ */
+export function getCurrentEnvironment(): 'prod' | 'dev' {
+  return process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production' 
+    ? 'prod' 
+    : 'dev';
+}
+
+/**
+ * SIGNATURE LINK CONTRACT: Forensic logging for signature email sends
+ * Must be called every time a signature email is sent
+ */
+export interface SignatureLinkForensicLog {
+  orderId: string;
+  signatureToken: string;
+  environment: 'prod' | 'dev';
+  fullUrl: string;
+  context: 'initial' | 'resend' | 'reminder';
+  timestamp: Date;
+}
+
+export function logSignatureEmailSend(data: Omit<SignatureLinkForensicLog, 'timestamp' | 'fullUrl'>): SignatureLinkForensicLog {
+  const fullUrl = createSignatureLink(data.signatureToken);
+  const log: SignatureLinkForensicLog = {
+    ...data,
+    fullUrl,
+    timestamp: new Date(),
+  };
+  console.log(`📧 [SIGNATURE LINK FORENSICS] Order: ${log.orderId} | Token: ${log.signatureToken.substring(0, 8)}... | Env: ${log.environment} | Context: ${log.context} | URL: ${log.fullUrl}`);
+  return log;
 }
 
 /**

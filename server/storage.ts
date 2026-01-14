@@ -14175,8 +14175,9 @@ export class DatabaseStorage implements IStorage {
       const signatureToken = nanoid(32);
 
       // Generate signature link using unified URL resolution
-      const { createMagicLink } = await import('./utils/magicLink');
-      const signatureLink = createMagicLink(signatureToken);
+      const { createSignatureLink, getCurrentEnvironment } = await import('./utils/magicLink');
+      const signatureLink = createSignatureLink(signatureToken);
+      const environment = getCurrentEnvironment();
 
       // Get customer address
       const addresses = await this.getCustomerAddresses(order.customerId || '');
@@ -14278,12 +14279,13 @@ export class DatabaseStorage implements IStorage {
       // Generate PDF
       const pdfResult = await generateSalesOrderPDF(orderData);
       
-      // Create followup order record
+      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token and environment
       const followupOrder = await this.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
         signatureToken,
+        environment, // Store environment for cross-environment safety
         pdfGenerated: true,
         pdfPath: pdfResult.filePath,
         orderSummary: orderData as any,

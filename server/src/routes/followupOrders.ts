@@ -1222,52 +1222,49 @@ router.post('/:orderId/resend-email', async (req, res) => {
       });
     }
 
+    // SIGNATURE LINK CONTRACT: Get environment and check for cross-environment safety
+    const { createSignatureLink, getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
+    const currentEnv = getCurrentEnvironment();
+    
     // Get or create the follow-up order
     let followupOrder = await storage.getFollowupOrderByOrderId(orderId);
     
-    // Always generate a FRESH signature token when resending to ensure the link works
-    // Use nanoid(32) to match the original token format used in Create Order flow
-    const newSignatureToken = nanoid(32);
-    
     if (!followupOrder) {
-      console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically`);
+      // SIGNATURE LINK CONTRACT: Token is ONLY created here when no followup order exists
+      console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically with immutable token`);
       
-      // Create followup order entry with new token
+      const signatureToken = nanoid(32);
+      
+      // Create followup order entry with immutable token and environment
       followupOrder = await storage.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
-        signatureToken: newSignatureToken,
+        signatureToken,
+        environment: currentEnv, // Store environment for cross-environment safety
         pdfGenerated: false, // Will be generated below
         emailSent: false,
       });
       
-      console.log(`✅ Created followup_order for ${orderId} with fresh token ${newSignatureToken.substring(0, 8)}...`);
+      console.log(`✅ Created followup_order for ${orderId} with immutable token ${signatureToken.substring(0, 8)}... in ${currentEnv} environment`);
     } else {
-      // Update existing followup order with fresh token
-      console.log(`🔄 Updating followup_order for ${orderId} with fresh signature token`);
-      
-      const updateData: any = {
-        signatureToken: newSignatureToken,
-      };
-
-      // ONLY reset signature state if the order is NOT already signed
-      // This preserves signature data for already-signed orders
-      if (!followupOrder.signatureSigned) {
-        updateData.signatureData = null;
-        updateData.signedAt = null;
-        updateData.signedPdfPath = null;
-      } else {
-        console.log(`📋 Order ${orderId} already signed - preserving signature data`);
+      // SIGNATURE LINK CONTRACT: Token immutability - NEVER regenerate tokens
+      // Check for cross-environment safety
+      const orderEnv = (followupOrder as any).environment || 'dev';
+      if (orderEnv !== currentEnv) {
+        console.error(`🚨 [CROSS-ENV BLOCK] Order ${orderId} was created in ${orderEnv} but current environment is ${currentEnv}. Blocking email to prevent broken links.`);
+        return res.status(400).json({
+          error: `Cannot resend email: Order was created in ${orderEnv} environment but you are currently in ${currentEnv}. This would result in a broken signature link.`,
+          orderEnvironment: orderEnv,
+          currentEnvironment: currentEnv,
+        });
       }
-
-      // NEVER reset signatureSigned once true
-      followupOrder = await storage.updateFollowupOrder(
-        followupOrder.id,
-        updateData
-      );
       
-      console.log(`✅ Updated followup_order with fresh token ${newSignatureToken.substring(0, 8)}...`);
+      console.log(`📋 Using existing immutable token for ${orderId} (token: ${followupOrder.signatureToken?.substring(0, 8)}...)`);
+      
+      if (followupOrder.signatureSigned) {
+        console.log(`📋 Order ${orderId} already signed at ${followupOrder.signedAt} - signature data preserved`);
+      }
     }
 
     // Get customer address
@@ -1341,8 +1338,16 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
     }
 
-    // Generate signature link using the fresh token with unified URL resolution
-    const signatureLink = createMagicLink(followupOrder.signatureToken || '');
+    // SIGNATURE LINK CONTRACT: Generate signature link using immutable token
+    const signatureLink = createSignatureLink(followupOrder.signatureToken || '');
+    
+    // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
+    logSignatureEmailSend({
+      orderId: orderId,
+      signatureToken: followupOrder.signatureToken || '',
+      environment: currentEnv,
+      context: 'resend',
+    });
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];

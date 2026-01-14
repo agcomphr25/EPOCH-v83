@@ -9,6 +9,17 @@ const router = Router();
 
 const CSR_ADMIN_ROLES = ['ADMIN', 'OWNER', 'CSR'];
 
+const updateTicketSchema = z.object({
+  status: z.enum(['new', 'in_progress', 'waiting_on_customer', 'waiting_on_production', 'resolved', 'closed']).optional(),
+  priority: z.enum(['low', 'normal', 'high']).optional(),
+  ownerUserId: z.number().optional(),
+  assignedUserId: z.number().nullable().optional(),
+  assignedUserIds: z.array(z.number()).optional(),
+  title: z.string().optional(),
+  description: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+});
+
 function hasAccess(user: any): boolean {
   return user && CSR_ADMIN_ROLES.includes(user.role);
 }
@@ -113,7 +124,8 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    const { status, priority, ownerUserId, assignedUserId, assignedUserIds, ...rest } = req.body;
+    const validatedData = updateTicketSchema.parse(req.body);
+    const { status, priority, ownerUserId, assignedUserId, assignedUserIds } = validatedData;
 
     if (status && status !== existingTicket.status) {
       await storage.createTicketActivity({
@@ -234,17 +246,13 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       });
     }
 
-    const ticket = await storage.updateTicket(req.params.id, {
-      status,
-      priority,
-      ownerUserId,
-      assignedUserId,
-      assignedUserIds,
-      ...rest,
-    });
+    const ticket = await storage.updateTicket(req.params.id, validatedData);
 
     res.json(ticket);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
     console.error('Error updating ticket:', error);
     res.status(500).json({ error: 'Failed to update ticket' });
   }

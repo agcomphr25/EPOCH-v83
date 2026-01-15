@@ -7552,9 +7552,9 @@ export function registerRoutes(app: Express): Server {
       const nextYear = month === 12 ? year + 1 : year;
       const endDateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
       
-      // Query orders with features and model info for the specified month
+      // Query P1 orders (regular stock orders) with features and model info for the specified month
       // Revenue is recognized when stock is fulfilled/shipped, so filter by shipped_date
-      const query = `
+      const p1Query = `
         SELECT 
           ao.order_id,
           ao.model_id,
@@ -7564,7 +7564,8 @@ export function registerRoutes(app: Express): Server {
           ao.shipping,
           ao.shipped_date,
           sm.price as stock_model_price,
-          sm.name as stock_model_name
+          sm.name as stock_model_name,
+          'P1' as order_type
         FROM all_orders ao
         LEFT JOIN stock_models sm ON ao.model_id = sm.id
         WHERE ao.shipped_date >= $1 
@@ -7572,8 +7573,37 @@ export function registerRoutes(app: Express): Server {
           AND ao.status NOT IN ('CANCELLED', 'SCRAPPED')
       `;
       
-      const result = await pool.query(query, [startDateStr, endDateStr]);
-      const rows = Array.isArray(result) ? result : (result.rows || []);
+      // Query PO production orders (P1 PO orders) that shipped in the specified month
+      // Use COALESCE to check shipped_at first, then fulfilled_date
+      const poQuery = `
+        SELECT 
+          po.order_id,
+          po.item_id as model_id,
+          po.specifications as features,
+          poi.unit_price as calculated_total,
+          NULL as price_override,
+          0 as shipping,
+          COALESCE(po.shipped_at, po.fulfilled_date) as shipped_date,
+          poi.unit_price as stock_model_price,
+          po.item_name as stock_model_name,
+          'PO' as order_type
+        FROM production_orders po
+        LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
+        WHERE (
+          (po.shipped_at >= $1 AND po.shipped_at < $2)
+          OR (po.shipped_at IS NULL AND po.fulfilled_date >= $1 AND po.fulfilled_date < $2)
+        )
+        AND po.production_status NOT IN ('CANCELLED', 'SCRAPPED')
+      `;
+      
+      const [p1Result, poResult] = await Promise.all([
+        pool.query(p1Query, [startDateStr, endDateStr]),
+        pool.query(poQuery, [startDateStr, endDateStr])
+      ]);
+      
+      const p1Rows = Array.isArray(p1Result) ? p1Result : (p1Result.rows || []);
+      const poRows = Array.isArray(poResult) ? poResult : (poResult.rows || []);
+      const rows = [...p1Rows, ...poRows];
       
       // Initialize category totals
       const categories: Record<string, { total: number; count: number; orders: { orderId: string; amount: number; detail: string }[] }> = {
@@ -7586,6 +7616,7 @@ export function registerRoutes(app: Express): Server {
         'Paint': { total: 0, count: 0, orders: [] },
         'Swivels': { total: 0, count: 0, orders: [] },
         'Shipping': { total: 0, count: 0, orders: [] },
+        'PO Orders': { total: 0, count: 0, orders: [] },
         'Other': { total: 0, count: 0, orders: [] },
       };
       
@@ -7626,8 +7657,25 @@ export function registerRoutes(app: Express): Server {
       for (const row of rows) {
         const features = row.features || {};
         const orderId = row.order_id;
+        const orderType = row.order_type || 'P1';
         
-        // Stock Model price
+        // Handle PO orders separately - they go into PO Orders category
+        if (orderType === 'PO') {
+          const poPrice = parseFloat(row.stock_model_price) || 0;
+          if (poPrice > 0) {
+            categories['PO Orders'].total += poPrice;
+            categories['PO Orders'].count++;
+            categories['PO Orders'].orders.push({
+              orderId,
+              amount: poPrice,
+              detail: row.stock_model_name || row.model_id || 'PO Item'
+            });
+            grandTotal += poPrice;
+          }
+          continue; // Skip feature processing for PO orders
+        }
+        
+        // Stock Model price (P1 orders only)
         const stockModelPrice = row.price_override || row.stock_model_price || 0;
         if (stockModelPrice > 0) {
           categories['Stock Model'].total += stockModelPrice;

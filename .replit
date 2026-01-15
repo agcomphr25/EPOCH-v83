@@ -62,7 +62,6 @@ JWT_TOKEN = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814ca
 PORTAL_JWT_SECRET = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814caac3a972cdc39dd185451fe355d6e2c28a81dfe0475d69d98dec1023f71a61"
 APP_URL = "https://agcompepoch.xyz"
 PRODUCTION_DOMAIN = "agcompepoch.xyz"
-HELIUM_DATABASE_URL = "postgresql://postgres:password@helium/heliumdb?sslmode=disable"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"

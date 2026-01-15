@@ -7545,8 +7545,12 @@ export function registerRoutes(app: Express): Server {
       const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
       const year = parseInt(req.query.year as string) || new Date().getFullYear();
       
-      const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      // Use ISO date strings to avoid timezone issues
+      // Start of month in UTC and start of next month in UTC
+      const startDateStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+      const endDateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
       
       // Query orders with features and model info for the specified month
       // Revenue is recognized when stock is fulfilled/shipped, so filter by shipped_date
@@ -7564,11 +7568,11 @@ export function registerRoutes(app: Express): Server {
         FROM all_orders ao
         LEFT JOIN stock_models sm ON ao.model_id = sm.id
         WHERE ao.shipped_date >= $1 
-          AND ao.shipped_date <= $2
+          AND ao.shipped_date < $2
           AND ao.status NOT IN ('CANCELLED', 'SCRAPPED')
       `;
       
-      const result = await pool.query(query, [startDate, endDate]);
+      const result = await pool.query(query, [startDateStr, endDateStr]);
       const rows = Array.isArray(result) ? result : (result.rows || []);
       
       // Initialize category totals

@@ -3197,4 +3197,696 @@ router.get('/programs/:programId/tasks-by-day', async (req, res) => {
   }
 });
 
+// ============================================================================
+// HELIUM DATABASE IMPORT - Import training data from external system
+// ============================================================================
+
+import { 
+  testHeliumConnection, 
+  fetchHeliumTrainingModules, 
+  fetchHeliumTrainingMatrix,
+  importHeliumTrainingModules,
+  importHeliumTrainingMatrix,
+  getHeliumStats
+} from '../services/heliumImport';
+
+// Get helium connection status and stats
+router.get('/helium/status', async (req, res) => {
+  try {
+    const stats = await getHeliumStats();
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error checking helium status:', error);
+    res.status(500).json({ error: error.message, connected: false });
+  }
+});
+
+// Preview helium training modules (don't import yet)
+router.get('/helium/preview/modules', async (req, res) => {
+  try {
+    const modules = await fetchHeliumTrainingModules();
+    res.json(modules);
+  } catch (error: any) {
+    console.error('Error previewing helium modules:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview helium training matrix (don't import yet)
+router.get('/helium/preview/matrix', async (req, res) => {
+  try {
+    const matrix = await fetchHeliumTrainingMatrix();
+    res.json(matrix);
+  } catch (error: any) {
+    console.error('Error previewing helium matrix:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import training modules from helium
+router.post('/helium/import/modules', async (req, res) => {
+  try {
+    const result = await importHeliumTrainingModules();
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error importing helium modules:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import training matrix from helium
+router.post('/helium/import/matrix', async (req, res) => {
+  try {
+    const result = await importHeliumTrainingMatrix();
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error importing helium matrix:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import all training data from helium
+router.post('/helium/import/all', async (req, res) => {
+  try {
+    const [modulesResult, matrixResult] = await Promise.all([
+      importHeliumTrainingModules(),
+      importHeliumTrainingMatrix(),
+    ]);
+    
+    res.json({
+      modules: modulesResult,
+      matrix: matrixResult,
+      success: modulesResult.errors.length === 0 && matrixResult.errors.length === 0,
+    });
+  } catch (error: any) {
+    console.error('Error importing all helium data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// FACILITY TOPICS - Standard facility training topics (PPE, FOD, ITAR, etc.)
+// ============================================================================
+
+import { facilityTopics, facilityTopicQuestions, dailyTrainingSessions, dailyTaskBlocks, trainerCertifications } from '../../schema';
+
+// Get all facility topics
+router.get('/facility-topics', async (req, res) => {
+  try {
+    let topics: any[] = [];
+    try {
+      topics = await db.select().from(facilityTopics).orderBy(facilityTopics.title);
+    } catch (e) {
+      topics = [];
+    }
+    res.json(topics || []);
+  } catch (error: any) {
+    console.error('Error fetching facility topics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single facility topic
+router.get('/facility-topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [topic] = await db.select().from(facilityTopics).where(eq(facilityTopics.id, id));
+    if (!topic) {
+      return res.status(404).json({ error: 'Facility topic not found' });
+    }
+    res.json(topic);
+  } catch (error: any) {
+    console.error('Error fetching facility topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create facility topic
+router.post('/facility-topics', async (req, res) => {
+  try {
+    const [topic] = await db.insert(facilityTopics).values(req.body).returning();
+    res.status(201).json(topic);
+  } catch (error: any) {
+    console.error('Error creating facility topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update facility topic
+router.put('/facility-topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(facilityTopics)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(facilityTopics.id, id))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Facility topic not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating facility topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get questions for a facility topic
+router.get('/facility-topics/:id/questions', async (req, res) => {
+  try {
+    const topicId = parseInt(req.params.id);
+    let questions: any[] = [];
+    try {
+      questions = await db.select().from(facilityTopicQuestions)
+        .where(eq(facilityTopicQuestions.topicId, topicId));
+    } catch (e) {
+      questions = [];
+    }
+    res.json(questions || []);
+  } catch (error: any) {
+    console.error('Error fetching facility topic questions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add question to facility topic
+router.post('/facility-topics/:id/questions', async (req, res) => {
+  try {
+    const topicId = parseInt(req.params.id);
+    const [question] = await db.insert(facilityTopicQuestions)
+      .values({ ...req.body, topicId })
+      .returning();
+    res.status(201).json(question);
+  } catch (error: any) {
+    console.error('Error adding facility topic question:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// DAILY TRAINING SESSIONS - Train-the-Trainer session management
+// ============================================================================
+
+// Get all daily training sessions
+router.get('/daily-sessions', async (req, res) => {
+  try {
+    const { traineeId, trainerId, status } = req.query;
+    let sessions: any[] = [];
+    try {
+      if (traineeId) {
+        sessions = await db.select().from(dailyTrainingSessions)
+          .where(eq(dailyTrainingSessions.traineeId, parseInt(traineeId as string)))
+          .orderBy(desc(dailyTrainingSessions.sessionDate));
+      } else if (trainerId) {
+        sessions = await db.select().from(dailyTrainingSessions)
+          .where(eq(dailyTrainingSessions.trainerId, parseInt(trainerId as string)))
+          .orderBy(desc(dailyTrainingSessions.sessionDate));
+      } else {
+        sessions = await db.select().from(dailyTrainingSessions)
+          .orderBy(desc(dailyTrainingSessions.sessionDate));
+      }
+    } catch (e) {
+      sessions = [];
+    }
+    res.json(sessions || []);
+  } catch (error: any) {
+    console.error('Error fetching daily sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start a new daily training session
+router.post('/daily-sessions', async (req, res) => {
+  try {
+    const { traineeId, trainerId, facilityTopicId, planDayId, notes } = req.body;
+    const [session] = await db.insert(dailyTrainingSessions).values({
+      traineeId,
+      trainerId,
+      facilityTopicId,
+      planDayId,
+      sessionDate: new Date(),
+      notes,
+      status: 'active',
+    }).returning();
+    res.status(201).json(session);
+  } catch (error: any) {
+    console.error('Error starting daily session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get session with task blocks
+router.get('/daily-sessions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [session] = await db.select().from(dailyTrainingSessions)
+      .where(eq(dailyTrainingSessions.id, id));
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    let taskBlocks: any[] = [];
+    try {
+      taskBlocks = await db.select().from(dailyTaskBlocks)
+        .where(eq(dailyTaskBlocks.sessionId, id));
+    } catch (e) {
+      taskBlocks = [];
+    }
+    
+    res.json({ ...session, taskBlocks: taskBlocks || [] });
+  } catch (error: any) {
+    console.error('Error fetching daily session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update task block (4-step progress and S-O-A feedback)
+router.put('/task-blocks/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(dailyTaskBlocks)
+      .set(req.body)
+      .where(eq(dailyTaskBlocks.id, id))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Task block not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating task block:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add task block to session
+router.post('/daily-sessions/:sessionId/task-blocks', async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.sessionId);
+    const [block] = await db.insert(dailyTaskBlocks).values({
+      sessionId,
+      taskId: req.body.taskId,
+    }).returning();
+    res.status(201).json(block);
+  } catch (error: any) {
+    console.error('Error adding task block:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sign session (trainer or trainee)
+router.put('/daily-sessions/:id/sign', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { role, signature, competencyAttested } = req.body;
+    
+    const updates: any = { signedAt: new Date() };
+    if (role === 'trainer') {
+      updates.trainerSignature = signature;
+      if (competencyAttested !== undefined) {
+        updates.competencyAttested = competencyAttested;
+      }
+    } else {
+      updates.traineeSignature = signature;
+    }
+    
+    const [updated] = await db.update(dailyTrainingSessions)
+      .set(updates)
+      .where(eq(dailyTrainingSessions.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error signing session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete session
+router.put('/daily-sessions/:id/complete', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(dailyTrainingSessions)
+      .set({ status: 'completed' })
+      .where(eq(dailyTrainingSessions.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error completing session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINER CERTIFICATIONS - Track certified trainers
+// ============================================================================
+
+// Get all certified trainers
+router.get('/trainer-certifications', async (req, res) => {
+  try {
+    let certs: any[] = [];
+    try {
+      certs = await db.select({
+        id: trainerCertifications.id,
+        employeeId: trainerCertifications.employeeId,
+        certifiedAt: trainerCertifications.certifiedAt,
+        certifiedBy: trainerCertifications.certifiedBy,
+        quizScore: trainerCertifications.quizScore,
+        expiresAt: trainerCertifications.expiresAt,
+        isActive: trainerCertifications.isActive,
+        notes: trainerCertifications.notes,
+        employeeName: employees.name,
+        department: employees.department,
+      }).from(trainerCertifications)
+        .leftJoin(employees, eq(trainerCertifications.employeeId, employees.id))
+        .where(eq(trainerCertifications.isActive, true));
+    } catch (e) {
+      certs = [];
+    }
+    res.json(certs || []);
+  } catch (error: any) {
+    console.error('Error fetching trainer certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if employee is certified trainer
+router.get('/trainer-certifications/check/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    const [cert] = await db.select().from(trainerCertifications)
+      .where(and(
+        eq(trainerCertifications.employeeId, employeeId),
+        eq(trainerCertifications.isActive, true)
+      ));
+    res.json({ isCertified: !!cert, certification: cert || null });
+  } catch (error: any) {
+    console.error('Error checking trainer certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create trainer certification
+router.post('/trainer-certifications', async (req, res) => {
+  try {
+    const [cert] = await db.insert(trainerCertifications).values({
+      employeeId: req.body.employeeId,
+      certifiedBy: req.body.certifiedBy,
+      quizScore: req.body.quizScore,
+      expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+      notes: req.body.notes,
+    }).returning();
+    res.status(201).json(cert);
+  } catch (error: any) {
+    console.error('Error creating trainer certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Revoke trainer certification
+router.put('/trainer-certifications/:id/revoke', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(trainerCertifications)
+      .set({ isActive: false })
+      .where(eq(trainerCertifications.id, id))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error revoking trainer certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// AI-POWERED WORK INSTRUCTION IMPORT
+// ============================================================================
+
+import OpenAI from 'openai';
+
+let openaiClient: OpenAI | null = null;
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openaiClient;
+}
+
+router.post('/work-instructions/ai-extract', async (req, res) => {
+  try {
+    const { pdfText, department } = req.body;
+    
+    if (!pdfText) {
+      return res.status(400).json({ error: 'PDF text is required' });
+    }
+    
+    const client = getOpenAIClient();
+    
+    const systemPrompt = `You are an expert at extracting work instructions from manufacturing documents.
+Extract structured work instruction data from the provided document text.
+
+Output a JSON object with this structure:
+{
+  "title": "Work instruction title",
+  "processArea": "Process area (e.g., Layup, CNC, Paint)",
+  "objective": "Clear objective statement",
+  "estimatedMinutes": 30,
+  "prerequisites": ["List of prerequisites"],
+  "ppeRequired": ["PPE items required"],
+  "tools": ["Tools and equipment needed"],
+  "steps": [
+    {
+      "stepNumber": 1,
+      "instruction": "Step instruction",
+      "criticalPoint": "Critical point if any (important for quality/safety)",
+      "safetyNote": "Safety note if any"
+    }
+  ],
+  "criticalPoints": ["Overall critical points for quality"],
+  "safetyConsiderations": ["Safety considerations"],
+  "qualityCheckpoints": ["Quality verification points"]
+}
+
+Focus on extracting:
+- Clear, actionable steps
+- Critical points that could affect quality
+- Safety notes and PPE requirements
+- Quality checkpoints
+- Prerequisites and tools needed`;
+
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Extract work instruction from this document:\n\n${pdfText.substring(0, 10000)}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'No response from AI' });
+    }
+
+    const extracted = JSON.parse(content);
+    extracted.department = department || 'Manufacturing';
+    
+    res.json(extracted);
+  } catch (error: any) {
+    console.error('Error extracting work instruction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/work-instructions/ai-generate-quiz', async (req, res) => {
+  try {
+    const { workInstruction } = req.body;
+    
+    if (!workInstruction) {
+      return res.status(400).json({ error: 'Work instruction is required' });
+    }
+    
+    const client = getOpenAIClient();
+    
+    const systemPrompt = `Generate 5-10 quiz questions based on this work instruction.
+Focus on critical points, safety considerations, and proper execution.
+
+Output a JSON object with this structure:
+{
+  "questions": [
+    {
+      "question": "Question text",
+      "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
+      "correctAnswer": "A",
+      "explanation": "Why this answer is correct",
+      "category": "Critical Point" or "Safety" or "Quality" or "Process"
+    }
+  ]
+}
+
+Focus on:
+- Critical safety points
+- Quality checkpoints
+- Correct sequence of steps
+- Common mistakes to avoid`;
+
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Generate quiz for this work instruction:\n\nTitle: ${workInstruction.title}\n\nSteps: ${JSON.stringify(workInstruction.steps)}\n\nCritical Points: ${JSON.stringify(workInstruction.criticalPoints)}\n\nSafety: ${JSON.stringify(workInstruction.safetyConsiderations)}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.5,
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'No response from AI' });
+    }
+
+    const generated = JSON.parse(content);
+    res.json(generated);
+  } catch (error: any) {
+    console.error('Error generating quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINING PLAN DAYS - 4-Day Competency Structure
+// ============================================================================
+
+import { trainingPlanDays, trainingPlanDayTopics } from '../../schema';
+
+// Get all training plan days with their topics
+router.get('/plan-days', async (req, res) => {
+  try {
+    let days: any[] = [];
+    try {
+      days = await db.select().from(trainingPlanDays).orderBy(trainingPlanDays.dayNumber);
+    } catch (e) {
+      days = [];
+    }
+    
+    const daysWithTopics = await Promise.all((days || []).map(async (day) => {
+      let topics: any[] = [];
+      try {
+        const topicLinks = await db.select().from(trainingPlanDayTopics)
+          .where(eq(trainingPlanDayTopics.planDayId, day.id));
+        
+        for (const link of topicLinks) {
+          const [topic] = await db.select().from(facilityTopics)
+            .where(eq(facilityTopics.id, link.topicId));
+          if (topic) topics.push(topic);
+        }
+      } catch (e) {
+        topics = [];
+      }
+      return { ...day, topics };
+    }));
+    
+    res.json(daysWithTopics);
+  } catch (error: any) {
+    console.error('Error fetching plan days:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Initialize 4-day training plan
+router.post('/plan-days/initialize', async (req, res) => {
+  try {
+    const defaultDays = [
+      { dayNumber: 1, title: "Foundation Day", objectives: "Introduction to facility processes, safety overview, and critical equipment orientation. Cover PPE requirements, FOD awareness, and basic chemical handling." },
+      { dayNumber: 2, title: "Core Skills Day", objectives: "Hands-on practice with supervised instruction. Focus on work instruction comprehension, ITAR awareness, and basic production tasks." },
+      { dayNumber: 3, title: "Application Day", objectives: "Trainee demonstrates skills under coaching. Apply learned concepts, practice S-O-A feedback techniques, and refine techniques." },
+      { dayNumber: 4, title: "Validation Day", objectives: "Independent task completion with observation. Final competency verification and certification signoff." },
+    ];
+    
+    const existing = await db.select().from(trainingPlanDays);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Training plan already initialized' });
+    }
+    
+    const created = await db.insert(trainingPlanDays).values(defaultDays).returning();
+    res.status(201).json(created);
+  } catch (error: any) {
+    console.error('Error initializing plan days:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update training plan day
+router.put('/plan-days/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(trainingPlanDays)
+      .set({ title: req.body.title, objectives: req.body.objectives })
+      .where(eq(trainingPlanDays.id, id))
+      .returning();
+    if (!updated) {
+      return res.status(404).json({ error: 'Plan day not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating plan day:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add topic to plan day
+router.post('/plan-days/:dayId/topics', async (req, res) => {
+  try {
+    const dayId = parseInt(req.params.dayId);
+    const topicId = parseInt(req.body.topicId);
+    
+    const existing = await db.select().from(trainingPlanDayTopics)
+      .where(and(
+        eq(trainingPlanDayTopics.planDayId, dayId),
+        eq(trainingPlanDayTopics.topicId, topicId)
+      ));
+    
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Topic already assigned to this day' });
+    }
+    
+    const [link] = await db.insert(trainingPlanDayTopics)
+      .values({ planDayId: dayId, topicId })
+      .returning();
+    res.status(201).json(link);
+  } catch (error: any) {
+    console.error('Error adding topic to day:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove topic from plan day
+router.delete('/plan-days/:dayId/topics/:topicId', async (req, res) => {
+  try {
+    const dayId = parseInt(req.params.dayId);
+    const topicId = parseInt(req.params.topicId);
+    
+    await db.delete(trainingPlanDayTopics)
+      .where(and(
+        eq(trainingPlanDayTopics.planDayId, dayId),
+        eq(trainingPlanDayTopics.topicId, topicId)
+      ));
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error removing topic from day:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

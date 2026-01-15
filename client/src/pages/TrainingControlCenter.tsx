@@ -14,7 +14,8 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  Wrench
+  Wrench,
+  UserCheck
 } from 'lucide-react';
 
 import Training from './Training';
@@ -22,6 +23,7 @@ import TrainingMatrixView from './TrainingMatrixView';
 import TrainingManagement from './TrainingManagement';
 import TrainingMatrixImport from './TrainingMatrixImport';
 import TrainingMatrixManage from './TrainingMatrixManage';
+import TrainTheTrainer from './TrainTheTrainer';
 
 interface TrainingStats {
   totalModules: number;
@@ -114,7 +116,7 @@ export default function TrainingControlCenter() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <GraduationCap className="h-4 w-4" />
             Modules
@@ -130,6 +132,10 @@ export default function TrainingControlCenter() {
           <TabsTrigger value="import" className="flex items-center gap-2" data-testid="tab-import">
             <FileSpreadsheet className="h-4 w-4" />
             Import
+          </TabsTrigger>
+          <TabsTrigger value="trainer" className="flex items-center gap-2" data-testid="tab-trainer">
+            <UserCheck className="h-4 w-4" />
+            Train-the-Trainer
           </TabsTrigger>
           <TabsTrigger value="management" className="flex items-center gap-2" data-testid="tab-management">
             <Settings className="h-4 w-4" />
@@ -151,6 +157,10 @@ export default function TrainingControlCenter() {
 
         <TabsContent value="import" className="space-y-4">
           <TrainingMatrixImport />
+        </TabsContent>
+
+        <TabsContent value="trainer" className="space-y-4">
+          <TrainTheTrainer />
         </TabsContent>
 
         <TabsContent value="management" className="space-y-4">

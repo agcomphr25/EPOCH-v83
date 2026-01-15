@@ -2,7 +2,7 @@ import { storage } from '../storage.js';
 import { db } from '../db.js';
 import { communicationLogs } from '@shared/schema';
 import { sendOrderConfirmationNotification } from './notifications.js';
-import { createMagicLink } from './magicLink.js';
+import { createSignatureLink, checkEnvironmentGuard, getCurrentEnvironment, logSignatureEmailSend } from './magicLink.js';
 
 const REMINDER_COOLDOWN_HOURS = 48; // Minimum hours between reminders
 const MAX_REMINDER_ATTEMPTS = 3; // Maximum reminder emails per order
@@ -209,8 +209,51 @@ export async function sendReminderForOverdueOrders() {
         
         console.log(`📨 [REMINDER] Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
         
+        // SIGNATURE LINK CONTRACT: Environment guard - block cross-environment sends
+        const envGuard = checkEnvironmentGuard({
+          orderId: followupOrder.orderId,
+          signatureToken: followupOrder.signatureToken,
+          orderEnvironment: (followupOrder as any).environment,
+          recipient: followupOrder.customerEmail,
+        });
+        
+        if (envGuard) {
+          console.error(`🚨 [REMINDER] ${envGuard.reason}`);
+          
+          await db.insert(communicationLogs).values({
+            orderId: followupOrder.orderId,
+            customerId: followupOrder.customerId,
+            messageType: 'transactional',
+            method: 'email',
+            type: 'order-confirmation',
+            context: 'reminder',
+            recipient: followupOrder.customerEmail,
+            status: 'blocked',
+            skipReason: 'cross_environment',
+            signatureToken: followupOrder.signatureToken || undefined,
+            error: envGuard.reason,
+            message: `Reminder blocked for ${followupOrder.orderId}: cross-environment safety`,
+            sentAt: new Date(),
+          });
+          
+          failedCount++;
+          results.push({ orderId: followupOrder.orderId, outcome: 'failed', error: 'cross_environment_blocked' });
+          continue;
+        }
+        
         // Use EXISTING signature token - do NOT regenerate
-        const signatureLink = createMagicLink(followupOrder.signatureToken);
+        // SIGNATURE LINK CONTRACT: Use createSignatureLink for all signature URLs
+        const signatureLink = createSignatureLink(followupOrder.signatureToken);
+        
+        // SIGNATURE LINK CONTRACT: Forensic logging
+        const currentEnv = getCurrentEnvironment();
+        logSignatureEmailSend({
+          orderId: followupOrder.orderId,
+          signatureToken: followupOrder.signatureToken,
+          environment: currentEnv,
+          context: 'reminder',
+          recipient: followupOrder.customerEmail,
+        });
         
         // Get order details from orderSummary
         const orderSummary = followupOrder.orderSummary as Record<string, any> || {};

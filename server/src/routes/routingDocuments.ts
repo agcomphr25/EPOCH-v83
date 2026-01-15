@@ -71,10 +71,21 @@ function transformRow(row: any): any {
   return transformed;
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// Lazy initialization of OpenAI client - only created when needed
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY or configure the AI integration.');
+    }
+    openaiClient = new OpenAI({
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    });
+  }
+  return openaiClient;
+}
 
 // Get all routing documents
 router.get('/', async (req: Request, res: Response) => {
@@ -395,7 +406,7 @@ Return a JSON object with the following structure:
   "specialProcesses": [{"process": "string", "requirements": "string", "department": "string"}]
 }`;
 
-        const response = await openai.chat.completions.create({
+        const response = await getOpenAI().chat.completions.create({
           model: 'gpt-5.1',
           messages: [
             { role: 'system', content: systemPrompt },
@@ -513,7 +524,7 @@ Return a JSON object with the following structure:
   "specialProcesses": [{"process": "string", "requirements": "string", "department": "string"}]
 }`;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-5.1',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -608,7 +619,7 @@ Custom Requirements: ${JSON.stringify(customFields || {})}
 ${referenceContent ? `Reference Documents:\n${referenceContent}` : ''}
 ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-5.1',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -690,7 +701,7 @@ Return a JSON object with:
   "aiGeneratedPrompt": "A prompt that can be used to generate similar documents in the future"
 }`;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-5.1',
       messages: [
         { role: 'system', content: systemPrompt },

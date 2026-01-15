@@ -41,7 +41,11 @@ import {
   CheckCircle,
   Clock,
   Search,
+  Upload,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface WorkInstruction {
   id: number;
@@ -91,10 +95,14 @@ const DEPARTMENTS = [
 export default function WorkInstructionsPage() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
   const [editingInstruction, setEditingInstruction] = useState<WorkInstruction | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [pdfText, setPdfText] = useState('');
+  const [aiDepartment, setAiDepartment] = useState('Manufacturing');
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -188,6 +196,46 @@ export default function WorkInstructionsPage() {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
+
+  const handleAiExtract = async () => {
+    if (!pdfText.trim()) {
+      toast({ title: 'Error', description: 'Please paste the PDF text content', variant: 'destructive' });
+      return;
+    }
+    
+    setIsExtracting(true);
+    try {
+      const response = await apiRequest('/api/training/work-instructions/ai-extract', {
+        method: 'POST',
+        body: JSON.stringify({ pdfText, department: aiDepartment }),
+      });
+      
+      const extracted = response as any;
+      setFormData({
+        title: extracted.title || '',
+        department: extracted.department || aiDepartment,
+        processArea: extracted.processArea || '',
+        objective: extracted.objective || '',
+        estimatedMinutes: extracted.estimatedMinutes || 30,
+        prerequisites: extracted.prerequisites?.length ? extracted.prerequisites : [''],
+        ppeRequired: extracted.ppeRequired?.length ? extracted.ppeRequired : [''],
+        tools: extracted.tools?.length ? extracted.tools : [''],
+        steps: extracted.steps?.length ? extracted.steps : [{ stepNumber: 1, instruction: '', criticalPoint: '', safetyNote: '' }],
+        criticalPoints: extracted.criticalPoints?.length ? extracted.criticalPoints : [''],
+        safetyConsiderations: extracted.safetyConsiderations?.length ? extracted.safetyConsiderations : [''],
+        qualityCheckpoints: extracted.qualityCheckpoints?.length ? extracted.qualityCheckpoints : [''],
+      });
+      
+      setIsAiImportOpen(false);
+      setIsCreateOpen(true);
+      setPdfText('');
+      toast({ title: 'AI Extraction Complete', description: 'Review and edit the extracted work instruction' });
+    } catch (error: any) {
+      toast({ title: 'Extraction Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -507,23 +555,91 @@ export default function WorkInstructionsPage() {
             </p>
           </div>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => resetForm()}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Work Instruction
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Create Work Instruction</DialogTitle>
-              <DialogDescription>
-                Define procedural steps with critical points and safety notes
-              </DialogDescription>
-            </DialogHeader>
-            <WorkInstructionForm />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={isAiImportOpen} onOpenChange={setIsAiImportOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Sparkles className="h-4 w-4 mr-2" />
+                AI Import
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  AI-Powered Import
+                </DialogTitle>
+                <DialogDescription>
+                  Paste the text content from a PDF or document to extract work instruction details
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>How to use</AlertTitle>
+                  <AlertDescription>
+                    Copy text from your PDF document and paste it below. The AI will extract steps, critical points, safety notes, and other details.
+                  </AlertDescription>
+                </Alert>
+                <div>
+                  <Label>Department</Label>
+                  <Select value={aiDepartment} onValueChange={setAiDepartment}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.map((d) => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Document Text</Label>
+                  <Textarea
+                    value={pdfText}
+                    onChange={(e) => setPdfText(e.target.value)}
+                    placeholder="Paste the text content from your PDF or document here..."
+                    className="h-48"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsAiImportOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAiExtract} disabled={isExtracting || !pdfText.trim()}>
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Extract with AI
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => resetForm()}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Work Instruction
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Create Work Instruction</DialogTitle>
+                <DialogDescription>
+                  Define procedural steps with critical points and safety notes
+                </DialogDescription>
+              </DialogHeader>
+              <WorkInstructionForm />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex gap-4 items-center">

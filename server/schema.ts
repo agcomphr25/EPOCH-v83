@@ -237,6 +237,9 @@ export const followupOrders = pgTable('followup_orders', {
   orderId: text('order_id').notNull(),
   customerId: text('customer_id').notNull(),
   customerEmail: text('customer_email').notNull(),
+  // SIGNATURE LINK CONTRACT: Environment field for cross-environment safety
+  // Token must only be used in the environment it was created in
+  environment: text('environment').default('dev'), // 'prod' or 'dev'
   // Email Tracking
   emailSent: boolean('email_sent').default(false),
   emailSentAt: timestamp('email_sent_at'),
@@ -245,7 +248,7 @@ export const followupOrders = pgTable('followup_orders', {
   pdfGenerated: boolean('pdf_generated').default(false),
   pdfPath: text('pdf_path'),
   pdfGeneratedAt: timestamp('pdf_generated_at'),
-  // Signature Tracking
+  // SIGNATURE LINK CONTRACT: Token is immutable - written once at creation, never updated
   signatureToken: text('signature_token'), // Unique token for signature link
   signatureSigned: boolean('signature_signed').default(false),
   signatureData: text('signature_data'), // Base64 signature image
@@ -9813,7 +9816,8 @@ export const tickets = pgTable('tickets', {
   description: text('description'),
   customerId: integer('customer_id'), // Nullable - tickets may not have a customer
   ownerUserId: integer('owner_user_id').notNull(), // Original creator of the ticket
-  assignedUserId: integer('assigned_user_id'), // Person currently assigned to work on the ticket
+  assignedUserId: integer('assigned_user_id'), // Legacy: single person assigned (kept for backwards compatibility)
+  assignedUserIds: jsonb('assigned_user_ids').$type<number[]>().default(sql`'[]'::jsonb`), // Multiple assignees
   slaDueAt: timestamp('sla_due_at'),
   slaBreached: boolean('sla_breached').default(false),
   lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented
@@ -10924,6 +10928,35 @@ export const insertDocumentDistributionLogSchema = createInsertSchema(documentDi
     distributionMethod: z.enum(['print', 'email', 'digital']).default('print'),
   });
 
+// Historical Monthly Data - for tracking legacy data from previous systems
+export const historicalMonthlyData = pgTable('historical_monthly_data', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  dataType: text('data_type').notNull(),
+  category: text('category').notNull(),
+  amount: numeric('amount', { precision: 15, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniqueEntry: unique().on(table.year, table.month, table.dataType, table.category),
+}));
+
+export const insertHistoricalMonthlyDataSchema = createInsertSchema(historicalMonthlyData)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    year: z.number().int().min(2020).max(2030),
+    month: z.number().int().min(1).max(12),
+    dataType: z.enum(['credit_card', 'revenue']),
+    category: z.enum(['online', 'phone', 'aerospace', 'combined']),
+    amount: z.string().or(z.number()),
+  });
+
+export type HistoricalMonthlyData = typeof historicalMonthlyData.$inferSelect;
+export type InsertHistoricalMonthlyData = z.infer<typeof insertHistoricalMonthlyDataSchema>;
+
 // Types
 export type RoutingDocument = typeof routingDocuments.$inferSelect;
 export type InsertRoutingDocument = z.infer<typeof insertRoutingDocumentSchema>;
@@ -10939,3 +10972,189 @@ export type CertificationTaskLink = typeof certificationTaskLinks.$inferSelect;
 export type InsertCertificationTaskLink = z.infer<typeof insertCertificationTaskLinkSchema>;
 export type DocumentDistributionLog = typeof documentDistributionLogs.$inferSelect;
 export type InsertDocumentDistributionLog = z.infer<typeof insertDocumentDistributionLogSchema>;
+
+// ============================================================================
+// TRAIN-THE-TRAINER - Facility Topics & Training Sessions
+// ============================================================================
+
+// Facility Topics - Standard facility training topics (PPE, FOD, ITAR, Chemical, Fire, Counterfeit)
+export const facilityTopics = pgTable('facility_topics', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(), // PPE, FOD, ITAR, CHEM, FIRE, COUNTERFEIT
+  title: text('title').notNull(),
+  overview: text('overview'),
+  contentHtml: text('content_html'), // HTML content for training display
+  estimatedMinutes: integer('estimated_minutes').default(30),
+  moduleId: integer('module_id').references(() => trainingModules.id), // Link to training module
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Facility Topic Quiz Questions - Questions specific to facility topics
+export const facilityTopicQuestions = pgTable('facility_topic_questions', {
+  id: serial('id').primaryKey(),
+  topicId: integer('topic_id').references(() => facilityTopics.id).notNull(),
+  workInstructionId: integer('work_instruction_id').references(() => workInstructions.id),
+  question: text('question').notNull(),
+  questionType: text('question_type').notNull().default('MCQ'), // MCQ, TF, SHORT
+  options: jsonb('options').$type<string[]>(), // Array of choices for MCQ
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'),
+  severity: text('severity').default('major'), // minor, major, critical
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Critical Points - Detailed critical points for work instructions
+export const criticalPoints = pgTable('critical_points', {
+  id: serial('id').primaryKey(),
+  workInstructionId: integer('work_instruction_id').references(() => workInstructions.id).notNull(),
+  label: text('label').notNull(), // Short name
+  detail: text('detail'), // What/why explanation
+  severity: text('severity').default('major'), // minor, major, critical
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Plan Days - 4-day structured training with step focus
+export const trainingPlanDays = pgTable('training_plan_days', {
+  id: serial('id').primaryKey(),
+  assignmentId: integer('assignment_id').references(() => trainingAssignments.id).notNull(),
+  dayNumber: integer('day_number').notNull(), // 1, 2, 3, or 4
+  stepFocus: text('step_focus').notNull(), // "Step 1: Trainer Does/Explains", etc.
+  objectives: text('objectives'),
+  status: text('status').default('pending'), // pending, in_progress, completed
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Plan Day Topics - Facility topics scheduled for each day
+export const trainingPlanDayTopics = pgTable('training_plan_day_topics', {
+  id: serial('id').primaryKey(),
+  planDayId: integer('plan_day_id').references(() => trainingPlanDays.id).notNull(),
+  facilityTopicId: integer('facility_topic_id').references(() => facilityTopics.id).notNull(),
+  baselineLevel: text('baseline_level').default('none'), // none, basic, intermediate, advanced
+  targetLevel: text('target_level').default('basic'), // basic, intermediate, advanced
+  emphasisNotes: text('emphasis_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily Training Sessions - Individual training session records
+export const dailyTrainingSessions = pgTable('daily_training_sessions', {
+  id: serial('id').primaryKey(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  planDayId: integer('plan_day_id').references(() => trainingPlanDays.id),
+  sessionDate: timestamp('session_date').notNull(),
+  facilityTopicId: integer('facility_topic_id').references(() => facilityTopics.id),
+  traineeSignature: text('trainee_signature'),
+  trainerSignature: text('trainer_signature'),
+  signedAt: timestamp('signed_at'),
+  competencyAttested: boolean('competency_attested').default(false),
+  notes: text('notes'),
+  status: text('status').default('active'), // active, completed
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily Task Blocks - 4-step method tracking for each task in a session
+export const dailyTaskBlocks = pgTable('daily_task_blocks', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id').references(() => dailyTrainingSessions.id).notNull(),
+  taskId: integer('task_id').references(() => trainingProgramTasks.id).notNull(),
+  // 4-step method completion flags
+  step1Complete: boolean('step1_complete').default(false), // Trainer Does/Explains
+  step2Complete: boolean('step2_complete').default(false), // Trainer Does/Trainee Explains
+  step3Complete: boolean('step3_complete').default(false), // Trainee Does/Trainer Coaches
+  step4Complete: boolean('step4_complete').default(false), // Trainee Does/Trainer Observes
+  // S-O-A coaching fields
+  strength: text('strength'),
+  opportunity: text('opportunity'),
+  action: text('action'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Daily Session Quizzes - Quiz attempts for daily sessions
+export const dailySessionQuizzes = pgTable('daily_session_quizzes', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id').references(() => dailyTrainingSessions.id).notNull(),
+  score: integer('score').default(0),
+  total: integer('total').default(0),
+  passed: boolean('passed').default(false),
+  answers: jsonb('answers').$type<{questionId: number; answer: string; correct: boolean}[]>(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Employee Topic Knowledge - Track knowledge levels per facility topic
+export const employeeTopicKnowledge = pgTable('employee_topic_knowledge', {
+  id: serial('id').primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  topicId: integer('topic_id').references(() => facilityTopics.id).notNull(),
+  currentLevel: text('current_level').default('none'), // none, basic, intermediate, advanced
+  assessedAt: timestamp('assessed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Trainer Certifications - Track certified trainers
+export const trainerCertifications = pgTable('trainer_certifications', {
+  id: serial('id').primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  certifiedAt: timestamp('certified_at').defaultNow(),
+  certifiedBy: integer('certified_by').references(() => employees.id),
+  quizScore: integer('quiz_score'),
+  expiresAt: timestamp('expires_at'),
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Work Instruction Import Jobs - Track PDF import and AI processing
+export const workInstructionImportJobs = pgTable('work_instruction_import_jobs', {
+  id: serial('id').primaryKey(),
+  workInstructionId: integer('work_instruction_id').references(() => workInstructions.id),
+  originalFilename: text('original_filename').notNull(),
+  extractedText: text('extracted_text'),
+  status: text('status').default('uploaded'), // uploaded, processing, completed, failed
+  error: text('error'),
+  createdAt: timestamp('created_at').defaultNow(),
+  processedAt: timestamp('processed_at'),
+});
+
+// Insert schemas for Train-the-Trainer tables
+export const insertFacilityTopicSchema = createInsertSchema(facilityTopics).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertFacilityTopicQuestionSchema = createInsertSchema(facilityTopicQuestions).omit({ id: true, createdAt: true });
+export const insertCriticalPointSchema = createInsertSchema(criticalPoints).omit({ id: true, createdAt: true });
+export const insertTrainingPlanDaySchema = createInsertSchema(trainingPlanDays).omit({ id: true, createdAt: true });
+export const insertTrainingPlanDayTopicSchema = createInsertSchema(trainingPlanDayTopics).omit({ id: true, createdAt: true });
+export const insertDailyTrainingSessionSchema = createInsertSchema(dailyTrainingSessions).omit({ id: true, createdAt: true });
+export const insertDailyTaskBlockSchema = createInsertSchema(dailyTaskBlocks).omit({ id: true, createdAt: true });
+export const insertDailySessionQuizSchema = createInsertSchema(dailySessionQuizzes).omit({ id: true, createdAt: true });
+export const insertEmployeeTopicKnowledgeSchema = createInsertSchema(employeeTopicKnowledge).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainerCertificationSchema = createInsertSchema(trainerCertifications).omit({ id: true, createdAt: true });
+export const insertWorkInstructionImportJobSchema = createInsertSchema(workInstructionImportJobs).omit({ id: true, createdAt: true });
+
+// Types for Train-the-Trainer
+export type FacilityTopic = typeof facilityTopics.$inferSelect;
+export type InsertFacilityTopic = z.infer<typeof insertFacilityTopicSchema>;
+export type FacilityTopicQuestion = typeof facilityTopicQuestions.$inferSelect;
+export type InsertFacilityTopicQuestion = z.infer<typeof insertFacilityTopicQuestionSchema>;
+export type CriticalPoint = typeof criticalPoints.$inferSelect;
+export type InsertCriticalPoint = z.infer<typeof insertCriticalPointSchema>;
+export type TrainingPlanDay = typeof trainingPlanDays.$inferSelect;
+export type InsertTrainingPlanDay = z.infer<typeof insertTrainingPlanDaySchema>;
+export type TrainingPlanDayTopic = typeof trainingPlanDayTopics.$inferSelect;
+export type InsertTrainingPlanDayTopic = z.infer<typeof insertTrainingPlanDayTopicSchema>;
+export type DailyTrainingSession = typeof dailyTrainingSessions.$inferSelect;
+export type InsertDailyTrainingSession = z.infer<typeof insertDailyTrainingSessionSchema>;
+export type DailyTaskBlock = typeof dailyTaskBlocks.$inferSelect;
+export type InsertDailyTaskBlock = z.infer<typeof insertDailyTaskBlockSchema>;
+export type DailySessionQuiz = typeof dailySessionQuizzes.$inferSelect;
+export type InsertDailySessionQuiz = z.infer<typeof insertDailySessionQuizSchema>;
+export type EmployeeTopicKnowledge = typeof employeeTopicKnowledge.$inferSelect;
+export type InsertEmployeeTopicKnowledge = z.infer<typeof insertEmployeeTopicKnowledgeSchema>;
+export type TrainerCertification = typeof trainerCertifications.$inferSelect;
+export type InsertTrainerCertification = z.infer<typeof insertTrainerCertificationSchema>;
+export type WorkInstructionImportJob = typeof workInstructionImportJobs.$inferSelect;
+export type InsertWorkInstructionImportJob = z.infer<typeof insertWorkInstructionImportJobSchema>;

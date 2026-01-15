@@ -61,6 +61,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/finance/invoice-breakdown',
   '/finance/scrap-report',
   '/payment-analytics',
+  '/historical-data',
   '/finish-qc-completed-report',
   '/gateway-reports',
   '/inventory/enhanced-mrp',

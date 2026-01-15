@@ -455,7 +455,7 @@ export default function SystemHealthChecksPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {check.category === 'email' ? (
+                        {(check.category === 'email' || check.category === 'notifications') ? (
                           editingEmailId === check.id ? (
                             <div className="flex gap-2">
                               <Input

@@ -116,6 +116,8 @@ import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
 import TrainingControlCenter from '@/pages/TrainingControlCenter';
 import TrainingModule from '@/pages/TrainingModule';
+import TrainingPlans from '@/pages/TrainingPlans';
+import TrainerDashboard from '@/pages/TrainerDashboard';
 import {
   ProgramsPage,
   ProgramBuilderPage,
@@ -157,6 +159,7 @@ import P2QuoteForm from './pages/P2QuoteForm';
 import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import PaymentAnalytics from './pages/PaymentAnalytics';
+import HistoricalDataEntry from './pages/HistoricalDataEntry';
 import ShippedOrderDiscountsPage from './pages/ShippedOrderDiscountsPage';
 import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
 import ScrapReportPage from './pages/ScrapReportPage';
@@ -639,6 +642,10 @@ function App() {
                     component={PaymentAnalytics}
                   />
                   <Route
+                    path="/historical-data"
+                    component={HistoricalDataEntry}
+                  />
+                  <Route
                     path="/finance/shipped-discounts"
                     component={ShippedOrderDiscountsPage}
                   />
@@ -760,6 +767,8 @@ function App() {
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
                   <Route path="/training/programs" component={ProgramsPage} />
                   <Route path="/training/programs/:id" component={ProgramBuilderPage} />
+                  <Route path="/training/plans" component={TrainingPlans} />
+                  <Route path="/training/trainer-dashboard" component={TrainerDashboard} />
                   <Route path="/training/work-instructions" component={WorkInstructionsPage} />
                   <Route path="/training/quizzes" component={QuizManagementPage} />
                   <Route path="/training/daily-quizzes" component={DailyQuizSelectionPage} />

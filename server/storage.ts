@@ -14175,8 +14175,9 @@ export class DatabaseStorage implements IStorage {
       const signatureToken = nanoid(32);
 
       // Generate signature link using unified URL resolution
-      const { createMagicLink } = await import('./utils/magicLink');
-      const signatureLink = createMagicLink(signatureToken);
+      const { createSignatureLink, getCurrentEnvironment } = await import('./utils/magicLink');
+      const signatureLink = createSignatureLink(signatureToken);
+      const environment = getCurrentEnvironment();
 
       // Get customer address
       const addresses = await this.getCustomerAddresses(order.customerId || '');
@@ -14278,12 +14279,13 @@ export class DatabaseStorage implements IStorage {
       // Generate PDF
       const pdfResult = await generateSalesOrderPDF(orderData);
       
-      // Create followup order record
+      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token and environment
       const followupOrder = await this.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
         signatureToken,
+        environment, // Store environment for cross-environment safety
         pdfGenerated: true,
         pdfPath: pdfResult.filePath,
         orderSummary: orderData as any,
@@ -14973,19 +14975,19 @@ export class DatabaseStorage implements IStorage {
   async getMetalAccessoriesDemands(): Promise<any[]> {
     const items = await this.getAllMetalAccessories();
 
-    const ordersInProgress = await db
+    const ordersFinalized = await db
       .select()
       .from(allOrders)
       .where(
         and(
-          eq(allOrders.status, 'IN_PROGRESS'),
+          eq(allOrders.status, 'FINALIZED'),
           eq(allOrders.isCancelled, false)
         )
       );
 
     console.log(
-      '🔍 Metal Accessories Demands - Total IN_PROGRESS orders:',
-      ordersInProgress.length
+      '🔍 Metal Accessories Demands - Total FINALIZED orders:',
+      ordersFinalized.length
     );
 
     const demands = items.map((item) => {
@@ -14996,7 +14998,7 @@ export class DatabaseStorage implements IStorage {
       // Normalize item name for comparison (remove hyphens/underscores, lowercase)
       const normalizedItemName = item.name.toLowerCase().replace(/[-_]/g, '');
 
-      ordersInProgress.forEach((order) => {
+      ordersFinalized.forEach((order) => {
         const features = order.features as any;
         const featureQuantities = order.featureQuantities as any;
 

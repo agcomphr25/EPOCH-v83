@@ -17,6 +17,7 @@ import {
   Home,
   Eye,
   Settings,
+  MessageSquare,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -197,6 +198,20 @@ export default function STACIWTestDashboard() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Quality control queue
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/tickets">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-pink-200">
+            <CardContent className="p-4 text-center">
+              <MessageSquare className="w-8 h-8 text-pink-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Tickets
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Support tickets
               </p>
             </CardContent>
           </Card>

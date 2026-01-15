@@ -1,0 +1,75 @@
+We have added an `environment` column to the following tables in both PROD and DEV:
+- followup_orders
+- orders
+- customers
+
+Your job now is to finish enforcing environment-safe signature emails.
+
+Do the following:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) ENVIRONMENT VARIABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use process.env.APP_ENV as the server’s environment.
+Allowed values: "prod" | "dev"
+
+Fail hard if it is missing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) WRITE ENVIRONMENT ON CREATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When a followup order is created, write:
+  followup_orders.environment = process.env.APP_ENV
+
+Do NOT rely on DB defaults.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) ENFORCE BEFORE SENDING EMAIL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Before ANY signature email is sent (initial, resend, reminder, or job):
+
+- Load the followup_orders row
+- Compare followup_orders.environment to process.env.APP_ENV
+- If they do not match:
+    Block the send
+    Log a fatal error including:
+      order_id
+      signature_token
+      order.environment
+      APP_ENV
+      attempted recipient
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) USE THE SINGLE LINK BUILDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+All signature emails must generate the link using:
+
+  createSignatureLink(token)
+
+No inline URL building is allowed anywhere.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) IMMUTABLE TOKEN GUARANTEE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Audit the codebase and ensure:
+- signature_token is generated ONLY when the followup order is created
+- resends and reminders never generate or modify it
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) FORENSIC LOGGING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Every signature email send must log:
+- order_id
+- signature_token
+- environment
+- full URL sent
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7) VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After implementation, produce a report showing:
+- All call sites that send signature emails
+- The environment guard applied to each
+- Confirmation that tokens are never regenerated
+
+This system must now be impossible to cross-send between DEV and PROD.

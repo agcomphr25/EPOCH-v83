@@ -1,0 +1,93 @@
+You are now enforcing the Signature Link Contract across the entire codebase.
+
+GOAL:
+There must be exactly ONE canonical way to generate, store, send, and consume digital signature links.
+
+Implement the following invariants globally:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) TOKEN IMMUTABILITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- The column followup_orders.signature_token must be written exactly once, when the followup order is created.
+- No resend, reminder, or admin action may ever generate or overwrite a signature_token.
+- Audit the codebase and remove any code that re-generates or updates signature_token outside of initial creation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) SINGLE LINK FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+All signature links must use this format and no other:
+
+  /sign-order?token=<signature_token>
+
+- Remove any legacy /sign-order/:token support.
+- Remove any other tokenized routes.
+- Frontend must read token ONLY from URL query param.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) SINGLE LINK BUILDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create a single function:
+
+  createSignatureLink(token: string): string
+
+This must return:
+
+  getAppBaseUrl() + "/sign-order?token=" + token
+
+This function must be the ONLY way signature URLs are generated.
+
+Audit all email senders:
+- initial send
+- manual resend
+- automated reminders
+- background jobs
+
+Replace all inline URL building with this function.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) ENVIRONMENT SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Each followup_orders row must include an environment field: "prod" or "dev".
+
+Before any signature email is sent:
+- Read the order’s environment
+- Compare to process.env.APP_ENV
+- If they do not match, block the email and log a fatal error
+
+This prevents cross-environment broken links.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) FORENSIC LOGGING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Every signature email send must log:
+
+- order_id
+- signature_token
+- environment
+- full generated URL
+
+Add this to communication_logs or email logs.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) FRONTEND HARDENING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Confirm that SignOrderPage.tsx:
+- Reads token ONLY from query params
+- Shows "Invalid Link" if token is missing
+- Calls ONLY /api/followup-orders/by-token/:token
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7) VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Produce a report showing:
+- All places that previously generated tokens
+- All places that previously built signature URLs
+- All places that send signature emails
+
+Confirm they now all route through:
+  createSignatureLink()
+  and immutable signature_token
+
+No regressions are allowed.
+
+This is a production-grade contract and must be enforced across the entire app.

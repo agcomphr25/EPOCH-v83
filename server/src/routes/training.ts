@@ -3508,6 +3508,7 @@ router.get('/trainer-certifications/check/:employeeId', async (req, res) => {
 // Create trainer certification
 router.post('/trainer-certifications', async (req, res) => {
   try {
+    // Create the trainer certification
     const [cert] = await db.insert(trainerCertifications).values({
       employeeId: req.body.employeeId,
       certifiedBy: req.body.certifiedBy,
@@ -3515,6 +3516,46 @@ router.post('/trainer-certifications', async (req, res) => {
       expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
       notes: req.body.notes,
     }).returning();
+
+    // Get employee details for the matrix entry
+    const [employee] = await db.select().from(employees).where(eq(employees.id, req.body.employeeId));
+
+    // Also create/update training matrix entry for Train-the-Trainer certification
+    const existingMatrix = await db.select().from(trainingMatrix)
+      .where(and(
+        eq(trainingMatrix.employeeId, req.body.employeeId),
+        eq(trainingMatrix.trainingName, 'Train-the-Trainer Certification')
+      ));
+
+    if (existingMatrix.length > 0) {
+      // Update existing entry
+      await db.update(trainingMatrix)
+        .set({
+          lastCompleted: new Date(),
+          lastScore: req.body.quizScore,
+          nextDue: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+          status: 'COMPLETED',
+          notes: `Certified with score: ${req.body.quizScore}%`,
+        })
+        .where(eq(trainingMatrix.id, existingMatrix[0].id));
+    } else {
+      // Create new matrix entry
+      await db.insert(trainingMatrix).values({
+        employeeId: req.body.employeeId,
+        employeeName: employee?.name || null,
+        jobTitle: employee?.jobTitle || null,
+        department: employee?.department || null,
+        trainingName: 'Train-the-Trainer Certification',
+        requiredBy: 'ROLE',
+        frequency: 'ANNUAL',
+        lastCompleted: new Date(),
+        lastScore: req.body.quizScore,
+        nextDue: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+        status: 'COMPLETED',
+        notes: `Certified with score: ${req.body.quizScore}%`,
+      });
+    }
+
     res.status(201).json(cert);
   } catch (error: any) {
     console.error('Error creating trainer certification:', error);
@@ -3533,6 +3574,18 @@ router.put('/trainer-certifications/:id/revoke', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ error: 'Certification not found' });
     }
+
+    // Also update the training matrix entry to show revoked status
+    await db.update(trainingMatrix)
+      .set({
+        status: 'PENDING',
+        notes: 'Certification revoked',
+      })
+      .where(and(
+        eq(trainingMatrix.employeeId, updated.employeeId),
+        eq(trainingMatrix.trainingName, 'Train-the-Trainer Certification')
+      ));
+
     res.json(updated);
   } catch (error: any) {
     console.error('Error revoking trainer certification:', error);

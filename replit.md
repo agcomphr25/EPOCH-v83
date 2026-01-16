@@ -37,6 +37,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue with Accept.Blue integration.
 - **Help Center**: FAQ-based system accessible via navbar.
 - **PDF Management**: Centralized PDF configuration, flexible Template Library System, and **unified orderPdfService** with intent-based PDF generation (SIGNATURE_EMAIL, RESEND_EMAIL, CUSTOMER_VIEW, SHIPPING_PRINT, SIGNED_ARCHIVE) using frozen order snapshots to prevent data drift between original and regenerated PDFs.
+- **Signature Email Workflow**: Two semantically distinct actions: (1) "Resend Signature Email" - resends the SAME document using stored snapshot, REFUSES if order changed, same publicSignatureId; (2) "Send Updated Order for Signature" - creates NEW snapshot, NEW followup_order, NEW publicSignatureId, supersedes previous unsigned requests. Supersession tracking ensures only ONE active unsigned followup_order per order.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking.
 - **Order Audit System**: Comprehensive audit tracking for P1 orders and P2 serialized items, including configurable event categories, field change detection, department transition timing, and a unified Audit Drawer.

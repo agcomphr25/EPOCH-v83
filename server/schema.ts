@@ -272,6 +272,12 @@ export const followupOrders = pgTable('followup_orders', {
   // INVARIANT: Created ONLY during initial signature email, NEVER updated on resend
   // Used for SIGNATURE_EMAIL, RESEND_EMAIL, and SIGNED_ARCHIVE intents
   orderSnapshot: jsonb('order_snapshot'), // Complete order data frozen at creation time
+  // SUPERSESSION TRACKING: When an updated order is sent, previous unsigned followups are superseded
+  // Only ONE active (non-superseded, unsigned) followup_order per order at a time
+  // Signed followups are IMMUTABLE and never superseded
+  supersededAt: timestamp('superseded_at'), // When this followup was replaced by a newer one
+  supersededBy: integer('superseded_by'), // ID of the followup order that replaced this one
+  supersessionReason: text('supersession_reason'), // 'order_updated' | 'manual_invalidation' etc.
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

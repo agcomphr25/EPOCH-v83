@@ -1372,18 +1372,23 @@ router.post('/:orderId/resend-email', async (req, res) => {
       
       const signatureToken = nanoid(32);
       
-      // Create followup order entry with immutable token and environment
+      // Generate public signature ID for path-based URL (email-client safe)
+      const { generatePublicSignatureId } = await import('../../utils/magicLink');
+      const publicSignatureId = generatePublicSignatureId();
+      
+      // Create followup order entry with immutable token, public ID, and environment
       followupOrder = await storage.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
         signatureToken,
+        publicSignatureId, // NEW: Path-based URL identifier for email-safe links
         environment: currentEnv, // Store environment for cross-environment safety
         pdfGenerated: false, // Will be generated below
         emailSent: false,
       });
       
-      console.log(`✅ Created followup_order for ${orderId} with immutable token ${signatureToken.substring(0, 8)}... in ${currentEnv} environment`);
+      console.log(`✅ Created followup_order for ${orderId} with publicSignatureId ${publicSignatureId} in ${currentEnv} environment`);
     } else {
       // SIGNATURE LINK CONTRACT: Token immutability - NEVER regenerate tokens
       // Check for cross-environment safety
@@ -1398,6 +1403,16 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
       
       console.log(`📋 Using existing immutable token for ${orderId} (token: ${followupOrder.signatureToken?.substring(0, 8)}...)`);
+      
+      // SAFETY CHECK: If existing order is missing publicSignatureId, generate one
+      if (!followupOrder.publicSignatureId) {
+        console.log(`⚠️ Order ${orderId} missing publicSignatureId - generating one now`);
+        const { generatePublicSignatureId } = await import('../../utils/magicLink');
+        const newPublicId = generatePublicSignatureId();
+        await storage.updateFollowupOrder(followupOrder.id, { publicSignatureId: newPublicId });
+        followupOrder.publicSignatureId = newPublicId;
+        console.log(`✅ Generated publicSignatureId ${newPublicId} for order ${orderId}`);
+      }
       
       if (followupOrder.signatureSigned) {
         console.log(`📋 Order ${orderId} already signed at ${followupOrder.signedAt} - signature data preserved`);

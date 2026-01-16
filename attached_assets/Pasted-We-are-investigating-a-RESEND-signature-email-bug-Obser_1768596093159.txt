@@ -1,0 +1,93 @@
+We are investigating a RESEND signature email bug.
+
+Observed behavior:
+- Resend email sends ONLY the PDF attachment
+- Email body is empty
+- No magic link is included
+- This affects UNSIGNED orders
+- This behavior existed BEFORE the recent architecture changes
+
+This is NOT about initial emails.
+This is NOT about reminder emails.
+
+Investigate ONLY the RESEND path.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) IDENTIFY THE RESEND ENTRY POINT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Find the exact function that handles:
+- Manual "Resend Signature" action from the UI
+
+Provide:
+- File name
+- Function name
+- Route handler
+- How it decides what email to send
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) EMAIL TEMPLATE SELECTION (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Show:
+- Which email template is used for RESEND
+- Whether it is the SAME template as INITIAL send
+- Whether a conditional branch skips body rendering
+
+Specifically check for logic like:
+- if (context === 'resend')
+- if (isReminder)
+- if (skipEmailBody)
+- if (pdfOnly)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) MAGIC LINK INJECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For the resend path ONLY:
+- Show where the magic link is generated
+- Show where it is passed into the email template
+- Confirm whether it is INCLUDED in the template variables
+
+Explicitly answer:
+- Is createSignatureLink() called on resend? (YES / NO)
+- Is the resulting URL passed to the template? (YES / NO)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) PDF-ONLY FALLBACK CHECK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Search the codebase for:
+- "pdfOnly"
+- "sendPdf"
+- "attachmentOnly"
+- "skipBody"
+- any conditional that sends attachments without HTML
+
+Show any code that causes:
+- attachment-only emails
+- empty email bodies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) SENDGRID PAYLOAD INSPECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Log or show the actual SendGrid payload for a RESEND email:
+- subject
+- html content
+- text content
+- attachments
+- dynamic template data
+
+Confirm whether:
+- html/text is empty
+- or populated but not rendered
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) ROOT CAUSE CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Based on evidence, classify the cause as ONE of:
+A) Resend path uses wrong template
+B) Resend path skips template rendering
+C) Magic link not injected for resend
+D) Conditional pdf-only fallback triggered
+E) Template expects variables not provided
+F) Other (must show code)
+
+Do NOT guess.
+Show code and payload evidence.

@@ -805,8 +805,24 @@ export function registerRoutes(app: Express): Server {
         }),
       ];
 
+      // DEDUPLICATION: Remove duplicate orders by orderId (keep first occurrence)
+      // This prevents the same order from appearing multiple times in the queue
+      const seenOrderIds = new Set<string>();
+      const deduplicatedQueue = combinedQueue.filter((order) => {
+        const orderId = (order as any).orderId;
+        if (seenOrderIds.has(orderId)) {
+          return false; // Skip duplicate
+        }
+        seenOrderIds.add(orderId);
+        return true;
+      });
+
+      console.log(
+        `🔧 DEDUPLICATION: Reduced from ${combinedQueue.length} to ${deduplicatedQueue.length} orders (removed ${combinedQueue.length - deduplicatedQueue.length} duplicates)`
+      );
+
       // Count Mesa Universal orders in final result
-      const mesaCount = combinedQueue.filter(
+      const mesaCount = deduplicatedQueue.filter(
         (order) => (order as any).modelId === 'mesa_universal'
       ).length;
       console.log(
@@ -814,13 +830,13 @@ export function registerRoutes(app: Express): Server {
       );
 
       // Sort by priority score (lower = higher priority)
-      combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
+      deduplicatedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
 
       // Log OEM priority verification
       if (oemMode && selectedPOOrders.length > 0) {
-        const topOrders = combinedQueue.slice(
+        const topOrders = deduplicatedQueue.slice(
           0,
-          Math.min(5, combinedQueue.length)
+          Math.min(5, deduplicatedQueue.length)
         );
         console.log(
           '🚀 OEM MODE VERIFICATION: Top 5 orders after sorting:',
@@ -843,7 +859,7 @@ export function registerRoutes(app: Express): Server {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
 
-      res.json(combinedQueue);
+      res.json(deduplicatedQueue);
     } catch (_error) {
       console.error('❌ P1 layup queue fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P1 layup queue' });

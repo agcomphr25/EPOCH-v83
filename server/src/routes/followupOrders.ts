@@ -10,7 +10,7 @@ import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
 import { createSignatureLink, generatePublicSignatureId } from '../../utils/magicLink';
-import { generateOrderPdf, PdfIntent, hasOrderChangedSinceSnapshot, storeOrderSnapshot } from '../../services/orderPdfService';
+import { generateOrderPdf, PdfIntent, hasOrderChangedSinceSnapshot, storeOrderSnapshotById } from '../../services/orderPdfService';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -1470,29 +1470,33 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfPath,
     });
     
+    // INVARIANT: Email data comes from stored snapshot, NOT from live order
+    // This ensures the email matches the PDF exactly
+    const storedSnapshot = followupOrder.orderSnapshot as any;
+    
     // Send email via unified notification function with forceResend=true (bypass deduplication)
     // Manual resends intentionally bypass deduplication since user explicitly requested it
     const emailResult = await sendOrderConfirmationNotification({
-      orderId: order.orderId,
-      customerId: order.customerId || '',
-      customerEmail: customer.email,
-      customerPhone: customer.phone,
+      orderId: storedSnapshot.orderId || order.orderId,
+      customerId: storedSnapshot.customerId || order.customerId || '',
+      customerEmail: storedSnapshot.customerEmail || customer.email,
+      customerPhone: storedSnapshot.customerPhone || customer.phone,
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
-      signatureToken: followupOrder.signatureToken || '',
+      signatureToken: currentFollowupOrder.signatureToken || '',
       pdfPath,
       context: 'resend', // Manual resend by user
       orderData: {
-        orderId: order.orderId,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        orderDate: new Date(order.orderDate).toLocaleDateString(),
-        dueDate: new Date(order.dueDate).toLocaleDateString(),
-        customerPO: order.customerPO || undefined,
-        modelId: order.modelId || undefined,
-        handedness: order.handedness || undefined,
-        features: order.features as Record<string, any> || undefined,
-        notes: order.notes || undefined,
-        shipping: order.shipping || 0,
+        orderId: storedSnapshot.orderId || order.orderId,
+        customerName: storedSnapshot.customerName || customer.name,
+        customerEmail: storedSnapshot.customerEmail || customer.email,
+        orderDate: storedSnapshot.orderDate ? new Date(storedSnapshot.orderDate).toLocaleDateString() : new Date(order.orderDate).toLocaleDateString(),
+        dueDate: storedSnapshot.dueDate ? new Date(storedSnapshot.dueDate).toLocaleDateString() : new Date(order.dueDate).toLocaleDateString(),
+        customerPO: storedSnapshot.customerPO || order.customerPO || undefined,
+        modelId: storedSnapshot.modelId || order.modelId || undefined,
+        handedness: storedSnapshot.handedness || order.handedness || undefined,
+        features: storedSnapshot.features || order.features as Record<string, any> || undefined,
+        notes: storedSnapshot.notes || order.notes || undefined,
+        shipping: storedSnapshot.shipping || order.shipping || 0,
         signatureLink,
       },
       forceResend: true, // MANUAL RESEND - bypass deduplication intentionally
@@ -1637,10 +1641,11 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
     const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);
     const pdfPath = pdfResult.filePath!;
 
-    // Store the new snapshot with the new followup order
+    // Store the new snapshot with the specific new followup order
+    // CRITICAL: Use followup order ID, not order ID, to prevent overwriting other snapshots
     if (pdfResult.snapshot) {
-      await storeOrderSnapshot(orderId, pdfResult.snapshot);
-      console.log(`💾 [UPDATED-ORDER] Stored snapshot for order ${orderId}`);
+      await storeOrderSnapshotById(newFollowupOrder.id, pdfResult.snapshot);
+      console.log(`💾 [UPDATED-ORDER] Stored snapshot for followup order ${newFollowupOrder.id}`);
     }
 
     // Update follow-up order with PDF path
@@ -1662,6 +1667,9 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
       recipient: customer.email,
     });
 
+    // Use snapshot data for email to ensure consistency with PDF
+    const newSnapshot = pdfResult.snapshot as any;
+    
     console.log('📧 [UPDATED-ORDER-DEBUG] About to send email for order:', {
       orderId: order.orderId,
       signatureLink,
@@ -1669,30 +1677,31 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
       signatureToken: signatureToken.substring(0, 8) + '...',
       pdfPath,
       supersededFollowupId,
+      hasSnapshot: !!newSnapshot,
     });
 
-    // Send signature email
+    // Send signature email using snapshot data for consistency
     const emailResult = await sendOrderConfirmationNotification({
-      orderId: order.orderId,
-      customerId: order.customerId || '',
-      customerEmail: customer.email,
-      customerPhone: customer.phone,
+      orderId: newSnapshot?.orderId || order.orderId,
+      customerId: newSnapshot?.customerId || order.customerId || '',
+      customerEmail: newSnapshot?.customerEmail || customer.email,
+      customerPhone: newSnapshot?.customerPhone || customer.phone,
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken: signatureToken,
       pdfPath,
       context: 'updated_order',
       orderData: {
-        orderId: order.orderId,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        orderDate: new Date(order.orderDate).toLocaleDateString(),
-        dueDate: new Date(order.dueDate).toLocaleDateString(),
-        customerPO: order.customerPO || undefined,
-        modelId: order.modelId || undefined,
-        handedness: order.handedness || undefined,
-        features: order.features as Record<string, any> || undefined,
-        notes: order.notes || undefined,
-        shipping: order.shipping || 0,
+        orderId: newSnapshot?.orderId || order.orderId,
+        customerName: newSnapshot?.customerName || customer.name,
+        customerEmail: newSnapshot?.customerEmail || customer.email,
+        orderDate: newSnapshot?.orderDate ? new Date(newSnapshot.orderDate).toLocaleDateString() : new Date(order.orderDate).toLocaleDateString(),
+        dueDate: newSnapshot?.dueDate ? new Date(newSnapshot.dueDate).toLocaleDateString() : new Date(order.dueDate).toLocaleDateString(),
+        customerPO: newSnapshot?.customerPO || order.customerPO || undefined,
+        modelId: newSnapshot?.modelId || order.modelId || undefined,
+        handedness: newSnapshot?.handedness || order.handedness || undefined,
+        features: newSnapshot?.features || order.features as Record<string, any> || undefined,
+        notes: newSnapshot?.notes || order.notes || undefined,
+        shipping: newSnapshot?.shipping || order.shipping || 0,
         signatureLink,
       },
       forceResend: true, // Always send for updated orders

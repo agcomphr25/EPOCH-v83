@@ -536,23 +536,35 @@ export async function generateOrderPdf(
 }
 
 /**
+ * Store the order snapshot on a specific followup order record.
+ * This MUST be called during signature email creation, using the specific followup order ID.
+ * CRITICAL: Uses followup order ID, not order ID, to prevent overwriting other followups' snapshots.
+ */
+export async function storeOrderSnapshotById(followupOrderId: number, snapshot: OrderSnapshot): Promise<void> {
+  console.log(`💾 [PDF-SERVICE] Storing snapshot for followup order ${followupOrderId}`);
+  
+  await db
+    .update(followupOrders)
+    .set({ orderSnapshot: snapshot })
+    .where(eq(followupOrders.id, followupOrderId));
+  
+  console.log(`✅ [PDF-SERVICE] Snapshot stored for followup order ${followupOrderId}`);
+}
+
+/**
+ * @deprecated Use storeOrderSnapshotById instead to avoid overwriting snapshots
  * Store the order snapshot when creating a followup order for signature.
  * This MUST be called during initial signature email creation.
  */
 export async function storeOrderSnapshot(orderId: string, snapshot: OrderSnapshot): Promise<void> {
-  console.log(`💾 [PDF-SERVICE] Storing snapshot for ${orderId}`);
+  console.log(`⚠️ [PDF-SERVICE] DEPRECATED: storeOrderSnapshot called for ${orderId} - use storeOrderSnapshotById instead`);
   
   const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
   if (!followupOrder) {
     throw new Error(`Cannot store snapshot: followup order not found for ${orderId}`);
   }
   
-  await db
-    .update(followupOrders)
-    .set({ orderSnapshot: snapshot })
-    .where(eq(followupOrders.orderId, orderId));
-  
-  console.log(`✅ [PDF-SERVICE] Snapshot stored for ${orderId}`);
+  await storeOrderSnapshotById(followupOrder.id, snapshot);
 }
 
 /**

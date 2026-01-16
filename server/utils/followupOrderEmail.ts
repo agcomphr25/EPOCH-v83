@@ -264,7 +264,13 @@ export async function sendFollowupOrderEmail(
       htmlLength: emailHTML?.length || 0,
       hasAttachment: true,
       pdfSize: pdfBase64?.length || 0,
+      signatureLink: orderData.signatureLink,
+      signatureLinkPresent: !!orderData.signatureLink && orderData.signatureLink.length > 20,
     });
+    
+    // DEBUG: Log first 500 chars of HTML to verify body is present
+    console.log('📧 [DEBUG] HTML preview (first 500 chars):', emailHTML?.substring(0, 500));
+    console.log('📧 [DEBUG] Text preview (first 300 chars):', emailText?.substring(0, 300));
 
     const [response] = await client.send(msg);
 

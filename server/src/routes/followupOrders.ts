@@ -1622,6 +1622,18 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
+    // DEBUG: Log signature state before sending email
+    console.log('📧 [RESEND-DEBUG] About to send email for order:', {
+      orderId: order.orderId,
+      signatureLink,
+      signatureLinkLength: signatureLink?.length || 0,
+      publicSignatureId: followupOrder.publicSignatureId,
+      signatureToken: followupOrder.signatureToken?.substring(0, 8) + '...',
+      signatureSigned: followupOrder.signatureSigned,
+      signedAt: followupOrder.signedAt,
+      pdfPath,
+    });
+    
     // Send email via unified notification function with forceResend=true (bypass deduplication)
     // Manual resends intentionally bypass deduplication since user explicitly requested it
     const emailResult = await sendOrderConfirmationNotification({

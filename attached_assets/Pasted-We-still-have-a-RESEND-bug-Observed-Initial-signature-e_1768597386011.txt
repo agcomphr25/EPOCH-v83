@@ -1,0 +1,102 @@
+We still have a RESEND bug.
+
+Observed:
+- Initial signature email includes body + magic link
+- Resend for UNSIGNED order sends ONLY PDF attachment
+- No body, no magic link
+- publicSignatureId exists and is valid
+
+This means the resend path is executing the WRONG email behavior.
+
+Investigate and prove WHICH branch is executing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) TRACE THE RESEND ENTRY POINT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In server/src/routes/followupOrders.ts:
+
+- Identify the exact resend handler
+- Show the full control flow from:
+  route → service → email send
+
+Include:
+- function names
+- parameters passed
+- context flags (resend, initial, reminder, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) IDENTIFY EMAIL TYPE / MODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Explicitly answer:
+
+- Does resend call the SAME email function as initial?
+- Or does it call a “send PDF / document resend” function?
+
+Search for:
+- sendSalesOrderEmail
+- sendFollowupOrderEmail
+- sendOrderConfirmationNotification
+- sendDocumentEmail
+- any function that attaches a PDF without body
+
+Show the call graph.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) CHECK CONDITIONALS THAT SUPPRESS BODY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Search for conditionals like:
+
+- if (isResend)
+- if (context === 'resend')
+- if (signatureSigned)
+- if (!requiresSignature)
+- if (skipEmailBody)
+- if (pdfOnly)
+
+Show the exact condition that causes:
+- body not to render
+- magic link not to be included
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) SIGNATURE STATE EVALUATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Confirm, with code and logs:
+
+- What condition determines "order is signed"?
+- What fields are checked?
+  (signatureSigned, signedAt, etc.)
+
+Log or print:
+- followupOrder.signatureSigned
+- followupOrder.signedAt
+- followupOrder.publicSignatureId
+
+At the moment resend is triggered.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) SENDGRID PAYLOAD FOR RESEND (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Log the actual payload sent to SendGrid on RESEND:
+
+- subject
+- html (length + content)
+- text (length + content)
+- attachments
+- template data
+
+Confirm:
+- Is html/text empty?
+- Or are they present but not rendered?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) CLASSIFY ROOT CAUSE (NO GUESSING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Classify as exactly ONE:
+
+A) Resend uses wrong email function
+B) Resend uses wrong email context/type
+C) Conditional suppresses body for resend
+D) Signature state incorrectly evaluated
+E) Other (show code)
+
+Show the exact line that causes the PDF-only behavior.

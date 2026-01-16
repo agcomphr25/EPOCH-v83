@@ -71,15 +71,39 @@ export function createMagicLink(token: string): string {
 }
 
 /**
+ * Generate a public signature ID for URL-safe identification
+ * Format: sig_XXXXXXXX (8 uppercase alphanumeric characters)
+ * This ID is safe to expose in URLs - contains no secrets
+ */
+export function generatePublicSignatureId(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excludes confusing chars: I, O, 0, 1
+  let id = 'sig_';
+  for (let i = 0; i < 8; i++) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return id;
+}
+
+/**
  * SIGNATURE LINK CONTRACT: Single canonical function for generating signature URLs
  * This is the ONLY way signature URLs should be generated across the codebase.
  * 
- * Format: {APP_BASE_URL}/sign-order?token={signature_token}
+ * NEW FORMAT: {APP_BASE_URL}/sign-order/{public_signature_id}
+ * - NO query params
+ * - NO secrets in URL
+ * - Email-client safe (no URL mangling)
  * 
- * @param token - The immutable signature token from followup_orders.signature_token
- * @returns Full signature URL
+ * @param publicSignatureId - The public_signature_id from followup_orders (NOT the secret token)
+ * @returns Full signature URL using path-based routing
  */
-export function createSignatureLink(token: string): string {
+export function createSignatureLink(publicSignatureId: string): string {
+  return `${getAppBaseUrl()}/sign-order/${publicSignatureId}`;
+}
+
+/**
+ * @deprecated Legacy token-based links - use createSignatureLink with publicSignatureId instead
+ */
+export function createLegacySignatureLink(token: string): string {
   return `${getAppBaseUrl()}/sign-order?token=${token}`;
 }
 

@@ -1,0 +1,114 @@
+We are permanently correcting the digital signature architecture.
+
+Objective:
+Eliminate all client-supplied authority from email links so that
+INITIAL, RESEND, and REMINDER signature emails work deterministically
+with ALL email providers.
+
+This is a REQUIRED architectural change, not a workaround.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) ADD PUBLIC SIGNATURE IDENTIFIER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add a new column to followup_orders:
+
+  public_signature_id TEXT UNIQUE NOT NULL
+
+Generation rules:
+- Generated ONCE at followup order creation
+- Prefix: "sig_"
+- Length: 8–12 characters
+- Characters: A–Z, 0–9 only
+- NO symbols, NO lowercase, NO secrets
+
+Example:
+  sig_8F3K2Q9A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) SERVER-ONLY SECRET (KEEP EXISTING TOKEN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Retain followup_orders.signature_token but enforce:
+
+- signature_token is NEVER exposed in URLs
+- signature_token is NEVER accepted from the client
+- signature_token is used ONLY server-side to authorize signing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) CANONICAL SIGNATURE LINK (ALL EMAILS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALL signature links (initial, resend, reminder) MUST be:
+
+  /sign-order/<public_signature_id>
+
+NO query params.
+NO tokens in URLs.
+NO exceptions.
+
+Create a single helper:
+
+  createSignatureLink(publicSignatureId: string): string
+
+This must be the ONLY way signature URLs are generated.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) ROUTING & LOOKUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Frontend:
+- Update SignOrderPage to read public_signature_id from the URL path
+- Remove all token parsing logic
+- Client treats the ID as an untrusted locator only
+
+Backend:
+- Replace token-based lookup with:
+
+    SELECT * FROM followup_orders
+    WHERE public_signature_id = :id
+
+- Enforce:
+  - environment guard
+  - not already signed
+  - order exists
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) SIGNING AUTHORIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When a signature is submitted:
+- Server validates using the internal signature_token
+- Client NEVER supplies the token
+- Client supplies only the public_signature_id
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) INITIAL / RESEND / REMINDER UNIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ensure:
+- Initial send uses public_signature_id
+- Resend uses SAME public_signature_id
+- Reminder uses SAME public_signature_id
+- No path ever regenerates public_signature_id or signature_token
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7) BACKWARD COMPATIBILITY (TEMPORARY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If a request arrives with legacy ?token=:
+- Resolve token ONCE server-side
+- Redirect (302) to /sign-order/<public_signature_id>
+- Log legacy usage
+- Do NOT expose token again
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8) MIGRATION & SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Backfill public_signature_id for existing followup_orders
+- Ensure uniqueness
+- Add DB constraint
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9) VERIFICATION REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After implementation, produce a report confirming:
+- No email contains signature_token
+- No query params are required for signing
+- Initial, resend, and reminder emails all use path-based links
+- System works regardless of email client, tracking, scanners, or redirects
+
+This change is mandatory and must be deterministic.

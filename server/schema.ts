@@ -237,6 +237,10 @@ export const followupOrders = pgTable('followup_orders', {
   orderId: text('order_id').notNull(),
   customerId: text('customer_id').notNull(),
   customerEmail: text('customer_email').notNull(),
+  // PUBLIC SIGNATURE ID: URL-safe identifier for signature links (no query params)
+  // Format: sig_XXXXXXXX (8 uppercase alphanumeric chars)
+  // This is the ONLY value exposed in URLs - never contains secrets
+  publicSignatureId: text('public_signature_id').unique(),
   // SIGNATURE LINK CONTRACT: Environment field for cross-environment safety
   // Token must only be used in the environment it was created in
   environment: text('environment').default('dev'), // 'prod' or 'dev'
@@ -248,8 +252,9 @@ export const followupOrders = pgTable('followup_orders', {
   pdfGenerated: boolean('pdf_generated').default(false),
   pdfPath: text('pdf_path'),
   pdfGeneratedAt: timestamp('pdf_generated_at'),
-  // SIGNATURE LINK CONTRACT: Token is immutable - written once at creation, never updated
-  signatureToken: text('signature_token'), // Unique token for signature link
+  // SIGNATURE LINK CONTRACT: Token is SERVER-ONLY - never exposed in URLs
+  // Used only for server-side authorization, never sent to client
+  signatureToken: text('signature_token'), // Server-only secret for authorization
   signatureSigned: boolean('signature_signed').default(false),
   signatureData: text('signature_data'), // Base64 signature image
   signedAt: timestamp('signed_at'),
@@ -1796,6 +1801,7 @@ export const insertFollowupOrderSchema = createInsertSchema(followupOrders)
     orderId: z.string().min(1, 'Order ID is required'),
     customerId: z.string().min(1, 'Customer ID is required'),
     customerEmail: z.string().email('Valid email is required'),
+    publicSignatureId: z.string().min(1, 'Public signature ID is required'),
     signatureToken: z.string().min(1, 'Signature token is required'),
     orderSummary: z.record(z.any()).optional().nullable(),
   });

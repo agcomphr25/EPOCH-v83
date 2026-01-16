@@ -492,6 +492,7 @@ import {
   parseOrderId,
   formatOrderId,
 } from './utils/orderIdGenerator';
+import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
 
 // modify the interface with any CRUD methods
 // you might need
@@ -14177,7 +14178,6 @@ export class DatabaseStorage implements IStorage {
 
       // Import required modules
       const { nanoid } = await import('nanoid');
-      const { generateSalesOrderPDF } = await import('./utils/pdf/salesOrderPdf');
       const { sendFollowupOrderEmail } = await import('./utils/followupOrderEmail');
 
       // Generate unique signature token (kept server-side for security)
@@ -14189,107 +14189,12 @@ export class DatabaseStorage implements IStorage {
       const signatureLink = createSignatureLink(publicSignatureId);
       const environment = getCurrentEnvironment();
 
-      // Get customer address
-      const addresses = await this.getCustomerAddresses(order.customerId || '');
-      const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
-
-      // Get stock model information
-      const stockModels = await this.getAllStockModels();
-      const stockModel = stockModels.find(m => m.id === order.modelId);
-
-      // Get features information
-      const allFeatures = await this.getAllFeatures();
-
-      // Build feature data
-      const featurePrices: Record<string, number> = {};
-      const featureDisplayNames: Record<string, string> = {};
-      const featureSelectionDisplayNames: Record<string, string> = {};
-      const featureSelectionPrices: Record<string, number> = {};
-
-      if (order.features && typeof order.features === 'object') {
-        for (const [featureKey, featureValue] of Object.entries(order.features)) {
-          if (featureValue && featureValue !== false && featureValue !== '') {
-            const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
-            if (featureDetail) {
-              featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
-              const featureOptions = (featureDetail as any).options || [];
-              
-              if (Array.isArray(featureValue)) {
-                let totalPrice = 0;
-                for (const selectionValue of featureValue) {
-                  const option = featureOptions.find((opt: any) => opt.value === selectionValue);
-                  if (option) {
-                    featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
-                    const selectionPrice = option.price || 0;
-                    featureSelectionPrices[selectionValue] = selectionPrice;
-                    totalPrice += selectionPrice;
-                  }
-                }
-                featurePrices[featureKey] = totalPrice;
-              } else {
-                const option = featureOptions.find((opt: any) => opt.value === featureValue);
-                if (option) {
-                  featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
-                  const selectionPrice = option.price || 0;
-                  featureSelectionPrices[featureValue] = selectionPrice;
-                  featurePrices[featureKey] = selectionPrice;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Extract miscellaneous items from features object
-      const miscItems = (order.features as any)?.miscItems || [];
-
-      // Prepare order data for PDF
-      const orderData = {
-        orderId: order.orderId,
-        orderDate: new Date(order.orderDate),
-        dueDate: new Date(order.dueDate),
-        customerId: order.customerId || '',
-        customerPO: order.customerPO || undefined,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        customerPhone: customer.phone || undefined,
-        customerCompany: customer.company || undefined,
-        customerAddress: defaultAddress ? {
-          street: defaultAddress.street,
-          street2: defaultAddress.street2 || undefined,
-          city: defaultAddress.city,
-          state: defaultAddress.state,
-          zipCode: defaultAddress.zipCode,
-          country: defaultAddress.country,
-        } : undefined,
-        modelId: order.modelId || undefined,
-        modelName: stockModel?.name || undefined,
-        modelDisplayName: stockModel?.displayName || undefined,
-        modelPrice: stockModel?.price || 0,
-        handedness: order.handedness || undefined,
-        features: order.features as Record<string, any> || undefined,
-        featurePrices,
-        featureDisplayNames,
-        featureSelectionDisplayNames,
-        featureSelectionPrices,
-        featureQuantities: order.featureQuantities as Record<string, number> || undefined,
-        miscItems: miscItems.length > 0 ? miscItems : undefined,
-        notes: order.notes || undefined,
-        shipping: order.shipping || 0,
-        paymentStatus: 'PENDING' as const,
-        discountCode: order.discountCode || undefined,
-        customDiscountType: order.customDiscountType || undefined,
-        customDiscountValue: order.customDiscountValue || undefined,
-        showCustomDiscount: order.showCustomDiscount || undefined,
-        priceOverride: order.priceOverride || undefined,
-        flattopPriceOverride: order.flattopPriceOverride || undefined,
-        isFlattop: order.isFlattop || false,
-      };
-
-      // Generate PDF
-      const pdfResult = await generateSalesOrderPDF(orderData);
+      // Generate PDF via unified service with frozen snapshot
+      const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);
+      const pdfPath = pdfResult.filePath!;
+      const orderSnapshot = pdfResult.snapshot;
       
-      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token and public ID
+      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token, public ID, and frozen snapshot
       const followupOrder = await this.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
@@ -14298,8 +14203,9 @@ export class DatabaseStorage implements IStorage {
         publicSignatureId, // NEW: Path-based URL identifier (no secrets in URL)
         environment, // Store environment for cross-environment safety
         pdfGenerated: true,
-        pdfPath: pdfResult.filePath,
-        orderSummary: orderData as any,
+        pdfPath,
+        orderSummary: { orderId: order.orderId } as any,
+        orderSnapshot, // INVARIANT: Frozen at creation, never updated on resend
       });
 
       // Send email
@@ -14314,7 +14220,7 @@ export class DatabaseStorage implements IStorage {
           modelId: order.modelId,
           signatureLink,
         },
-        pdfResult.filePath
+        pdfPath
       );
 
       // Update followup order with email status

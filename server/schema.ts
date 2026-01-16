@@ -268,6 +268,10 @@ export const followupOrders = pgTable('followup_orders', {
   reminderCount: integer('reminder_count').default(0), // Number of reminder emails sent
   // Order Summary for Email Display
   orderSummary: jsonb('order_summary'), // Contains order details for email body
+  // ORDER SNAPSHOT: Frozen order data captured at signature email creation
+  // INVARIANT: Created ONLY during initial signature email, NEVER updated on resend
+  // Used for SIGNATURE_EMAIL, RESEND_EMAIL, and SIGNED_ARCHIVE intents
+  orderSnapshot: jsonb('order_snapshot'), // Complete order data frozen at creation time
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

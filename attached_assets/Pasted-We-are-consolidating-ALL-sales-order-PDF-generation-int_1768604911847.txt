@@ -1,0 +1,131 @@
+We are consolidating ALL sales order PDF generation into a single, authoritative service.
+
+This is a HARD architectural refactor.
+Do not preserve existing fragmentation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) GOAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+There must be exactly ONE PDF renderer for sales orders.
+All PDFs must be generated through it.
+
+Controllers must NOT:
+- query PDF data
+- choose notes fields
+- recalculate discounts
+- decide payment status
+- embed signatures
+
+They may ONLY:
+- choose orderId
+- choose intent
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2) CREATE UNIFIED PDF SERVICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create:
+
+server/services/orderPdfService.ts
+
+Export:
+
+enum PdfIntent {
+  SIGNATURE_EMAIL,   // frozen snapshot, pending payment, signature box
+  RESEND_EMAIL,      // SAME snapshot as original signature
+  CUSTOMER_VIEW,     // live data, customer notes
+  SHIPPING_PRINT,    // live data, internal notes
+  SIGNED_ARCHIVE     // frozen snapshot + embedded signature
+}
+
+export async function generateOrderPdf(
+  orderId: string,
+  intent: PdfIntent
+): Promise<{
+  buffer: Buffer;
+  filePath?: string;
+  generatedAt: Date;
+}>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3) INTENT-DRIVEN BEHAVIOR (NO FLAGS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Intent controls ALL behavior.
+Do NOT allow callers to override behavior with options.
+
+Define intent config internally, e.g.:
+
+- dataSource: snapshot | live
+- notesField: customer_notes | internal_notes
+- paymentStatus: pending | live | as_signed
+- includeSignatureBox: boolean
+- storePdf: boolean
+
+SIGNATURE_EMAIL:
+- uses snapshot
+- stores PDF
+- payment status ALWAYS "PENDING"
+
+RESEND_EMAIL:
+- uses SAME snapshot as original
+- stores PDF
+- NEVER regenerates snapshot
+
+CUSTOMER_VIEW:
+- live data
+- no storage
+
+SHIPPING_PRINT:
+- live data
+- internal notes
+- no storage
+
+SIGNED_ARCHIVE:
+- snapshot
+- embedded signature
+- immutable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4) SNAPSHOT RULE (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add to followup_orders:
+
+order_snapshot JSONB NOT NULL
+
+Rules:
+- Snapshot is created ONLY when sending an order for signature
+- Snapshot is NEVER updated on resend
+- Snapshot is reused for RESEND and SIGNED_ARCHIVE
+- Live PDFs NEVER use snapshots
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5) MIGRATE EXISTING CALLERS (ONE BY ONE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Replace PDF generation in:
+- followupOrders.ts (initial, resend, signed)
+- orders.ts (creation)
+- shippingPdf.ts (view / print)
+- storage.ts (background emails)
+
+Each must call generateOrderPdf(orderId, intent).
+
+Do NOT duplicate data fetching logic.
+Do NOT leave parallel implementations.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6) INVARIANTS (FAIL LOUD)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Throw errors if:
+- snapshot is missing for SIGNATURE or RESEND
+- signed archive is regenerated
+- intent behavior is bypassed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7) CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After migration:
+- delete unused PDF helpers
+- remove duplicated discount/payment logic
+- ensure exactly ONE PDF renderer exists
+
+Do not implement UI changes yet.
+Focus only on PDF correctness and consolidation.

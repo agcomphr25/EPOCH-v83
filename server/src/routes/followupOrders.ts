@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertFollowupOrderSchema } from '../../schema';
-import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
+import { embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
@@ -10,6 +10,7 @@ import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
 import { createSignatureLink, generatePublicSignatureId } from '../../utils/magicLink';
+import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -473,11 +474,10 @@ router.post('/', async (req, res) => {
       showCustomDiscount: orderData.showCustomDiscount,
     });
 
-    // Generate PDF
-    const pdfBuffer = await generateSalesOrderPDF(orderData, true);
-    const pdfFilename = `sales_order_${orderId}_${Date.now()}.pdf`;
-    const pdfPath = path.join(uploadsDir, pdfFilename);
-    fs.writeFileSync(pdfPath, pdfBuffer);
+    // Generate PDF via unified PDF service (creates snapshot internally and returns it)
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);
+    const pdfPath = pdfResult.filePath!;
+    const orderSnapshot = pdfResult.snapshot; // Snapshot created by service, store with followup order
 
     // Create order summary for email and sign page
     const orderSummary = {
@@ -507,7 +507,7 @@ router.post('/', async (req, res) => {
     const { getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
     const orderEnvironment = getCurrentEnvironment();
     
-    // Create followup order record with explicit environment and public ID
+    // Create followup order record with explicit environment, public ID, and frozen snapshot
     const followupOrder = await storage.createFollowupOrder({
       orderId: order.orderId,
       customerId: order.customerId || '',
@@ -519,6 +519,7 @@ router.post('/', async (req, res) => {
       pdfPath,
       pdfGeneratedAt: new Date(),
       orderSummary,
+      orderSnapshot, // INVARIANT: Frozen at creation, never updated on resend
     });
     
     // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
@@ -1061,37 +1062,18 @@ router.get('/signed-pdf/:orderId', authenticateToken, async (req, res) => {
       showCustomDiscount: order.showCustomDiscount || undefined,
     };
 
-    console.log(`📄 Regenerating base PDF for order ${orderId}...`);
+    // Generate signed PDF via unified service (uses stored snapshot + embeds signature)
+    console.log(`📄 [SIGNED-ARCHIVE] Generating signed PDF for order ${orderId}...`);
     
-    // Generate the base PDF (with signature box)
-    const basePdfBuffer = await generateSalesOrderPDF(orderData, true);
-    
-    // Write the base PDF to a temp file so we can embed signature
-    const tempPdfFilename = `temp_sales_order_${orderId}_${Date.now()}.pdf`;
-    const tempPdfPath = path.join(uploadsDir, tempPdfFilename);
-    fs.writeFileSync(tempPdfPath, basePdfBuffer);
-    
-    console.log(`✍️ Embedding signature into PDF for order ${orderId}...`);
-    
-    // Embed the stored signature into the PDF
-    const signedPdfBuffer = await embedSignatureInPDF(tempPdfPath, followupOrder.signatureData);
-    
-    // Clean up temp file
-    if (fs.existsSync(tempPdfPath)) {
-      fs.unlinkSync(tempPdfPath);
-    }
-    
-    // Save the regenerated signed PDF
-    const signedPdfFilename = `signed_sales_order_${orderId}_${Date.now()}.pdf`;
-    const signedPdfPath = path.join(uploadsDir, signedPdfFilename);
-    fs.writeFileSync(signedPdfPath, signedPdfBuffer);
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNED_ARCHIVE);
+    const signedPdfPath = pdfResult.filePath!;
     
     // Update the followup order with the new signed PDF path
     await storage.updateFollowupOrder(followupOrder.id, {
       signedPdfPath,
     });
     
-    console.log(`✅ Regenerated signed PDF for order ${orderId} at ${signedPdfPath}`);
+    console.log(`✅ [SIGNED-ARCHIVE] PDF generated for order ${orderId} at ${signedPdfPath}`);
     
     // Serve the regenerated signed PDF
     res.setHeader('Content-Type', 'application/pdf');
@@ -1601,19 +1583,11 @@ router.post('/:orderId/resend-email', async (req, res) => {
       showCustomDiscount: shouldShowDiscount || order.showCustomDiscount || undefined,
     };
 
-    console.log('🔄 Regenerating PDF with latest order data including discounts:', {
-      orderId: orderData.orderId,
-      discountCode: orderData.discountCode,
-      customDiscountType: orderData.customDiscountType,
-      customDiscountValue: orderData.customDiscountValue,
-      showCustomDiscount: orderData.showCustomDiscount,
-    });
-
-    // Regenerate PDF with latest order data (including updated discounts)
-    const pdfBuffer = await generateSalesOrderPDF(orderData, true);
-    const pdfFilename = `sales_order_${orderId}_${Date.now()}.pdf`;
-    const pdfPath = path.join(uploadsDir, pdfFilename);
-    fs.writeFileSync(pdfPath, pdfBuffer);
+    // RESEND uses the SAME snapshot as the original (never regenerates data)
+    console.log('🔄 [RESEND] Regenerating PDF using STORED snapshot for data consistency');
+    
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.RESEND_EMAIL);
+    const pdfPath = pdfResult.filePath!;
 
     // Update follow-up order with new PDF path
     await storage.updateFollowupOrder(followupOrder.id, {

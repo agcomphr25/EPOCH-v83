@@ -36,7 +36,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable workflows, barcode scanning, fail-closed traceability gating, a Traveler Viewer, and Electronic Signature System.
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue with Accept.Blue integration.
 - **Help Center**: FAQ-based system accessible via navbar.
-- **PDF Management**: Centralized PDF configuration and a flexible Template Library System.
+- **PDF Management**: Centralized PDF configuration, flexible Template Library System, and **unified orderPdfService** with intent-based PDF generation (SIGNATURE_EMAIL, RESEND_EMAIL, CUSTOMER_VIEW, SHIPPING_PRINT, SIGNED_ARCHIVE) using frozen order snapshots to prevent data drift between original and regenerated PDFs.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking.
 - **Order Audit System**: Comprehensive audit tracking for P1 orders and P2 serialized items, including configurable event categories, field change detection, department transition timing, and a unified Audit Drawer.

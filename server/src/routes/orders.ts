@@ -24,6 +24,7 @@ import {
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
 import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
+import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
 
@@ -455,7 +456,6 @@ router.post('/finalized', async (req: Request, res: Response) => {
     try {
       // Import dependencies
       const { nanoid } = await import('nanoid');
-      const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf');
       const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
       const { sendThankYouOrderEmail } = await import('../../utils/thankYouOrderEmail');
       const fs = await import('fs');
@@ -686,21 +686,14 @@ router.post('/finalized', async (req: Request, res: Response) => {
         showCustomDiscount: order.showCustomDiscount || undefined,
       };
       
-      // Generate PDF
-      const uploadsDir = 'uploads/followup-orders';
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      
-      const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, hasStock);
-      const pdfFilename = `sales_order_${order.orderId}_${Date.now()}.pdf`;
-      const pdfPath = path.join(uploadsDir, pdfFilename);
-      fs.writeFileSync(pdfPath, pdfBuffer);
-      
       // Declare signatureToken outside the if block for error handling access
       let signatureToken: string | undefined;
       
       if (hasStock) {
+        // Generate PDF via unified service with frozen snapshot for signature workflow
+        const pdfResult = await generateOrderPdf(order.orderId, PdfIntent.SIGNATURE_EMAIL);
+        const pdfPath = pdfResult.filePath!;
+        const orderSnapshot = pdfResult.snapshot;
         // Order with stock - require signature
         // Generate unique signature token (kept server-side for security)
         signatureToken = nanoid(32);
@@ -727,7 +720,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
         // SIGNATURE LINK CONTRACT: Write environment explicitly on create (not DB defaults)
         const orderEnvironment = getCurrentEnvironment();
         
-        // Create followup order record with explicit environment and public signature ID
+        // Create followup order record with explicit environment, public ID, and frozen snapshot
         const followupOrder = await storage.createFollowupOrder({
           orderId: order.orderId,
           customerId: order.customerId || '',
@@ -739,6 +732,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           pdfPath,
           pdfGeneratedAt: new Date(),
           orderSummary,
+          orderSnapshot, // INVARIANT: Frozen at creation, never updated on resend
         });
         
         console.log(`✅ Follow-up order created for ${order.orderId} in ${orderEnvironment} environment with publicSignatureId ${publicSignatureId}`);

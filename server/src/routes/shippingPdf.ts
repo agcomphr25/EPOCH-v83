@@ -17,6 +17,7 @@ import {
   LOGO_CONFIG,
   getLogoDimensions,
 } from '../../utils/pdf/pdfConfig';
+import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
 
@@ -935,7 +936,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
     // Get comprehensive order data from storage with payment status
     const { storage } = await import('../../storage');
-    const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf.js');
     
     console.log(`📄 [Route] Loading order data for: ${orderId}`);
     
@@ -1262,9 +1262,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       showCustomDiscount: shouldShowDiscount,
     };
 
-    // Generate PDF using centralized generator
-    console.log(`📄 [Route] Calling generateSalesOrderPDF for ${orderId}`);
-    const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, false);
+    // Generate PDF via unified service (CUSTOMER_VIEW uses live data, no signature box)
+    console.log(`📄 [Route] Generating CUSTOMER_VIEW PDF for ${orderId}`);
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.CUSTOMER_VIEW);
+    const pdfBuffer = pdfResult.buffer!;
     console.log(`✅ [Route] PDF generated successfully (${pdfBuffer.length} bytes)`);
 
     // Set response headers for PDF inline display

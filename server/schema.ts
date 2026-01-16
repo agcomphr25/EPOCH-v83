@@ -11122,6 +11122,162 @@ export const workInstructionImportJobs = pgTable('work_instruction_import_jobs',
   processedAt: timestamp('processed_at'),
 });
 
+// ============================================================================
+// TRAINING CONTENT LIBRARY - Central repository for all training materials
+// ============================================================================
+
+// Training Content Categories - Organize documents by type (Department, Facility, Custom)
+export const trainingContentCategories = pgTable('training_content_categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').notNull().default('custom'), // department, facility, custom
+  description: text('description'),
+  color: text('color').default('#3B82F6'), // UI color for the category
+  parentId: integer('parent_id'), // For subcategories
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Library Documents - Uploaded documents with extracted content
+export const trainingLibraryDocuments = pgTable('training_library_documents', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  fileUrl: text('file_url'), // Object storage URL
+  fileType: text('file_type'), // pdf, doc, txt, etc.
+  fileSize: integer('file_size'),
+  extractedContent: text('extracted_content'), // AI-extracted text content
+  summary: text('summary'), // AI-generated summary
+  keyPoints: text('key_points'), // JSON array of key points
+  status: text('status').default('uploaded'), // uploaded, processing, ready, failed
+  uploadedBy: integer('uploaded_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Document-Category Assignments - Many-to-many relationship
+export const documentCategoryAssignments = pgTable('document_category_assignments', {
+  id: serial('id').primaryKey(),
+  documentId: integer('document_id').references(() => trainingLibraryDocuments.id).notNull(),
+  categoryId: integer('category_id').references(() => trainingContentCategories.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Library Topics - AI-generated training topics from documents
+export const trainingLibraryTopics = pgTable('training_library_topics', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  objectives: text('objectives'), // JSON array of learning objectives
+  prerequisites: text('prerequisites'),
+  estimatedDuration: integer('estimated_duration'), // in minutes
+  difficultyLevel: text('difficulty_level').default('beginner'), // beginner, intermediate, advanced
+  categoryId: integer('category_id').references(() => trainingContentCategories.id),
+  createdBy: integer('created_by').references(() => employees.id),
+  isAiGenerated: boolean('is_ai_generated').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Topic-Document Links - Which documents were used to create this topic
+export const topicDocumentLinks = pgTable('topic_document_links', {
+  id: serial('id').primaryKey(),
+  topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  documentId: integer('document_id').references(() => trainingLibraryDocuments.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 4-Step Training Materials - Content for each step of the training process
+export const trainingTopicMaterials = pgTable('training_topic_materials', {
+  id: serial('id').primaryKey(),
+  topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  stepNumber: integer('step_number').notNull(), // 1-4 for 4-step method
+  stepTitle: text('step_title').notNull(), // e.g., "Trainer Does / Trainer Explains"
+  trainerInstructions: text('trainer_instructions'), // What the trainer should do
+  keyPoints: text('key_points'), // JSON array of key teaching points
+  demonstrations: text('demonstrations'), // Things to demonstrate
+  safetyNotes: text('safety_notes'),
+  estimatedTime: integer('estimated_time'), // minutes for this step
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Topic Quiz Questions - AI-generated quiz questions for each topic
+export const trainingTopicQuizQuestions = pgTable('training_topic_quiz_questions', {
+  id: serial('id').primaryKey(),
+  topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  question: text('question').notNull(),
+  questionType: text('question_type').default('multiple_choice'), // multiple_choice, true_false, short_answer
+  options: text('options'), // JSON array for multiple choice
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'), // Why this is the correct answer
+  difficulty: text('difficulty').default('medium'), // easy, medium, hard
+  stepNumber: integer('step_number'), // Which training step this relates to
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Trainee Topic Assignments - Assign topics to employees for training
+export const traineeTopicAssignments = pgTable('trainee_topic_assignments', {
+  id: serial('id').primaryKey(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id),
+  dayNumber: integer('day_number'), // Which day of 4-day plan (1-4)
+  status: text('status').default('assigned'), // assigned, in_progress, completed
+  dueDate: timestamp('due_date'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// AI Training Plan - Generated 4-day training plans
+export const aiTrainingPlans = pgTable('ai_training_plans', {
+  id: serial('id').primaryKey(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  planStructure: text('plan_structure'), // JSON with full 4-day structure
+  totalTopics: integer('total_topics'),
+  status: text('status').default('draft'), // draft, active, completed
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert schemas for Content Library
+export const insertTrainingContentCategorySchema = createInsertSchema(trainingContentCategories).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingLibraryDocumentSchema = createInsertSchema(trainingLibraryDocuments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDocumentCategoryAssignmentSchema = createInsertSchema(documentCategoryAssignments).omit({ id: true, createdAt: true });
+export const insertTrainingLibraryTopicSchema = createInsertSchema(trainingLibraryTopics).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTopicDocumentLinkSchema = createInsertSchema(topicDocumentLinks).omit({ id: true, createdAt: true });
+export const insertTrainingTopicMaterialSchema = createInsertSchema(trainingTopicMaterials).omit({ id: true, createdAt: true });
+export const insertTrainingTopicQuizQuestionSchema = createInsertSchema(trainingTopicQuizQuestions).omit({ id: true, createdAt: true });
+export const insertTraineeTopicAssignmentSchema = createInsertSchema(traineeTopicAssignments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAiTrainingPlanSchema = createInsertSchema(aiTrainingPlans).omit({ id: true, createdAt: true, updatedAt: true });
+
+// Types for Content Library
+export type TrainingContentCategory = typeof trainingContentCategories.$inferSelect;
+export type InsertTrainingContentCategory = z.infer<typeof insertTrainingContentCategorySchema>;
+export type TrainingLibraryDocument = typeof trainingLibraryDocuments.$inferSelect;
+export type InsertTrainingLibraryDocument = z.infer<typeof insertTrainingLibraryDocumentSchema>;
+export type DocumentCategoryAssignment = typeof documentCategoryAssignments.$inferSelect;
+export type InsertDocumentCategoryAssignment = z.infer<typeof insertDocumentCategoryAssignmentSchema>;
+export type TrainingLibraryTopic = typeof trainingLibraryTopics.$inferSelect;
+export type InsertTrainingLibraryTopic = z.infer<typeof insertTrainingLibraryTopicSchema>;
+export type TopicDocumentLink = typeof topicDocumentLinks.$inferSelect;
+export type InsertTopicDocumentLink = z.infer<typeof insertTopicDocumentLinkSchema>;
+export type TrainingTopicMaterial = typeof trainingTopicMaterials.$inferSelect;
+export type InsertTrainingTopicMaterial = z.infer<typeof insertTrainingTopicMaterialSchema>;
+export type TrainingTopicQuizQuestion = typeof trainingTopicQuizQuestions.$inferSelect;
+export type InsertTrainingTopicQuizQuestion = z.infer<typeof insertTrainingTopicQuizQuestionSchema>;
+export type TraineeTopicAssignment = typeof traineeTopicAssignments.$inferSelect;
+export type InsertTraineeTopicAssignment = z.infer<typeof insertTraineeTopicAssignmentSchema>;
+export type AiTrainingPlan = typeof aiTrainingPlans.$inferSelect;
+export type InsertAiTrainingPlan = z.infer<typeof insertAiTrainingPlanSchema>;
+
 // Insert schemas for Train-the-Trainer tables
 export const insertFacilityTopicSchema = createInsertSchema(facilityTopics).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertFacilityTopicQuestionSchema = createInsertSchema(facilityTopicQuestions).omit({ id: true, createdAt: true });

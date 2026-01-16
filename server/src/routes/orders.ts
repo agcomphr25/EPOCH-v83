@@ -697,10 +697,19 @@ router.post('/finalized', async (req: Request, res: Response) => {
       const pdfPath = path.join(uploadsDir, pdfFilename);
       fs.writeFileSync(pdfPath, pdfBuffer);
       
+      // Declare signatureToken outside the if block for error handling access
+      let signatureToken: string | undefined;
+      
       if (hasStock) {
         // Order with stock - require signature
-        // Generate unique signature token
-        const signatureToken = nanoid(32);
+        // Generate unique signature token (kept server-side for security)
+        signatureToken = nanoid(32);
+        
+        // SIGNATURE LINK CONTRACT: Import functions for environment and URL generation
+        const { getCurrentEnvironment, createSignatureLink, logSignatureEmailSend, generatePublicSignatureId } = await import('../../utils/magicLink');
+        
+        // Generate public signature ID for URL (path-based, email-client safe)
+        const publicSignatureId = generatePublicSignatureId();
         
         // Create order summary for email
         const orderSummary = {
@@ -716,15 +725,15 @@ router.post('/finalized', async (req: Request, res: Response) => {
         };
         
         // SIGNATURE LINK CONTRACT: Write environment explicitly on create (not DB defaults)
-        const { getCurrentEnvironment, createSignatureLink, logSignatureEmailSend } = await import('../../utils/magicLink');
         const orderEnvironment = getCurrentEnvironment();
         
-        // Create followup order record with explicit environment
+        // Create followup order record with explicit environment and public signature ID
         const followupOrder = await storage.createFollowupOrder({
           orderId: order.orderId,
           customerId: order.customerId || '',
           customerEmail: customer.email,
           signatureToken,
+          publicSignatureId, // NEW: Path-based URL identifier (no secrets in URL)
           environment: orderEnvironment, // Explicit environment for cross-environment safety
           pdfGenerated: true,
           pdfPath,
@@ -732,10 +741,10 @@ router.post('/finalized', async (req: Request, res: Response) => {
           orderSummary,
         });
         
-        console.log(`✅ Follow-up order created for ${order.orderId} in ${orderEnvironment} environment, sending signature email via unified function...`);
+        console.log(`✅ Follow-up order created for ${order.orderId} in ${orderEnvironment} environment with publicSignatureId ${publicSignatureId}`);
         
-        // SIGNATURE LINK CONTRACT: Generate signature link using canonical function
-        const signatureLink = createSignatureLink(signatureToken);
+        // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId (path-based, email-client safe)
+        const signatureLink = createSignatureLink(publicSignatureId);
         
         // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
         logSignatureEmailSend({

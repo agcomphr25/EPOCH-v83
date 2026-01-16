@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, robust inventory tracking, an employee portal, quality control workflows, a powerful Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The vision is to be the leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its primary purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, robust inventory tracking, an employee portal, quality control workflows, a powerful Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The vision is to be the leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -20,7 +20,7 @@ Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY
 Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
 
 ## System Architecture
-The application is a full-stack TypeScript monorepo, emphasizing type safety, data consistency, and cross-platform compatibility with PWA support via Capacitor.
+The application is a full-stack TypeScript monorepo designed for type safety, data consistency, and cross-platform compatibility with PWA support via Capacitor.
 
 ### Core Architectural Decisions
 - **Type Safety & Data Consistency**: Utilizes shared TypeScript schemas (Drizzle, Zod) and a `features` object as a single source of truth.
@@ -28,37 +28,38 @@ The application is a full-stack TypeScript monorepo, emphasizing type safety, da
 - **UI/UX**: Modern UI using ShadCN UI, Tailwind CSS, and Framer Motion for a dynamic user experience.
 - **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
 - **Order Management**: Features atomic order ID reservation, rush fees, and an urgency/priority system.
+- **Signature Email Link Architecture**: Path-based signature URLs using `publicSignatureId` field to eliminate email client URL corruption.
 - **Inventory & Production**: Includes parts list management, P1 Purchase Orders, vendor POs with Zod validation, inventory CSV import, and enhanced layup scheduling.
 - **Quality Control**: Nonconformance Record System and Vendor Evaluation System with automated scoring.
-- **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, demand-filtered BOM assignment, and fabric inventory with conformance document support (external URLs or App Storage uploads).
-- **Barcode Strategy**: CODE128 for serialized items, CODE39 for regular orders, with an automatic helper function.
+- **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, demand-filtered BOM assignment, and fabric inventory with conformance document support.
+- **Barcode Strategy**: CODE128 for serialized items, CODE39 for regular orders.
 - **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable workflows, barcode scanning, fail-closed traceability gating, a Traveler Viewer, and Electronic Signature System.
-- **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module for legacy financial tracking, and Refund Request/Queue with Accept.Blue integration.
-- **Help Center**: FAQ-based system accessible via navbar, covering key workflows.
+- **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue with Accept.Blue integration.
+- **Help Center**: FAQ-based system accessible via navbar.
 - **PDF Management**: Centralized PDF configuration and a flexible Template Library System.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking.
 - **Order Audit System**: Comprehensive audit tracking for P1 orders and P2 serialized items, including configurable event categories, field change detection, department transition timing, and a unified Audit Drawer.
-- **Media Library System**: Centralized image storage with camera capture, file upload, and reference-based attachments linking media to entities.
+- **Media Library System**: Centralized image storage with camera capture, file upload, and reference-based attachments.
 - **Document Scanner**: Built-in scanning with OpenCV.js for automatic edge detection, perspective correction, image enhancement, and PDF conversion.
 - **Voice Notes System**: Voice-activated note recording for production issues, with automatic order ID extraction, issue categorization, resolution tracking, and analytics dashboard.
 - **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments, with multi-person visibility sharing and dashboard integration.
-- **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics, including Missed Punch Awareness for detecting anomalies.
+- **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics.
 - **Filtered Orders Report**: Advanced order filtering and export tool with multi-select status, date range, customer exclusion, and CSV export.
-- **Survey Engine**: Generic, reusable survey system with UUID-based tables, respondent and context abstraction, designed for broad reuse.
+- **Survey Engine**: Generic, reusable survey system with UUID-based tables, respondent and context abstraction.
 - **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement, project manager assignments, reminders, activity logging, and automatic notifications.
-- **Ticket Assignment System**: Separate owner (creator) and assignee tracking for tickets, with internal message notifications on assignment and automated stale ticket reminders (48-hour inactivity threshold, 24-hour cooldown, max 3 reminders).
-- **PDF Signature Tool**: Internal utility for signing PDFs with drag-and-drop signature positioning, using percentage-based coordinates for zoom-independent placement. Available to all authenticated employees via UNIVERSAL_ACCESS_ROUTES.
-- **Routing Document Management System**: AI-powered document management for P2 Control Center supporting work instructions, spec sheets, and traveler templates. Features include: (1) Document upload with presigned URLs via Object Storage, (2) AI document parsing with OpenAI to extract routing steps, data fields, quality checkpoints, and certification requirements, (3) AI-powered document generation from templates and reference documents, (4) Template learning system that analyzes existing documents to create reusable templates, (5) Spec sheet management with version control, (6) Document-to-routing linking for parts, (7) Certification task linking to specific departments/traveler steps, (8) Document distribution logging for print/email tracking, (9) **Generate Part Routing from AI** - converts AI-extracted routing steps into actual part routings with department sequences, operations, and quality checkpoints. Database tables: `routing_documents`, `spec_sheets`, `document_templates`, `template_fields`, `routing_document_links`, `certification_task_links`, `document_distribution_logs`. API routes under `/api/routing-documents`. **P2 Control Center Integration**: Documents tab ("Docs") in P2 Control Center provides unified access to routing documents alongside projects and purchase orders. Frontend also at standalone `/routing-document-management`.
-- **Training Builder Module**: Self-contained training program management system accessible from the Training Control Center using Train-the-Trainer methodology. Features include: structured program definitions with department/role targeting, task-based learning objectives with day-based organization, Content Library for browsing existing modules and quiz questions, drag-to-reorder tasks, employee assignments with due dates, session tracking with supervisor signoff, and progress monitoring. **Train-the-Trainer Components**: (1) Work Instructions with procedural steps, critical points, safety considerations, PPE requirements, and quality checkpoints for standardized task documentation (`work_instructions`, `training_task_work_instructions` tables); (2) 4-Step Training Model integration - Phase 1: Trainer Does/Trainer Explains, Phase 2: Trainer Does/Trainee Explains, Phase 3: Trainee Does/Trainer Coaches, Phase 4: Trainee Does/Trainer Observes; (3) S-O-A Coaching Feedback system - Strength (what trainee did well), Opportunity (what to improve), Action (what to do differently) with database persistence (`training_soa_feedback` table); (4) Quiz Management System with quiz creation, multiple-choice questions, daily quiz selection by facility, quiz attempt tracking, and competency verification; (5) Certification Workflow with trainer observation signoff, quiz completion tracking, and dual trainer/trainee signoff for Training Matrix integration. Database tables: `training_programs`, `training_program_tasks`, `training_assignments`, `training_builder_sessions`, `training_builder_task_progress`, `work_instructions`, `training_task_work_instructions`, `training_soa_feedback`, `training_builder_quizzes`, `training_builder_quiz_questions`, `training_daily_quiz_selections`, `training_builder_quiz_attempts`, `training_certifications`. API routes under `/api/training/programs`, `/api/training/assignments`, `/api/training/sessions`, `/api/training/work-instructions`, `/api/training/quizzes`, `/api/training/daily-quizzes`, `/api/training/quiz-attempts`, `/api/training/certifications`. Frontend components in `client/src/modules/training-builder/`.
-- **Training Content Library**: Central repository for training materials accessible as 2nd tab in Training Control Center. Features include: (1) Category management with Department, Facility, and Custom category types with color coding and hierarchical organization; (2) Document upload and storage with AI-powered content extraction using OpenAI for automatic summary and key point generation; (3) AI Training Topic Generator that creates complete 4-Step Method training materials (trainer instructions, key points, demonstrations, safety notes) and quiz questions from selected documents; (4) Trainee assignment interface with AI-powered 4-day training plan generation that organizes topics with optimal flow and workload distribution; (5) Training plan tracking with progress monitoring and status updates. Database tables: `training_content_categories`, `training_library_documents`, `document_category_assignments`, `training_library_topics`, `topic_document_links`, `training_topic_materials`, `training_topic_quiz_questions`, `trainee_topic_assignments`, `ai_training_plans`. API routes under `/api/training/content-library/`. Frontend at `/training/content-library` and integrated as "Content Library" tab in Training Control Center.
+- **Ticket Assignment System**: Separate owner (creator) and assignee tracking for tickets, with internal message notifications and automated stale ticket reminders.
+- **PDF Signature Tool**: Internal utility for signing PDFs with drag-and-drop signature positioning.
+- **Routing Document Management System**: AI-powered document management for P2 Control Center supporting work instructions, spec sheets, and traveler templates, including AI parsing, generation, template learning, and linking to part routings and certifications.
+- **Training Builder Module**: Self-contained training program management system using Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, 4-Step Training Model integration, S-O-A Coaching Feedback, Quiz Management, and Certification Workflow.
+- **Training Content Library**: Central repository for training materials with category management, document upload with AI content extraction, AI Training Topic Generator for 4-Step Method materials, trainee assignment interface with AI-powered 4-day training plan generation, and progress tracking.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 - **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 - **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
-- **Security**: Dual-condition authentication bypass for development, global API authentication, JWT secret in production, bcrypt password hashing, Zod input validation, backend middleware mirroring frontend permissions, admin-only routes, and feature flags for experimental features.
-- **Database Schema Standards**: All new tables use UUID for primary keys; existing `serial` IDs are untouched.
+- **Security**: Dual-condition authentication bypass for development, global API authentication, JWT secret in production, bcrypt password hashing, Zod input validation, backend middleware mirroring frontend permissions, admin-only routes, and feature flags.
+- **Database Schema Standards**: All new tables use UUID for primary keys.
 
 ## External Dependencies
 
@@ -87,6 +88,6 @@ The application is a full-stack TypeScript monorepo, emphasizing type safety, da
 - Twilio (SMS)
 - Google Calendar (Event Integration)
 - Google Drive (File Access and PDF Processing)
-- Google APIs (`googleapis` package)
+- Google APIs
 - Azure Document Intelligence (AI-powered document analysis)
-- Microsoft Azure AD / MSAL (`@azure/msal-node` - OAuth authentication)
+- Microsoft Azure AD / MSAL (OAuth authentication)

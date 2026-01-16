@@ -241,9 +241,9 @@ export async function sendReminderForOverdueOrders() {
           continue;
         }
         
-        // Use EXISTING signature token - do NOT regenerate
-        // SIGNATURE LINK CONTRACT: Use createSignatureLink for all signature URLs
-        const signatureLink = createSignatureLink(followupOrder.signatureToken);
+        // Use EXISTING public signature ID - do NOT regenerate
+        // SIGNATURE LINK CONTRACT: Use createSignatureLink with publicSignatureId for all signature URLs
+        const signatureLink = createSignatureLink(followupOrder.publicSignatureId || '');
         
         // SIGNATURE LINK CONTRACT: Forensic logging
         const currentEnv = getCurrentEnvironment();

@@ -1058,6 +1058,7 @@ export interface IStorage {
   createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
   getFollowupOrder(id: number): Promise<FollowupOrder | undefined>;
   getFollowupOrderByToken(token: string): Promise<FollowupOrder | undefined>;
+  getFollowupOrderByPublicId(publicSignatureId: string): Promise<FollowupOrder | undefined>;
   getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined>;
   updateFollowupOrder(id: number, data: Partial<InsertFollowupOrder>): Promise<FollowupOrder>;
   getAllFollowupOrders(): Promise<FollowupOrder[]>;
@@ -8367,6 +8368,14 @@ export class DatabaseStorage implements IStorage {
     return followupOrder;
   }
 
+  async getFollowupOrderByPublicId(publicSignatureId: string): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.publicSignatureId, publicSignatureId));
+    return followupOrder;
+  }
+
   async getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined> {
     const [followupOrder] = await db
       .select()
@@ -14171,12 +14180,13 @@ export class DatabaseStorage implements IStorage {
       const { generateSalesOrderPDF } = await import('./utils/pdf/salesOrderPdf');
       const { sendFollowupOrderEmail } = await import('./utils/followupOrderEmail');
 
-      // Generate unique signature token
+      // Generate unique signature token (kept server-side for security)
       const signatureToken = nanoid(32);
 
-      // Generate signature link using unified URL resolution
-      const { createSignatureLink, getCurrentEnvironment } = await import('./utils/magicLink');
-      const signatureLink = createSignatureLink(signatureToken);
+      // Generate signature link using unified URL resolution with publicSignatureId
+      const { createSignatureLink, getCurrentEnvironment, generatePublicSignatureId } = await import('./utils/magicLink');
+      const publicSignatureId = generatePublicSignatureId();
+      const signatureLink = createSignatureLink(publicSignatureId);
       const environment = getCurrentEnvironment();
 
       // Get customer address
@@ -14279,12 +14289,13 @@ export class DatabaseStorage implements IStorage {
       // Generate PDF
       const pdfResult = await generateSalesOrderPDF(orderData);
       
-      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token and environment
+      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token and public ID
       const followupOrder = await this.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
         signatureToken,
+        publicSignatureId, // NEW: Path-based URL identifier (no secrets in URL)
         environment, // Store environment for cross-environment safety
         pdfGenerated: true,
         pdfPath: pdfResult.filePath,

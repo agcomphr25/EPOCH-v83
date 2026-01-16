@@ -9,7 +9,7 @@ import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder'
 import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
-import { createSignatureLink } from '../../utils/magicLink';
+import { createSignatureLink, generatePublicSignatureId } from '../../utils/magicLink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -350,11 +350,12 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Generate unique signature token
+    // Generate unique signature token (server-only secret) and public ID (URL-safe)
     const signatureToken = nanoid(32);
+    const publicSignatureId = generatePublicSignatureId();
 
-    // SIGNATURE LINK CONTRACT: Generate signature link using canonical function
-    const signatureLink = createSignatureLink(signatureToken);
+    // SIGNATURE LINK CONTRACT: Generate signature link using PUBLIC ID (no secrets in URL)
+    const signatureLink = createSignatureLink(publicSignatureId);
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
@@ -506,12 +507,13 @@ router.post('/', async (req, res) => {
     const { getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
     const orderEnvironment = getCurrentEnvironment();
     
-    // Create followup order record with explicit environment
+    // Create followup order record with explicit environment and public ID
     const followupOrder = await storage.createFollowupOrder({
       orderId: order.orderId,
       customerId: order.customerId || '',
       customerEmail: customer.email,
-      signatureToken,
+      publicSignatureId, // URL-safe public identifier (exposed in emails)
+      signatureToken, // Server-only secret (never exposed)
       environment: orderEnvironment, // Explicit environment for cross-environment safety
       pdfGenerated: true,
       pdfPath,
@@ -616,40 +618,120 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/followup-orders/by-token/:token - Get follow-up order by signature token (MUST be before /:id route)
+// GET /api/followup-orders/sign/:publicId - Get follow-up order by PUBLIC signature ID (NEW PATH-BASED ROUTE)
+// This is the PRIMARY route for customer signature links - no query params, no secrets
+router.get('/sign/:publicId', async (req, res) => {
+  try {
+    const { publicId } = req.params;
+
+    console.log('🔐 [SIGN-ORDER] Path-based lookup request received');
+    console.log('🔐 [SIGN-ORDER] Public ID:', publicId);
+
+    // Validate public ID format (sig_XXXXXXXX)
+    if (!publicId || !publicId.startsWith('sig_')) {
+      console.log('❌ [SIGN-ORDER] Invalid public ID format:', publicId);
+      return res.status(400).json({ error: 'Invalid signature link format' });
+    }
+
+    const followupOrder = await storage.getFollowupOrderByPublicId(publicId);
+    if (!followupOrder) {
+      console.log('❌ [SIGN-ORDER] No order found for public ID:', publicId);
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    console.log('✅ [SIGN-ORDER] Found order:', followupOrder.orderId);
+
+    // Environment check
+    const { getCurrentEnvironment } = await import('../../utils/magicLink');
+    const currentEnv = getCurrentEnvironment();
+    if (followupOrder.environment && followupOrder.environment !== currentEnv) {
+      console.log(`❌ [SIGN-ORDER] Environment mismatch: order=${followupOrder.environment}, current=${currentEnv}`);
+      return res.status(403).json({ error: 'This link is not valid in this environment' });
+    }
+
+    // Check if already signed
+    if (followupOrder.signatureSigned) {
+      console.log(`📋 [SIGN-ORDER] Order ${followupOrder.orderId} already signed`);
+    }
+
+    // Enrich order data (same logic as by-token route)
+    let enrichedOrderSummary = followupOrder.orderSummary as any;
+    
+    if (!enrichedOrderSummary?.customerName && followupOrder.customerId) {
+      const customer = await storage.getCustomerById(followupOrder.customerId);
+      if (customer) {
+        const addresses = await storage.getCustomerAddresses(followupOrder.customerId);
+        const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+        
+        enrichedOrderSummary = {
+          ...enrichedOrderSummary,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+          customerAddress: defaultAddress ? {
+            street: defaultAddress.street,
+            street2: defaultAddress.street2,
+            city: defaultAddress.city,
+            state: defaultAddress.state,
+            zipCode: defaultAddress.zipCode,
+          } : undefined,
+        };
+      }
+    }
+
+    // Fetch stock model and feature information
+    const stockModels = await storage.getAllStockModels();
+    const allFeatures = await storage.getAllFeatures();
+    
+    const stockModel = stockModels.find(m => m.id === enrichedOrderSummary?.modelId);
+    
+    // Calculate pricing
+    const pricing = await calculateOrderPricing(enrichedOrderSummary, stockModel, allFeatures, followupOrder.orderId);
+
+    // Return order data - NEVER expose signatureToken to client
+    const { signatureToken, ...safeOrderData } = followupOrder;
+    res.json({
+      ...safeOrderData,
+      orderSummary: enrichedOrderSummary,
+      modelDisplayName: stockModel?.displayName || stockModel?.name || enrichedOrderSummary?.modelId,
+      pricing,
+    });
+  } catch (error) {
+    console.error('Error fetching followup order by public ID:', error);
+    res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
+// GET /api/followup-orders/by-token/:token - LEGACY: Get follow-up order by signature token
+// This route is deprecated - use /sign/:publicId instead
 router.get('/by-token/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
     // TOKEN INTEGRITY FORENSIC LOGGING
-    console.log('🔍 [TOKEN-TRACE] /by-token request received');
-    console.log('🔍 [TOKEN-TRACE] Raw token from URL:', JSON.stringify(token));
-    console.log('🔍 [TOKEN-TRACE] Token length:', token?.length);
-    console.log('🔍 [TOKEN-TRACE] Token chars:', token?.split('').map((c, i) => `${i}:${c.charCodeAt(0)}:${c}`).join(' '));
-    console.log('🔍 [TOKEN-TRACE] Has leading/trailing whitespace:', token !== token?.trim());
-    console.log('🔍 [TOKEN-TRACE] URL-decoded token:', decodeURIComponent(token || ''));
+    console.log('⚠️ [LEGACY-TOKEN] /by-token request received (deprecated path)');
+    console.log('⚠️ [LEGACY-TOKEN] Raw token from URL:', JSON.stringify(token));
+    console.log('⚠️ [LEGACY-TOKEN] Token length:', token?.length);
 
     const followupOrder = await storage.getFollowupOrderByToken(token);
     if (!followupOrder) {
-      // Token not found - log for forensics
-      console.log('❌ [TOKEN-TRACE] NO MATCH FOUND for token:', JSON.stringify(token));
-      console.log('❌ [TOKEN-TRACE] Attempting trimmed lookup...');
+      console.log('❌ [LEGACY-TOKEN] NO MATCH FOUND for token:', JSON.stringify(token));
       
       // Try trimmed version
       const trimmedOrder = await storage.getFollowupOrderByToken(token?.trim() || '');
       if (trimmedOrder) {
-        console.log('⚠️ [TOKEN-TRACE] FOUND with trimmed token! DB token:', JSON.stringify(trimmedOrder.signatureToken));
-        console.log('⚠️ [TOKEN-TRACE] DB token length:', trimmedOrder.signatureToken?.length);
+        console.log('⚠️ [LEGACY-TOKEN] FOUND with trimmed token!');
       }
       
       return res.status(404).json({ error: 'Followup order not found' });
     }
     
-    // Token found - log match details
-    console.log('✅ [TOKEN-TRACE] MATCH FOUND for order:', followupOrder.orderId);
-    console.log('✅ [TOKEN-TRACE] DB token:', JSON.stringify(followupOrder.signatureToken));
-    console.log('✅ [TOKEN-TRACE] DB token length:', followupOrder.signatureToken?.length);
-    console.log('✅ [TOKEN-TRACE] Exact match:', token === followupOrder.signatureToken);
+    console.log('✅ [LEGACY-TOKEN] MATCH FOUND for order:', followupOrder.orderId);
+    
+    // If this order has a publicSignatureId, redirect client to use new path
+    if (followupOrder.publicSignatureId) {
+      console.log('🔄 [LEGACY-TOKEN] Order has publicSignatureId, client should use new path');
+    }
 
     // Fetch customer information if not in orderSummary
     let enrichedOrderSummary = followupOrder.orderSummary as any;
@@ -1047,6 +1129,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/followup-orders/:id/sign - Submit signature for follow-up order
+// Accepts EITHER publicSignatureId (new) OR signatureToken (legacy)
 router.post('/:id/sign', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -1057,16 +1140,16 @@ router.post('/:id/sign', async (req, res) => {
       return res.status(400).json({ error: 'Invalid followup order ID' });
     }
 
-    const { signatureData, signatureToken } = req.body;
+    const { signatureData, signatureToken, publicSignatureId } = req.body;
     if (!signatureData) {
       console.log(`❌ Missing signature data for order ID: ${id}`);
       return res.status(400).json({ error: 'Signature data is required' });
     }
 
-    // Normalize undefined/token mismatch cases
-    if (!signatureToken) {
-      console.log(`❌ Missing signature token for order ID: ${id}`);
-      return res.status(400).json({ error: 'Missing signature token' });
+    // Must have either publicSignatureId (new) or signatureToken (legacy)
+    if (!signatureToken && !publicSignatureId) {
+      console.log(`❌ Missing authentication for order ID: ${id}`);
+      return res.status(400).json({ error: 'Missing signature authentication' });
     }
 
     const followupOrder = await storage.getFollowupOrder(id);
@@ -1077,10 +1160,25 @@ router.post('/:id/sign', async (req, res) => {
 
     console.log(`📋 Found followup order: ${followupOrder.orderId}, pdfPath: ${followupOrder.pdfPath || 'MISSING'}`);
 
-    // Support both new (`?token=`) and old (`:token`) formats by trimming whitespace
-    if (!followupOrder.signatureToken || followupOrder.signatureToken.trim() !== signatureToken.trim()) {
-      console.log(`❌ Token mismatch for order ${followupOrder.orderId}. Expected: ${followupOrder.signatureToken?.substring(0, 8)}..., Got: ${signatureToken?.substring(0, 8)}...`);
-      return res.status(403).json({ error: 'Invalid or expired signing link token' });
+    // Validate authorization - accept EITHER publicSignatureId OR signatureToken
+    let isAuthorized = false;
+    
+    if (publicSignatureId) {
+      // NEW: Validate using public signature ID (no secret in client)
+      isAuthorized = followupOrder.publicSignatureId === publicSignatureId;
+      if (!isAuthorized) {
+        console.log(`❌ Public ID mismatch for order ${followupOrder.orderId}`);
+      }
+    } else if (signatureToken) {
+      // LEGACY: Validate using secret token (backwards compatibility)
+      isAuthorized = followupOrder.signatureToken?.trim() === signatureToken?.trim();
+      if (!isAuthorized) {
+        console.log(`❌ Token mismatch for order ${followupOrder.orderId}`);
+      }
+    }
+    
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Invalid or expired signing link' });
     }
 
     if (followupOrder.signatureSigned) {
@@ -1377,8 +1475,8 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
     }
 
-    // SIGNATURE LINK CONTRACT: Generate signature link using immutable token
-    const signatureLink = createSignatureLink(followupOrder.signatureToken || '');
+    // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId (path-based, no secrets in URL)
+    const signatureLink = createSignatureLink(followupOrder.publicSignatureId || '');
     
     // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
     logSignatureEmailSend({

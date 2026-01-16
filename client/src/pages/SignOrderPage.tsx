@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useRoute } from 'wouter';
 import SignatureCanvas from 'react-signature-canvas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,15 +55,47 @@ interface FollowupOrder {
 }
 
 export default function SignOrderPage() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
+  // Support both NEW path-based routing (/sign-order/sig_XXXXXXXX) and LEGACY query params (?token=xxx)
+  const [, pathParams] = useRoute('/sign-order/:identifier');
+  const queryParams = new URLSearchParams(window.location.search);
+  const legacyToken = queryParams.get('token');
+  
+  // Determine which identifier to use and which API endpoint
+  const { identifier, apiEndpoint, isPublicId } = useMemo(() => {
+    // Check for new path-based public signature ID (sig_XXXXXXXX format)
+    if (pathParams?.identifier && pathParams.identifier.startsWith('sig_')) {
+      return {
+        identifier: pathParams.identifier,
+        apiEndpoint: `/api/followup-orders/sign/${pathParams.identifier}`,
+        isPublicId: true,
+      };
+    }
+    // Check for path param that looks like a legacy token (long random string)
+    if (pathParams?.identifier && pathParams.identifier.length > 20) {
+      return {
+        identifier: pathParams.identifier,
+        apiEndpoint: `/api/followup-orders/by-token/${pathParams.identifier}`,
+        isPublicId: false,
+      };
+    }
+    // Fall back to legacy query param token
+    if (legacyToken) {
+      return {
+        identifier: legacyToken,
+        apiEndpoint: `/api/followup-orders/by-token/${legacyToken}`,
+        isPublicId: false,
+      };
+    }
+    return { identifier: null, apiEndpoint: null, isPublicId: false };
+  }, [pathParams?.identifier, legacyToken]);
+
   const { toast } = useToast();
   const signatureRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
 
   const { data: followupOrder, isLoading, error } = useQuery<FollowupOrder>({
-    queryKey: ['/api/followup-orders/by-token', token],
-    enabled: !!token,
+    queryKey: [apiEndpoint],
+    enabled: !!identifier && !!apiEndpoint,
   });
 
   const signMutation = useMutation({
@@ -74,12 +107,18 @@ export default function SignOrderPage() {
       const signatureData = signatureRef.current.toDataURL();
       
       try {
+        // For new public ID signing, we use a different endpoint that doesn't require token
+        // For legacy tokens, we still pass the token for backward compatibility
         return await apiRequest(`/api/followup-orders/${followupOrder?.id}/sign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             signatureData,
-            signatureToken: token
+            // For public ID route, pass the publicSignatureId; for legacy, pass token
+            ...(isPublicId 
+              ? { publicSignatureId: identifier }
+              : { signatureToken: identifier }
+            ),
           }),
         });
       } catch (err: any) {
@@ -113,14 +152,14 @@ export default function SignOrderPage() {
     setSignatureEmpty(signatureRef.current?.isEmpty() || false);
   };
 
-  if (!token) {
+  if (!identifier) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle className="text-red-600">Invalid Link</CardTitle>
             <CardDescription>
-              No token provided. Please use the link from your email to sign your order.
+              Invalid or missing signature link. Please use the link from your email to sign your order.
             </CardDescription>
           </CardHeader>
         </Card>

@@ -554,3 +554,112 @@ export async function storeOrderSnapshot(orderId: string, snapshot: OrderSnapsho
   
   console.log(`✅ [PDF-SERVICE] Snapshot stored for ${orderId}`);
 }
+
+/**
+ * Compare critical fields between the current order state and a stored snapshot.
+ * Returns true if the order has changed in ways that require customer re-approval.
+ * 
+ * Critical fields that require re-approval:
+ * - modelId (stock model changed)
+ * - handedness
+ * - features (any option changes)
+ * - customDiscountValue / customDiscountType (pricing changed)
+ * - shipping cost
+ * - miscItems
+ */
+export async function hasOrderChangedSinceSnapshot(orderId: string, storedSnapshot: OrderSnapshot): Promise<{
+  hasChanged: boolean;
+  changes: string[];
+}> {
+  console.log(`🔍 [PDF-SERVICE] Comparing current order ${orderId} with stored snapshot`);
+  
+  const currentSnapshot = await createOrderSnapshot(orderId);
+  const changes: string[] = [];
+
+  // Compare critical fields
+  if (currentSnapshot.modelId !== storedSnapshot.modelId) {
+    changes.push(`Stock model changed: ${storedSnapshot.modelId || 'None'} → ${currentSnapshot.modelId || 'None'}`);
+  }
+  
+  if (currentSnapshot.handedness !== storedSnapshot.handedness) {
+    changes.push(`Handedness changed: ${storedSnapshot.handedness || 'None'} → ${currentSnapshot.handedness || 'None'}`);
+  }
+
+  if (currentSnapshot.modelPrice !== storedSnapshot.modelPrice) {
+    changes.push(`Model price changed: $${(storedSnapshot.modelPrice || 0) / 100} → $${(currentSnapshot.modelPrice || 0) / 100}`);
+  }
+
+  if (currentSnapshot.shipping !== storedSnapshot.shipping) {
+    changes.push(`Shipping changed: $${(storedSnapshot.shipping || 0) / 100} → $${(currentSnapshot.shipping || 0) / 100}`);
+  }
+
+  if (currentSnapshot.customDiscountValue !== storedSnapshot.customDiscountValue) {
+    changes.push(`Discount value changed: ${storedSnapshot.customDiscountValue || 0} → ${currentSnapshot.customDiscountValue || 0}`);
+  }
+
+  if (currentSnapshot.customDiscountType !== storedSnapshot.customDiscountType) {
+    changes.push(`Discount type changed: ${storedSnapshot.customDiscountType || 'none'} → ${currentSnapshot.customDiscountType || 'none'}`);
+  }
+
+  // Deep compare features object
+  const currentFeatures = JSON.stringify(sortObject(currentSnapshot.features || {}));
+  const storedFeatures = JSON.stringify(sortObject(storedSnapshot.features || {}));
+  if (currentFeatures !== storedFeatures) {
+    changes.push('Order features/options have changed');
+  }
+
+  // Deep compare misc items
+  const currentMisc = JSON.stringify(sortObject(currentSnapshot.miscItems || []));
+  const storedMisc = JSON.stringify(sortObject(storedSnapshot.miscItems || []));
+  if (currentMisc !== storedMisc) {
+    changes.push('Miscellaneous items have changed');
+  }
+
+  // Notes changes don't require re-approval, so not comparing those
+  
+  const hasChanged = changes.length > 0;
+  if (hasChanged) {
+    console.log(`⚠️ [PDF-SERVICE] Order ${orderId} has ${changes.length} changes since snapshot:`, changes);
+  } else {
+    console.log(`✅ [PDF-SERVICE] Order ${orderId} matches stored snapshot`);
+  }
+
+  return { hasChanged, changes };
+}
+
+function sortObject(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(sortObject).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).sort().reduce((result: any, key) => {
+      result[key] = sortObject(obj[key]);
+      return result;
+    }, {});
+  }
+  return obj;
+}
+
+/**
+ * Get the active (non-superseded, unsigned) followup order for an order.
+ * Returns null if no active followup order exists.
+ */
+export async function getActiveFollowupOrder(orderId: string): Promise<any | null> {
+  const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+  
+  if (!followupOrder) {
+    return null;
+  }
+
+  // Already signed = immutable, not active for new signatures
+  if (followupOrder.signatureSigned) {
+    return null;
+  }
+
+  // Already superseded = not active
+  if ((followupOrder as any).supersededAt) {
+    return null;
+  }
+
+  return followupOrder;
+}

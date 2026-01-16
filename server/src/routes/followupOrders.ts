@@ -10,7 +10,7 @@ import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
 import { createSignatureLink, generatePublicSignatureId } from '../../utils/magicLink';
-import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
+import { generateOrderPdf, PdfIntent, hasOrderChangedSinceSnapshot, storeOrderSnapshot } from '../../services/orderPdfService';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -1315,9 +1315,13 @@ router.post('/:id/sign', async (req, res) => {
 });
 
 // POST /api/followup-orders/:orderId/resend-email - Resend signature email for PENDING_SIGNATURE orders
+// SEMANTIC: This is a TRUE RESEND - same document, same snapshot, same publicSignatureId
+// If the order has changed since the snapshot was created, this will REFUSE to resend
+// Use sendUpdatedOrderForSignature instead for changed orders
 router.post('/:orderId/resend-email', async (req, res) => {
   try {
     const { orderId } = req.params;
+    console.log(`📧 [RESEND] Starting resend-email for order ${orderId}`);
 
     // Verify order exists first
     const order = await storage.getOrderById(orderId);
@@ -1345,245 +1349,103 @@ router.post('/:orderId/resend-email', async (req, res) => {
     const { createSignatureLink, getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
     const currentEnv = getCurrentEnvironment();
     
-    // Get or create the follow-up order
-    let followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    // INVARIANT: Resend REQUIRES an existing followup order with snapshot
+    // If no followup order exists, the user should use sendUpdatedOrderForSignature
+    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
     
     if (!followupOrder) {
-      // SIGNATURE LINK CONTRACT: Token is ONLY created here when no followup order exists
-      console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically with immutable token`);
-      
-      const signatureToken = nanoid(32);
-      
-      // Generate public signature ID for path-based URL (email-client safe)
-      const { generatePublicSignatureId } = await import('../../utils/magicLink');
-      const publicSignatureId = generatePublicSignatureId();
-      
-      // Create followup order entry with immutable token, public ID, and environment
-      followupOrder = await storage.createFollowupOrder({
-        orderId: order.orderId,
-        customerId: order.customerId || '',
-        customerEmail: customer.email,
-        signatureToken,
-        publicSignatureId, // NEW: Path-based URL identifier for email-safe links
-        environment: currentEnv, // Store environment for cross-environment safety
-        pdfGenerated: false, // Will be generated below
-        emailSent: false,
+      console.log(`🚫 [RESEND-BLOCKED] No followup_order found for ${orderId} - cannot resend without existing document`);
+      return res.status(400).json({
+        error: 'No signature request exists for this order. Use "Send Updated Order for Signature" to create a new signature request.',
+        code: 'NO_EXISTING_FOLLOWUP',
+        action: 'send_updated_order',
       });
-      
-      console.log(`✅ Created followup_order for ${orderId} with publicSignatureId ${publicSignatureId} in ${currentEnv} environment`);
-    } else {
-      // SIGNATURE LINK CONTRACT: Token immutability - NEVER regenerate tokens
-      // Check for cross-environment safety
-      const orderEnv = (followupOrder as any).environment || 'dev';
-      if (orderEnv !== currentEnv) {
-        console.error(`🚨 [CROSS-ENV BLOCK] Order ${orderId} was created in ${orderEnv} but current environment is ${currentEnv}. Blocking email to prevent broken links.`);
-        return res.status(400).json({
-          error: `Cannot resend email: Order was created in ${orderEnv} environment but you are currently in ${currentEnv}. This would result in a broken signature link.`,
-          orderEnvironment: orderEnv,
-          currentEnvironment: currentEnv,
-        });
-      }
-      
-      console.log(`📋 Using existing immutable token for ${orderId} (token: ${followupOrder.signatureToken?.substring(0, 8)}...)`);
-      
-      // SAFETY CHECK: If existing order is missing publicSignatureId, generate one
-      if (!followupOrder.publicSignatureId) {
-        console.log(`⚠️ Order ${orderId} missing publicSignatureId - generating one now`);
-        const { generatePublicSignatureId } = await import('../../utils/magicLink');
-        const newPublicId = generatePublicSignatureId();
-        await storage.updateFollowupOrder(followupOrder.id, { publicSignatureId: newPublicId });
-        followupOrder.publicSignatureId = newPublicId;
-        console.log(`✅ Generated publicSignatureId ${newPublicId} for order ${orderId}`);
-      }
-      
-      if (followupOrder.signatureSigned) {
-        console.log(`📋 Order ${orderId} already signed at ${followupOrder.signedAt} - signature data preserved`);
-      }
     }
 
-    // Get customer address
-    const addresses = await storage.getCustomerAddresses(order.customerId || '');
-    const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+    // INVARIANT: Cannot resend a superseded followup order
+    if ((followupOrder as any).supersededAt) {
+      console.log(`🚫 [RESEND-BLOCKED] Followup order for ${orderId} was superseded at ${(followupOrder as any).supersededAt}`);
+      return res.status(400).json({
+        error: 'This signature request has been superseded by a newer version. The customer should use the latest signature link.',
+        code: 'FOLLOWUP_SUPERSEDED',
+        supersededAt: (followupOrder as any).supersededAt,
+      });
+    }
 
-    // Get stock model information
-    const stockModels = await storage.getAllStockModels();
-    const stockModel = stockModels.find(m => m.id === order.modelId);
+    // INVARIANT: Cannot resend if order already signed - customer already approved this version
+    if (followupOrder.signatureSigned) {
+      console.log(`🚫 [RESEND-BLOCKED] Followup order for ${orderId} already signed at ${followupOrder.signedAt}`);
+      return res.status(400).json({
+        error: 'This order has already been signed by the customer. Resending is not needed.',
+        code: 'ALREADY_SIGNED',
+        signedAt: followupOrder.signedAt,
+      });
+    }
 
-    // Get features information for pricing and display names
-    const allFeatures = await storage.getAllFeatures();
+    // INVARIANT: Cannot resend without a stored snapshot
+    if (!followupOrder.orderSnapshot) {
+      console.log(`🚫 [RESEND-BLOCKED] No snapshot stored for ${orderId} - cannot resend without frozen data`);
+      return res.status(400).json({
+        error: 'No snapshot exists for this signature request. Use "Send Updated Order for Signature" to create a new signature request with current order data.',
+        code: 'NO_SNAPSHOT',
+        action: 'send_updated_order',
+      });
+    }
+
+    // INVARIANT: Refuse to resend if order has changed since snapshot was created
+    // This is the KEY semantic distinction - resend = same document
+    const { hasChanged, changes } = await hasOrderChangedSinceSnapshot(orderId, followupOrder.orderSnapshot as any);
+    if (hasChanged) {
+      console.log(`🚫 [RESEND-BLOCKED] Order ${orderId} has changed since snapshot. Changes:`, changes);
+      return res.status(400).json({
+        error: 'The order has been modified since the signature request was created. Use "Send Updated Order for Signature" to send the updated order for new approval.',
+        code: 'ORDER_CHANGED',
+        action: 'send_updated_order',
+        changes: changes,
+      });
+    }
+
+    console.log(`✅ [RESEND] Order ${orderId} matches snapshot - proceeding with resend`);
+
+    // SIGNATURE LINK CONTRACT: Token immutability - NEVER regenerate tokens
+    // Check for cross-environment safety
+    const orderEnv = (followupOrder as any).environment || 'dev';
+    if (orderEnv !== currentEnv) {
+      console.error(`🚨 [CROSS-ENV BLOCK] Order ${orderId} was created in ${orderEnv} but current environment is ${currentEnv}. Blocking email to prevent broken links.`);
+      return res.status(400).json({
+        error: `Cannot resend email: Order was created in ${orderEnv} environment but you are currently in ${currentEnv}. This would result in a broken signature link.`,
+        orderEnvironment: orderEnv,
+        currentEnvironment: currentEnv,
+      });
+    }
     
-    // Helper function to create a fallback display name from a value
-    const createFallbackDisplayName = (value: string): string => {
-      return value
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-    };
+    console.log(`📋 [RESEND] Using existing immutable token for ${orderId} (token: ${followupOrder.signatureToken?.substring(0, 8)}...)`);
     
-    // Build comprehensive feature data for PDF
-    const featurePrices: Record<string, number> = {};
-    const featureDisplayNames: Record<string, string> = {};
-    const featureSelectionDisplayNames: Record<string, string> = {};
-    const featureSelectionPrices: Record<string, number> = {};
-
-    if (order.features && typeof order.features === 'object') {
-      for (const [featureKey, featureValue] of Object.entries(order.features)) {
-        if (featureValue && featureValue !== false && featureValue !== '') {
-          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
-          if (featureDetail) {
-            // Store feature-level display name
-            featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
-            
-            // Process feature selections to get display names and prices
-            const featureOptions = (featureDetail as any).options || [];
-            
-            if (Array.isArray(featureValue)) {
-              // Handle array of selections (like rails)
-              let totalPrice = 0;
-              for (const selectionValue of featureValue) {
-                const option = featureOptions.find((opt: any) => opt.value === selectionValue);
-                if (option) {
-                  featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
-                  const selectionPrice = option.price || 0;
-                  featureSelectionPrices[selectionValue] = selectionPrice;
-                  totalPrice += selectionPrice;
-                } else {
-                  // Fallback: create display name from value
-                  featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
-                }
-              }
-              featurePrices[featureKey] = totalPrice;
-            } else {
-              // Handle single selection
-              const option = featureOptions.find((opt: any) => opt.value === featureValue);
-              if (option) {
-                featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
-                const selectionPrice = option.price || 0;
-                featureSelectionPrices[featureValue] = selectionPrice;
-                featurePrices[featureKey] = selectionPrice;
-              } else {
-                // Fallback: create display name from value and use feature base price
-                featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
-                featurePrices[featureKey] = featureDetail.price || 0;
-              }
-            }
-          }
-        }
-      }
+    // SAFETY CHECK: If existing order is missing publicSignatureId, generate one
+    let currentFollowupOrder = followupOrder;
+    if (!followupOrder.publicSignatureId) {
+      console.log(`⚠️ Order ${orderId} missing publicSignatureId - generating one now`);
+      const { generatePublicSignatureId } = await import('../../utils/magicLink');
+      const newPublicId = generatePublicSignatureId();
+      await storage.updateFollowupOrder(followupOrder.id, { publicSignatureId: newPublicId });
+      currentFollowupOrder = { ...followupOrder, publicSignatureId: newPublicId };
+      console.log(`✅ Generated publicSignatureId ${newPublicId} for order ${orderId}`);
     }
 
     // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId (path-based, no secrets in URL)
-    const signatureLink = createSignatureLink(followupOrder.publicSignatureId || '');
+    const signatureLink = createSignatureLink(currentFollowupOrder.publicSignatureId || '');
     
     // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
     logSignatureEmailSend({
       orderId: orderId,
-      signatureToken: followupOrder.signatureToken || '',
+      signatureToken: currentFollowupOrder.signatureToken || '',
       environment: currentEnv,
       context: 'resend',
       recipient: customer.email,
     });
 
-    // Extract miscellaneous items from features object
-    const miscItems = (order.features as any)?.miscItems || [];
-
-    // Get discount details for PDF - extract display name, type, value, and appliesTo
-    let discountDisplayName: string | undefined;
-    let discountAppliesTo: 'stock_model' | 'total_order' | undefined;
-    let calculatedDiscountType: string | undefined;
-    let calculatedDiscountValue: number | undefined;
-    let shouldShowDiscount = false;
-    
-    if (order.discountCode && order.discountCode !== 'none') {
-      try {
-        const persistentDiscounts = await storage.getAllPersistentDiscounts();
-        const seasonalDiscounts = await storage.getAllShortTermSales();
-        
-        let discount: any = null;
-        if (order.discountCode.startsWith('persistent_')) {
-          const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-          discount = persistentDiscounts.find((d) => d.id === discountId);
-        } else if (order.discountCode.startsWith('short_term_')) {
-          const discountId = parseInt(order.discountCode.replace('short_term_', ''));
-          discount = seasonalDiscounts.find((d) => d.id === discountId);
-        } else {
-          discount = persistentDiscounts.find((d) => d.name === order.discountCode) ||
-                     seasonalDiscounts.find((d) => d.name === order.discountCode);
-        }
-        
-        if (discount) {
-          shouldShowDiscount = true;
-          discountDisplayName = discount.name || discount.description;
-          discountAppliesTo = discount.appliesTo || 'total_order';
-          
-          if (discount.percent !== null && discount.percent > 0) {
-            calculatedDiscountType = 'percent';
-            calculatedDiscountValue = discount.percent;
-          } else if (discount.fixedAmount) {
-            calculatedDiscountType = 'fixed';
-            calculatedDiscountValue = Number(discount.fixedAmount) / 100;
-          }
-          console.log(`📄 [Followup Resend] Discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}`);
-        } else if (order.customDiscountValue) {
-          shouldShowDiscount = true;
-          calculatedDiscountType = order.customDiscountType || 'percent';
-          calculatedDiscountValue = order.customDiscountValue;
-          discountAppliesTo = (order.discountAppliesTo as 'stock_model' | 'total_order') || 'total_order';
-        }
-      } catch (error) {
-        console.error('Error fetching discount details:', error);
-      }
-    }
-    
-    if (order.showCustomDiscount && order.customDiscountValue) {
-      shouldShowDiscount = true;
-      calculatedDiscountType = order.customDiscountType || 'percent';
-      calculatedDiscountValue = order.customDiscountValue;
-    }
-
-    // Prepare order data for PDF with LATEST discount information
-    const orderData = {
-      orderId: order.orderId,
-      orderDate: new Date(order.orderDate),
-      dueDate: new Date(order.dueDate),
-      customerId: order.customerId || '',
-      customerPO: order.customerPO || undefined,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerPhone: customer.phone || undefined,
-      customerCompany: customer.company || undefined,
-      customerAddress: defaultAddress ? {
-        street: defaultAddress.street,
-        street2: defaultAddress.street2 || undefined,
-        city: defaultAddress.city,
-        state: defaultAddress.state,
-        zipCode: defaultAddress.zipCode,
-        country: defaultAddress.country,
-      } : undefined,
-      modelId: order.modelId || undefined,
-      modelName: stockModel?.name || undefined,
-      modelDisplayName: stockModel?.displayName || undefined,
-      modelPrice: stockModel?.price || 0,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      featurePrices,
-      featureDisplayNames,
-      featureSelectionDisplayNames,
-      featureSelectionPrices,
-      featureQuantities: order.featureQuantities as Record<string, number> || undefined,
-      miscItems: miscItems.length > 0 ? miscItems : undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      paymentStatus: 'PENDING' as const,
-      discountCode: order.discountCode || undefined,
-      discountDisplayName: discountDisplayName || undefined,
-      discountAppliesTo: discountAppliesTo || undefined,
-      customDiscountType: calculatedDiscountType || order.customDiscountType || undefined,
-      customDiscountValue: calculatedDiscountValue || order.customDiscountValue || undefined,
-      showCustomDiscount: shouldShowDiscount || order.showCustomDiscount || undefined,
-    };
-
     // RESEND uses the SAME snapshot as the original (never regenerates data)
+    // All order data comes from the stored snapshot via the PDF service
     console.log('🔄 [RESEND] Regenerating PDF using STORED snapshot for data consistency');
     
     const pdfResult = await generateOrderPdf(orderId, PdfIntent.RESEND_EMAIL);
@@ -1688,6 +1550,207 @@ router.post('/:orderId/resend-email', async (req, res) => {
     console.error('Error resending follow-up order email:', error);
     res.status(500).json({ 
       error: 'Failed to resend email',
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// POST /api/followup-orders/:orderId/send-updated-order - Send an updated order for signature
+// SEMANTIC: This creates a NEW signature request - new snapshot, new publicSignatureId, new followup_order
+// Supersedes any existing unsigned followup order for this order
+// Use this when order data has changed and customer must re-approve
+router.post('/:orderId/send-updated-order', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`📧 [UPDATED-ORDER] Starting send-updated-order for order ${orderId}`);
+
+    // Verify order exists first
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Allow sending for PENDING_SIGNATURE and FINALIZED orders
+    const allowedStatuses = ['PENDING_SIGNATURE', 'FINALIZED'];
+    if (!allowedStatuses.includes(order.status?.toUpperCase() || '')) {
+      return res.status(400).json({ 
+        error: `Order status is ${order.status}. Can only send signature request for PENDING_SIGNATURE or FINALIZED orders.` 
+      });
+    }
+
+    // Get customer details
+    const customer = await storage.getCustomerById(order.customerId || '');
+    if (!customer || !customer.email) {
+      return res.status(400).json({ 
+        error: 'Customer email not found. Cannot send email.' 
+      });
+    }
+
+    // Get environment for signature link
+    const { getCurrentEnvironment, logSignatureEmailSend } = await import('../../utils/magicLink');
+    const currentEnv = getCurrentEnvironment();
+
+    // Check for existing unsigned followup order to supersede
+    const existingFollowup = await storage.getFollowupOrderByOrderId(orderId);
+    let supersededFollowupId: number | null = null;
+    
+    if (existingFollowup && !existingFollowup.signatureSigned && !(existingFollowup as any).supersededAt) {
+      // Mark the existing unsigned followup as superseded
+      console.log(`🔄 [UPDATED-ORDER] Superseding existing followup order ${existingFollowup.id} for ${orderId}`);
+      await storage.updateFollowupOrder(existingFollowup.id, {
+        supersededAt: new Date(),
+        supersessionReason: 'order_updated',
+      } as any);
+      supersededFollowupId = existingFollowup.id;
+      console.log(`✅ [UPDATED-ORDER] Marked followup ${existingFollowup.id} as superseded (reason: order_updated)`);
+    } else if (existingFollowup?.signatureSigned) {
+      console.log(`📋 [UPDATED-ORDER] Previous followup ${existingFollowup.id} was signed - creating new followup for updated order`);
+    }
+
+    // Create new signature token and public ID
+    const signatureToken = nanoid(32);
+    const newPublicSignatureId = generatePublicSignatureId();
+
+    // Create new followup order with new tokens
+    const newFollowupOrder = await storage.createFollowupOrder({
+      orderId: order.orderId,
+      customerId: order.customerId || '',
+      customerEmail: customer.email,
+      signatureToken,
+      publicSignatureId: newPublicSignatureId,
+      environment: currentEnv,
+      pdfGenerated: false,
+      emailSent: false,
+    });
+
+    // Update the superseded followup to reference the new one
+    if (supersededFollowupId) {
+      await storage.updateFollowupOrder(supersededFollowupId, {
+        supersededBy: newFollowupOrder.id,
+      } as any);
+    }
+
+    console.log(`✅ [UPDATED-ORDER] Created new followup order ${newFollowupOrder.id} with publicSignatureId ${newPublicSignatureId}`);
+
+    // Generate PDF with SIGNATURE_EMAIL intent (creates new snapshot)
+    console.log(`📸 [UPDATED-ORDER] Creating NEW snapshot for updated order ${orderId}`);
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);
+    const pdfPath = pdfResult.filePath!;
+
+    // Store the new snapshot with the new followup order
+    if (pdfResult.snapshot) {
+      await storeOrderSnapshot(orderId, pdfResult.snapshot);
+      console.log(`💾 [UPDATED-ORDER] Stored snapshot for order ${orderId}`);
+    }
+
+    // Update follow-up order with PDF path
+    await storage.updateFollowupOrder(newFollowupOrder.id, {
+      pdfPath,
+      pdfGenerated: true,
+      pdfGeneratedAt: new Date(),
+    });
+
+    // Generate signature link
+    const signatureLink = createSignatureLink(newPublicSignatureId);
+
+    // Forensic logging
+    logSignatureEmailSend({
+      orderId: orderId,
+      signatureToken: signatureToken,
+      environment: currentEnv,
+      context: 'updated_order',
+      recipient: customer.email,
+    });
+
+    console.log('📧 [UPDATED-ORDER-DEBUG] About to send email for order:', {
+      orderId: order.orderId,
+      signatureLink,
+      publicSignatureId: newPublicSignatureId,
+      signatureToken: signatureToken.substring(0, 8) + '...',
+      pdfPath,
+      supersededFollowupId,
+    });
+
+    // Send signature email
+    const emailResult = await sendOrderConfirmationNotification({
+      orderId: order.orderId,
+      customerId: order.customerId || '',
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod,
+      signatureToken: signatureToken,
+      pdfPath,
+      context: 'updated_order',
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        signatureLink,
+      },
+      forceResend: true, // Always send for updated orders
+    });
+
+    // Handle email outcome
+    const validOutcomes = ['sent', 'skipped', 'failed'] as const;
+    if (!validOutcomes.includes(emailResult.outcome)) {
+      console.error(`❌ [UPDATED-ORDER-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
+      return res.status(500).json({
+        success: false,
+        error: `Email send failed: Unknown email outcome "${emailResult.outcome}"`,
+      });
+    }
+
+    if (emailResult.outcome === 'sent') {
+      await storage.updateFollowupOrder(newFollowupOrder.id, {
+        emailSent: true,
+        emailSentAt: new Date(),
+        emailError: null,
+      });
+
+      console.log(`✅ [UPDATED-ORDER] Successfully sent updated order email for ${orderId}`);
+
+      res.json({
+        success: true,
+        message: 'Updated order has been sent for signature.',
+        emailOutcome: 'sent',
+        emailSent: true,
+        messageId: emailResult.messageId,
+        newFollowupOrderId: newFollowupOrder.id,
+        supersededFollowupId: supersededFollowupId,
+        newPublicSignatureId: newPublicSignatureId,
+      });
+    } else if (emailResult.outcome === 'skipped') {
+      res.json({
+        success: true,
+        message: 'Email was skipped (deduplication).',
+        emailOutcome: 'skipped',
+        emailSent: false,
+        newFollowupOrderId: newFollowupOrder.id,
+      });
+    } else {
+      await storage.updateFollowupOrder(newFollowupOrder.id, {
+        emailError: emailResult.error,
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send email.',
+        emailOutcome: 'failed',
+        error: emailResult.error,
+      });
+    }
+  } catch (error) {
+    console.error('Error sending updated order for signature:', error);
+    res.status(500).json({ 
+      error: 'Failed to send updated order',
       details: error instanceof Error ? error.message : 'Unknown error' 
     });
   }

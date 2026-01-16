@@ -621,10 +621,35 @@ router.get('/by-token/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
+    // TOKEN INTEGRITY FORENSIC LOGGING
+    console.log('🔍 [TOKEN-TRACE] /by-token request received');
+    console.log('🔍 [TOKEN-TRACE] Raw token from URL:', JSON.stringify(token));
+    console.log('🔍 [TOKEN-TRACE] Token length:', token?.length);
+    console.log('🔍 [TOKEN-TRACE] Token chars:', token?.split('').map((c, i) => `${i}:${c.charCodeAt(0)}:${c}`).join(' '));
+    console.log('🔍 [TOKEN-TRACE] Has leading/trailing whitespace:', token !== token?.trim());
+    console.log('🔍 [TOKEN-TRACE] URL-decoded token:', decodeURIComponent(token || ''));
+
     const followupOrder = await storage.getFollowupOrderByToken(token);
     if (!followupOrder) {
+      // Token not found - log for forensics
+      console.log('❌ [TOKEN-TRACE] NO MATCH FOUND for token:', JSON.stringify(token));
+      console.log('❌ [TOKEN-TRACE] Attempting trimmed lookup...');
+      
+      // Try trimmed version
+      const trimmedOrder = await storage.getFollowupOrderByToken(token?.trim() || '');
+      if (trimmedOrder) {
+        console.log('⚠️ [TOKEN-TRACE] FOUND with trimmed token! DB token:', JSON.stringify(trimmedOrder.signatureToken));
+        console.log('⚠️ [TOKEN-TRACE] DB token length:', trimmedOrder.signatureToken?.length);
+      }
+      
       return res.status(404).json({ error: 'Followup order not found' });
     }
+    
+    // Token found - log match details
+    console.log('✅ [TOKEN-TRACE] MATCH FOUND for order:', followupOrder.orderId);
+    console.log('✅ [TOKEN-TRACE] DB token:', JSON.stringify(followupOrder.signatureToken));
+    console.log('✅ [TOKEN-TRACE] DB token length:', followupOrder.signatureToken?.length);
+    console.log('✅ [TOKEN-TRACE] Exact match:', token === followupOrder.signatureToken);
 
     // Fetch customer information if not in orderSummary
     let enrichedOrderSummary = followupOrder.orderSummary as any;

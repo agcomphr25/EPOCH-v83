@@ -4953,12 +4953,57 @@ export function registerRoutes(app: Express): Server {
 
       // Get all items for this purchase order
       const poItems = await storage.getPurchaseOrderItems(poId);
+      
+      // Define patterns that indicate NON-STOCK items (parts only, no manufacturing needed)
+      // These should NOT get production orders - they're just parts fulfillment
+      const nonStockPatterns = [
+        /bottom.?metal/i,
+        /^bm[-_]/i,          // BM-xxx patterns for bottom metals
+        /rail/i,
+        /swivel/i,
+        /stud/i,
+        /qd.?accessory/i,
+        /^qd[-_]/i,          // QD-xxx patterns
+        /hardware/i,
+        /screw/i,
+        /bolt/i,
+        /nut/i,
+        /washer/i,
+        /pin/i,
+        /spring/i,
+        /accessory/i,
+        /part.?only/i,
+      ];
+      
+      // Function to check if an item is a non-stock part
+      const isNonStockItem = (item: any): boolean => {
+        const itemName = (item.itemName || item.stockModelName || '').toLowerCase();
+        const stockModelId = (item.stockModelId || '').toLowerCase();
+        const itemId = (item.itemId || '').toLowerCase();
+        
+        // Check if any of the identifiers match non-stock patterns
+        const allIdentifiers = `${itemName} ${stockModelId} ${itemId}`;
+        return nonStockPatterns.some(pattern => pattern.test(allIdentifiers));
+      };
+      
       // Include items that have a valid stock model ID (not 'no_stock' or empty)
-      // This covers both 'stock_model' and 'custom_model' item types
+      // AND are not non-stock parts (bottom metals, rails, etc.)
       const stockModelItems = poItems.filter((item) => {
         const stockModelId = item.stockModelId || '';
         const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
-        return hasValidStockModel;
+        
+        if (!hasValidStockModel) {
+          console.log(`🚫 Skipping item ${item.id}: no valid stock model (${stockModelId})`);
+          return false;
+        }
+        
+        // Check if this is a non-stock item (parts only)
+        if (isNonStockItem(item)) {
+          console.log(`🚫 Skipping non-stock item ${item.id}: ${item.itemName || item.stockModelName} (parts only, no manufacturing)`);
+          return false;
+        }
+        
+        return true;
       });
 
       console.log(

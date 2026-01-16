@@ -2,7 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Circle, Minus, ArrowUpDown, Calendar, Plus, Edit, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, Circle, Minus, ArrowUpDown, Calendar, Plus, Edit, Trash2, Upload, FileSpreadsheet, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -98,6 +118,11 @@ export default function TrainingMatrixView() {
   // Dialog states for CRUD
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any>(null);
+  
+  // Import dialog states
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedSheetId, setSelectedSheetId] = useState<string>('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Fetch all employees
   const { data: allEmployees, isLoading: employeesLoading } = useQuery<Employee[]>({
@@ -120,6 +145,55 @@ export default function TrainingMatrixView() {
     Evaluation[]
   >({
     queryKey: ['/api/employees/evaluations'],
+  });
+
+  // Google Sheets import queries and mutations
+  interface GoogleSheet {
+    id: string;
+    name: string;
+    modifiedTime: string;
+  }
+
+  const { data: sheets = [], isLoading: sheetsLoading } = useQuery<GoogleSheet[]>({
+    queryKey: ['/api/training/google-sheets'],
+    enabled: showImportDialog,
+  });
+
+  const { data: previewData, isLoading: previewLoading } = useQuery<{ data: string[][] }>({
+    queryKey: [`/api/training/google-sheets/${selectedSheetId}/preview`],
+    enabled: !!selectedSheetId && showImportDialog,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/training/matrix', { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Training matrix data has been deleted' });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      setShowDeleteDialog(false);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to delete training matrix', variant: 'destructive' });
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/training/import-from-sheets', {
+        method: 'POST',
+        body: JSON.stringify({ spreadsheetId: selectedSheetId }),
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: 'Import Successful', description: `Imported ${data.imported || 0} training records` });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      setShowImportDialog(false);
+      setSelectedSheetId('');
+    },
+    onError: (error: any) => {
+      toast({ title: 'Import Failed', description: error.message || 'Failed to import training data', variant: 'destructive' });
+    },
   });
 
   const formatDate = (dateStr: string | null) => {
@@ -904,6 +978,15 @@ export default function TrainingMatrixView() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowImportDialog(true)}
+                data-testid="button-import-matrix"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Import Matrix
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setLocation('/import-certifications')}
                 data-testid="button-import-certifications"
               >
@@ -972,6 +1055,133 @@ export default function TrainingMatrixView() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Import Matrix Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Training Matrix from Google Sheets</DialogTitle>
+            <DialogDescription>
+              Select a Google Sheet to import training data from. This will add new records to the training matrix.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label>Select Google Sheet</Label>
+              {sheetsLoading ? (
+                <div className="animate-pulse h-10 bg-gray-200 rounded" />
+              ) : sheets.length === 0 ? (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    No Google Sheets found. Make sure Google Drive is connected and you have spreadsheets available.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Select value={selectedSheetId} onValueChange={setSelectedSheetId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a spreadsheet..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sheets.map((sheet) => (
+                      <SelectItem key={sheet.id} value={sheet.id}>
+                        {sheet.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedSheetId && (
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                {previewLoading ? (
+                  <div className="animate-pulse h-48 bg-gray-200 rounded" />
+                ) : previewData?.data ? (
+                  <div className="border rounded-lg overflow-x-auto max-h-64">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {previewData.data[0]?.map((header, i) => (
+                            <TableHead key={i} className="whitespace-nowrap">
+                              {header}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previewData.data.slice(1, 6).map((row, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            {row.map((cell, cellIndex) => (
+                              <TableCell key={cellIndex} className="whitespace-nowrap">
+                                {cell}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {previewData.data.length > 6 && (
+                      <div className="p-2 text-sm text-muted-foreground text-center border-t">
+                        ... and {previewData.data.length - 6} more rows
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertDescription>No preview data available</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-between">
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete All Matrix Data
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => importMutation.mutate()}
+                  disabled={!selectedSheetId || importMutation.isPending}
+                >
+                  {importMutation.isPending ? 'Importing...' : 'Import Data'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Training Matrix Data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all training matrix records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete All'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

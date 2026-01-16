@@ -1,3 +1,97 @@
 Your branch is ahead of 'origin/main' by 44 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20260115-2305-my-change a17055e9] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20260115-230554.txt
+branch 'feature-20260115-2305-my-change' set up to track 'origin/feature-20260115-2305-my-change'.
+> a17055e9 (HEAD -> feature-20260115-2305-my-change, origin/feature-20260115-2305-my-change) feat: my-change
+> de9d56cb (gitsafe-backup/main, gitsafe-backup/HEAD, main) Add trainer certifications to the training matrix
+> fbca521d Remove unused Helium database import functionality
+> 5aff254e Saved progress at the end of the loop
+> 77bfd047 Add training management and AI content extraction features
+> e96e3f70 (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD) Published your App
+> 0f433f89 Published your App
+> 2a1a9132 Improve badge scanning by recording department history and completion timestamps
+> 538731b4 Update invoice breakdown to correctly filter orders by fulfillment date
+> 343b7598 Improve report accuracy by fixing order progression tracking
+> 20322e6d Improve how orders are tracked through quality control
+> 8f50bf43 Update how orders are processed to ensure accurate reporting
+> 0b225cef Improve how order completion data is recorded and displayed
+> 47569938 Improve order progression tracking by updating department history logging
+> 25bf24b7 Update the finish QC report to correctly display orders
+> f0678ce5 Published your App
+> 23f43852 Add purchase orders to the revenue breakdown report
+> edc86ed1 Published your App
+> 2c2c590d Fix timezone issues when reporting on order fulfillment dates
+> d55fabc8 Published your App
+> 8ee4c283 Update invoice breakdown to filter by fulfillment date
+> 3520cc23 Published your App
+> 78d49885 Saved progress at the end of the loop
+> f72f378d Enhance order creation and reminder emails with secure signature link generation
+> 2c044ffd Enforce environment safety for signature emails and log relevant details
+> 1aa3fdbc Add a Tickets card to three different dashboards
+> 25f12952 Published your App
+> 3a7589f0 Saved progress at the end of the loop
+> 8d6eee91 Published your App
+> ac991483 Enforce consistent signature link generation and usage across the application
+> 43570eda Published your App
+> e3d18c7c Add ability to set test email for notification checks
+> 9829b91f Simplify order signing link to use query parameters
+> dfdf5c23 Update sign order page to use query parameters for token
+> ac8ccb2d Saved progress at the end of the loop
+> 7d402486 Add validation and error handling for ticket updates
+> b8e0f726 Allow multiple users to be assigned to a single ticket
+> 9e5e2508 Adjust order signing to correctly use production URLs from development environment
+> d166bc4b Published your App
+> 16690d64 Update metal accessory demand calculation to use finalized orders
+> 8738a10c Published your App
+> 12e0e4ae Add historical data entry module for legacy financial tracking
+> ef090fb5 Add system for tracking and comparing historical financial data
+> 2eae04e2 Transitioned from Plan to Build mode
+> 16e7c7c0 Improve document generation by lazily initializing the AI client
+ ...nt-column-to-the-following-ta_1768431539155.txt |  75 +++
+ ...Signature-Link-Contract-acros_1768424223843.txt |  93 +++
+ attached_assets/image_1768421768316.png            | Bin 0 -> 37982 bytes
+ attached_assets/image_1768423656949.png            | Bin 0 -> 62179 bytes
+ attached_assets/image_1768423833692.png            | Bin 0 -> 155052 bytes
+ attached_assets/image_1768450132790.png            | Bin 0 -> 33203 bytes
+ attached_assets/image_1768453705338.png            | Bin 0 -> 111743 bytes
+ attached_assets/image_1768453821250.png            | Bin 0 -> 127787 bytes
+ attached_assets/image_1768453913755.png            | Bin 0 -> 93496 bytes
+ attached_assets/image_1768454064730.png            | Bin 0 -> 115239 bytes
+ attached_assets/image_1768454138697.png            | Bin 0 -> 120906 bytes
+ attached_assets/image_1768454402015.png            | Bin 0 -> 119036 bytes
+ attached_assets/image_1768455124969.png            | Bin 0 -> 43656 bytes
+ client/src/App.tsx                                 |   9 +
+ client/src/components/Navigation.tsx               |   7 +
+ client/src/config/userPermissions.ts               |   1 +
+ .../pages/WorkInstructionsPage.tsx                 | 150 ++++-
+ client/src/pages/AGTestDashboard.tsx               |  19 +
+ client/src/pages/DARLENEBTestDashboard.tsx         |  15 +
+ client/src/pages/HistoricalDataEntry.tsx           | 334 ++++++++++
+ client/src/pages/MetalAccessoriesTracker.tsx       |   2 +-
+ client/src/pages/STACIWTestDashboard.tsx           |  15 +
+ client/src/pages/SignOrderPage.tsx                 |  24 +-
+ client/src/pages/SystemHealthChecksPage.tsx        |   2 +-
+ client/src/pages/TicketsPage.tsx                   | 198 ++++--
+ client/src/pages/TrainTheTrainer.tsx               | 696 +++++++++++++++++++++
+ client/src/pages/TrainerDashboard.tsx              | 561 +++++++++++++++++
+ client/src/pages/TrainingControlCenter.tsx         |  14 +-
+ client/src/pages/TrainingPlans.tsx                 | 371 +++++++++++
+ push_log_20260115-230554.txt                       |   3 +
+ replit.md                                          |   2 +-
+ server/schema.ts                                   | 223 ++++++-
+ server/src/routes/employeeBadges.ts                |  68 +-
+ server/src/routes/followupOrders.ts                |  92 +--
+ server/src/routes/historicalData.ts                | 276 ++++++++
+ server/src/routes/index.ts                         |  78 ++-
+ server/src/routes/orders.ts                        |  23 +-
+ server/src/routes/routingDocuments.ts              |  27 +-
+ server/src/routes/tickets.ts                       |  25 +-
+ server/src/routes/training.ts                      | 658 +++++++++++++++++++
+ server/storage.ts                                  |  18 +-
+ server/utils/followupOrderReminder.ts              |  47 +-
+ server/utils/magicLink.ts                          | 110 ++++
+ 43 files changed, 4089 insertions(+), 147 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20260115-2305-my-change?expand=1

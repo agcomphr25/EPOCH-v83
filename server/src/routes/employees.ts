@@ -149,7 +149,7 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
   try {
     // Get all active certifications and all active employees in a CROSS JOIN
     // Then LEFT JOIN to employee_certifications to show which ones they have
-    const result = await pool.query`
+    const result = await pool.query(`
       SELECT 
         e.id as "employeeId",
         e.name as "employeeName",
@@ -166,9 +166,9 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
       CROSS JOIN certifications c
       LEFT JOIN employee_certifications ec 
         ON e.id = ec.employee_id AND c.id = ec.certification_id
-      WHERE c.is_active = true AND c.category = 'DEPARTMENT'
+      WHERE e.is_active = true AND c.is_active = true AND c.category = 'DEPARTMENT'
       ORDER BY e.name, c.name
-    `;
+    `);
 
     console.log('Certifications matrix result:', result.length, 'rows');
     res.json(result || []);
@@ -181,7 +181,7 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
 // All Evaluations - Get all employees with their evaluations (MUST be before /:id)
 router.get('/evaluations', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query`
+    const result = await pool.query(`
       SELECT 
         e.id as "employeeId",
         e.name as "employeeName",
@@ -200,8 +200,9 @@ router.get('/evaluations', async (req: Request, res: Response) => {
         ev.status
       FROM employees e
       LEFT JOIN evaluations ev ON e.id = ev.employee_id
+      WHERE e.is_active = true
       ORDER BY e.name, ev.evaluation_period_end DESC
-    `;
+    `);
 
     res.json(result || []);
   } catch (error) {

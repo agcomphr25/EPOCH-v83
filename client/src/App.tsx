@@ -118,6 +118,7 @@ import TrainingControlCenter from '@/pages/TrainingControlCenter';
 import TrainingModule from '@/pages/TrainingModule';
 import TrainingPlans from '@/pages/TrainingPlans';
 import TrainerDashboard from '@/pages/TrainerDashboard';
+import TrainingContentLibrary from '@/pages/TrainingContentLibrary';
 import {
   ProgramsPage,
   ProgramBuilderPage,
@@ -774,6 +775,7 @@ function App() {
                   <Route path="/training/daily-quizzes" component={DailyQuizSelectionPage} />
                   <Route path="/training/assign" component={AssignProgramPage} />
                   <Route path="/training/sessions/:sessionId" component={SessionDailySheetPage} />
+                  <Route path="/training/content-library" component={TrainingContentLibrary} />
                   <Route path="/training/:moduleId" component={TrainingModule} />
 
                   <Route path="/calendar" component={Calendar} />

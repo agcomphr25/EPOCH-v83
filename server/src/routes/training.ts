@@ -3855,4 +3855,690 @@ router.delete('/plan-days/:dayId/topics/:topicId', async (req, res) => {
   }
 });
 
+// ============================================================================
+// TRAINING CONTENT LIBRARY - Central repository for training materials
+// ============================================================================
+
+import { 
+  trainingContentCategories, 
+  trainingLibraryDocuments, 
+  documentCategoryAssignments,
+  trainingLibraryTopics,
+  topicDocumentLinks,
+  trainingTopicMaterials,
+  trainingTopicQuizQuestions,
+  traineeTopicAssignments,
+  aiTrainingPlans
+} from '../../schema';
+
+// --- CATEGORIES ---
+
+// Get all categories
+router.get('/content-library/categories', async (req, res) => {
+  try {
+    const categories = await db.select().from(trainingContentCategories).orderBy(trainingContentCategories.type, trainingContentCategories.name);
+    res.json(categories);
+  } catch (error: any) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create category
+router.post('/content-library/categories', async (req, res) => {
+  try {
+    const [category] = await db.insert(trainingContentCategories).values({
+      name: req.body.name,
+      type: req.body.type || 'custom',
+      description: req.body.description,
+      color: req.body.color,
+      parentId: req.body.parentId,
+      createdBy: req.body.createdBy,
+    }).returning();
+    res.status(201).json(category);
+  } catch (error: any) {
+    console.error('Error creating category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update category
+router.put('/content-library/categories/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [updated] = await db.update(trainingContentCategories)
+      .set({
+        name: req.body.name,
+        description: req.body.description,
+        color: req.body.color,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingContentCategories.id, id))
+      .returning();
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete category
+router.delete('/content-library/categories/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingContentCategories).where(eq(trainingContentCategories.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- DOCUMENTS ---
+
+// Get all documents with categories
+router.get('/content-library/documents', async (req, res) => {
+  try {
+    const docs = await db.select({
+      id: trainingLibraryDocuments.id,
+      title: trainingLibraryDocuments.title,
+      originalFilename: trainingLibraryDocuments.originalFilename,
+      fileUrl: trainingLibraryDocuments.fileUrl,
+      fileType: trainingLibraryDocuments.fileType,
+      fileSize: trainingLibraryDocuments.fileSize,
+      summary: trainingLibraryDocuments.summary,
+      status: trainingLibraryDocuments.status,
+      uploadedBy: trainingLibraryDocuments.uploadedBy,
+      createdAt: trainingLibraryDocuments.createdAt,
+    }).from(trainingLibraryDocuments).orderBy(desc(trainingLibraryDocuments.createdAt));
+
+    // Get categories for each document
+    const docsWithCategories = await Promise.all(docs.map(async (doc) => {
+      const assignments = await db.select({
+        categoryId: documentCategoryAssignments.categoryId,
+        categoryName: trainingContentCategories.name,
+        categoryType: trainingContentCategories.type,
+        categoryColor: trainingContentCategories.color,
+      }).from(documentCategoryAssignments)
+        .leftJoin(trainingContentCategories, eq(documentCategoryAssignments.categoryId, trainingContentCategories.id))
+        .where(eq(documentCategoryAssignments.documentId, doc.id));
+      
+      return { ...doc, categories: assignments };
+    }));
+
+    res.json(docsWithCategories);
+  } catch (error: any) {
+    console.error('Error fetching documents:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single document with full content
+router.get('/content-library/documents/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [doc] = await db.select().from(trainingLibraryDocuments).where(eq(trainingLibraryDocuments.id, id));
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const assignments = await db.select({
+      categoryId: documentCategoryAssignments.categoryId,
+      categoryName: trainingContentCategories.name,
+      categoryType: trainingContentCategories.type,
+    }).from(documentCategoryAssignments)
+      .leftJoin(trainingContentCategories, eq(documentCategoryAssignments.categoryId, trainingContentCategories.id))
+      .where(eq(documentCategoryAssignments.documentId, id));
+
+    res.json({ ...doc, categories: assignments });
+  } catch (error: any) {
+    console.error('Error fetching document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload document with category assignment and AI extraction
+router.post('/content-library/documents', async (req, res) => {
+  try {
+    const { title, originalFilename, fileUrl, fileType, fileSize, categoryIds, uploadedBy, extractedText } = req.body;
+
+    // Create document record
+    const [doc] = await db.insert(trainingLibraryDocuments).values({
+      title,
+      originalFilename,
+      fileUrl,
+      fileType,
+      fileSize,
+      extractedContent: extractedText,
+      status: extractedText ? 'processing' : 'uploaded',
+      uploadedBy,
+    }).returning();
+
+    // Assign categories
+    if (categoryIds && categoryIds.length > 0) {
+      for (const categoryId of categoryIds) {
+        await db.insert(documentCategoryAssignments).values({
+          documentId: doc.id,
+          categoryId,
+        });
+      }
+    }
+
+    // If we have extracted text, process with AI
+    if (extractedText) {
+      try {
+        const client = getOpenAIClient();
+        const completion = await client.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { 
+              role: 'system', 
+              content: `Analyze this training document and extract a summary and key points. Return JSON with:
+{
+  "summary": "2-3 sentence summary",
+  "keyPoints": ["point 1", "point 2", ...]
+}`
+            },
+            { role: 'user', content: extractedText.substring(0, 15000) }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        });
+
+        const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        
+        await db.update(trainingLibraryDocuments)
+          .set({
+            summary: parsed.summary,
+            keyPoints: JSON.stringify(parsed.keyPoints),
+            status: 'ready',
+            updatedAt: new Date(),
+          })
+          .where(eq(trainingLibraryDocuments.id, doc.id));
+
+        doc.summary = parsed.summary;
+        doc.keyPoints = JSON.stringify(parsed.keyPoints);
+        doc.status = 'ready';
+      } catch (aiError: any) {
+        console.error('AI extraction error:', aiError);
+        await db.update(trainingLibraryDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(trainingLibraryDocuments.id, doc.id));
+      }
+    }
+
+    res.status(201).json(doc);
+  } catch (error: any) {
+    console.error('Error uploading document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update document categories
+router.put('/content-library/documents/:id/categories', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { categoryIds } = req.body;
+
+    // Remove existing assignments
+    await db.delete(documentCategoryAssignments).where(eq(documentCategoryAssignments.documentId, id));
+
+    // Add new assignments
+    for (const categoryId of categoryIds) {
+      await db.insert(documentCategoryAssignments).values({
+        documentId: id,
+        categoryId,
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating document categories:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete document
+router.delete('/content-library/documents/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(documentCategoryAssignments).where(eq(documentCategoryAssignments.documentId, id));
+    await db.delete(trainingLibraryDocuments).where(eq(trainingLibraryDocuments.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- AI TRAINING TOPIC GENERATION ---
+
+// Generate training topic from selected documents
+router.post('/content-library/generate-topic', async (req, res) => {
+  try {
+    const { documentIds, categoryId, createdBy } = req.body;
+
+    // Fetch document contents
+    const docs = await db.select().from(trainingLibraryDocuments)
+      .where(inArray(trainingLibraryDocuments.id, documentIds));
+
+    const combinedContent = docs.map(d => 
+      `Document: ${d.title}\n${d.extractedContent || d.summary || ''}`
+    ).join('\n\n---\n\n');
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: `You are creating a comprehensive training topic using the 4-Step Training Method.
+Create training materials that a trainer can easily follow.
+
+Return JSON with this structure:
+{
+  "title": "Training Topic Title",
+  "description": "Overview of what will be learned",
+  "objectives": ["objective 1", "objective 2", ...],
+  "prerequisites": "Any required prior knowledge",
+  "estimatedDuration": 60,
+  "difficultyLevel": "beginner|intermediate|advanced",
+  "materials": [
+    {
+      "stepNumber": 1,
+      "stepTitle": "Trainer Does / Trainer Explains",
+      "trainerInstructions": "Detailed instructions for what the trainer should demonstrate and explain",
+      "keyPoints": ["key point 1", "key point 2"],
+      "demonstrations": "What to physically demonstrate",
+      "safetyNotes": "Any safety considerations",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 2,
+      "stepTitle": "Trainer Does / Trainee Explains",
+      "trainerInstructions": "Instructions for this step...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 3,
+      "stepTitle": "Trainee Does / Trainer Coaches",
+      "trainerInstructions": "Instructions for hands-on practice with coaching...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 4,
+      "stepTitle": "Trainee Does / Trainer Observes",
+      "trainerInstructions": "Instructions for independent execution with observation...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    }
+  ],
+  "quizQuestions": [
+    {
+      "question": "Question text",
+      "questionType": "multiple_choice",
+      "options": ["A) option", "B) option", "C) option", "D) option"],
+      "correctAnswer": "A",
+      "explanation": "Why this is correct",
+      "difficulty": "easy|medium|hard",
+      "stepNumber": 1
+    }
+  ]
+}`
+        },
+        { role: 'user', content: `Create a complete 4-Step training topic from this content:\n\n${combinedContent.substring(0, 25000)}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.5,
+    });
+
+    const generated = JSON.parse(completion.choices[0]?.message?.content || '{}');
+
+    // Create the topic
+    const [topic] = await db.insert(trainingLibraryTopics).values({
+      title: generated.title,
+      description: generated.description,
+      objectives: JSON.stringify(generated.objectives),
+      prerequisites: generated.prerequisites,
+      estimatedDuration: generated.estimatedDuration,
+      difficultyLevel: generated.difficultyLevel,
+      categoryId,
+      createdBy,
+      isAiGenerated: true,
+    }).returning();
+
+    // Link documents to topic
+    for (const docId of documentIds) {
+      await db.insert(topicDocumentLinks).values({
+        topicId: topic.id,
+        documentId: docId,
+      });
+    }
+
+    // Create training materials for each step
+    for (const material of generated.materials || []) {
+      await db.insert(trainingTopicMaterials).values({
+        topicId: topic.id,
+        stepNumber: material.stepNumber,
+        stepTitle: material.stepTitle,
+        trainerInstructions: material.trainerInstructions,
+        keyPoints: JSON.stringify(material.keyPoints),
+        demonstrations: material.demonstrations,
+        safetyNotes: material.safetyNotes,
+        estimatedTime: material.estimatedTime,
+      });
+    }
+
+    // Create quiz questions
+    for (const q of generated.quizQuestions || []) {
+      await db.insert(trainingTopicQuizQuestions).values({
+        topicId: topic.id,
+        question: q.question,
+        questionType: q.questionType,
+        options: JSON.stringify(q.options),
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        difficulty: q.difficulty,
+        stepNumber: q.stepNumber,
+      });
+    }
+
+    res.status(201).json({ topic, materials: generated.materials, quizQuestions: generated.quizQuestions });
+  } catch (error: any) {
+    console.error('Error generating topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- TOPICS ---
+
+// Get all topics with materials count
+router.get('/content-library/topics', async (req, res) => {
+  try {
+    const topics = await db.select({
+      id: trainingLibraryTopics.id,
+      title: trainingLibraryTopics.title,
+      description: trainingLibraryTopics.description,
+      objectives: trainingLibraryTopics.objectives,
+      estimatedDuration: trainingLibraryTopics.estimatedDuration,
+      difficultyLevel: trainingLibraryTopics.difficultyLevel,
+      categoryId: trainingLibraryTopics.categoryId,
+      isAiGenerated: trainingLibraryTopics.isAiGenerated,
+      createdAt: trainingLibraryTopics.createdAt,
+      categoryName: trainingContentCategories.name,
+      categoryColor: trainingContentCategories.color,
+    }).from(trainingLibraryTopics)
+      .leftJoin(trainingContentCategories, eq(trainingLibraryTopics.categoryId, trainingContentCategories.id))
+      .orderBy(desc(trainingLibraryTopics.createdAt));
+
+    res.json(topics);
+  } catch (error: any) {
+    console.error('Error fetching topics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single topic with full details
+router.get('/content-library/topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [topic] = await db.select().from(trainingLibraryTopics).where(eq(trainingLibraryTopics.id, id));
+    if (!topic) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    const materials = await db.select().from(trainingTopicMaterials)
+      .where(eq(trainingTopicMaterials.topicId, id))
+      .orderBy(trainingTopicMaterials.stepNumber);
+
+    const quizQuestions = await db.select().from(trainingTopicQuizQuestions)
+      .where(eq(trainingTopicQuizQuestions.topicId, id));
+
+    const linkedDocs = await db.select({
+      id: trainingLibraryDocuments.id,
+      title: trainingLibraryDocuments.title,
+    }).from(topicDocumentLinks)
+      .leftJoin(trainingLibraryDocuments, eq(topicDocumentLinks.documentId, trainingLibraryDocuments.id))
+      .where(eq(topicDocumentLinks.topicId, id));
+
+    res.json({ ...topic, materials, quizQuestions, linkedDocuments: linkedDocs });
+  } catch (error: any) {
+    console.error('Error fetching topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete topic
+router.delete('/content-library/topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingTopicQuizQuestions).where(eq(trainingTopicQuizQuestions.topicId, id));
+    await db.delete(trainingTopicMaterials).where(eq(trainingTopicMaterials.topicId, id));
+    await db.delete(topicDocumentLinks).where(eq(topicDocumentLinks.topicId, id));
+    await db.delete(trainingLibraryTopics).where(eq(trainingLibraryTopics.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- TRAINEE ASSIGNMENTS ---
+
+// Get assignments for a trainee
+router.get('/content-library/assignments/:traineeId', async (req, res) => {
+  try {
+    const traineeId = parseInt(req.params.traineeId);
+    const assignments = await db.select({
+      id: traineeTopicAssignments.id,
+      topicId: traineeTopicAssignments.topicId,
+      trainerId: traineeTopicAssignments.trainerId,
+      dayNumber: traineeTopicAssignments.dayNumber,
+      status: traineeTopicAssignments.status,
+      dueDate: traineeTopicAssignments.dueDate,
+      startedAt: traineeTopicAssignments.startedAt,
+      completedAt: traineeTopicAssignments.completedAt,
+      topicTitle: trainingLibraryTopics.title,
+      topicDuration: trainingLibraryTopics.estimatedDuration,
+    }).from(traineeTopicAssignments)
+      .leftJoin(trainingLibraryTopics, eq(traineeTopicAssignments.topicId, trainingLibraryTopics.id))
+      .where(eq(traineeTopicAssignments.traineeId, traineeId))
+      .orderBy(traineeTopicAssignments.dayNumber);
+
+    res.json(assignments);
+  } catch (error: any) {
+    console.error('Error fetching assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign topics to trainee
+router.post('/content-library/assign-topics', async (req, res) => {
+  try {
+    const { traineeId, topicIds, trainerId, createdBy } = req.body;
+
+    const assignments = [];
+    for (let i = 0; i < topicIds.length; i++) {
+      const dayNumber = Math.ceil((i + 1) / Math.ceil(topicIds.length / 4)); // Distribute across 4 days
+      const [assignment] = await db.insert(traineeTopicAssignments).values({
+        traineeId,
+        topicId: topicIds[i],
+        trainerId,
+        dayNumber,
+        createdBy,
+      }).returning();
+      assignments.push(assignment);
+    }
+
+    res.status(201).json(assignments);
+  } catch (error: any) {
+    console.error('Error assigning topics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate AI training plan from selected topics
+router.post('/content-library/generate-training-plan', async (req, res) => {
+  try {
+    const { traineeId, topicIds, trainerId, createdBy } = req.body;
+
+    // Fetch topics
+    const topics = await db.select().from(trainingLibraryTopics)
+      .where(inArray(trainingLibraryTopics.id, topicIds));
+
+    // Get trainee info
+    const [trainee] = await db.select().from(employees).where(eq(employees.id, traineeId));
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: `You are organizing training topics into an optimal 4-day training plan.
+Each day should have a logical flow and appropriate workload.
+Consider prerequisites and build skills progressively.
+
+Return JSON with:
+{
+  "title": "Training Plan for [Area]",
+  "description": "Overview of this training program",
+  "days": [
+    {
+      "dayNumber": 1,
+      "theme": "Day theme/focus",
+      "objectives": ["what trainee will learn"],
+      "topicIds": [list of topic IDs for this day],
+      "estimatedHours": 4
+    },
+    ...
+  ]
+}`
+        },
+        { 
+          role: 'user', 
+          content: `Create a 4-day training plan for ${trainee?.name || 'trainee'} using these topics:\n\n${topics.map(t => `ID: ${t.id}, Title: ${t.title}, Duration: ${t.estimatedDuration}min, Prerequisites: ${t.prerequisites || 'None'}`).join('\n')}`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.5,
+    });
+
+    const plan = JSON.parse(completion.choices[0]?.message?.content || '{}');
+
+    // Create the training plan
+    const [savedPlan] = await db.insert(aiTrainingPlans).values({
+      traineeId,
+      title: plan.title,
+      description: plan.description,
+      planStructure: JSON.stringify(plan),
+      totalTopics: topicIds.length,
+      createdBy,
+    }).returning();
+
+    // Create assignments based on the plan
+    for (const day of plan.days || []) {
+      for (const topicId of day.topicIds || []) {
+        await db.insert(traineeTopicAssignments).values({
+          traineeId,
+          topicId,
+          trainerId,
+          dayNumber: day.dayNumber,
+          createdBy,
+        });
+      }
+    }
+
+    res.status(201).json({ plan: savedPlan, structure: plan });
+  } catch (error: any) {
+    console.error('Error generating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update assignment status
+router.put('/content-library/assignments/:id/status', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status } = req.body;
+
+    const updates: any = { status, updatedAt: new Date() };
+    if (status === 'in_progress' && !req.body.startedAt) {
+      updates.startedAt = new Date();
+    }
+    if (status === 'completed') {
+      updates.completedAt = new Date();
+    }
+
+    const [updated] = await db.update(traineeTopicAssignments)
+      .set(updates)
+      .where(eq(traineeTopicAssignments.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get AI training plans
+router.get('/content-library/training-plans', async (req, res) => {
+  try {
+    const plans = await db.select({
+      id: aiTrainingPlans.id,
+      traineeId: aiTrainingPlans.traineeId,
+      title: aiTrainingPlans.title,
+      description: aiTrainingPlans.description,
+      totalTopics: aiTrainingPlans.totalTopics,
+      status: aiTrainingPlans.status,
+      createdAt: aiTrainingPlans.createdAt,
+      traineeName: employees.name,
+    }).from(aiTrainingPlans)
+      .leftJoin(employees, eq(aiTrainingPlans.traineeId, employees.id))
+      .orderBy(desc(aiTrainingPlans.createdAt));
+
+    res.json(plans);
+  } catch (error: any) {
+    console.error('Error fetching training plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single training plan with full structure
+router.get('/content-library/training-plans/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [plan] = await db.select().from(aiTrainingPlans).where(eq(aiTrainingPlans.id, id));
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+
+    const assignments = await db.select({
+      id: traineeTopicAssignments.id,
+      topicId: traineeTopicAssignments.topicId,
+      dayNumber: traineeTopicAssignments.dayNumber,
+      status: traineeTopicAssignments.status,
+      topicTitle: trainingLibraryTopics.title,
+      topicDuration: trainingLibraryTopics.estimatedDuration,
+    }).from(traineeTopicAssignments)
+      .leftJoin(trainingLibraryTopics, eq(traineeTopicAssignments.topicId, trainingLibraryTopics.id))
+      .where(eq(traineeTopicAssignments.traineeId, plan.traineeId))
+      .orderBy(traineeTopicAssignments.dayNumber);
+
+    res.json({ ...plan, assignments });
+  } catch (error: any) {
+    console.error('Error fetching training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

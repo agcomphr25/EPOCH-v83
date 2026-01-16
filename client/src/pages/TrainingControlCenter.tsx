@@ -9,21 +9,21 @@ import {
   GraduationCap, 
   LayoutGrid, 
   Settings, 
-  FileSpreadsheet,
   Users,
   CheckCircle,
   Clock,
   AlertCircle,
   Wrench,
-  UserCheck
+  UserCheck,
+  BookOpen
 } from 'lucide-react';
 
 import Training from './Training';
 import TrainingMatrixView from './TrainingMatrixView';
 import TrainingManagement from './TrainingManagement';
-import TrainingMatrixImport from './TrainingMatrixImport';
 import TrainingMatrixManage from './TrainingMatrixManage';
 import TrainTheTrainer from './TrainTheTrainer';
+import TrainingContentLibrary from './TrainingContentLibrary';
 
 interface TrainingStats {
   totalModules: number;
@@ -121,6 +121,10 @@ export default function TrainingControlCenter() {
             <GraduationCap className="h-4 w-4" />
             Modules
           </TabsTrigger>
+          <TabsTrigger value="library" className="flex items-center gap-2" data-testid="tab-library">
+            <BookOpen className="h-4 w-4" />
+            Content Library
+          </TabsTrigger>
           <TabsTrigger value="matrix" className="flex items-center gap-2" data-testid="tab-matrix">
             <LayoutGrid className="h-4 w-4" />
             Matrix
@@ -128,10 +132,6 @@ export default function TrainingControlCenter() {
           <TabsTrigger value="assignments" className="flex items-center gap-2" data-testid="tab-assignments">
             <Users className="h-4 w-4" />
             Assignments
-          </TabsTrigger>
-          <TabsTrigger value="import" className="flex items-center gap-2" data-testid="tab-import">
-            <FileSpreadsheet className="h-4 w-4" />
-            Import
           </TabsTrigger>
           <TabsTrigger value="trainer" className="flex items-center gap-2" data-testid="tab-trainer">
             <UserCheck className="h-4 w-4" />
@@ -147,6 +147,10 @@ export default function TrainingControlCenter() {
           <Training />
         </TabsContent>
 
+        <TabsContent value="library" className="space-y-4">
+          <TrainingContentLibrary />
+        </TabsContent>
+
         <TabsContent value="matrix" className="space-y-4">
           <TrainingMatrixView />
         </TabsContent>
@@ -155,9 +159,6 @@ export default function TrainingControlCenter() {
           <TrainingMatrixManage />
         </TabsContent>
 
-        <TabsContent value="import" className="space-y-4">
-          <TrainingMatrixImport />
-        </TabsContent>
 
         <TabsContent value="trainer" className="space-y-4">
           <TrainTheTrainer />

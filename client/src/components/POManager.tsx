@@ -68,6 +68,12 @@ import {
   UserPlus,
   Mail,
   Phone,
+  Paperclip,
+  Download,
+  Upload,
+  FileText,
+  X,
+  Loader2,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -148,6 +154,210 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   );
 }
 
+// Component for PO Attachments management
+function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const queryClient = useQueryClient();
+  const fileInputRef = { current: null as HTMLInputElement | null };
+
+  const { data: attachments = [], isLoading, refetch } = useQuery({
+    queryKey: [`/api/pos/${poId}/attachments`],
+    queryFn: () => apiRequest(`/api/pos/${poId}/attachments`),
+    enabled: isOpen,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (attachmentId: string) => {
+      return apiRequest(`/api/pos/${poId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Attachment deleted');
+      refetch();
+    },
+    onError: () => {
+      toast.error('Failed to delete attachment');
+    },
+  });
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please select a PDF file');
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('File size must be less than 20MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const urlResponse = await apiRequest(`/api/pos/${poId}/attachments/request-upload-url`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+
+      await fetch(urlResponse.uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
+        method: 'POST',
+        body: JSON.stringify({
+          objectPath: urlResponse.objectPath,
+          originalFileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+        }),
+      });
+
+      toast.success('PDF attached successfully');
+      refetch();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload PDF');
+    } finally {
+      setIsUploading(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const handleDownload = async (attachmentId: string, fileName: string) => {
+    try {
+      const response = await apiRequest(`/api/pos/${poId}/attachments/${attachmentId}/download`);
+      window.open(response.downloadURL, '_blank');
+    } catch (error) {
+      toast.error('Failed to download file');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="flex items-center gap-1">
+          <Paperclip className="w-4 h-4" />
+          {(attachments as any[]).length > 0 && (
+            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
+              {(attachments as any[]).length}
+            </span>
+          )}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>PO Attachments - {poNumber}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Attach PDF copies of purchase orders
+            </p>
+            <div>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={handleFileSelect}
+                className="hidden"
+                id={`po-upload-${poId}`}
+                ref={(el) => (fileInputRef.current = el)}
+              />
+              <Button 
+                size="sm" 
+                onClick={() => document.getElementById(`po-upload-${poId}`)?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload PDF
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading attachments...
+            </div>
+          ) : (attachments as any[]).length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+              <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No attachments yet</p>
+              <p className="text-xs">Upload a PDF copy of this PO</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(attachments as any[]).map((attachment: any) => (
+                <div
+                  key={attachment.id}
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {attachment.originalFileName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(attachment.fileSize)} • {new Date(attachment.uploadedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownload(attachment.id, attachment.originalFileName)}
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Delete this attachment?')) {
+                          deleteMutation.mutate(attachment.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Component for individual PO card to safely use hooks
 function POCard({
   po,
@@ -213,6 +423,7 @@ function POCard({
                 <Package className="w-4 h-4" />
                 Manage Items
               </Button>
+              <POAttachments poId={po.id} poNumber={po.poNumber} />
               <Button
                 variant="ghost"
                 size="sm"

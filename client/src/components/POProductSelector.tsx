@@ -20,13 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Package, Plus, ShoppingCart } from 'lucide-react';
+import { Package, Plus, ShoppingCart, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface POProduct {
   id: number;
   customerName: string;
   productName: string;
+  customerProductNumber: string;
   material: string;
   handedness: string;
   stockModel: string;
@@ -78,6 +79,7 @@ export default function POProductSelector({
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(
     []
   );
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   // Fetch customer-associated PO products
@@ -108,6 +110,15 @@ export default function POProductSelector({
       product.customerName.toLowerCase().trim() ===
       customerName.toLowerCase().trim()
   );
+
+  // Filter products by search query (product name or customer product number)
+  const filteredProducts = customerProducts.filter((product) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    const productName = (product.productName || '').toLowerCase();
+    const customerProductNum = (product.customerProductNumber || '').toLowerCase();
+    return productName.includes(query) || customerProductNum.includes(query);
+  });
 
   const getStockModelDisplayName = (stockModelId: string) => {
     const stockModel = stockModels.find((sm) => sm.id === stockModelId);
@@ -216,6 +227,7 @@ export default function POProductSelector({
 
   const handleClose = () => {
     setSelectedProducts([]);
+    setSearchQuery('');
     onClose();
   };
 
@@ -273,7 +285,19 @@ export default function POProductSelector({
               {/* Available Products */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Available Products</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Available Products</CardTitle>
+                    <div className="relative w-72">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by product name or customer #..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                        data-testid="input-product-search"
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -287,13 +311,24 @@ export default function POProductSelector({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customerProducts.map((product) => (
+                      {filteredProducts.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                            {searchQuery ? 'No products match your search' : 'No products available'}
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredProducts.map((product) => (
                         <TableRow key={product.id}>
                           <TableCell>
                             <div>
                               <div className="font-medium">
                                 {product.productName}
                               </div>
+                              {product.customerProductNumber && (
+                                <div className="text-xs text-gray-500">
+                                  Customer #: {product.customerProductNumber}
+                                </div>
+                              )}
                               {product.flatTop && (
                                 <Badge variant="secondary" className="mt-1">
                                   Flat Top

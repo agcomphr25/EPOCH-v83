@@ -455,7 +455,7 @@ export async function updateTrackingInfo(
 // with structured deduplication using signature_token
 // =============================================================================
 
-export type OrderConfirmationContext = 'initial' | 'resend' | 'reminder';
+export type OrderConfirmationContext = 'initial' | 'resend' | 'reminder' | 'pdf_copy' | 'updated_order';
 
 export interface OrderConfirmationData {
   orderId: string;
@@ -478,7 +478,7 @@ export interface OrderConfirmationData {
     features?: Record<string, any>;
     notes?: string;
     shipping?: number;
-    signatureLink: string;
+    signatureLink?: string; // Optional for pdf_copy context
   };
   forceResend?: boolean; // Set true to bypass deduplication (manual resend)
 }

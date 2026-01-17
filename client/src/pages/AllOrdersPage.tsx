@@ -73,6 +73,7 @@ import {
   MessageSquare,
   Eye,
   RefreshCw,
+  FileDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
@@ -352,6 +353,29 @@ export default function AllOrdersPage() {
         title: 'Error',
         description:
           'Failed to send updated order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Email PDF Copy mutation (no signature workflow, just sends PDF attachment)
+  const emailPdfCopyMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/orders/${orderId}/email-pdf-copy`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'PDF Emailed',
+        description: 'A PDF copy of the order has been emailed to the customer.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description:
+          'Failed to email PDF: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -1106,6 +1130,15 @@ export default function AllOrdersPage() {
                               {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
                             </DropdownMenuItem>
                           )}
+                          {/* Email PDF Copy - sends PDF without signature workflow, available for all orders */}
+                          <DropdownMenuItem
+                            onClick={() => emailPdfCopyMutation.mutate(order.orderId)}
+                            disabled={emailPdfCopyMutation.isPending}
+                            className="text-green-600"
+                          >
+                            <FileDown className={`mr-2 h-4 w-4 ${emailPdfCopyMutation.isPending ? 'animate-pulse' : ''}`} />
+                            {emailPdfCopyMutation.isPending ? 'Sending...' : 'Email PDF Copy'}
+                          </DropdownMenuItem>
                           {order.isCancelled ? (
                             <DropdownMenuItem
                               onClick={() =>

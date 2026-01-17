@@ -3894,4 +3894,102 @@ router.get('/:orderId/customer-address', async (req: Request, res: Response) => 
   }
 });
 
+// Email PDF Copy - sends order PDF without signature workflows
+// This is independent of followup_orders and signature tracking
+router.post('/:orderId/email-pdf-copy', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    console.log(`📧 [EMAIL-PDF-COPY] Starting email-pdf-copy for order ${orderId}`);
+    
+    // Get order details
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Get customer details
+    const customer = order.customerId ? await storage.getCustomerById(order.customerId) : null;
+    if (!customer || !customer.email) {
+      return res.status(400).json({ error: 'Customer email not found' });
+    }
+    
+    // Check if order has been signed (check followup_orders table)
+    // Query directly since we may have multiple followup orders per order now
+    const signedFollowups = await db
+      .select()
+      .from(sql`followup_orders`)
+      .where(sql`order_id = ${orderId} AND signature_signed = true`)
+      .limit(1);
+    const signedFollowup = signedFollowups.length > 0 ? signedFollowups[0] : null;
+    
+    // Determine which PDF intent to use
+    const pdfIntent = signedFollowup ? PdfIntent.SIGNED_ARCHIVE : PdfIntent.CUSTOMER_VIEW;
+    console.log(`📄 [EMAIL-PDF-COPY] Using PDF intent: ${pdfIntent} (signed: ${!!signedFollowup})`);
+    
+    // Generate PDF
+    const pdfResult = await generateOrderPdf(orderId, pdfIntent);
+    const pdfPath = pdfResult.filePath;
+    
+    if (!pdfPath) {
+      return res.status(500).json({ error: 'Failed to generate PDF' });
+    }
+    
+    console.log(`📄 [EMAIL-PDF-COPY] Generated PDF at: ${pdfPath}`);
+    
+    // Send email with PDF attachment (no signature link)
+    const preferredMethod = Array.isArray(customer.preferredCommunicationMethod) 
+      ? customer.preferredCommunicationMethod[0] 
+      : customer.preferredCommunicationMethod;
+    
+    const emailResult = await sendOrderConfirmationNotification({
+      orderId: order.orderId,
+      customerId: order.customerId || '',
+      customerEmail: customer.email,
+      customerPhone: customer.phone || undefined,
+      preferredCommunicationMethod: preferredMethod as string || undefined,
+      signatureToken: `pdf_copy_${Date.now()}`, // Unique token to prevent dedup issues
+      pdfPath,
+      context: 'pdf_copy', // Different context to indicate this is just a copy
+      orderData: {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        dueDate: new Date(order.dueDate).toLocaleDateString(),
+        customerPO: order.customerPO || undefined,
+        modelId: order.modelId || undefined,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        // No signatureLink - this is just a PDF copy
+      },
+      forceResend: true,
+    });
+    
+    if (emailResult.outcome === 'sent') {
+      console.log(`✅ [EMAIL-PDF-COPY] Successfully sent PDF copy for ${orderId}`);
+      res.json({
+        success: true,
+        message: 'PDF copy emailed successfully',
+        pdfPath,
+      });
+    } else {
+      console.error(`❌ [EMAIL-PDF-COPY] Email failed for ${orderId}:`, emailResult);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send email',
+        details: emailResult,
+      });
+    }
+  } catch (error) {
+    console.error('Error sending PDF copy email:', error);
+    res.status(500).json({
+      error: 'Failed to send PDF copy',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 export default router;

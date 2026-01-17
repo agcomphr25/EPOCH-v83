@@ -17,7 +17,7 @@ interface EmailOrderData {
   shipping?: number;
   total?: number;
   notes?: string;
-  signatureLink: string;
+  signatureLink?: string; // Optional for pdf_copy context (no signature required)
 }
 
 function formatCurrency(amount: number): string {
@@ -133,6 +133,7 @@ function generateEmailHTML(orderData: EmailOrderData, logoBase64?: string): stri
     </ol>
   </div>
 
+  ${orderData.signatureLink ? `
   <!-- Action Required Section -->
   <div style="background-color: #fff3cd; padding: 25px; border: 2px solid #ffc107; border-radius: 5px; margin-bottom: 25px;">
     <h2 style="color: #856404; margin: 0 0 15px 0; font-size: 18px;">✓ Signature Required</h2>
@@ -149,6 +150,15 @@ function generateEmailHTML(orderData: EmailOrderData, logoBase64?: string): stri
       <strong>Important:</strong> Production will begin only after you have reviewed and signed this order.
     </p>
   </div>
+  ` : `
+  <!-- PDF Copy Notice (no signature required) -->
+  <div style="background-color: #d4edda; padding: 25px; border: 2px solid #28a745; border-radius: 5px; margin-bottom: 25px;">
+    <h2 style="color: #155724; margin: 0 0 15px 0; font-size: 18px;">📄 Order PDF Copy</h2>
+    <p style="margin: 0; font-size: 15px; color: #333;">
+      Please find your Sales Order PDF attached to this email for your records.
+    </p>
+  </div>
+  `}
 
   <!-- Footer -->
   <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; margin-top: 30px; text-align: center;">
@@ -206,7 +216,7 @@ that you are in agreement
    terms and conditions. We are not able to place any order into 
    production without a confirmation.
 
-✓ SIGNATURE REQUIRED
+${orderData.signatureLink ? `✓ SIGNATURE REQUIRED
 ─────────────────────────────────────────────────────────────
 Please review the attached Sales Order PDF carefully. Once reviewed, 
 click the link below to digitally sign and approve your order for 
@@ -215,7 +225,9 @@ production:
 ${orderData.signatureLink}
 
 IMPORTANT: Production will begin only after you have reviewed and 
-signed this order.
+signed this order.` : `📄 ORDER PDF COPY
+─────────────────────────────────────────────────────────────
+Please find your Sales Order PDF attached to this email for your records.`}
 
 ─────────────────────────────────────────────────────────────
 Questions about your order? Contact us at sales@agcomposites.com
@@ -240,10 +252,15 @@ export async function sendFollowupOrderEmail(
     // SendGrid email with attachment
     const { client, fromEmail } = await (await import('./sendgrid')).getUncachableSendGridClient();
 
+    // Determine subject based on whether this is a signature request or just a PDF copy
+    const subject = orderData.signatureLink 
+      ? `Order Confirmation - ${orderData.orderId} - Signature Required`
+      : `Order PDF - ${orderData.orderId}`;
+    
     const msg = {
       to: orderData.customerEmail,
       from: fromEmail,
-      subject: `Order Confirmation - ${orderData.orderId} - Signature Required`,
+      subject,
       text: emailText,
       html: emailHTML,
       attachments: [

@@ -97,7 +97,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History, Clock, CopyPlus, Eraser, RefreshCw } from 'lucide-react';
+import { History, Clock, CopyPlus, Eraser, RefreshCw, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -467,6 +467,29 @@ export default function OrdersList() {
         title: 'Error',
         description:
           'Failed to send updated order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Email PDF Copy mutation (no signature workflow, just sends PDF attachment)
+  const emailPdfCopyMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/orders/${orderId}/email-pdf-copy`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      showToast({
+        title: 'PDF Emailed',
+        description: 'A PDF copy of the order has been emailed to the customer.',
+      });
+    },
+    onError: (error: any) => {
+      showToast({
+        title: 'Error',
+        description:
+          'Failed to email PDF: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -1844,6 +1867,16 @@ export default function OrdersList() {
                                   {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
                                 </DropdownMenuItem>
                               )}
+                              {/* Email PDF Copy - sends PDF without signature workflow, available for all orders */}
+                              <DropdownMenuItem
+                                onClick={() => emailPdfCopyMutation.mutate(order.orderId)}
+                                disabled={emailPdfCopyMutation.isPending}
+                                className="text-green-600"
+                                data-testid={`button-email-pdf-copy-${order.orderId}`}
+                              >
+                                <FileDown className={`mr-2 h-4 w-4 ${emailPdfCopyMutation.isPending ? 'animate-pulse' : ''}`} />
+                                {emailPdfCopyMutation.isPending ? 'Sending...' : 'Email PDF Copy'}
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={async () => {
                                   try {

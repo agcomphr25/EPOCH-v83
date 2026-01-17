@@ -3866,6 +3866,19 @@ export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// P1 Purchase Order Attachment type
+export interface P1POAttachment {
+  id: string;
+  fileName: string;
+  originalFileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedBy: string | null;
+  uploadedAt: string;
+  notes: string | null;
+}
+
 // Purchase Order Management Tables
 export const purchaseOrders = pgTable('purchase_orders', {
   id: serial('id').primaryKey(),
@@ -3877,6 +3890,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
+  attachments: jsonb('attachments').$type<P1POAttachment[]>().default(sql`'[]'::jsonb`), // PDF attachments for PO copies
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

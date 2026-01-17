@@ -4926,6 +4926,200 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============ PO ATTACHMENTS ============
+  // Request presigned upload URL for PO attachment
+  app.post('/api/pos/:id/attachments/request-upload-url', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, size, contentType } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: 'Missing required field: name' });
+      }
+
+      console.log(`📎 Requesting upload URL for PO ${id}: ${name}`);
+
+      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+      const objectStorageService = new ObjectStorageService();
+      
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+
+      console.log(`📎 Generated upload URL for ${name}, objectPath: ${objectPath}`);
+
+      res.json({
+        uploadURL,
+        objectPath,
+        metadata: { name, size, contentType, poId: id },
+      });
+    } catch (error: any) {
+      console.error('Error generating PO attachment upload URL:', error);
+      res.status(500).json({ error: 'Failed to generate upload URL' });
+    }
+  });
+
+  // Complete upload and save PO attachment to database
+  app.post('/api/pos/:id/attachments/complete-upload', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const { objectPath, originalFileName, fileSize, mimeType, notes } = req.body;
+      const user = (req as any).user;
+
+      if (!objectPath || !originalFileName) {
+        return res.status(400).json({ 
+          error: 'Missing required fields: objectPath, originalFileName' 
+        });
+      }
+
+      console.log(`📎 Completing PO attachment upload for PO ${poId}: ${originalFileName}`);
+
+      const { storage } = await import('../../storage');
+      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+      const objectStorageService = new ObjectStorageService();
+
+      // Set ACL policy to make file accessible
+      try {
+        await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+          owner: user?.id?.toString() || 'system',
+          visibility: 'public',
+        });
+        console.log('📎 ACL policy set successfully for:', objectPath);
+      } catch (aclError) {
+        console.warn('📎 Failed to set ACL policy for PO attachment:', aclError);
+      }
+
+      // Get current PO
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      // Generate unique ID and create attachment object
+      const { randomUUID } = await import('crypto');
+      const attachment = {
+        id: randomUUID(),
+        fileName: objectPath.split('/').pop() || originalFileName,
+        originalFileName,
+        filePath: objectPath,
+        fileSize: fileSize || 0,
+        mimeType: mimeType || 'application/octet-stream',
+        uploadedBy: user?.username || null,
+        uploadedAt: new Date().toISOString(),
+        notes: notes || null,
+      };
+
+      // Append to attachments array
+      const currentAttachments = (purchaseOrder as any).attachments || [];
+      const updatedAttachments = [...currentAttachments, attachment];
+
+      // Update the PO with new attachments
+      await storage.updatePurchaseOrder(poId, { attachments: updatedAttachments } as any);
+
+      console.log(`📎 PO attachment saved successfully for PO ${poId}:`, attachment.id);
+      res.json(attachment);
+    } catch (error: any) {
+      console.error('Error completing PO attachment upload:', error);
+      res.status(500).json({ error: error.message || 'Failed to complete upload' });
+    }
+  });
+
+  // Get all attachments for a PO
+  app.get('/api/pos/:id/attachments', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const { storage } = await import('../../storage');
+      
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      const attachments = (purchaseOrder as any).attachments || [];
+      res.json(attachments);
+    } catch (error: any) {
+      console.error('Error fetching PO attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // Delete a PO attachment
+  app.delete('/api/pos/:id/attachments/:attachmentId', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const { attachmentId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      const currentAttachments = (purchaseOrder as any).attachments || [];
+      const attachmentToDelete = currentAttachments.find((a: any) => a.id === attachmentId);
+      
+      if (!attachmentToDelete) {
+        return res.status(404).json({ error: 'Attachment not found' });
+      }
+
+      // Remove from array
+      const updatedAttachments = currentAttachments.filter((a: any) => a.id !== attachmentId);
+      
+      // Optionally delete from object storage
+      try {
+        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+        const objectStorageService = new ObjectStorageService();
+        await objectStorageService.deleteObject(attachmentToDelete.filePath);
+        console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+      } catch (storageError) {
+        console.warn('📎 Failed to delete file from storage (may not exist):', storageError);
+      }
+
+      // Update PO
+      await storage.updatePurchaseOrder(poId, { attachments: updatedAttachments } as any);
+
+      console.log(`📎 PO attachment ${attachmentId} deleted from PO ${poId}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting PO attachment:', error);
+      res.status(500).json({ error: 'Failed to delete attachment' });
+    }
+  });
+
+  // Get download URL for a PO attachment
+  app.get('/api/pos/:id/attachments/:attachmentId/download', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const { attachmentId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      const attachments = (purchaseOrder as any).attachments || [];
+      const attachment = attachments.find((a: any) => a.id === attachmentId);
+      
+      if (!attachment) {
+        return res.status(404).json({ error: 'Attachment not found' });
+      }
+
+      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+      const objectStorageService = new ObjectStorageService();
+      
+      const downloadURL = await objectStorageService.getObjectEntityDownloadURL(attachment.filePath);
+      
+      res.json({ 
+        downloadURL, 
+        fileName: attachment.originalFileName,
+        mimeType: attachment.mimeType 
+      });
+    } catch (error: any) {
+      console.error('Error getting PO attachment download URL:', error);
+      res.status(500).json({ error: 'Failed to get download URL' });
+    }
+  });
+
   // Generate Production Orders from Purchase Order Items
   app.post('/api/pos/:id/generate-production-orders', async (req, res) => {
     try {

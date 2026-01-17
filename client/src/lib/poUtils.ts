@@ -1,5 +1,18 @@
 import { apiRequest } from '@/lib/queryClient';
 
+// PO Attachment type
+export interface POAttachment {
+  id: string;
+  fileName: string;
+  originalFileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedBy: string | null;
+  uploadedAt: string;
+  notes: string | null;
+}
+
 // PO Types
 export interface PurchaseOrder {
   id: number;
@@ -11,6 +24,7 @@ export interface PurchaseOrder {
   expectedDelivery: string;
   status: 'OPEN' | 'CLOSED' | 'CANCELED';
   notes?: string;
+  attachments?: POAttachment[];
   createdAt: string;
   updatedAt: string;
   items?: PurchaseOrderItem[];

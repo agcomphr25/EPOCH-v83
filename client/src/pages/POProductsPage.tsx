@@ -47,6 +47,7 @@ interface POProduct {
   id: number;
   customerName: string;
   productName: string;
+  customerProductNumber: string;
   productType: string;
   material: string;
   handedness: string;
@@ -70,6 +71,7 @@ interface POProduct {
 interface POProductFormData {
   customerName: string;
   productName: string;
+  customerProductNumber: string;
   productType: string;
   material: string;
   handedness: string;
@@ -96,6 +98,7 @@ export default function POProductsPage() {
   const [formData, setFormData] = useState<POProductFormData>({
     customerName: '',
     productName: '',
+    customerProductNumber: '',
     productType: '',
     material: '',
     handedness: '',
@@ -266,6 +269,7 @@ export default function POProductsPage() {
     setFormData({
       customerName: '',
       productName: '',
+      customerProductNumber: '',
       productType: '',
       material: '',
       handedness: '',
@@ -290,6 +294,7 @@ export default function POProductsPage() {
     setFormData({
       customerName: product.customerName,
       productName: product.productName,
+      customerProductNumber: product.customerProductNumber || '',
       productType: product.productType || '',
       material: product.material,
       handedness: product.handedness,
@@ -473,6 +478,19 @@ export default function POProductsPage() {
                       }
                       placeholder="Enter product name"
                       required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customerProductNumber">Customer Product Number</Label>
+                    <Input
+                      id="customerProductNumber"
+                      data-testid="input-customer-product-number"
+                      value={formData.customerProductNumber}
+                      onChange={(e) =>
+                        handleInputChange('customerProductNumber', e.target.value)
+                      }
+                      placeholder="Enter customer product number"
                     />
                   </div>
                 </div>

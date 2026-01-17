@@ -6810,6 +6810,7 @@ export const poProducts = pgTable('po_products', {
   id: serial('id').primaryKey(),
   customerName: text('customer_name').notNull(),
   productName: text('product_name').notNull(),
+  customerProductNumber: text('customer_product_number'),
   material: text('material'),
   handedness: text('handedness'),
   stockModel: text('stock_model'),

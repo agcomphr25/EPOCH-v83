@@ -59,6 +59,34 @@ interface POItemsManagerProps {
   onAddItem: () => void;
 }
 
+// Helper to format specification labels
+const specificationLabels: Record<string, string> = {
+  stockModel: 'Stock Model',
+  material: 'Material',
+  handedness: 'Handedness',
+  actionLength: 'Action Length',
+  actionInlet: 'Action Inlet',
+  bottomMetal: 'Bottom Metal',
+  barrelInlet: 'Barrel Inlet',
+  qds: 'QDS',
+  swivelStuds: 'Swivel Studs',
+  paintOptions: 'Paint Options',
+  texture: 'Texture',
+  flatTop: 'Flat Top',
+};
+
+// Helper to format specification values for display
+const formatSpecValue = (key: string, value: any): string => {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') {
+    return value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return String(value);
+};
+
 export default function POItemsManager({
   poId,
   poNumber,
@@ -360,15 +388,24 @@ export default function POItemsManager({
                 </div>
               </div>
 
-              {selectedItem.specifications && (
+              {selectedItem.specifications && Object.keys(selectedItem.specifications).length > 0 && (
                 <div>
                   <label className="text-sm font-medium text-gray-500">
                     Specifications
                   </label>
-                  <div className="mt-1 p-3 bg-gray-50 rounded border">
-                    <pre className="text-xs text-gray-700 whitespace-pre-wrap">
-                      {JSON.stringify(selectedItem.specifications, null, 2)}
-                    </pre>
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    {Object.entries(selectedItem.specifications)
+                      .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+                      .map(([key, value]) => (
+                        <div key={key} className="bg-gray-50 rounded-lg p-3 border">
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            {specificationLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
+                          </div>
+                          <div className="text-sm font-medium text-gray-900 mt-1">
+                            {formatSpecValue(key, value)}
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}

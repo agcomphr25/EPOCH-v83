@@ -72,6 +72,7 @@ import {
   Mail,
   MessageSquare,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
@@ -328,6 +329,29 @@ export default function AllOrdersPage() {
         title: 'Error',
         description:
           'Failed to send email: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Send updated order email mutation (creates new snapshot with current order data)
+  const sendUpdatedOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/send-updated-order`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Updated Order Sent',
+        description: 'A new signature request with the updated order has been sent.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description:
+          'Failed to send updated order: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -1070,6 +1094,18 @@ export default function AllOrdersPage() {
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             Report Kickback
                           </DropdownMenuItem>
+                          {/* Send Updated Order Email - for orders that need customer to sign updated version */}
+                          {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
+                            order.status?.toUpperCase() === 'FINALIZED') && (
+                            <DropdownMenuItem
+                              onClick={() => sendUpdatedOrderMutation.mutate(order.orderId)}
+                              disabled={sendUpdatedOrderMutation.isPending}
+                              className="text-blue-600"
+                            >
+                              <RefreshCw className={`mr-2 h-4 w-4 ${sendUpdatedOrderMutation.isPending ? 'animate-spin' : ''}`} />
+                              {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
+                            </DropdownMenuItem>
+                          )}
                           {order.isCancelled ? (
                             <DropdownMenuItem
                               onClick={() =>

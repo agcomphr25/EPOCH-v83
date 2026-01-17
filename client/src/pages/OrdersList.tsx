@@ -97,7 +97,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History, Clock, CopyPlus, Eraser } from 'lucide-react';
+import { History, Clock, CopyPlus, Eraser, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -444,6 +444,29 @@ export default function OrdersList() {
         title: 'Error',
         description:
           'Failed to resend email: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Send updated order email mutation (creates new snapshot with current order data)
+  const sendUpdatedOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/send-updated-order`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      showToast({
+        title: 'Updated Order Sent',
+        description: 'A new signature request with the updated order has been sent.',
+      });
+    },
+    onError: (error: any) => {
+      showToast({
+        title: 'Error',
+        description:
+          'Failed to send updated order: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -1808,6 +1831,19 @@ export default function OrdersList() {
                                 <Clock className="mr-2 h-4 w-4" />
                                 View Timeline
                               </DropdownMenuItem>
+                              {/* Send Updated Order Email - for orders that need customer to sign updated version */}
+                              {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
+                                order.status?.toUpperCase() === 'FINALIZED') && (
+                                <DropdownMenuItem
+                                  onClick={() => sendUpdatedOrderMutation.mutate(order.orderId)}
+                                  disabled={sendUpdatedOrderMutation.isPending}
+                                  className="text-blue-600"
+                                  data-testid={`button-send-updated-order-${order.orderId}`}
+                                >
+                                  <RefreshCw className={`mr-2 h-4 w-4 ${sendUpdatedOrderMutation.isPending ? 'animate-spin' : ''}`} />
+                                  {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={async () => {
                                   try {

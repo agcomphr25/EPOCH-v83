@@ -71,8 +71,40 @@ export default function TrainingContentLibrary() {
   const [selectedTopic, setSelectedTopic] = useState<any>(null);
   
   const [newCategory, setNewCategory] = useState({ name: '', type: 'custom', description: '', color: '#3B82F6' });
-  const [newDoc, setNewDoc] = useState({ title: '', extractedText: '', categoryIds: [] as number[] });
+  const [newDoc, setNewDoc] = useState({ title: '', extractedText: '', categoryIds: [] as number[], fileName: '' });
   const [selectedTrainee, setSelectedTrainee] = useState<string>('');
+  const [isExtractingFile, setIsExtractingFile] = useState(false);
+
+  const handleFileSelect = async (file: File) => {
+    setIsExtractingFile(true);
+    try {
+      const text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          resolve(content || '');
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+      });
+      
+      setNewDoc(prev => ({
+        ...prev,
+        extractedText: text,
+        fileName: file.name,
+        title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+      }));
+      toast({ title: 'File loaded', description: `Loaded ${file.name}` });
+    } catch (error) {
+      toast({ 
+        title: 'Error reading file', 
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsExtractingFile(false);
+    }
+  };
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['/api/training/content-library/categories'],
@@ -124,7 +156,7 @@ export default function TrainingContentLibrary() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/documents'] });
       setNewDocOpen(false);
-      setNewDoc({ title: '', extractedText: '', categoryIds: [] });
+      setNewDoc({ title: '', extractedText: '', categoryIds: [], fileName: '' });
       toast({ title: 'Document uploaded and processed' });
     },
     onError: (error: any) => {
@@ -357,17 +389,48 @@ export default function TrainingContentLibrary() {
                 </div>
               </div>
               <div>
-                <Label>Document Content (paste text or upload will extract)</Label>
+                <Label>Upload File from Computer</Label>
+                <div className="mt-2 p-4 border-2 border-dashed rounded-lg text-center">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.csv,.doc,.docx,.pdf"
+                    className="hidden"
+                    id="training-doc-file-input"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileSelect(file);
+                    }}
+                  />
+                  <label htmlFor="training-doc-file-input" className="cursor-pointer">
+                    {isExtractingFile ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                        <span className="text-muted-foreground">Reading file...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {newDoc.fileName ? `Selected: ${newDoc.fileName}` : 'Click to select a file (.txt, .md, .csv, .doc, .docx, .pdf)'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">or drag and drop</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+              <div>
+                <Label>Document Content {newDoc.fileName && <span className="text-xs text-muted-foreground ml-2">(loaded from {newDoc.fileName})</span>}</Label>
                 <Textarea 
                   value={newDoc.extractedText}
                   onChange={(e) => setNewDoc({ ...newDoc, extractedText: e.target.value })}
-                  placeholder="Paste the document content here..."
+                  placeholder="Content will appear here after file upload, or paste text directly..."
                   className="min-h-[200px]"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => uploadDocumentMutation.mutate()} disabled={!newDoc.title || !newDoc.extractedText || uploadDocumentMutation.isPending}>
+              <Button onClick={() => uploadDocumentMutation.mutate()} disabled={!newDoc.title || !newDoc.extractedText || uploadDocumentMutation.isPending || isExtractingFile}>
                 {uploadDocumentMutation.isPending ? 'Processing with AI...' : 'Import & Process'}
               </Button>
             </DialogFooter>

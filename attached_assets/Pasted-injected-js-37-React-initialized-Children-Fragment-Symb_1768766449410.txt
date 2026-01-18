@@ -1,0 +1,156 @@
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2Ftraining-control-center&id=%3Ar1kh%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+EPOCH-v83:1 Unrecognized feature: 'ambient-light-sensor'.
+EPOCH-v83:1 Unrecognized feature: 'battery'.
+EPOCH-v83:1 Unrecognized feature: 'execution-while-not-rendered'.
+EPOCH-v83:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+EPOCH-v83:1 Unrecognized feature: 'layout-animations'.
+EPOCH-v83:1 Unrecognized feature: 'legacy-image-formats'.
+EPOCH-v83:1 Unrecognized feature: 'navigation-override'.
+EPOCH-v83:1 Unrecognized feature: 'oversized-images'.
+EPOCH-v83:1 Unrecognized feature: 'publickey-credentials'.
+EPOCH-v83:1 Unrecognized feature: 'speaker-selection'.
+EPOCH-v83:1 Unrecognized feature: 'unoptimized-images'.
+EPOCH-v83:1 Unrecognized feature: 'unsized-media'.
+EPOCH-v83:1 Unrecognized feature: 'pointer-lock'.
+EPOCH-v83:1 Allow attribute will take precedence over 'allowfullscreen'.
+EPOCH-v83:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/training/content-library/generate-training-plan (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/api/training/content-library/generate-training-plan 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:98
+mutationFn @ TrainingContentLibrary.tsx:215
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:805
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 ✅ API Response from /api/training/content-library/generate-training-plan: 500
+injected.js:37 API error raw body: {"error":"column \"created_by\" of relation \"trainee_topic_assignments\" does not exist"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:104
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:215
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:805
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 💥 API Request failed for /api/training/content-library/generate-training-plan: Error: column "created_by" of relation "trainee_topic_assignments" does not exist
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:153
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:215
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:805
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449

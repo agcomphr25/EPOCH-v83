@@ -4649,4 +4649,83 @@ router.get('/content-library/training-plans/:id', async (req, res) => {
   }
 });
 
+// Update training plan
+router.put('/content-library/training-plans/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, description, status } = req.body;
+    
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (status !== undefined) updateData.status = status;
+    
+    const [updated] = await db.update(aiTrainingPlans)
+      .set(updateData)
+      .where(eq(aiTrainingPlans.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete training plan
+router.delete('/content-library/training-plans/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    // First get the plan to find the trainee
+    const [plan] = await db.select().from(aiTrainingPlans).where(eq(aiTrainingPlans.id, id));
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    // Delete associated topic assignments
+    await db.delete(traineeTopicAssignments)
+      .where(eq(traineeTopicAssignments.traineeId, plan.traineeId));
+    
+    // Delete the plan
+    const [deleted] = await db.delete(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, id))
+      .returning();
+    
+    res.json({ success: true, deleted });
+  } catch (error: any) {
+    console.error('Error deleting training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update document (general update)
+router.put('/content-library/documents/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, summary, status } = req.body;
+    
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
+    if (summary !== undefined) updateData.summary = summary;
+    if (status !== undefined) updateData.status = status;
+    
+    const [updated] = await db.update(trainingLibraryDocuments)
+      .set(updateData)
+      .where(eq(trainingLibraryDocuments.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

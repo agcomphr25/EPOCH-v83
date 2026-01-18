@@ -15,8 +15,24 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   FolderOpen, FileText, Upload, Plus, Tag, BookOpen, Users, 
   Sparkles, Clock, Target, CheckCircle, ChevronRight, Trash2,
-  Eye, Brain, GraduationCap, ClipboardList, Calendar
+  Eye, Brain, GraduationCap, ClipboardList, Calendar, Edit, MoreVertical
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Category {
   id: number;
@@ -86,6 +102,20 @@ export default function TrainingContentLibrary() {
   const [newDoc, setNewDoc] = useState({ title: '', extractedText: '', categoryIds: [] as number[], fileName: '' });
   const [selectedTrainee, setSelectedTrainee] = useState<string>('');
   const [isExtractingFile, setIsExtractingFile] = useState(false);
+  
+  // Edit/Delete state for documents
+  const [editDocOpen, setEditDocOpen] = useState(false);
+  const [deleteDocOpen, setDeleteDocOpen] = useState(false);
+  const [docToEdit, setDocToEdit] = useState<Document | null>(null);
+  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
+  const [editDocForm, setEditDocForm] = useState({ title: '', summary: '' });
+  
+  // Edit/Delete state for training plans
+  const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [deletePlanOpen, setDeletePlanOpen] = useState(false);
+  const [planToEdit, setPlanToEdit] = useState<TrainingPlan | null>(null);
+  const [planToDelete, setPlanToDelete] = useState<TrainingPlan | null>(null);
+  const [editPlanForm, setEditPlanForm] = useState({ title: '', description: '', status: '' });
 
   const handleFileSelect = async (file: File) => {
     setIsExtractingFile(true);
@@ -247,6 +277,90 @@ export default function TrainingContentLibrary() {
       toast({ title: 'Error creating training plan', description: error.message, variant: 'destructive' });
     },
   });
+
+  // Document CRUD mutations
+  const updateDocMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: { title?: string; summary?: string } }) => {
+      return apiRequest(`/api/training/content-library/documents/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/documents'] });
+      setEditDocOpen(false);
+      setDocToEdit(null);
+      toast({ title: 'Document updated successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error updating document', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/content-library/documents/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/documents'] });
+      setDeleteDocOpen(false);
+      setDocToDelete(null);
+      toast({ title: 'Document deleted successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error deleting document', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Training Plan CRUD mutations
+  const updatePlanMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: { title?: string; description?: string; status?: string } }) => {
+      return apiRequest(`/api/training/content-library/training-plans/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/training-plans'] });
+      setEditPlanOpen(false);
+      setPlanToEdit(null);
+      toast({ title: 'Training plan updated successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error updating training plan', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/content-library/training-plans/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/training-plans'] });
+      setDeletePlanOpen(false);
+      setPlanToDelete(null);
+      toast({ title: 'Training plan deleted successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error deleting training plan', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const openEditDoc = (doc: Document) => {
+    setDocToEdit(doc);
+    setEditDocForm({ title: doc.title, summary: doc.summary || '' });
+    setEditDocOpen(true);
+  };
+
+  const openEditPlan = (plan: TrainingPlan) => {
+    setPlanToEdit(plan);
+    setEditPlanForm({ title: plan.title, description: plan.description || '', status: plan.status });
+    setEditPlanOpen(true);
+  };
 
   const filteredDocuments = categoryFilter === 'all' 
     ? documents 
@@ -598,9 +712,31 @@ export default function TrainingContentLibrary() {
                         </div>
                       </div>
                     </div>
-                    <Badge variant={doc.status === 'ready' ? 'default' : 'secondary'}>
-                      {doc.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={doc.status === 'ready' ? 'default' : 'secondary'}>
+                        {doc.status}
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => openEditDoc(doc)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => { setDocToDelete(doc); setDeleteDocOpen(true); }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -714,7 +850,7 @@ export default function TrainingContentLibrary() {
                 <Card key={plan.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <CardTitle className="text-lg">{plan.title}</CardTitle>
                           <Badge variant={plan.status === 'active' ? 'default' : 'secondary'}>
@@ -738,6 +874,26 @@ export default function TrainingContentLibrary() {
                           )}
                         </CardDescription>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditPlan(plan)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => { setPlanToDelete(plan); setDeletePlanOpen(true); }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -998,6 +1154,144 @@ export default function TrainingContentLibrary() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Document Dialog */}
+      <Dialog open={editDocOpen} onOpenChange={setEditDocOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Document</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={editDocForm.title}
+                onChange={(e) => setEditDocForm({ ...editDocForm, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Summary</Label>
+              <Textarea
+                value={editDocForm.summary}
+                onChange={(e) => setEditDocForm({ ...editDocForm, summary: e.target.value })}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDocOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => docToEdit && updateDocMutation.mutate({ 
+                id: docToEdit.id, 
+                data: { title: editDocForm.title, summary: editDocForm.summary } 
+              })}
+              disabled={updateDocMutation.isPending}
+            >
+              {updateDocMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Document Confirmation */}
+      <AlertDialog open={deleteDocOpen} onOpenChange={setDeleteDocOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{docToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => docToDelete && deleteDocMutation.mutate(docToDelete.id)}
+            >
+              {deleteDocMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Training Plan Dialog */}
+      <Dialog open={editPlanOpen} onOpenChange={setEditPlanOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Training Plan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={editPlanForm.title}
+                onChange={(e) => setEditPlanForm({ ...editPlanForm, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={editPlanForm.description}
+                onChange={(e) => setEditPlanForm({ ...editPlanForm, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select 
+                value={editPlanForm.status} 
+                onValueChange={(value) => setEditPlanForm({ ...editPlanForm, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPlanOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => planToEdit && updatePlanMutation.mutate({ 
+                id: planToEdit.id, 
+                data: { 
+                  title: editPlanForm.title, 
+                  description: editPlanForm.description,
+                  status: editPlanForm.status 
+                } 
+              })}
+              disabled={updatePlanMutation.isPending}
+            >
+              {updatePlanMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Training Plan Confirmation */}
+      <AlertDialog open={deletePlanOpen} onOpenChange={setDeletePlanOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Training Plan</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{planToDelete?.title}"? This will also remove all topic assignments for this plan. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => planToDelete && deletePlanMutation.mutate(planToDelete.id)}
+            >
+              {deletePlanMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

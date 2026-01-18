@@ -619,6 +619,12 @@ export default function Navigation() {
       icon: GraduationCap,
       description: 'Unified training management: modules, matrix, and assignments',
     },
+    {
+      path: '/training/trainer-dashboard',
+      label: 'Trainer Dashboard',
+      icon: GraduationCap,
+      description: 'Conduct training sessions using the 4-step method',
+    },
   ];
 
   const employeesItems = [

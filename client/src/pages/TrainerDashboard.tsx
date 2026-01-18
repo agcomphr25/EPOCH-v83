@@ -186,17 +186,6 @@ export default function TrainerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTopicContent, setActiveTopicContent] = useState<TopicContent | null>(null);
   const [loadingTopicContent, setLoadingTopicContent] = useState(false);
-  const [createModuleOpen, setCreateModuleOpen] = useState(false);
-  const [newModule, setNewModule] = useState({
-    code: '',
-    title: '',
-    overview: '',
-    contentHtml: '',
-    estimatedMinutes: 30,
-  });
-  const [criticalPointsInput, setCriticalPointsInput] = useState<{ label: string; detail: string; severity: string }[]>([
-    { label: '', detail: '', severity: 'major' }
-  ]);
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],

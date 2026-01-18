@@ -3464,6 +3464,53 @@ router.put('/daily-sessions/:id/complete', async (req, res) => {
   }
 });
 
+// Update session
+router.put('/daily-sessions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { traineeId, trainerId, facilityTopicId, planDayId, notes, status } = req.body;
+    
+    const updateData: any = {};
+    if (traineeId !== undefined) updateData.traineeId = traineeId;
+    if (trainerId !== undefined) updateData.trainerId = trainerId;
+    if (facilityTopicId !== undefined) updateData.facilityTopicId = facilityTopicId;
+    if (planDayId !== undefined) updateData.planDayId = planDayId;
+    if (notes !== undefined) updateData.notes = notes;
+    if (status !== undefined) updateData.status = status;
+    
+    const [updated] = await db.update(dailyTrainingSessions)
+      .set(updateData)
+      .where(eq(dailyTrainingSessions.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete session
+router.delete('/daily-sessions/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deleted] = await db.delete(dailyTrainingSessions)
+      .where(eq(dailyTrainingSessions.id, id))
+      .returning();
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json({ success: true, deleted });
+  } catch (error: any) {
+    console.error('Error deleting session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================================================
 // TRAINER CERTIFICATIONS - Track certified trainers
 // ============================================================================

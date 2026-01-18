@@ -34,7 +34,26 @@ import {
   Plus,
   ListTodo,
   AlertCircle,
+  Edit,
+  Trash2,
+  MoreVertical,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Employee {
   id: number;
@@ -95,6 +114,10 @@ export default function TrainerDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('assignments');
   const [startSessionOpen, setStartSessionOpen] = useState(false);
+  const [editSessionOpen, setEditSessionOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToEdit, setSessionToEdit] = useState<DailySession | null>(null);
+  const [sessionToDelete, setSessionToDelete] = useState<DailySession | null>(null);
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedDayId, setSelectedDayId] = useState<string>('');
@@ -217,6 +240,71 @@ export default function TrainerDashboard() {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
+
+  const updateSessionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return apiRequest(`/api/training/daily-sessions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
+      setEditSessionOpen(false);
+      setSessionToEdit(null);
+      resetEditForm();
+      toast({ title: 'Session Updated', description: 'Training session has been updated successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/daily-sessions/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
+      setDeleteDialogOpen(false);
+      setSessionToDelete(null);
+      toast({ title: 'Session Deleted', description: 'Training session has been deleted' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const resetEditForm = () => {
+    setSelectedTraineeId('');
+    setSelectedTopicId('');
+    setSelectedDayId('');
+    setSessionNotes('');
+  };
+
+  const openEditDialog = (session: DailySession) => {
+    setSessionToEdit(session);
+    setSelectedTraineeId(session.traineeId?.toString() || '');
+    setSelectedTopicId(session.facilityTopicId?.toString() || '');
+    setSelectedDayId(session.planDayId?.toString() || '');
+    setSessionNotes(session.notes || '');
+    setEditSessionOpen(true);
+  };
+
+  const handleUpdateSession = () => {
+    if (!sessionToEdit) return;
+    updateSessionMutation.mutate({
+      id: sessionToEdit.id,
+      data: {
+        traineeId: selectedTraineeId ? parseInt(selectedTraineeId) : sessionToEdit.traineeId,
+        facilityTopicId: selectedTopicId ? parseInt(selectedTopicId) : null,
+        planDayId: selectedDayId ? parseInt(selectedDayId) : null,
+        notes: sessionNotes,
+      },
+    });
+  };
 
   const activeSessions = mySessions.filter(s => s.status === 'active');
   const completedSessions = mySessions.filter(s => s.status === 'completed');
@@ -506,11 +594,36 @@ export default function TrainerDashboard() {
                       <div>
                         <CardTitle>{getEmployeeName(session.traineeId)}</CardTitle>
                         <CardDescription>{getTopicTitle(session.facilityTopicId)}</CardDescription>
+                        {session.notes && (
+                          <p className="text-sm text-muted-foreground mt-1">{session.notes}</p>
+                        )}
                       </div>
-                      <Button onClick={() => setActiveSessionId(session.id)}>
-                        <Play className="h-4 w-4 mr-2" />
-                        Resume
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button onClick={() => setActiveSessionId(session.id)}>
+                          <Play className="h-4 w-4 mr-2" />
+                          Resume
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(session)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Session
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => { setSessionToDelete(session); setDeleteDialogOpen(true); }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Session
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>
@@ -535,11 +648,39 @@ export default function TrainerDashboard() {
                       <div>
                         <CardTitle>{getEmployeeName(session.traineeId)}</CardTitle>
                         <CardDescription>{getTopicTitle(session.facilityTopicId)}</CardDescription>
+                        {session.notes && (
+                          <p className="text-sm text-muted-foreground mt-1">{session.notes}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Completed: {new Date(session.sessionDate).toLocaleDateString()}
+                        </p>
                       </div>
-                      <Badge variant="outline" className="bg-green-50">
-                        <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
-                        Completed
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                          Completed
+                        </Badge>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(session)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Session
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => { setSessionToDelete(session); setDeleteDialogOpen(true); }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Session
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>
@@ -653,6 +794,105 @@ export default function TrainerDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Session Dialog */}
+      <Dialog open={editSessionOpen} onOpenChange={(open) => { setEditSessionOpen(open); if (!open) resetEditForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Training Session</DialogTitle>
+            <DialogDescription>
+              Update the training session details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Trainee</Label>
+              <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select trainee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id.toString()}>
+                      {emp.name} - {emp.department}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Facility Topic (Optional)</Label>
+              <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select topic" />
+                </SelectTrigger>
+                <SelectContent>
+                  {facilityTopics.map((topic) => (
+                    <SelectItem key={topic.id} value={topic.id.toString()}>
+                      {topic.code} - {topic.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Training Day (Optional)</Label>
+              <Select value={selectedDayId} onValueChange={setSelectedDayId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {planDays.map((day: any) => (
+                    <SelectItem key={day.id} value={day.id.toString()}>
+                      Day {day.dayNumber}: {day.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                placeholder="Any notes for this session..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditSessionOpen(false); resetEditForm(); }}>Cancel</Button>
+            <Button
+              onClick={handleUpdateSession}
+              disabled={updateSessionMutation.isPending}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              {updateSessionMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Training Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this training session for {sessionToDelete ? getEmployeeName(sessionToDelete.traineeId) : ''}? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSessionToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sessionToDelete && deleteSessionMutation.mutate(sessionToDelete.id)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteSessionMutation.isPending ? 'Deleting...' : 'Delete Session'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

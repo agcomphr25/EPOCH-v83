@@ -950,12 +950,12 @@ export default function TrainerDashboard() {
           <DialogHeader>
             <DialogTitle>Start Training Session</DialogTitle>
             <DialogDescription>
-              Select a trainee and topic to begin a new training session
+              Select a trainee and training module to begin a new training session
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Trainee</Label>
+              <Label>Trainee <span className="text-destructive">*</span></Label>
               <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select trainee" />
@@ -970,10 +970,10 @@ export default function TrainerDashboard() {
               </Select>
             </div>
             <div>
-              <Label>Facility Topic (Optional)</Label>
+              <Label>Training Module <span className="text-destructive">*</span></Label>
               <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select topic" />
+                  <SelectValue placeholder="Select training module" />
                 </SelectTrigger>
                 <SelectContent>
                   {facilityTopics.map((topic) => (
@@ -1012,7 +1012,7 @@ export default function TrainerDashboard() {
             <Button variant="outline" onClick={() => setStartSessionOpen(false)}>Cancel</Button>
             <Button
               onClick={() => startSessionMutation.mutate()}
-              disabled={!selectedTraineeId || startSessionMutation.isPending}
+              disabled={!selectedTraineeId || !selectedTopicId || startSessionMutation.isPending}
             >
               <Play className="h-4 w-4 mr-2" />
               Start Session
@@ -1047,10 +1047,10 @@ export default function TrainerDashboard() {
               </Select>
             </div>
             <div>
-              <Label>Facility Topic (Optional)</Label>
+              <Label>Training Module <span className="text-destructive">*</span></Label>
               <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select topic" />
+                  <SelectValue placeholder="Select training module" />
                 </SelectTrigger>
                 <SelectContent>
                   {facilityTopics.map((topic) => (

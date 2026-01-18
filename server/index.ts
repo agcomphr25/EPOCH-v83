@@ -24,6 +24,10 @@ console.log('Environment check:', {
   PORT: process.env.PORT || 'Not set (defaulting to 5000)',
 });
 
+console.log('🧬 [BOOT] DATABASE_URL:', process.env.DATABASE_URL);
+console.log('🧬 [BOOT] NODE_ENV:', process.env.NODE_ENV);
+console.log('🧬 [BOOT] APP_ENV:', process.env.APP_ENV);
+
 const app = express();
 
 // CRITICAL: Health check endpoint MUST be registered FIRST, before any middleware

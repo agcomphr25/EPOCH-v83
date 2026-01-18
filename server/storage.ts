@@ -8401,6 +8401,11 @@ export class DatabaseStorage implements IStorage {
     console.log('🔍 [FORENSIC] SQL:', compiledQuery.sql);
     console.log('🔍 [FORENSIC] Params:', JSON.stringify(compiledQuery.params));
     
+    console.log('🧬 [DB TRACE] DB URL:', process.env.DATABASE_URL);
+    console.log('🧬 [DB TRACE] DB NAME:', process.env.DATABASE_URL?.split('/').pop());
+    console.log('🧬 [DB TRACE] SQL:', compiledQuery.sql);
+    console.log('🧬 [DB TRACE] PARAMS:', compiledQuery.params);
+    
     const [followupOrder] = await query;
     
     // FORENSIC LOGGING: Result

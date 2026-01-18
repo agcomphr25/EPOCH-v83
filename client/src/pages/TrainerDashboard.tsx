@@ -87,6 +87,15 @@ interface TrainingModule {
   contentHtml?: string;
 }
 
+interface ContentLibraryTopic {
+  id: number;
+  title: string;
+  description: string | null;
+  objectives: string | null;
+  estimatedDuration: number | null;
+  isAiGenerated: boolean;
+}
+
 interface WorkInstruction {
   id: number;
   title: string;
@@ -202,6 +211,10 @@ export default function TrainerDashboard() {
     queryKey: ['/api/training/modules'],
   });
 
+  const { data: contentLibraryTopics = [] } = useQuery<ContentLibraryTopic[]>({
+    queryKey: ['/api/training/content-library/topics'],
+  });
+
   const { data: planDays = [] } = useQuery<any[]>({
     queryKey: ['/api/training/plan-days'],
   });
@@ -243,7 +256,8 @@ export default function TrainerDashboard() {
         body: JSON.stringify({
           traineeId: parseInt(selectedTraineeId),
           trainerId: trainerId,
-          facilityTopicId: selectedTopicId ? parseInt(selectedTopicId) : null,
+          facilityTopicId: selectedTopicId ? parseInt(selectedTopicId.replace('topic-', '').replace('module-', '')) : null,
+          topicType: selectedTopicId?.startsWith('topic-') ? 'content-library' : 'module',
           planDayId: selectedDayId ? parseInt(selectedDayId) : null,
           notes: sessionNotes,
         }),
@@ -425,7 +439,13 @@ export default function TrainerDashboard() {
   };
 
   const getEmployeeName = (id: number) => employees.find(e => e.id === id)?.name || 'Unknown';
-  const getTopicTitle = (id: number) => trainingModules.find(t => t.id === id)?.title || 'General Training';
+  const getTopicTitle = (id: number) => {
+    const module = trainingModules.find(t => t.id === id);
+    if (module) return module.title;
+    const topic = contentLibraryTopics.find(t => t.id === id);
+    if (topic) return topic.title;
+    return 'General Training';
+  };
 
   const filterSession = (session: DailySession) => {
     if (searchTerm === '') return true;
@@ -448,7 +468,7 @@ export default function TrainerDashboard() {
         return;
       }
       
-      const session = activeSessions.find(s => s.id === activeSessionId);
+      const session = mySessions.find(s => s.id === activeSessionId && s.status === 'active');
       if (!session?.facilityTopicId) return;
       
       setLoadingTopicContent(true);
@@ -465,6 +485,61 @@ export default function TrainerDashboard() {
             workInstructions: [],
             criticalPoints: [],
           });
+        } else {
+          const contentTopic = contentLibraryTopics.find(t => t.id === session.facilityTopicId);
+          if (contentTopic) {
+            const response = await fetch(`/api/training/content-library/topics/${contentTopic.id}`);
+            if (response.ok) {
+              const data = await response.json();
+              let objectives: string[] = [];
+              try {
+                objectives = data.objectives ? JSON.parse(data.objectives) : [];
+              } catch (e) { objectives = []; }
+              
+              const workInstructions = (data.materials || []).map((m: any) => ({
+                id: m.id,
+                title: m.stepTitle || `Step ${m.stepNumber}`,
+                objective: m.trainerInstructions || '',
+                steps: m.keyPoints ? JSON.parse(m.keyPoints).map((point: string, idx: number) => ({
+                  stepNumber: idx + 1,
+                  instruction: point,
+                })) : [],
+                ppeRequired: [],
+                tools: [],
+              }));
+              
+              setActiveTopicContent({
+                topic: {
+                  id: contentTopic.id,
+                  title: data.title,
+                  overview: data.description || '',
+                  contentHtml: objectives.length > 0 
+                    ? `<ul>${objectives.map((o: string) => `<li>${o}</li>`).join('')}</ul>`
+                    : data.description || '',
+                },
+                workInstructions,
+                criticalPoints: (data.materials || [])
+                  .filter((m: any) => m.safetyNotes)
+                  .map((m: any) => ({
+                    id: m.id,
+                    label: 'Safety Note',
+                    detail: m.safetyNotes,
+                    severity: 'major',
+                  })),
+              });
+            } else {
+              setActiveTopicContent({
+                topic: {
+                  id: contentTopic.id,
+                  title: contentTopic.title,
+                  overview: contentTopic.description || '',
+                  contentHtml: contentTopic.objectives || contentTopic.description || '',
+                },
+                workInstructions: [],
+                criticalPoints: [],
+              });
+            }
+          }
         }
       } catch (error) {
         console.error('Error fetching topic content:', error);
@@ -474,7 +549,7 @@ export default function TrainerDashboard() {
     };
     
     fetchTopicContent();
-  }, [activeSessionId, activeSessions, trainingModules]);
+  }, [activeSessionId, mySessions, trainingModules, contentLibraryTopics]);
 
   const renderStepTracker = () => (
     <Card className="mb-6">
@@ -1177,19 +1252,41 @@ export default function TrainerDashboard() {
               </Select>
             </div>
             <div>
-              <Label>Training Module <span className="text-destructive">*</span></Label>
+              <Label>Training Material <span className="text-destructive">*</span></Label>
               <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select training module" />
+                  <SelectValue placeholder="Select training material" />
                 </SelectTrigger>
                 <SelectContent>
-                  {trainingModules.map((topic) => (
-                    <SelectItem key={topic.id} value={topic.id.toString()}>
-                      {topic.title}
-                    </SelectItem>
-                  ))}
+                  {contentLibraryTopics.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
+                        Content Library Topics
+                      </div>
+                      {contentLibraryTopics.map((topic) => (
+                        <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
+                          {topic.title} {topic.isAiGenerated && '(AI)'}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {trainingModules.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
+                        Training Modules
+                      </div>
+                      {trainingModules.map((mod) => (
+                        <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
+                          {mod.title}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select from Content Library topics (from documents) or Training Modules
+              </p>
             </div>
             <div>
               <Label>Training Day (Optional)</Label>
@@ -1254,19 +1351,41 @@ export default function TrainerDashboard() {
               </Select>
             </div>
             <div>
-              <Label>Training Module <span className="text-destructive">*</span></Label>
+              <Label>Training Material <span className="text-destructive">*</span></Label>
               <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select training module" />
+                  <SelectValue placeholder="Select training material" />
                 </SelectTrigger>
                 <SelectContent>
-                  {trainingModules.map((topic) => (
-                    <SelectItem key={topic.id} value={topic.id.toString()}>
-                      {topic.title}
-                    </SelectItem>
-                  ))}
+                  {contentLibraryTopics.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
+                        Content Library Topics
+                      </div>
+                      {contentLibraryTopics.map((topic) => (
+                        <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
+                          {topic.title} {topic.isAiGenerated && '(AI)'}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {trainingModules.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
+                        Training Modules
+                      </div>
+                      {trainingModules.map((mod) => (
+                        <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
+                          {mod.title}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select from Content Library topics (from documents) or Training Modules
+              </p>
             </div>
             <div>
               <Label>Training Day (Optional)</Label>

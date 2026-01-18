@@ -1,0 +1,124 @@
+COPY-PASTE THIS INTO THE REPLIT AGENT
+You are implementing an architectural invariant.
+This is NOT a refactor for style or convenience.
+Do NOT add fallbacks.
+Do NOT infer environment from process.env.
+Do NOT read APP_URL inside link generation.
+
+GOAL:
+Signature links must be generated from the environment that CREATED the followup order.
+DEV must never generate PROD links, and vice versa.
+
+────────────────────────────────────────
+STEP 1 — Change the contract (required)
+────────────────────────────────────────
+
+Modify createSignatureLink so that it EXPLICITLY requires environment.
+
+Before:
+  createSignatureLink(publicSignatureId)
+
+After:
+  createSignatureLink(publicSignatureId, env)
+
+env is a strict union:
+  'dev' | 'prod'
+
+If env is missing or invalid, THROW (do not default).
+
+────────────────────────────────────────
+STEP 2 — Remove implicit base URL logic
+────────────────────────────────────────
+
+In server/utils/magicLink.ts:
+
+- DELETE getAppBaseUrl()
+- DELETE any usage of APP_URL, PRODUCTION_DOMAIN, REPLIT_DOMAINS
+- DELETE all environment inference
+
+Replace with a hard mapping:
+
+  const BASE_URLS = {
+    dev: 'https://epoch-v8-glennj.replit.app',
+    prod: 'https://agcompepoch.xyz',
+  };
+
+createSignatureLink MUST be:
+
+  export function createSignatureLink(
+    publicSignatureId: string,
+    env: 'dev' | 'prod'
+  ) {
+    const baseUrl = BASE_URLS[env];
+    if (!baseUrl) throw new Error(`Invalid env for signature link: ${env}`);
+    return `${baseUrl}/sign-order/${publicSignatureId}`;
+  }
+
+────────────────────────────────────────
+STEP 3 — Update ALL callers (mandatory)
+────────────────────────────────────────
+
+Find EVERY call to createSignatureLink and update it to pass env explicitly.
+
+These paths MUST be updated:
+
+1) Initial signature email
+   → use currentEnv at creation time
+
+2) Resend signature email
+   → use followupOrder.environment
+
+3) Send updated order for signature
+   → use currentEnv for new followup order
+
+4) Reminder emails
+   → use followupOrder.environment
+
+5) Background helpers (storage.ts)
+   → use followupOrder.environment or explicit env passed in
+
+If ANY call does not pass env explicitly, FAIL the task.
+
+────────────────────────────────────────
+STEP 4 — Add invariant protection
+────────────────────────────────────────
+
+Add a runtime guard:
+- If followupOrder.environment !== env used to generate the link
+- THROW an error and log it
+
+This is intentional. Silent mismatch is forbidden.
+
+────────────────────────────────────────
+STEP 5 — Kill global config usage
+────────────────────────────────────────
+
+Search the codebase and REMOVE from email/signature paths:
+
+- APP_URL
+- PRODUCTION_DOMAIN
+- PUBLIC_URL
+- FRONTEND_URL
+
+These must NOT influence signature links anymore.
+
+────────────────────────────────────────
+STEP 6 — Verification
+────────────────────────────────────────
+
+After implementation, verify:
+
+- DEV order → DEV email → DEV link → DEV DB
+- PROD order → PROD email → PROD link → PROD DB
+- It is IMPOSSIBLE for DEV to generate a PROD signature URL
+
+List:
+- All updated call sites
+- Final createSignatureLink implementation
+- Any guards added
+
+DO NOT implement UI changes.
+DO NOT modify database schema.
+DO NOT optimize unrelated code.
+
+This task is complete only when the invariant is enforced globally.

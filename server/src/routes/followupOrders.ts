@@ -355,8 +355,10 @@ router.post('/', async (req, res) => {
     const signatureToken = nanoid(32);
     const publicSignatureId = generatePublicSignatureId();
 
-    // SIGNATURE LINK CONTRACT: Generate signature link using PUBLIC ID (no secrets in URL)
-    const signatureLink = createSignatureLink(publicSignatureId);
+    // SIGNATURE LINK CONTRACT: Get environment FIRST, then generate signature link with EXPLICIT env
+    const { getCurrentEnvironment: getEnv } = await import('../../utils/magicLink');
+    const orderEnvironmentForLink = getEnv();
+    const signatureLink = createSignatureLink(publicSignatureId, orderEnvironmentForLink);
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
@@ -526,6 +528,7 @@ router.post('/', async (req, res) => {
     logSignatureEmailSend({
       orderId: order.orderId,
       signatureToken,
+      publicSignatureId,
       environment: orderEnvironment,
       context: 'initial',
       recipient: customer.email,
@@ -1443,14 +1446,22 @@ router.post('/:orderId/resend-email', async (req, res) => {
       console.log(`✅ Generated publicSignatureId ${newPublicId} for order ${orderId}`);
     }
 
-    // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId (path-based, no secrets in URL)
-    const signatureLink = createSignatureLink(currentFollowupOrder.publicSignatureId || '');
+    // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId with EXPLICIT environment from followup order
+    // INVARIANT: Resend MUST use the environment the followup order was CREATED in
+    const { validateSignatureLinkEnvironment } = await import('../../utils/magicLink');
+    const followupOrderEnv = (currentFollowupOrder as any).environment as 'dev' | 'prod' || 'dev';
+    
+    // INVARIANT CHECK: Validate environment match before generating link
+    validateSignatureLinkEnvironment((currentFollowupOrder as any).environment, followupOrderEnv, orderId);
+    
+    const signatureLink = createSignatureLink(currentFollowupOrder.publicSignatureId || '', followupOrderEnv);
     
     // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
     logSignatureEmailSend({
       orderId: orderId,
       signatureToken: currentFollowupOrder.signatureToken || '',
-      environment: currentEnv,
+      publicSignatureId: currentFollowupOrder.publicSignatureId || '',
+      environment: followupOrderEnv,
       context: 'resend',
       recipient: customer.email,
     });
@@ -1666,13 +1677,14 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
-    // Generate signature link
-    const signatureLink = createSignatureLink(newPublicSignatureId);
+    // Generate signature link with EXPLICIT environment (currentEnv for new followup order)
+    const signatureLink = createSignatureLink(newPublicSignatureId, currentEnv);
 
     // Forensic logging
     logSignatureEmailSend({
       orderId: orderId,
       signatureToken: signatureToken,
+      publicSignatureId: newPublicSignatureId,
       environment: currentEnv,
       context: 'updated_order',
       recipient: customer.email,

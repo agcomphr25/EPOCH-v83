@@ -14229,11 +14229,11 @@ export class DatabaseStorage implements IStorage {
       // Generate unique signature token (kept server-side for security)
       const signatureToken = nanoid(32);
 
-      // Generate signature link using unified URL resolution with publicSignatureId
+      // Generate signature link with EXPLICIT environment - no inference allowed
       const { createSignatureLink, getCurrentEnvironment, generatePublicSignatureId } = await import('./utils/magicLink');
-      const publicSignatureId = generatePublicSignatureId();
-      const signatureLink = createSignatureLink(publicSignatureId);
       const environment = getCurrentEnvironment();
+      const publicSignatureId = generatePublicSignatureId();
+      const signatureLink = createSignatureLink(publicSignatureId, environment);
 
       // Generate PDF via unified service with frozen snapshot
       const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);

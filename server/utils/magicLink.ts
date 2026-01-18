@@ -42,8 +42,18 @@ export function hashToken(token: string): string {
 }
 
 /**
- * UNIFIED URL RESOLUTION
- * Single source of truth for base URL across all magic links and signature links
+ * SIGNATURE LINK CONTRACT: Hard-coded base URLs per environment
+ * NO environment inference, NO APP_URL, NO PRODUCTION_DOMAIN
+ * These are the ONLY valid base URLs for signature links
+ */
+const SIGNATURE_BASE_URLS: Record<'dev' | 'prod', string> = {
+  dev: 'https://epoch-v8-glennj.replit.app',
+  prod: 'https://agcompepoch.xyz',
+};
+
+/**
+ * @deprecated Use SIGNATURE_BASE_URLS directly for signature links
+ * This function is kept for non-signature magic link URLs only
  */
 export function getAppBaseUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL;
@@ -60,14 +70,6 @@ export function getAppBaseUrl(): string {
  */
 export function getMagicLinkBaseUrl(): string {
   return getAppBaseUrl();
-}
-
-/**
- * Create a magic link URL for signature/verification
- * @deprecated Use createSignatureLink() instead for clarity
- */
-export function createMagicLink(token: string): string {
-  return createSignatureLink(token);
 }
 
 /**
@@ -88,23 +90,71 @@ export function generatePublicSignatureId(): string {
  * SIGNATURE LINK CONTRACT: Single canonical function for generating signature URLs
  * This is the ONLY way signature URLs should be generated across the codebase.
  * 
- * NEW FORMAT: {APP_BASE_URL}/sign-order/{public_signature_id}
+ * FORMAT: {BASE_URL}/sign-order/{public_signature_id}
  * - NO query params
  * - NO secrets in URL
  * - Email-client safe (no URL mangling)
+ * - REQUIRES explicit environment - THROWS if missing or invalid
  * 
  * @param publicSignatureId - The public_signature_id from followup_orders (NOT the secret token)
+ * @param env - The environment ('dev' or 'prod') - REQUIRED, no defaults
  * @returns Full signature URL using path-based routing
+ * @throws Error if env is missing or invalid
  */
-export function createSignatureLink(publicSignatureId: string): string {
-  return `${getAppBaseUrl()}/sign-order/${publicSignatureId}`;
+export function createSignatureLink(publicSignatureId: string, env: 'dev' | 'prod'): string {
+  if (!env || (env !== 'dev' && env !== 'prod')) {
+    const errorMsg = `[SIGNATURE LINK INVARIANT VIOLATION] createSignatureLink called with invalid env: ${env}. Must be 'dev' or 'prod'.`;
+    console.error(`🚨 ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+  
+  const baseUrl = SIGNATURE_BASE_URLS[env];
+  if (!baseUrl) {
+    const errorMsg = `[SIGNATURE LINK INVARIANT VIOLATION] No base URL configured for env: ${env}`;
+    console.error(`🚨 ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+  
+  console.log(`🔗 [SIGNATURE LINK] Generated link for env=${env}: ${baseUrl}/sign-order/${publicSignatureId}`);
+  return `${baseUrl}/sign-order/${publicSignatureId}`;
 }
 
 /**
- * @deprecated Legacy token-based links - use createSignatureLink with publicSignatureId instead
+ * @deprecated Legacy token-based links - use createSignatureLink with publicSignatureId and env instead
  */
-export function createLegacySignatureLink(token: string): string {
-  return `${getAppBaseUrl()}/sign-order?token=${token}`;
+export function createLegacySignatureLink(token: string, env: 'dev' | 'prod'): string {
+  const baseUrl = SIGNATURE_BASE_URLS[env];
+  if (!baseUrl) {
+    throw new Error(`Invalid env for legacy signature link: ${env}`);
+  }
+  return `${baseUrl}/sign-order?token=${token}`;
+}
+
+/**
+ * SIGNATURE LINK INVARIANT: Validate that the env used for link generation matches the followup order's stored environment
+ * THROWS if there's a mismatch - silent mismatches are forbidden
+ * 
+ * @param followupOrderEnv - The environment stored on the followup order record
+ * @param linkEnv - The environment being used to generate the signature link
+ * @param orderId - Order ID for error logging
+ * @throws Error if environments don't match
+ */
+export function validateSignatureLinkEnvironment(
+  followupOrderEnv: string | null | undefined,
+  linkEnv: 'dev' | 'prod',
+  orderId: string
+): void {
+  const normalizedFollowupEnv = (followupOrderEnv || 'dev') as 'dev' | 'prod';
+  
+  if (normalizedFollowupEnv !== linkEnv) {
+    const errorMsg = `[SIGNATURE LINK INVARIANT VIOLATION] Environment mismatch for order ${orderId}: ` +
+      `followup order was created in '${normalizedFollowupEnv}' but attempting to generate link for '${linkEnv}'. ` +
+      `This would result in a broken signature link. Operation blocked.`;
+    console.error(`🚨 ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+  
+  console.log(`✅ [SIGNATURE LINK INVARIANT] Environment validated for ${orderId}: followupOrder=${normalizedFollowupEnv}, link=${linkEnv}`);
 }
 
 /**
@@ -187,13 +237,13 @@ export interface SignatureLinkForensicLog {
   signatureToken: string;
   environment: 'prod' | 'dev';
   fullUrl: string;
-  context: 'initial' | 'resend' | 'reminder';
+  context: 'initial' | 'resend' | 'reminder' | 'updated_order';
   recipient: string;
   timestamp: Date;
 }
 
-export function logSignatureEmailSend(data: Omit<SignatureLinkForensicLog, 'timestamp' | 'fullUrl'>): SignatureLinkForensicLog {
-  const fullUrl = createSignatureLink(data.signatureToken);
+export function logSignatureEmailSend(data: Omit<SignatureLinkForensicLog, 'timestamp' | 'fullUrl'> & { publicSignatureId?: string }): SignatureLinkForensicLog {
+  const fullUrl = createSignatureLink(data.publicSignatureId || data.signatureToken, data.environment);
   const log: SignatureLinkForensicLog = {
     ...data,
     fullUrl,

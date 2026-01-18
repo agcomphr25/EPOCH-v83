@@ -821,13 +821,14 @@ router.post('/finalized', async (req: Request, res: Response) => {
         
         console.log(`✅ Follow-up order created for ${order.orderId} in ${orderEnvironment} environment with publicSignatureId ${publicSignatureId}`);
         
-        // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId (path-based, email-client safe)
-        const signatureLink = createSignatureLink(publicSignatureId);
+        // SIGNATURE LINK CONTRACT: Generate signature link using publicSignatureId with EXPLICIT environment
+        const signatureLink = createSignatureLink(publicSignatureId, orderEnvironment);
         
         // SIGNATURE LINK CONTRACT: Forensic logging for every signature email send
         logSignatureEmailSend({
           orderId: order.orderId,
           signatureToken,
+          publicSignatureId,
           environment: orderEnvironment,
           context: 'initial',
           recipient: customer.email,

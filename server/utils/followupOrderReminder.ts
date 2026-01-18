@@ -2,7 +2,7 @@ import { storage } from '../storage.js';
 import { db } from '../db.js';
 import { communicationLogs } from '@shared/schema';
 import { sendOrderConfirmationNotification } from './notifications.js';
-import { createSignatureLink, checkEnvironmentGuard, getCurrentEnvironment, logSignatureEmailSend } from './magicLink.js';
+import { createSignatureLink, checkEnvironmentGuard, logSignatureEmailSend } from './magicLink.js';
 
 const REMINDER_COOLDOWN_HOURS = 48; // Minimum hours between reminders
 const MAX_REMINDER_ATTEMPTS = 3; // Maximum reminder emails per order
@@ -242,15 +242,22 @@ export async function sendReminderForOverdueOrders() {
         }
         
         // Use EXISTING public signature ID - do NOT regenerate
-        // SIGNATURE LINK CONTRACT: Use createSignatureLink with publicSignatureId for all signature URLs
-        const signatureLink = createSignatureLink(followupOrder.publicSignatureId || '');
+        // SIGNATURE LINK CONTRACT: Use createSignatureLink with EXPLICIT environment from followup order
+        // INVARIANT: Reminders MUST use the environment the followup order was CREATED in
+        const { validateSignatureLinkEnvironment } = await import('./magicLink');
+        const followupOrderEnv = ((followupOrder as any).environment || 'dev') as 'dev' | 'prod';
+        
+        // INVARIANT CHECK: Validate environment match before generating link
+        validateSignatureLinkEnvironment((followupOrder as any).environment, followupOrderEnv, followupOrder.orderId);
+        
+        const signatureLink = createSignatureLink(followupOrder.publicSignatureId || '', followupOrderEnv);
         
         // SIGNATURE LINK CONTRACT: Forensic logging
-        const currentEnv = getCurrentEnvironment();
         logSignatureEmailSend({
           orderId: followupOrder.orderId,
           signatureToken: followupOrder.signatureToken,
-          environment: currentEnv,
+          publicSignatureId: followupOrder.publicSignatureId || '',
+          environment: followupOrderEnv,
           context: 'reminder',
           recipient: followupOrder.customerEmail,
         });

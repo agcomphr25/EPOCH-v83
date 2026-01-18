@@ -625,8 +625,18 @@ router.get('/sign/:publicId', async (req, res) => {
   try {
     const { publicId } = req.params;
 
+    // FORENSIC LOGGING: Trace INITIAL signature link click for "Order Not Found" debugging
+    console.log('═══════════════════════════════════════════════════════════════');
     console.log('🔐 [SIGN-ORDER] Path-based lookup request received');
-    console.log('🔐 [SIGN-ORDER] Public ID:', publicId);
+    console.log('🔐 [SIGN-ORDER] Timestamp:', new Date().toISOString());
+    console.log('🔐 [SIGN-ORDER] Raw publicId from URL params:', publicId);
+    console.log('🔐 [SIGN-ORDER] publicId type:', typeof publicId);
+    console.log('🔐 [SIGN-ORDER] publicId length:', publicId?.length);
+    console.log('🔐 [SIGN-ORDER] publicId trimmed:', publicId?.trim());
+    console.log('🔐 [SIGN-ORDER] publicId === trimmed:', publicId === publicId?.trim());
+    console.log('🔐 [SIGN-ORDER] APP_ENV:', process.env.APP_ENV);
+    console.log('🔐 [SIGN-ORDER] NODE_ENV:', process.env.NODE_ENV);
+    console.log('═══════════════════════════════════════════════════════════════');
 
     // Validate public ID format (sig_XXXXXXXX)
     if (!publicId || !publicId.startsWith('sig_')) {
@@ -637,6 +647,7 @@ router.get('/sign/:publicId', async (req, res) => {
     const followupOrder = await storage.getFollowupOrderByPublicId(publicId);
     if (!followupOrder) {
       console.log('❌ [SIGN-ORDER] No order found for public ID:', publicId);
+      console.log('❌ [SIGN-ORDER] FORENSIC: The publicSignatureId', publicId, 'does not exist in followup_orders table');
       return res.status(404).json({ error: 'Order not found' });
     }
 

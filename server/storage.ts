@@ -8382,10 +8382,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFollowupOrderByPublicId(publicSignatureId: string): Promise<FollowupOrder | undefined> {
-    const [followupOrder] = await db
+    // FORENSIC LOGGING: Trace signature lookup for "Order Not Found" debugging
+    console.log('🔍 [FORENSIC] getFollowupOrderByPublicId called');
+    console.log('🔍 [FORENSIC] Input publicSignatureId:', publicSignatureId);
+    console.log('🔍 [FORENSIC] Input type:', typeof publicSignatureId);
+    console.log('🔍 [FORENSIC] Input length:', publicSignatureId?.length);
+    console.log('🔍 [FORENSIC] APP_ENV:', process.env.APP_ENV);
+    console.log('🔍 [FORENSIC] NODE_ENV:', process.env.NODE_ENV);
+    
+    // Build query for logging
+    const query = db
       .select()
       .from(followupOrders)
       .where(eq(followupOrders.publicSignatureId, publicSignatureId));
+    
+    // Log the compiled SQL
+    const compiledQuery = query.toSQL();
+    console.log('🔍 [FORENSIC] SQL:', compiledQuery.sql);
+    console.log('🔍 [FORENSIC] Params:', JSON.stringify(compiledQuery.params));
+    
+    const [followupOrder] = await query;
+    
+    // FORENSIC LOGGING: Result
+    console.log('🔍 [FORENSIC] Query result:', followupOrder ? 'FOUND' : 'NOT FOUND');
+    if (!followupOrder) {
+      console.log('🔍 [FORENSIC] WHERE clause filter: followup_orders.public_signature_id =', publicSignatureId);
+      console.log('🔍 [FORENSIC] No row matched - publicSignatureId may not exist in database');
+    } else {
+      console.log('🔍 [FORENSIC] Found order ID:', followupOrder.orderId);
+      console.log('🔍 [FORENSIC] Found followup ID:', followupOrder.id);
+      console.log('🔍 [FORENSIC] Stored publicSignatureId:', followupOrder.publicSignatureId);
+      console.log('🔍 [FORENSIC] Stored environment:', followupOrder.environment);
+    }
+    
     return followupOrder;
   }
 

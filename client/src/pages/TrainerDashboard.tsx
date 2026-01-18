@@ -119,6 +119,11 @@ export default function TrainerDashboard() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<DailySession | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<DailySession | null>(null);
+  const [assignmentToEdit, setAssignmentToEdit] = useState<TrainingAssignment | null>(null);
+  const [assignmentToDelete, setAssignmentToDelete] = useState<TrainingAssignment | null>(null);
+  const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
+  const [deleteAssignmentOpen, setDeleteAssignmentOpen] = useState(false);
+  const [assignmentNotes, setAssignmentNotes] = useState('');
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedDayId, setSelectedDayId] = useState<string>('');
@@ -285,6 +290,48 @@ export default function TrainerDashboard() {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
+
+  const updateAssignmentMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return apiRequest(`/api/training/matrix/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      setEditAssignmentOpen(false);
+      setAssignmentToEdit(null);
+      setAssignmentNotes('');
+      toast({ title: 'Assignment Updated', description: 'Training assignment has been updated' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/matrix/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      setDeleteAssignmentOpen(false);
+      setAssignmentToDelete(null);
+      toast({ title: 'Assignment Deleted', description: 'Training assignment has been removed' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const openEditAssignment = (assignment: TrainingAssignment) => {
+    setAssignmentToEdit(assignment);
+    setAssignmentNotes(assignment.notes || '');
+    setEditAssignmentOpen(true);
+  };
 
   const resetEditForm = () => {
     setSelectedTraineeId('');
@@ -589,13 +636,35 @@ export default function TrainerDashboard() {
                           )}
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => startFromAssignmentMutation.mutate(assignment)}
-                        disabled={!assignment.employeeId || startFromAssignmentMutation.isPending}
-                      >
-                        <Play className="h-4 w-4 mr-2" />
-                        Start Training
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          onClick={() => startFromAssignmentMutation.mutate(assignment)}
+                          disabled={!assignment.employeeId || startFromAssignmentMutation.isPending}
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Start Training
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditAssignment(assignment)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Assignment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => { setAssignmentToDelete(assignment); setDeleteAssignmentOpen(true); }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Assignment
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>
@@ -919,6 +988,88 @@ export default function TrainerDashboard() {
               className="bg-red-600 hover:bg-red-700"
             >
               {deleteSessionMutation.isPending ? 'Deleting...' : 'Delete Session'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Assignment Dialog */}
+      <Dialog open={editAssignmentOpen} onOpenChange={(open) => { setEditAssignmentOpen(open); if (!open) { setAssignmentToEdit(null); setAssignmentNotes(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Training Assignment</DialogTitle>
+            <DialogDescription>
+              Update the assignment for {assignmentToEdit?.employeeName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Employee</Label>
+              <Input value={assignmentToEdit?.employeeName || ''} disabled />
+            </div>
+            <div>
+              <Label>Training</Label>
+              <Input value={assignmentToEdit?.trainingName || ''} disabled />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select 
+                value={assignmentToEdit?.status || 'PENDING'} 
+                onValueChange={(value) => setAssignmentToEdit(prev => prev ? {...prev, status: value} : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="OVERDUE">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={assignmentNotes}
+                onChange={(e) => setAssignmentNotes(e.target.value)}
+                placeholder="Any notes for this assignment..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditAssignmentOpen(false); setAssignmentToEdit(null); setAssignmentNotes(''); }}>Cancel</Button>
+            <Button
+              onClick={() => assignmentToEdit && updateAssignmentMutation.mutate({
+                id: assignmentToEdit.id,
+                data: { status: assignmentToEdit.status, notes: assignmentNotes }
+              })}
+              disabled={updateAssignmentMutation.isPending}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              {updateAssignmentMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Assignment Confirmation Dialog */}
+      <AlertDialog open={deleteAssignmentOpen} onOpenChange={setDeleteAssignmentOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Training Assignment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the "{assignmentToDelete?.trainingName}" assignment for {assignmentToDelete?.employeeName}? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAssignmentToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => assignmentToDelete && deleteAssignmentMutation.mutate(assignmentToDelete.id)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteAssignmentMutation.isPending ? 'Deleting...' : 'Delete Assignment'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

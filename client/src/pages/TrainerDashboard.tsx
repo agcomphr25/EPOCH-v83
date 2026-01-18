@@ -37,6 +37,7 @@ import {
   Edit,
   Trash2,
   MoreVertical,
+  Search,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -125,6 +126,7 @@ export default function TrainerDashboard() {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [soaFeedback, setSoaFeedback] = useState({ strength: '', opportunity: '', action: '' });
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
@@ -156,8 +158,15 @@ export default function TrainerDashboard() {
     queryKey: ['/api/training/matrix'],
   });
 
+  const searchLower = searchTerm.toLowerCase();
+  
   const pendingAssignments = trainingAssignments.filter(
-    (a) => a.status === 'PENDING' || a.status === 'IN_PROGRESS' || a.status === 'OVERDUE'
+    (a) => (a.status === 'PENDING' || a.status === 'IN_PROGRESS' || a.status === 'OVERDUE') &&
+    (searchTerm === '' || 
+      a.employeeName?.toLowerCase().includes(searchLower) ||
+      a.trainingName?.toLowerCase().includes(searchLower) ||
+      a.department?.toLowerCase().includes(searchLower) ||
+      a.jobTitle?.toLowerCase().includes(searchLower))
   );
 
   const startSessionMutation = useMutation({
@@ -306,11 +315,21 @@ export default function TrainerDashboard() {
     });
   };
 
-  const activeSessions = mySessions.filter(s => s.status === 'active');
-  const completedSessions = mySessions.filter(s => s.status === 'completed');
-
   const getEmployeeName = (id: number) => employees.find(e => e.id === id)?.name || 'Unknown';
   const getTopicTitle = (id: number) => facilityTopics.find(t => t.id === id)?.title || 'General Training';
+
+  const filterSession = (session: DailySession) => {
+    if (searchTerm === '') return true;
+    const employeeName = getEmployeeName(session.traineeId).toLowerCase();
+    const topicTitle = getTopicTitle(session.facilityTopicId).toLowerCase();
+    const notes = (session.notes || '').toLowerCase();
+    return employeeName.includes(searchLower) || 
+           topicTitle.includes(searchLower) || 
+           notes.includes(searchLower);
+  };
+
+  const activeSessions = mySessions.filter(s => s.status === 'active' && filterSession(s));
+  const completedSessions = mySessions.filter(s => s.status === 'completed' && filterSession(s));
 
   const renderStepTracker = () => (
     <Card className="mb-6">
@@ -496,10 +515,21 @@ export default function TrainerDashboard() {
             Conduct training sessions using the 4-Step Method with S-O-A coaching
           </p>
         </div>
-        <Button onClick={() => setStartSessionOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Start Session
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search sessions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-64"
+            />
+          </div>
+          <Button onClick={() => setStartSessionOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Start Session
+          </Button>
+        </div>
       </div>
 
       {activeSessionId ? (

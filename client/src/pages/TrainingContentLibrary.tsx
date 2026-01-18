@@ -77,24 +77,49 @@ export default function TrainingContentLibrary() {
 
   const handleFileSelect = async (file: File) => {
     setIsExtractingFile(true);
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
     try {
-      const text = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
-          resolve(content || '');
-        };
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsText(file);
-      });
-      
-      setNewDoc(prev => ({
-        ...prev,
-        extractedText: text,
-        fileName: file.name,
-        title: prev.title || file.name.replace(/\.[^/.]+$/, '')
-      }));
-      toast({ title: 'File loaded', description: `Loaded ${file.name}` });
+      if (['doc', 'docx', 'pdf'].includes(fileExtension || '')) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/training/content-library/extract-text', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to extract text from document');
+        }
+        
+        const data = await response.json();
+        setNewDoc(prev => ({
+          ...prev,
+          extractedText: data.text || '',
+          fileName: file.name,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+        }));
+        toast({ title: 'File processed', description: `Extracted text from ${file.name}` });
+      } else {
+        const text = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const content = e.target?.result as string;
+            resolve(content || '');
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file);
+        });
+        
+        setNewDoc(prev => ({
+          ...prev,
+          extractedText: text,
+          fileName: file.name,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+        }));
+        toast({ title: 'File loaded', description: `Loaded ${file.name}` });
+      }
     } catch (error) {
       toast({ 
         title: 'Error reading file', 

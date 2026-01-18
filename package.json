@@ -126,6 +126,7 @@
     "leaflet.heat": "^0.2.0",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.453.0",
+    "mammoth": "^1.11.0",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
     "moment": "^2.30.1",

@@ -4111,6 +4111,38 @@ router.delete('/content-library/documents/:id', async (req, res) => {
   }
 });
 
+// Extract text from uploaded file (PDF, DOC, DOCX)
+router.post('/content-library/extract-text', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileName = file.originalname.toLowerCase();
+    let extractedText = '';
+
+    if (fileName.endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse');
+      const pdfData = await pdfParse(file.buffer);
+      extractedText = pdfData.text;
+    } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      extractedText = result.value;
+    } else if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.csv')) {
+      extractedText = file.buffer.toString('utf-8');
+    } else {
+      return res.status(400).json({ error: 'Unsupported file type. Please use PDF, DOC, DOCX, TXT, MD, or CSV files.' });
+    }
+
+    res.json({ text: extractedText, filename: file.originalname });
+  } catch (error: any) {
+    console.error('Error extracting text from file:', error);
+    res.status(500).json({ error: `Failed to extract text: ${error.message}` });
+  }
+});
+
 // --- AI TRAINING TOPIC GENERATION ---
 
 // Generate training topic from selected documents

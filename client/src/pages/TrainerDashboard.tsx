@@ -77,12 +77,13 @@ interface DailySession {
   competencyAttested: boolean;
 }
 
-interface FacilityTopic {
+interface TrainingModule {
   id: number;
-  code: string;
   title: string;
   description: string;
-  overview?: string;
+  estimatedMinutes: number;
+  passingScore: number;
+  content?: string;
   contentHtml?: string;
 }
 
@@ -197,8 +198,8 @@ export default function TrainerDashboard() {
     queryKey: ['/api/employees'],
   });
 
-  const { data: facilityTopics = [] } = useQuery<FacilityTopic[]>({
-    queryKey: ['/api/training/facility-topics'],
+  const { data: trainingModules = [] } = useQuery<TrainingModule[]>({
+    queryKey: ['/api/training/modules'],
   });
 
   const { data: planDays = [] } = useQuery<any[]>({
@@ -424,7 +425,7 @@ export default function TrainerDashboard() {
   };
 
   const getEmployeeName = (id: number) => employees.find(e => e.id === id)?.name || 'Unknown';
-  const getTopicTitle = (id: number) => facilityTopics.find(t => t.id === id)?.title || 'General Training';
+  const getTopicTitle = (id: number) => trainingModules.find(t => t.id === id)?.title || 'General Training';
 
   const filterSession = (session: DailySession) => {
     if (searchTerm === '') return true;
@@ -452,10 +453,18 @@ export default function TrainerDashboard() {
       
       setLoadingTopicContent(true);
       try {
-        const response = await fetch(`/api/training/facility-topics/${session.facilityTopicId}/full-content`);
-        if (response.ok) {
-          const data = await response.json();
-          setActiveTopicContent(data);
+        const module = trainingModules.find(m => m.id === session.facilityTopicId);
+        if (module) {
+          setActiveTopicContent({
+            topic: {
+              id: module.id,
+              title: module.title,
+              overview: module.description,
+              contentHtml: module.contentHtml || module.content,
+            },
+            workInstructions: [],
+            criticalPoints: [],
+          });
         }
       } catch (error) {
         console.error('Error fetching topic content:', error);
@@ -465,7 +474,7 @@ export default function TrainerDashboard() {
     };
     
     fetchTopicContent();
-  }, [activeSessionId, activeSessions]);
+  }, [activeSessionId, activeSessions, trainingModules]);
 
   const renderStepTracker = () => (
     <Card className="mb-6">
@@ -1174,9 +1183,9 @@ export default function TrainerDashboard() {
                   <SelectValue placeholder="Select training module" />
                 </SelectTrigger>
                 <SelectContent>
-                  {facilityTopics.map((topic) => (
+                  {trainingModules.map((topic) => (
                     <SelectItem key={topic.id} value={topic.id.toString()}>
-                      {topic.code} - {topic.title}
+                      {topic.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1251,9 +1260,9 @@ export default function TrainerDashboard() {
                   <SelectValue placeholder="Select training module" />
                 </SelectTrigger>
                 <SelectContent>
-                  {facilityTopics.map((topic) => (
+                  {trainingModules.map((topic) => (
                     <SelectItem key={topic.id} value={topic.id.toString()}>
-                      {topic.code} - {topic.title}
+                      {topic.title}
                     </SelectItem>
                   ))}
                 </SelectContent>

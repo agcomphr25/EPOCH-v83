@@ -220,10 +220,10 @@ export async function extractTrainingContent(
   } else {
     // Fallback: Use pdf-parse with proper error handling
     try {
-      const { PDFParse } = await import('pdf-parse');
+      const { PDFParse } = await import('pdf-parse/node');
       // Convert Buffer to Uint8Array for pdf-parse
       const uint8Array = new Uint8Array(fileBuffer);
-      const parser = new PDFParse({ data: uint8Array });
+      const parser = new PDFParse({ data: uint8Array, verbosity: 0 });
       const textResult = await parser.getText();
       content = textResult.text || '';
       await parser.destroy();
@@ -361,10 +361,10 @@ export async function extractCertificationContent(
   } else {
     // Fallback: Use pdf-parse with proper error handling
     try {
-      const { PDFParse } = await import('pdf-parse');
+      const { PDFParse } = await import('pdf-parse/node');
       // Convert Buffer to Uint8Array for pdf-parse
       const uint8Array = new Uint8Array(fileBuffer);
-      const parser = new PDFParse({ data: uint8Array });
+      const parser = new PDFParse({ data: uint8Array, verbosity: 0 });
       const textResult = await parser.getText();
       content = textResult.text || '';
       await parser.destroy();
@@ -538,10 +538,10 @@ export async function extractTrainingMatrixData(
   } else {
     // Fallback: Use pdf-parse with proper error handling
     try {
-      const { PDFParse } = await import('pdf-parse');
+      const { PDFParse } = await import('pdf-parse/node');
       // Convert Buffer to Uint8Array for pdf-parse
       const uint8Array = new Uint8Array(fileBuffer);
-      const parser = new PDFParse({ data: uint8Array });
+      const parser = new PDFParse({ data: uint8Array, verbosity: 0 });
       const textResult = await parser.getText();
       content = textResult.text || '';
       await parser.destroy();

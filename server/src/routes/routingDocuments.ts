@@ -20,11 +20,10 @@ import { ObjectStorageService } from '../../replit_integrations/object_storage';
 // Dynamic PDF parser function
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
-    const pdfParseModule = await import('pdf-parse');
-    // pdf-parse v2.x exports PDFParse as a class that takes options with data
-    const PDFParse = pdfParseModule.PDFParse;
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const { PDFParse } = await import('pdf-parse/node');
+    const parser = new PDFParse({ data: new Uint8Array(buffer), verbosity: 0 });
     const textResult = await parser.getText();
+    await parser.destroy();
     return textResult.text || '';
   } catch (error) {
     console.error('Error parsing PDF:', error);

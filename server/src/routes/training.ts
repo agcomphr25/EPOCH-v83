@@ -4138,8 +4138,9 @@ router.post('/content-library/extract-text', upload.single('file'), async (req, 
     let extractedText = '';
 
     if (fileName.endsWith('.pdf')) {
-      const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: file.buffer });
+      const { PDFParse } = await import('pdf-parse/node');
+      const uint8Array = new Uint8Array(file.buffer);
+      const parser = new PDFParse({ data: uint8Array, verbosity: 0 });
       try {
         const pdfData = await parser.getText();
         extractedText = pdfData.text;

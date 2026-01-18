@@ -4123,12 +4123,13 @@ router.post('/content-library/extract-text', upload.single('file'), async (req, 
     let extractedText = '';
 
     if (fileName.endsWith('.pdf')) {
-      const pdfParse = require('pdf-parse');
+      const pdfParseModule = await import('pdf-parse');
+      const pdfParse = pdfParseModule.default || pdfParseModule;
       const pdfData = await pdfParse(file.buffer);
       extractedText = pdfData.text;
     } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
-      const mammoth = require('mammoth');
-      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      const mammothModule = await import('mammoth');
+      const result = await mammothModule.extractRawText({ buffer: file.buffer });
       extractedText = result.value;
     } else if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.csv')) {
       extractedText = file.buffer.toString('utf-8');

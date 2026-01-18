@@ -32,6 +32,8 @@ import {
   Calendar,
   ClipboardCheck,
   Plus,
+  ListTodo,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Employee {
@@ -62,6 +64,19 @@ interface FacilityTopic {
   description: string;
 }
 
+interface TrainingAssignment {
+  id: number;
+  employeeId: number | null;
+  employeeName: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  trainingName: string;
+  lastCompleted: string | null;
+  nextDue: string | null;
+  status: string;
+  notes: string | null;
+}
+
 const stepDescriptions = [
   { step: 1, title: "Trainer Does / Explains", icon: Eye, bgClass: "bg-blue-500", ringClass: "ring-blue-200", description: "Demonstrate while explaining what and why" },
   { step: 2, title: "Trainer Does / Trainee Explains", icon: MessageCircle, bgClass: "bg-teal-500", ringClass: "ring-teal-200", description: "Trainee verbalizes understanding" },
@@ -78,7 +93,7 @@ interface SessionUser {
 
 export default function TrainerDashboard() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('active');
+  const [activeTab, setActiveTab] = useState('assignments');
   const [startSessionOpen, setStartSessionOpen] = useState(false);
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
@@ -113,6 +128,14 @@ export default function TrainerDashboard() {
   const { data: trainerCertifications = [] } = useQuery<any[]>({
     queryKey: ['/api/training/trainer-certifications'],
   });
+
+  const { data: trainingAssignments = [] } = useQuery<TrainingAssignment[]>({
+    queryKey: ['/api/training/matrix'],
+  });
+
+  const pendingAssignments = trainingAssignments.filter(
+    (a) => a.status === 'PENDING' || a.status === 'IN_PROGRESS' || a.status === 'OVERDUE'
+  );
 
   const startSessionMutation = useMutation({
     mutationFn: async () => {
@@ -167,6 +190,28 @@ export default function TrainerDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
       toast({ title: 'Signed', description: 'Session signed successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const startFromAssignmentMutation = useMutation({
+    mutationFn: async (assignment: TrainingAssignment) => {
+      return apiRequest('/api/training/daily-sessions', {
+        method: 'POST',
+        body: JSON.stringify({
+          traineeId: assignment.employeeId,
+          trainerId: trainerId,
+          notes: `Training: ${assignment.trainingName}`,
+        }),
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
+      setActiveSessionId(data.id);
+      setCurrentStep(1);
+      toast({ title: 'Session Started', description: 'Begin with Step 1: Trainer Does / Explains' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -374,6 +419,10 @@ export default function TrainerDashboard() {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
+            <TabsTrigger value="assignments" className="flex items-center gap-2">
+              <ListTodo className="h-4 w-4" />
+              Pending ({pendingAssignments.length})
+            </TabsTrigger>
             <TabsTrigger value="active" className="flex items-center gap-2">
               <Play className="h-4 w-4" />
               Active ({activeSessions.length})
@@ -387,6 +436,54 @@ export default function TrainerDashboard() {
               Certifications
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="assignments" className="space-y-4">
+            {pendingAssignments.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <ListTodo className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Pending Assignments</h3>
+                  <p className="text-muted-foreground">Training assignments from Control Center will appear here</p>
+                </CardContent>
+              </Card>
+            ) : (
+              pendingAssignments.map((assignment) => (
+                <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <CardTitle className="text-base">{assignment.employeeName || 'Unknown Employee'}</CardTitle>
+                          <Badge variant={assignment.status === 'OVERDUE' ? 'destructive' : 'secondary'}>
+                            {assignment.status === 'OVERDUE' && <AlertCircle className="h-3 w-3 mr-1" />}
+                            {assignment.status}
+                          </Badge>
+                        </div>
+                        <CardDescription className="font-medium text-foreground">{assignment.trainingName}</CardDescription>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                          {assignment.department && <span>{assignment.department}</span>}
+                          {assignment.jobTitle && <span>• {assignment.jobTitle}</span>}
+                          {assignment.nextDue && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Due: {new Date(assignment.nextDue).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={() => startFromAssignmentMutation.mutate(assignment)}
+                        disabled={!assignment.employeeId || startFromAssignmentMutation.isPending}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Training
+                      </Button>
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))
+            )}
+          </TabsContent>
 
           <TabsContent value="active" className="space-y-4">
             {activeSessions.length === 0 ? (

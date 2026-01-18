@@ -28,6 +28,83 @@ import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
 
+/**
+ * Compute the bottom metal source from order features without side effects.
+ * @param features The order's features object
+ * @returns 'CUSTOMER_OWNS' or 'AG_SUPPLIES'
+ */
+function computeBottomMetalSource(features: Record<string, any> | null | undefined): string {
+  const bottomMetal = (features as Record<string, any>)?.bottom_metal as string | undefined;
+  const isCustomerOwns = bottomMetal === 'ag_bottom_metel_inlet_only';
+  return isCustomerOwns ? 'CUSTOMER_OWNS' : 'AG_SUPPLIES';
+}
+
+/**
+ * Idempotent helper to reconcile bottom metal demand from order state.
+ * Always ensures demand record matches order's effective bottom metal selection.
+ * Also updates the order's bottomMetalSource field in a single call.
+ * @param order The order to reconcile demand for
+ * @param updateOrderSource If true, also updates the order's bottomMetalSource field
+ * @returns Updated bottomMetalSource value
+ */
+async function reconcileBottomMetalDemand(order: any, updateOrderSource: boolean = true): Promise<string | null> {
+  if (!order?.orderId) return null;
+  
+  const orderId = order.orderId;
+  const features = (order.features as Record<string, any>) || {};
+  const bottomMetal = features.bottom_metal as string | undefined;
+  
+  // Determine the source based on the feature value
+  const bottomMetalSource = computeBottomMetalSource(features);
+  
+  // Determine if this order requires a demand record
+  const needsDemand = bottomMetalSource === 'AG_SUPPLIES' && 
+                      bottomMetal && 
+                      bottomMetal.startsWith('ag_') &&
+                      bottomMetal !== 'ag_bottom_metel_inlet_only';
+  
+  // Get existing demand record
+  const existingDemand = await storage.getBottomMetalDemandByOrderId(orderId);
+  
+  if (needsDemand) {
+    const normalizedSku = bottomMetal!.toUpperCase().replace(/_/g, '-');
+    
+    if (existingDemand) {
+      // Update existing demand - ensure SKU matches and status is open
+      if (existingDemand.bottomMetalSku !== normalizedSku || existingDemand.status !== 'open') {
+        await storage.updateBottomMetalDemand(existingDemand.id, { 
+          bottomMetalSku: normalizedSku,
+          status: 'open'
+        });
+        console.log(`🔩 Reconciled bottom metal demand for order ${orderId}: ${normalizedSku}`);
+      }
+    } else {
+      // Create new demand
+      await storage.createBottomMetalDemand({
+        orderId: orderId,
+        bottomMetalSku: normalizedSku,
+        quantity: 1,
+        status: 'open',
+      });
+      console.log(`🔩 Created bottom metal demand for order ${orderId}: ${normalizedSku}`);
+    }
+  } else {
+    // Cancel any existing demand that shouldn't exist
+    if (existingDemand && existingDemand.status !== 'cancelled') {
+      await storage.updateBottomMetalDemand(existingDemand.id, { status: 'cancelled' });
+      console.log(`🔩 Cancelled bottom metal demand for order ${orderId} (source: ${bottomMetalSource})`);
+    }
+  }
+  
+  // Update order's bottomMetalSource in the same reconciliation call
+  if (updateOrderSource && order.bottomMetalSource !== bottomMetalSource) {
+    await storage.updateFinalizedOrder(orderId, { bottomMetalSource });
+    console.log(`🔩 Updated order ${orderId} bottomMetalSource: ${bottomMetalSource}`);
+  }
+  
+  return bottomMetalSource;
+}
+
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -436,11 +513,18 @@ router.post('/finalized', async (req: Request, res: Response) => {
     const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'FINALIZED';
     const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping Management';
     
+    // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
+    const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
+    
     const order = await storage.createFinalizedOrder({
       ...orderData,
       status: orderStatus,
-      currentDepartment: orderDepartment
+      currentDepartment: orderDepartment,
+      bottomMetalSource,
     });
+    
+    // Use idempotent helper to create demand record (skip order update since already set)
+    await reconcileBottomMetalDemand(order, false);
     
     if (hasStock) {
       console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
@@ -1026,6 +1110,11 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     // Update the order in all_orders table
     const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
     console.log('Updated order successfully:', updatedOrder);
+
+    // Idempotently reconcile bottom metal demand from the effective post-update order state
+    // This handles all cases: feature changes, partial updates, drift correction, and updates bottomMetalSource
+    await reconcileBottomMetalDemand(updatedOrder);
+
     return res.json(updatedOrder);
   } catch (error) {
     console.error('Update order error:', error);
@@ -2352,6 +2441,14 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       },
     });
 
+    // Use idempotent reconciliation to properly restore demand based on current order features
+    // This validates demand state against order features instead of unconditionally re-opening
+    try {
+      await reconcileBottomMetalDemand(updatedOrder);
+    } catch (demandError) {
+      console.log('🔄 Bottom metal demand reconciliation failed on undo-cancel:', demandError);
+    }
+
     res.json({
       success: true,
       message: 'Order restored successfully and returned to production queue',
@@ -2539,6 +2636,15 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
         layupQueueError
       );
       // Don't fail the cancellation if layup queue removal fails
+    }
+
+    // Cancel any bottom metal demands for this order
+    try {
+      await storage.cancelBottomMetalDemandByOrderId(orderId);
+      console.log(`🔩 Cancelled bottom metal demand for order ${orderId}`);
+    } catch (demandError) {
+      console.log('🔧 No bottom metal demand to cancel or cancellation failed:', demandError);
+      // Don't fail the cancellation if demand cancellation fails
     }
 
     console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);

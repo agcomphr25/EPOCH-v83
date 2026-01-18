@@ -164,6 +164,8 @@ export const allOrders = pgTable('all_orders', {
   bomDefinitionId: text('bom_definition_id'), // Store BOM definition ID as text for production compatibility
   // Production Queue Eligibility
   productionReadinessStatus: text('production_readiness_status').default('pending'), // 'ready', 'missing_model', 'missing_action_length', 'pending'
+  // Bottom Metal Demand Tracking
+  bottomMetalSource: text('bottom_metal_source').default('AG_SUPPLIES'), // 'AG_SUPPLIES' or 'CUSTOMER_OWNS'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -2564,6 +2566,26 @@ export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
+
+// Bottom Metal Demands Tracking Table
+export const bottomMetalDemands = pgTable('bottom_metal_demands', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  bottomMetalSku: text('bottom_metal_sku').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  status: text('status').notNull().default('open'), // 'open', 'cancelled', 'fulfilled'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertBottomMetalDemandSchema = createInsertSchema(bottomMetalDemands).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertBottomMetalDemand = z.infer<typeof insertBottomMetalDemandSchema>;
+export type BottomMetalDemand = typeof bottomMetalDemands.$inferSelect;
 
 // Backward compatibility aliases (order_drafts table removed, now using all_orders with PENDING_SIGNATURE status)
 export type InsertOrderDraft = InsertAllOrder;

@@ -26,6 +26,26 @@ router.get('/demands', async (req, res) => {
   }
 });
 
+// New endpoint for bottom metal demands from the explicit tracking table
+router.get('/bottom-metal-demands', async (req, res) => {
+  try {
+    const demands = await storage.getBottomMetalDemandsSummary();
+    res.json(demands);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all bottom metal demand records (raw data)
+router.get('/bottom-metal-demands/all', async (req, res) => {
+  try {
+    const demands = await storage.getBottomMetalDemands();
+    res.json(demands);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);

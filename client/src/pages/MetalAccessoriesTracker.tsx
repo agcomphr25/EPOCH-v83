@@ -101,6 +101,11 @@ export default function MetalAccessoriesTracker() {
     queryKey: ['/api/metal-accessories/demands'],
   });
 
+  // Query for explicit bottom metal demands from tracking table
+  const { data: bottomMetalDemands = [], isLoading: bottomMetalDemandsLoading } = useQuery<any[]>({
+    queryKey: ['/api/metal-accessories/bottom-metal-demands'],
+  });
+
   const form = useForm({
     resolver: zodResolver(metalAccessorySchema),
     defaultValues: {
@@ -250,11 +255,14 @@ export default function MetalAccessoriesTracker() {
 
       <Tabs defaultValue="inventory" className="w-full">
         <TabsList
-          className="grid w-full max-w-md grid-cols-2"
+          className="grid w-full max-w-lg grid-cols-3"
           data-testid="tabs-list"
         >
           <TabsTrigger value="inventory" data-testid="tab-inventory">
             Inventory Management
+          </TabsTrigger>
+          <TabsTrigger value="bottom-metal-demands" data-testid="tab-bottom-metal-demands">
+            Bottom Metal Demands
           </TabsTrigger>
           <TabsTrigger value="add-new" data-testid="tab-add-new">
             Add New Item
@@ -670,6 +678,74 @@ export default function MetalAccessoriesTracker() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bottom-metal-demands" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bottom Metal Demand Tracking</CardTitle>
+              <CardDescription>
+                Explicit demand tracking from finalized orders - uses the bottom_metal_demands table instead of JSON feature matching
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {bottomMetalDemandsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : bottomMetalDemands.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-2">
+                    No bottom metal demands recorded yet.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Demands are created automatically when orders are finalized with AG bottom metal selections.
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Bottom Metal SKU</TableHead>
+                      <TableHead className="text-center">Total Quantity</TableHead>
+                      <TableHead className="text-center">Order Count</TableHead>
+                      <TableHead>Orders</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bottomMetalDemands.map((demand: any) => (
+                      <TableRow key={demand.sku}>
+                        <TableCell className="font-medium">{demand.sku}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center justify-center px-2 py-1 text-sm font-bold bg-blue-100 text-blue-800 rounded">
+                            {demand.totalQuantity}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">{demand.orderCount}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-md">
+                            {demand.orders.slice(0, 5).map((orderId: string) => (
+                              <span
+                                key={orderId}
+                                className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded"
+                              >
+                                {orderId}
+                              </span>
+                            ))}
+                            {demand.orders.length > 5 && (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded">
+                                +{demand.orders.length - 5} more
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

@@ -341,6 +341,10 @@ import {
   metalAccessories,
   type MetalAccessory,
   type InsertMetalAccessory,
+  // Bottom metal demands types
+  bottomMetalDemands,
+  type BottomMetalDemand,
+  type InsertBottomMetalDemand,
   // Vendor types
   type Vendor,
   type InsertVendor,
@@ -1770,6 +1774,14 @@ export interface IStorage {
   ): Promise<MetalAccessory>;
   deleteMetalAccessory(id: number): Promise<void>;
   getMetalAccessoriesDemands(): Promise<any[]>;
+
+  // Bottom Metal Demands CRUD
+  getBottomMetalDemands(): Promise<BottomMetalDemand[]>;
+  getBottomMetalDemandByOrderId(orderId: string): Promise<BottomMetalDemand | undefined>;
+  createBottomMetalDemand(data: InsertBottomMetalDemand): Promise<BottomMetalDemand>;
+  updateBottomMetalDemand(id: number, data: Partial<InsertBottomMetalDemand>): Promise<BottomMetalDemand>;
+  cancelBottomMetalDemandByOrderId(orderId: string): Promise<void>;
+  getBottomMetalDemandsSummary(): Promise<any[]>;
 
   // Magic Link Token Methods
   createMagicLinkToken(data: InsertMagicLinkToken): Promise<MagicLinkToken>;
@@ -15015,6 +15027,67 @@ export class DatabaseStorage implements IStorage {
     });
 
     return demands;
+  }
+
+  // Bottom Metal Demands CRUD
+  async getBottomMetalDemands(): Promise<BottomMetalDemand[]> {
+    return await db.select().from(bottomMetalDemands).orderBy(desc(bottomMetalDemands.createdAt));
+  }
+
+  async getBottomMetalDemandByOrderId(orderId: string): Promise<BottomMetalDemand | undefined> {
+    const [demand] = await db
+      .select()
+      .from(bottomMetalDemands)
+      .where(eq(bottomMetalDemands.orderId, orderId));
+    return demand || undefined;
+  }
+
+  async createBottomMetalDemand(data: InsertBottomMetalDemand): Promise<BottomMetalDemand> {
+    const [demand] = await db.insert(bottomMetalDemands).values(data).returning();
+    return demand;
+  }
+
+  async updateBottomMetalDemand(id: number, data: Partial<InsertBottomMetalDemand>): Promise<BottomMetalDemand> {
+    const [demand] = await db
+      .update(bottomMetalDemands)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(bottomMetalDemands.id, id))
+      .returning();
+    return demand;
+  }
+
+  async cancelBottomMetalDemandByOrderId(orderId: string): Promise<void> {
+    await db
+      .update(bottomMetalDemands)
+      .set({ status: 'cancelled', updatedAt: new Date() })
+      .where(eq(bottomMetalDemands.orderId, orderId));
+  }
+
+  async getBottomMetalDemandsSummary(): Promise<any[]> {
+    // Get all open demands grouped by SKU for the machine shop report
+    const demands = await db
+      .select()
+      .from(bottomMetalDemands)
+      .where(eq(bottomMetalDemands.status, 'open'));
+
+    // Group by SKU and calculate totals
+    const skuMap: Record<string, { sku: string; totalQuantity: number; orderCount: number; orders: string[] }> = {};
+    
+    demands.forEach((demand) => {
+      if (!skuMap[demand.bottomMetalSku]) {
+        skuMap[demand.bottomMetalSku] = {
+          sku: demand.bottomMetalSku,
+          totalQuantity: 0,
+          orderCount: 0,
+          orders: [],
+        };
+      }
+      skuMap[demand.bottomMetalSku].totalQuantity += demand.quantity;
+      skuMap[demand.bottomMetalSku].orderCount += 1;
+      skuMap[demand.bottomMetalSku].orders.push(demand.orderId);
+    });
+
+    return Object.values(skuMap).sort((a, b) => b.totalQuantity - a.totalQuantity);
   }
 
   async createMagicLinkToken(

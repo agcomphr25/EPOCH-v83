@@ -1,0 +1,192 @@
+Goal of This Exercise
+
+We are trying to answer one core question:
+
+“How many bottom metals do we actually need to make?”
+
+To do that, we must distinguish:
+
+Bottom metals sold as products
+
+Bottom metals included in bundles
+
+Bottom metals referenced implicitly via machining selection
+
+Bottom metals already owned by customer
+
+Bottom metals discounted / promotional
+
+Bottom metals tracked as inventory vs inferred demand
+
+🔴 CRITICAL: What You Need From the Replit Agent
+1️⃣ Order Entry Intake — Bottom Metal Capture
+
+Ask the agent:
+
+“Show me the exact schema and code paths where bottom metal information is captured during order entry.”
+
+You want all of the following:
+
+A. Database Tables
+
+Table name(s) where:
+
+Bottom metal selection is stored
+
+Machining options reference bottom metals
+
+Bundles are defined
+
+Columns related to:
+
+bottom_metal_id
+
+is_bundle
+
+bundle_price
+
+component_price
+
+discount_override
+
+customer_owned (if present)
+
+line_item_type
+
+📌 Why:
+This tells us whether bottom metals are explicit entities or inferred relationships (the root of your problem).
+
+B. Order Entry UI → Backend Mapping
+
+Ask for:
+
+The frontend form fields (React components or JSON payload)
+
+The API endpoint that receives the order
+
+The exact request payload when:
+
+Stock + our bottom metal
+
+Stock + customer-owned bottom metal
+
+Bottom metal only
+
+Discounted bottom metal
+
+📌 Why:
+I want to see what sales intends vs what production actually receives.
+
+2️⃣ Bundle Logic (This Is the Likely Failure Point)
+
+Ask:
+
+“Show how bundled bottom metals are represented in the order system.”
+
+Specifically request:
+
+Where $149 bundled price is applied
+
+Whether:
+
+Bottom metal exists as its own line item
+
+OR is hidden inside a stock SKU
+
+How the system distinguishes:
+
+$149 bundled
+
+$199 standalone
+
+$100 promo
+
+📌 Why:
+If the bottom metal doesn’t exist as a countable unit, your report will always understate demand.
+
+3️⃣ Inventory & Threshold Logic
+
+Ask the agent:
+
+“Show the bottom metal inventory model and threshold calculation used by the machine shop report.”
+
+You need:
+
+A. Inventory Table
+
+On-hand quantity
+
+WIP (if tracked)
+
+Allocated vs unallocated
+
+Minimum threshold column
+
+B. Calculation Logic
+
+Formula used to calculate:
+
+“Needed to make”
+
+“On order”
+
+Whether it uses:
+
+Sales orders
+
+Line items
+
+Bundles
+
+Machining references
+
+Or only explicit bottom metal SKUs
+
+📌 Why:
+Your workaround (inflating minimums) tells me demand is not flowing into this calculation.
+
+4️⃣ The Machine Shop Report Itself
+
+Ask:
+
+“Dump the full query (or data aggregation logic) for the machine shop bottom metal report.”
+
+You want:
+
+SQL or ORM query
+
+Any JOINs involving:
+
+Orders
+
+Line items
+
+Accessories
+
+Bundles
+
+Grouping logic
+
+📌 Why:
+This lets me tell you exactly what demand signals are missing.
+
+5️⃣ Concrete Example Orders (THIS IS GOLD)
+
+Ask the agent to extract real orders:
+
+“Give me 3–5 real orders showing different bottom metal scenarios, including raw DB rows.”
+
+Minimum set:
+
+Stock + bundled bottom metal ($149)
+
+Stock + customer already owns bottom metal
+
+Bottom metal only ($199)
+
+Discounted bottom metal ($100)
+
+Mixed order with multiple stocks
+
+📌 Why:
+This allows me to trace one bottom metal from sale → report → shop floor.

@@ -1,0 +1,104 @@
+index-jE8_qgIt.js:4103 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-jE8_qgIt.js:4103 React hooks: {useState: ƒ, useEffect: ƒ}
+index-jE8_qgIt.js:4100 App component is rendering...
+index-jE8_qgIt.js:4100 Environment: production
+index-jE8_qgIt.js:4100 Base URL: /
+training-control-center:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-jE8_qgIt.js:1389 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-jE8_qgIt.js:1389
+kte @ index-jE8_qgIt.js:40
+TO @ index-jE8_qgIt.js:40
+Iwt @ index-jE8_qgIt.js:40
+ak @ index-jE8_qgIt.js:40
+_4e @ index-jE8_qgIt.js:40
+xI @ index-jE8_qgIt.js:38
+(anonymous) @ index-jE8_qgIt.js:40
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-jE8_qgIt.js:235 🌐 API Request to /api/training/content-library/documents (timeout: 15000ms, deployment: true)
+index-jE8_qgIt.js:235 ✅ API Response from /api/training/content-library/documents: 201
+index-jE8_qgIt.js:1389 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-jE8_qgIt.js:1389
+kte @ index-jE8_qgIt.js:40
+TO @ index-jE8_qgIt.js:40
+Iwt @ index-jE8_qgIt.js:40
+ak @ index-jE8_qgIt.js:40
+_4e @ index-jE8_qgIt.js:40
+xI @ index-jE8_qgIt.js:38
+(anonymous) @ index-jE8_qgIt.js:40
+index-jE8_qgIt.js:235 🌐 API Request to /api/training/content-library/generate-topic (timeout: 15000ms, deployment: true)
+index-jE8_qgIt.js:235  POST https://agcompepoch.xyz/api/training/content-library/generate-topic 500 (Internal Server Error)
+Xe @ index-jE8_qgIt.js:235
+mutationFn @ index-jE8_qgIt.js:3167
+fn @ index-jE8_qgIt.js:51
+p @ index-jE8_qgIt.js:51
+start @ index-jE8_qgIt.js:51
+execute @ index-jE8_qgIt.js:51
+await in execute
+mutate @ index-jE8_qgIt.js:51
+(anonymous) @ index-jE8_qgIt.js:51
+onClick @ index-jE8_qgIt.js:3167
+Kbt @ index-jE8_qgIt.js:37
+Ybt @ index-jE8_qgIt.js:37
+Xbt @ index-jE8_qgIt.js:37
+ZSe @ index-jE8_qgIt.js:37
+Jze @ index-jE8_qgIt.js:37
+(anonymous) @ index-jE8_qgIt.js:37
+Uve @ index-jE8_qgIt.js:40
+wze @ index-jE8_qgIt.js:37
+Mie @ index-jE8_qgIt.js:37
+pve @ index-jE8_qgIt.js:37
+fjt @ index-jE8_qgIt.js:37
+index-jE8_qgIt.js:235 ✅ API Response from /api/training/content-library/generate-topic: 500
+index-jE8_qgIt.js:4103 API error raw body: {"error":"Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable."}
+console.error @ index-jE8_qgIt.js:4103
+Xe @ index-jE8_qgIt.js:235
+await in Xe
+mutationFn @ index-jE8_qgIt.js:3167
+fn @ index-jE8_qgIt.js:51
+p @ index-jE8_qgIt.js:51
+start @ index-jE8_qgIt.js:51
+execute @ index-jE8_qgIt.js:51
+await in execute
+mutate @ index-jE8_qgIt.js:51
+(anonymous) @ index-jE8_qgIt.js:51
+onClick @ index-jE8_qgIt.js:3167
+Kbt @ index-jE8_qgIt.js:37
+Ybt @ index-jE8_qgIt.js:37
+Xbt @ index-jE8_qgIt.js:37
+ZSe @ index-jE8_qgIt.js:37
+Jze @ index-jE8_qgIt.js:37
+(anonymous) @ index-jE8_qgIt.js:37
+Uve @ index-jE8_qgIt.js:40
+wze @ index-jE8_qgIt.js:37
+Mie @ index-jE8_qgIt.js:37
+pve @ index-jE8_qgIt.js:37
+fjt @ index-jE8_qgIt.js:37
+index-jE8_qgIt.js:4103 💥 API Request failed for /api/training/content-library/generate-topic: Error: Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable.
+    at Xe (index-jE8_qgIt.js:235:6173)
+console.error @ index-jE8_qgIt.js:4103
+Xe @ index-jE8_qgIt.js:235
+await in Xe
+mutationFn @ index-jE8_qgIt.js:3167
+fn @ index-jE8_qgIt.js:51
+p @ index-jE8_qgIt.js:51
+start @ index-jE8_qgIt.js:51
+execute @ index-jE8_qgIt.js:51
+await in execute
+mutate @ index-jE8_qgIt.js:51
+(anonymous) @ index-jE8_qgIt.js:51
+onClick @ index-jE8_qgIt.js:3167
+Kbt @ index-jE8_qgIt.js:37
+Ybt @ index-jE8_qgIt.js:37
+Xbt @ index-jE8_qgIt.js:37
+ZSe @ index-jE8_qgIt.js:37
+Jze @ index-jE8_qgIt.js:37
+(anonymous) @ index-jE8_qgIt.js:37
+Uve @ index-jE8_qgIt.js:40
+wze @ index-jE8_qgIt.js:37
+Mie @ index-jE8_qgIt.js:37
+pve @ index-jE8_qgIt.js:37
+fjt @ index-jE8_qgIt.js:37

@@ -1,0 +1,1707 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+EPOCH-v83:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+EPOCH-v83:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+EPOCH-v83:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+0759ecb6676892da.js:2 [Coframe] Replit Enterprise watcher loaded
+0759ecb6676892da.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+0759ecb6676892da.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+0759ecb6676892da.js:2 [LaunchDarkly] LaunchDarkly client initialized
+0759ecb6676892da.js:2 [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 07223b0f51219b99.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+0759ecb6676892da.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 915e9ea950add441.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e.writeToStore @ 5dc9aaa110c24b7a.js:2
+r.write @ 5dc9aaa110c24b7a.js:2
+e.writeQuery @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+c @ 5dc9aaa110c24b7a.js:2
+r.batch @ 5dc9aaa110c24b7a.js:2
+r.performTransaction @ 5dc9aaa110c24b7a.js:2
+e.markResult @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+t @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+then @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+V @ 5dc9aaa110c24b7a.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+v @ 5dc9aaa110c24b7a.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.consumeQueue @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+e.getResultsFromLink @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchQueryByPolicy @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchConcastWithInfo @ 5dc9aaa110c24b7a.js:2
+r.fetch @ 5dc9aaa110c24b7a.js:2
+r.reobserveAsConcast @ 5dc9aaa110c24b7a.js:2
+r.reobserve @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 915e9ea950add441.js:2
+aC @ ed1e693c96a75807.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0759ecb6676892da.js:2 [Violation] Added non-passive event listener to a scroll-blocking 'wheel' event. Consider marking event handler as 'passive' to make the page more responsive. See https://www.chromestatus.com/feature/5745543795965952
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 2d8e593630aa4a58.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ed1e693c96a75807.js:2 Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+EPOCH-v83:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/training/content-library/documents (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/content-library/documents: 201
+injected.js:37 [vite] server connection lost. Polling for restart...
+[Violation] 'close' handler took <N>ms
+[Violation] 'close' handler took <N>ms
+[Violation] 'close' handler took <N>ms
+[Violation] 'close' handler took <N>ms
+[Violation] 'close' handler took <N>ms
+[Violation] 'close' handler took <N>ms
+stallwart.build.js:1 stallwart: failed ping 1
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+chunk-NFC5BX5N.js?v=ab6c7ac3:18625 [Violation] 'setTimeout' handler took 50ms
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+chunk-NFC5BX5N.js?v=ab6c7ac3:18625 [Violation] 'setTimeout' handler took 103ms
+e41006bd0e8c1730.js:2 [Violation] 'setInterval' handler took 72ms
+injected.js:37 [vite] server connection lost. Polling for restart...
+stallwart.build.js:1 stallwart: failed ping 1
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.janeway.platform.replit.com/wsv2/v2.public.Q2dZSSs3NjB5d1lTQmdpYTI3VExCaUlIYW1GdVpYZGhlVEFBT3M0QkNpUXdZMlV4TkRJNVppMWhZalkxTFRSa05EZ3RZbVZtTXkwMk1URmhZV0k1Tm1Vd1pHWVNBMjVwZUJvWmNtVndiR2wwTFhKbGNHd3RabWxzWlhNdGFtRnVaWGRoZVNJSlJWQlBRMGd0ZGpnektnZG5iR1Z1YmpVeFFsY0tHbkpsY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTFxWVc1bGQyRjVFaGh5WlhCc2FYUXRjbVZ3YkMxdFpYUmhMV3BoYm1WM1lYa2FIM0psY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxXcGhibVYzWVhsS0J3ajBrdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQ...NGRETlVNa2xzTnpOblVsZFRabFpoTTJWWU5FaE1WMm94SlRKQ1QzSTJZM1pvVmpOb1pVZFFNblZ5V0hsRU9GVkVZMFZ4ZGpWSVFtOXZXV3M1VVcwbE1rSjViR1Z3Y3pSTVZGWlZWRFpZWTBwclRuRldNRzVGYzJRMWVHUktWMlk0UVhOU01GaEZkVEozV0V0bVJ6WTNNalIxUlVaTVMyOHdkbTgzWVVweVdqRlVibTQzZFUweFJFUjFVVkFsTWtZelNuRmhVelpwTURsbFdXdDZiVEZMZG1oVmQzRkpZbXA0ZUhFNU5saHpVRzUzVlVjMmJVUjFTRGxRVUdzeVpUTnFPRWR6WmxwS1dHcHZWblY0UzFOQlFTVXpSQ1V6UkE9PQfwYasMkU4Twjv5Y-ON6XcrcstQvh5qM-I3cllq2tjc_ZMMvnc15wwF7blinGLrxyQEEq1XRhD4xkL5Rmd_UAQ.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+n @ cf344694e1e36523.js:2
+s @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+connect @ 803eec1bacc00e5f.js:2
+handleClose @ 803eec1bacc00e5f.js:2
+n @ 803eec1bacc00e5f.js:2
+0759ecb6676892da.js:2  POST https://replit.com/data/repls/0ce1429f-ab65-4d48-bef3-611aab96e0df/get_connection_metadata net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 9ca9e04482443dae.js:2
+g @ 9ca9e04482443dae.js:2
+(anonymous) @ 1a92fe9bdd9862e0.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+g @ 1a92fe9bdd9862e0.js:2
+(anonymous) @ 1a92fe9bdd9862e0.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+e @ 1a92fe9bdd9862e0.js:2
+(anonymous) @ d964c93210f61320.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+Promise.then
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+Promise.then
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ d964c93210f61320.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ d964c93210f61320.js:2
+(anonymous) @ d964c93210f61320.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ d964c93210f61320.js:2
+(anonymous) @ a7b6f29bc3f39540.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+value @ a7b6f29bc3f39540.js:2
+(anonymous) @ a7b6f29bc3f39540.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ a7b6f29bc3f39540.js:2
+e.with @ 1a92fe9bdd9862e0.js:2
+e.with @ 1a92fe9bdd9862e0.js:2
+e.startActiveSpan @ 1a92fe9bdd9862e0.js:2
+e.startActiveSpan @ 1a92fe9bdd9862e0.js:2
+value @ a7b6f29bc3f39540.js:2
+onBackoffFinished @ a7b6f29bc3f39540.js:2
+(anonymous) @ a7b6f29bc3f39540.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+t @ a7b6f29bc3f39540.js:2
+NoConnectionToBackingOff @ a7b6f29bc3f39540.js:2
+value @ a7b6f29bc3f39540.js:2
+value @ a7b6f29bc3f39540.js:2
+value @ a7b6f29bc3f39540.js:2
+onConnectionClosed @ a7b6f29bc3f39540.js:2
+value @ a7b6f29bc3f39540.js:2
+i.ws.onclose @ a7b6f29bc3f39540.js:2
+0759ecb6676892da.js:2  POST https://replit.com/graphql net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.consumeQueue @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+e.scheduleQueueConsumption @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 915e9ea950add441.js:2
+(anonymous) @ 915e9ea950add441.js:2
+s @ 915e9ea950add441.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+0759ecb6676892da.js:2  POST https://replit.com/graphql net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+e.getResultsFromLink @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchQueryByPolicy @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchConcastWithInfo @ 5dc9aaa110c24b7a.js:2
+r.fetch @ 5dc9aaa110c24b7a.js:2
+r.reobserveAsConcast @ 5dc9aaa110c24b7a.js:2
+r.reobserve @ 5dc9aaa110c24b7a.js:2
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+0759ecb6676892da.js:2  POST https://securetoken.googleapis.com/v1/token?key=AIzaSyARAzVTWc_KOBojIholLo2wzwNOQ6VKcB8 net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+Promise.then
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+Promise.then
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+tj @ f061e66b250ffe8f.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+value @ f061e66b250ffe8f.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+value @ f061e66b250ffe8f.js:2
+(anonymous) @ f061e66b250ffe8f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+value @ f061e66b250ffe8f.js:2
+(anonymous) @ 721b6dfc56f50cb6.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 721b6dfc56f50cb6.js:2
+a @ 0759ecb6676892da.js:2
+0759ecb6676892da.js:2  POST https://replit.com/graphql net::ERR_CONNECTION_CLOSED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.consumeQueue @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+e.scheduleQueueConsumption @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+e.scheduleRetry @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 915e9ea950add441.js:2
+u @ 915e9ea950add441.js:2
+Promise.then
+c @ 915e9ea950add441.js:2
+(anonymous) @ 915e9ea950add441.js:2
+s @ 915e9ea950add441.js:2
+onError @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.error @ c55d52fce612c0b3.js:2
+error @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.error @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+l @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.error @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.catch
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.consumeQueue @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+e.scheduleQueueConsumption @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 915e9ea950add441.js:2
+(anonymous) @ 915e9ea950add441.js:2
+s @ 915e9ea950add441.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+stallwart.build.js:1 stallwart: failed ping 1
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.janeway.platform.replit.com/wsv2/v2.public.Q2dZSSs3NjB5d1lTQmdpYTI3VExCaUlIYW1GdVpYZGhlVEFBT3M0QkNpUXdZMlV4TkRJNVppMWhZalkxTFRSa05EZ3RZbVZtTXkwMk1URmhZV0k1Tm1Vd1pHWVNBMjVwZUJvWmNtVndiR2wwTFhKbGNHd3RabWxzWlhNdGFtRnVaWGRoZVNJSlJWQlBRMGd0ZGpnektnZG5iR1Z1YmpVeFFsY0tHbkpsY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTFxWVc1bGQyRjVFaGh5WlhCc2FYUXRjbVZ3YkMxdFpYUmhMV3BoYm1WM1lYa2FIM0psY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxXcGhibVYzWVhsS0J3ajBrdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQ...NGRETlVNa2xzTnpOblVsZFRabFpoTTJWWU5FaE1WMm94SlRKQ1QzSTJZM1pvVmpOb1pVZFFNblZ5V0hsRU9GVkVZMFZ4ZGpWSVFtOXZXV3M1VVcwbE1rSjViR1Z3Y3pSTVZGWlZWRFpZWTBwclRuRldNRzVGYzJRMWVHUktWMlk0UVhOU01GaEZkVEozV0V0bVJ6WTNNalIxUlVaTVMyOHdkbTgzWVVweVdqRlVibTQzZFUweFJFUjFVVkFsTWtZelNuRmhVelpwTURsbFdXdDZiVEZMZG1oVmQzRkpZbXA0ZUhFNU5saHpVRzUzVlVjMmJVUjFTRGxRVUdzeVpUTnFPRWR6WmxwS1dHcHZWblY0UzFOQlFTVXpSQ1V6UkE9PQfwYasMkU4Twjv5Y-ON6XcrcstQvh5qM-I3cllq2tjc_ZMMvnc15wwF7blinGLrxyQEEq1XRhD4xkL5Rmd_UAQ.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+n @ cf344694e1e36523.js:2
+s @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+connect @ 803eec1bacc00e5f.js:2
+handleClose @ 803eec1bacc00e5f.js:2
+n @ 803eec1bacc00e5f.js:2
+5dc9aaa110c24b7a.js:2 WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+0759ecb6676892da.js:2  POST https://replit.com/graphql net::ERR_NETWORK_CHANGED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.consumeQueue @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+e.scheduleQueueConsumption @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 915e9ea950add441.js:2
+(anonymous) @ 915e9ea950add441.js:2
+s @ 915e9ea950add441.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+e.mutate @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+onCompleted @ db09c50e6e999668.js:2
+(anonymous) @ 50d9706527c0948d.js:2
+Promise.then
+(anonymous) @ 50d9706527c0948d.js:2
+n @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 [vite] server connection lost. Polling for restart...
+shared-c4942301eb10ece437f4db5c4ea98f1f.js:1  POST https://r.stripe.com/b net::ERR_NETWORK_IO_SUSPENDED
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+e41006bd0e8c1730.js:2  POST https://logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Abeacon%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A72ea111f&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=b616086d-14b5-4e18-b95f-437b44415bfa net::ERR_NETWORK_IO_SUSPENDED
+(anonymous) @ e41006bd0e8c1730.js:2
+sendOnExit @ e41006bd0e8c1730.js:2
+e.flush @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.notify @ e41006bd0e8c1730.js:2
+u @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.notify @ e41006bd0e8c1730.js:2
+rP.capture @ e41006bd0e8c1730.js:2
+U @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+0759ecb6676892da.js:2 [Violation] 'requestAnimationFrame' handler took 79ms
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.janeway.platform.replit.com/wsv2/v2.public.Q2dZSSs3NjB5d1lTQmdpYTI3VExCaUlIYW1GdVpYZGhlVEFBT3M0QkNpUXdZMlV4TkRJNVppMWhZalkxTFRSa05EZ3RZbVZtTXkwMk1URmhZV0k1Tm1Vd1pHWVNBMjVwZUJvWmNtVndiR2wwTFhKbGNHd3RabWxzWlhNdGFtRnVaWGRoZVNJSlJWQlBRMGd0ZGpnektnZG5iR1Z1YmpVeFFsY0tHbkpsY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTFxWVc1bGQyRjVFaGh5WlhCc2FYUXRjbVZ3YkMxdFpYUmhMV3BoYm1WM1lYa2FIM0psY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxXcGhibVYzWVhsS0J3ajBrdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQ...NGRETlVNa2xzTnpOblVsZFRabFpoTTJWWU5FaE1WMm94SlRKQ1QzSTJZM1pvVmpOb1pVZFFNblZ5V0hsRU9GVkVZMFZ4ZGpWSVFtOXZXV3M1VVcwbE1rSjViR1Z3Y3pSTVZGWlZWRFpZWTBwclRuRldNRzVGYzJRMWVHUktWMlk0UVhOU01GaEZkVEozV0V0bVJ6WTNNalIxUlVaTVMyOHdkbTgzWVVweVdqRlVibTQzZFUweFJFUjFVVkFsTWtZelNuRmhVelpwTURsbFdXdDZiVEZMZG1oVmQzRkpZbXA0ZUhFNU5saHpVRzUzVlVjMmJVUjFTRGxRVUdzeVpUTnFPRWR6WmxwS1dHcHZWblY0UzFOQlFTVXpSQ1V6UkE9PQfwYasMkU4Twjv5Y-ON6XcrcstQvh5qM-I3cllq2tjc_ZMMvnc15wwF7blinGLrxyQEEq1XRhD4xkL5Rmd_UAQ.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+n @ cf344694e1e36523.js:2
+s @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+connect @ 803eec1bacc00e5f.js:2
+handleClose @ 803eec1bacc00e5f.js:2
+n @ 803eec1bacc00e5f.js:2
+07223b0f51219b99.js:2 WebSocket connection to 'wss://production-chort.replit.com/api/river' failed: 
+(anonymous) @ 07223b0f51219b99.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+shared-c4942301eb10ece437f4db5c4ea98f1f.js:1  POST https://r.stripe.com/b net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+e @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+c @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+setTimeout
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+log @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+log @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+Se @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+(anonymous) @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+shared-c4942301eb10ece437f4db5c4ea98f1f.js:1 Uncaught (in promise) FetchError: Error fetching https://r.stripe.com/b: Failed to fetch
+    at shared-c4942301eb10ece437f4db5c4ea98f1f.js:1:229441
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+Promise.catch
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+e @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+c @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+setTimeout
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+(anonymous) @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+value @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+log @ shared-c4942301eb10ece437f4db5c4ea98f1f.js:1
+log @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+Se @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+(anonymous) @ controller-with-preconnect-4649275a94eb4ec4554b22f79260a062.js:1
+0759ecb6676892da.js:2  POST https://prodregistryv2.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1768763286842&sid=c5bb4149-b84f-4a90-a7a1-d6c26fad1977&ec=1&gz=1 net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ df6212602bad8342.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ df6212602bad8342.js:2
+u @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+e.<computed> @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+(anonymous) @ 7599154bd2118454.js:2
+s @ df6212602bad8342.js:2
+Promise.then
+l @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+u @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+e.<computed> @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ df6212602bad8342.js:2
+l @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+e.<computed> @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ df6212602bad8342.js:2
+l @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+e.<computed> @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ df6212602bad8342.js:2
+l @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+(anonymous) @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+e.<computed> @ df6212602bad8342.js:2
+value @ df6212602bad8342.js:2
+t @ df6212602bad8342.js:2
+a @ 0759ecb6676892da.js:2
+0759ecb6676892da.js:2  POST https://replit.com/graphql net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+e.try @ 5dc9aaa110c24b7a.js:2
+e.start @ 5dc9aaa110c24b7a.js:2
+r.request @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+Promise.then
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e @ c55d52fce612c0b3.js:2
+i.subscribe @ c55d52fce612c0b3.js:2
+complete @ 5dc9aaa110c24b7a.js:2
+r.start @ 5dc9aaa110c24b7a.js:2
+r @ 5dc9aaa110c24b7a.js:2
+e.getObservableFromLink @ 5dc9aaa110c24b7a.js:2
+e.getResultsFromLink @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchQueryByPolicy @ 5dc9aaa110c24b7a.js:2
+g @ 5dc9aaa110c24b7a.js:2
+e.fetchConcastWithInfo @ 5dc9aaa110c24b7a.js:2
+r.fetch @ 5dc9aaa110c24b7a.js:2
+r.reobserveAsConcast @ 5dc9aaa110c24b7a.js:2
+r.reobserve @ 5dc9aaa110c24b7a.js:2
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+o @ 5dc9aaa110c24b7a.js:2
+Promise.then
+n @ 5dc9aaa110c24b7a.js:2
+a @ 0759ecb6676892da.js:2
+cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10  POST https://ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/ net::ERR_NAME_NOT_RESOLVED
+q @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+M @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+(anonymous) @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+(anonymous) @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+(anonymous) @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1768759174573%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%252Frepls%252FEPOCH-v83%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+a @ 0759ecb6676892da.js:2
+0759ecb6676892da.js:2  POST https://logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A72ea111f&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=fe3390bb-adb7-41cd-bec3-4ad6f11255ba net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ 0759ecb6676892da.js:2
+n @ e41006bd0e8c1730.js:2
+tt @ e41006bd0e8c1730.js:2
+tr @ e41006bd0e8c1730.js:2
+send @ e41006bd0e8c1730.js:2
+e.flush @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.notify @ e41006bd0e8c1730.js:2
+u @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+U @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+a @ 0759ecb6676892da.js:2
+setTimeout
+(anonymous) @ 0759ecb6676892da.js:2
+et @ e41006bd0e8c1730.js:2
+notifyBeforeAddMessage @ e41006bd0e8c1730.js:2
+e.push @ e41006bd0e8c1730.js:2
+e.addOrUpdate @ e41006bd0e8c1730.js:2
+e.add @ e41006bd0e8c1730.js:2
+add @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.notify @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.notify @ e41006bd0e8c1730.js:2
+handleLog @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+e.log @ e41006bd0e8c1730.js:2
+U @ e41006bd0e8c1730.js:2
+(anonymous) @ e41006bd0e8c1730.js:2
+L.o.value @ e41006bd0e8c1730.js:2
+e.info @ e41006bd0e8c1730.js:2
+info @ e41006bd0e8c1730.js:2
+t.info @ 07223b0f51219b99.js:2
+(anonymous) @ 07223b0f51219b99.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ c55d52fce612c0b3.js:2
+value @ c55d52fce612c0b3.js:2
+value @ c55d52fce612c0b3.js:2
+I @ 07223b0f51219b99.js:2
+O @ 07223b0f51219b99.js:2
+a @ 0759ecb6676892da.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+0759ecb6676892da.js:2 Cache data may be lost when replacing the hostingBuildDeployActionUpdates field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type HostingBuildDeployLogAction and HostingBuildDeployStatusAction have an ID or a custom merge function, or define a custom merge function for the Subscription.hostingBuildDeployActionUpdates field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"HostingBuildDeployLogAction","log":"\r\u001b[38;2;169;169;169m2026-01-18T19:11:57Z\u001b[37m \u001b[32minfo\u001b[37m: Build: c19813a5-0ac6-40c9-9792-b01be3797550\r\n"}
+  incoming: {"__typename":"HostingBuildDeployStatusAction","status":"security_scanning","message":null,"debugSummary":null}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 0759ecb6676892da.js:2
+(anonymous) @ 915e9ea950add441.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+e.writeToStore @ 5dc9aaa110c24b7a.js:2
+r.write @ 5dc9aaa110c24b7a.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+V @ 5dc9aaa110c24b7a.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+v @ 5dc9aaa110c24b7a.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 5dc9aaa110c24b7a.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 5dc9aaa110c24b7a.js:2
+emit @ 5dc9aaa110c24b7a.js:2
+emit @ 5dc9aaa110c24b7a.js:2
+a.onmessage @ 5dc9aaa110c24b7a.js:2
+0759ecb6676892da.js:2 [Violation] 'requestAnimationFrame' handler took 50ms
+injected.js:37 [vite] server connection lost. Polling for restart...
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/static/devtools/injected.js:214  GET https://0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/static/devtools/injected.js:214
+ping @ 0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/@vite/client:736
+waitForSuccessfulPing @ 0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/@vite/client:749
+(anonymous) @ 0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/@vite/client:561
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/training/content-library/generate-topic (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/api/training/content-library/generate-topic 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:98
+mutationFn @ TrainingContentLibrary.tsx:194
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:754
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 ✅ API Response from /api/training/content-library/generate-topic: 500
+injected.js:37 API error raw body: {"error":"OpenAI API key not configured. Please set OPENAI_API_KEY or configure the AI integration."}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:104
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:194
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:754
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 💥 API Request failed for /api/training/content-library/generate-topic: Error: OpenAI API key not configured. Please set OPENAI_API_KEY or configure the AI integration.
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:153
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:194
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:754
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449

@@ -4558,6 +4558,7 @@ router.get('/content-library/training-plans', async (req, res) => {
       traineeId: aiTrainingPlans.traineeId,
       title: aiTrainingPlans.title,
       description: aiTrainingPlans.description,
+      planStructure: aiTrainingPlans.planStructure,
       totalTopics: aiTrainingPlans.totalTopics,
       status: aiTrainingPlans.status,
       createdAt: aiTrainingPlans.createdAt,

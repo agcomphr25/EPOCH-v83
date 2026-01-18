@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   FolderOpen, FileText, Upload, Plus, Tag, BookOpen, Users, 
   Sparkles, Clock, Target, CheckCircle, ChevronRight, Trash2,
-  Eye, Brain, GraduationCap
+  Eye, Brain, GraduationCap, ClipboardList, Calendar
 } from 'lucide-react';
 
 interface Category {
@@ -54,6 +54,18 @@ interface Employee {
   id: number;
   name: string;
   department: string | null;
+}
+
+interface TrainingPlan {
+  id: number;
+  traineeId: number;
+  traineeName: string | null;
+  title: string;
+  description: string | null;
+  totalTopics: number | null;
+  status: string;
+  createdAt: string;
+  planStructure?: string;
 }
 
 export default function TrainingContentLibrary() {
@@ -145,6 +157,10 @@ export default function TrainingContentLibrary() {
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
+  });
+
+  const { data: trainingPlans = [] } = useQuery<TrainingPlan[]>({
+    queryKey: ['/api/training/content-library/training-plans'],
   });
 
   const createCategoryMutation = useMutation({
@@ -528,6 +544,10 @@ export default function TrainingContentLibrary() {
             <GraduationCap className="h-4 w-4" />
             Training Topics
           </TabsTrigger>
+          <TabsTrigger value="plans" className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Training Plans ({trainingPlans.length})
+          </TabsTrigger>
           <TabsTrigger value="categories" className="flex items-center gap-2">
             <Tag className="h-4 w-4" />
             Categories
@@ -676,6 +696,72 @@ export default function TrainingContentLibrary() {
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <GraduationCap className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No training topics yet. Select documents and generate topics with AI.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="plans" className="space-y-4">
+          <div className="grid gap-4">
+            {trainingPlans.map(plan => {
+              let planData: any = null;
+              try {
+                planData = plan.planStructure ? JSON.parse(plan.planStructure) : null;
+              } catch (e) {}
+              
+              return (
+                <Card key={plan.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <CardTitle className="text-lg">{plan.title}</CardTitle>
+                          <Badge variant={plan.status === 'active' ? 'default' : 'secondary'}>
+                            {plan.status}
+                          </Badge>
+                        </div>
+                        <CardDescription className="flex items-center gap-4">
+                          <span className="flex items-center gap-1">
+                            <Users className="h-4 w-4" />
+                            {plan.traineeName || 'Unknown trainee'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {new Date(plan.createdAt).toLocaleDateString()}
+                          </span>
+                          {plan.totalTopics && (
+                            <span className="flex items-center gap-1">
+                              <GraduationCap className="h-4 w-4" />
+                              {plan.totalTopics} topics
+                            </span>
+                          )}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                    {planData?.days && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {planData.days.map((day: any) => (
+                          <div key={day.dayNumber} className="p-3 bg-muted rounded-lg">
+                            <p className="font-medium text-sm">Day {day.dayNumber}</p>
+                            <p className="text-xs text-muted-foreground">{day.theme}</p>
+                            <p className="text-xs mt-1">{day.estimatedHours}h</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+            {trainingPlans.length === 0 && (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No training plans yet. Select topics and assign to a trainee to create a plan.</p>
                 </CardContent>
               </Card>
             )}

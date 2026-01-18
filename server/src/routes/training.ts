@@ -4124,7 +4124,8 @@ router.post('/content-library/extract-text', upload.single('file'), async (req, 
 
     if (fileName.endsWith('.pdf')) {
       const { PDFParse } = await import('pdf-parse');
-      const pdfData = await PDFParse(file.buffer);
+      const parser = new PDFParse();
+      const pdfData = await parser.loadPDF(file.buffer);
       extractedText = pdfData.text;
     } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
       const mammothModule = await import('mammoth');

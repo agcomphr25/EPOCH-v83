@@ -1381,13 +1381,20 @@ router.get('/p2-employee-certifications', async (req, res) => {
   try {
     const { partNumber } = req.query;
 
-    let query = db.select().from(p2EmployeePartCertifications);
-
+    let certifications;
     if (partNumber) {
-      query = query.where(eq(p2EmployeePartCertifications.partNumber, partNumber as string));
+      certifications = await db
+        .select()
+        .from(p2EmployeePartCertifications)
+        .where(eq(p2EmployeePartCertifications.partNumber, partNumber as string))
+        .orderBy(desc(p2EmployeePartCertifications.createdAt));
+    } else {
+      certifications = await db
+        .select()
+        .from(p2EmployeePartCertifications)
+        .orderBy(desc(p2EmployeePartCertifications.createdAt));
     }
 
-    const certifications = await query.orderBy(desc(p2EmployeePartCertifications.createdAt));
     res.json(certifications);
   } catch (error: any) {
     console.error('Error fetching employee certifications:', error);
@@ -2040,7 +2047,7 @@ router.post('/sessions/:sessionId/complete', async (req, res) => {
 
     // Record completion in training matrix
     if (program && employee) {
-      const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 
+      const employeeName = employee.name || 
                            employee.email || 
                            `Employee ${employee.id}`;
 
@@ -2291,8 +2298,9 @@ router.delete('/programs/:programId/quiz-refs/:refId', async (req, res) => {
 router.get('/sessions/:sessionId/quiz', async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const dayNumber = parseInt(req.query.day as string) || 1;
 
-    // Get session to find program and current day
+    // Get session to find program
     const [session] = await db
       .select()
       .from(trainingBuilderSessions)
@@ -2322,7 +2330,7 @@ router.get('/sessions/:sessionId/quiz', async (req, res) => {
       .where(
         and(
           eq(trainingProgramQuizRefs.programId, session.programId),
-          eq(trainingProgramQuizRefs.dayNumber, session.currentDay),
+          eq(trainingProgramQuizRefs.dayNumber, dayNumber),
           eq(trainingProgramQuizRefs.isActive, true)
         )
       )
@@ -2660,7 +2668,7 @@ router.get('/sessions/:sessionId/work-instructions', async (req, res) => {
         workInstructionLinks = [];
       }
       
-      const wiIds = [...new Set(workInstructionLinks.map(l => l.workInstructionId).filter(Boolean))];
+      const wiIds = Array.from(new Set(workInstructionLinks.map(l => l.workInstructionId).filter(Boolean)));
       
       if (wiIds.length > 0) {
         try {
@@ -3753,7 +3761,7 @@ router.get('/plan-days', async (req, res) => {
         
         for (const link of topicLinks) {
           const [topic] = await db.select().from(facilityTopics)
-            .where(eq(facilityTopics.id, link.topicId));
+            .where(eq(facilityTopics.id, link.facilityTopicId));
           if (topic) topics.push(topic);
         }
       } catch (e) {
@@ -3769,19 +3777,26 @@ router.get('/plan-days', async (req, res) => {
   }
 });
 
-// Initialize 4-day training plan
+// Initialize 4-day training plan for an assignment
 router.post('/plan-days/initialize', async (req, res) => {
   try {
+    const { assignmentId } = req.body;
+    
+    if (!assignmentId) {
+      return res.status(400).json({ error: 'assignmentId is required' });
+    }
+    
     const defaultDays = [
-      { dayNumber: 1, title: "Foundation Day", objectives: "Introduction to facility processes, safety overview, and critical equipment orientation. Cover PPE requirements, FOD awareness, and basic chemical handling." },
-      { dayNumber: 2, title: "Core Skills Day", objectives: "Hands-on practice with supervised instruction. Focus on work instruction comprehension, ITAR awareness, and basic production tasks." },
-      { dayNumber: 3, title: "Application Day", objectives: "Trainee demonstrates skills under coaching. Apply learned concepts, practice S-O-A feedback techniques, and refine techniques." },
-      { dayNumber: 4, title: "Validation Day", objectives: "Independent task completion with observation. Final competency verification and certification signoff." },
+      { dayNumber: 1, assignmentId, stepFocus: "Step 1: Trainer Does/Explains", objectives: "Introduction to facility processes, safety overview, and critical equipment orientation. Cover PPE requirements, FOD awareness, and basic chemical handling." },
+      { dayNumber: 2, assignmentId, stepFocus: "Step 2: Trainer Does/Trainee Explains", objectives: "Hands-on practice with supervised instruction. Focus on work instruction comprehension, ITAR awareness, and basic production tasks." },
+      { dayNumber: 3, assignmentId, stepFocus: "Step 3: Trainee Does/Trainer Coaches", objectives: "Trainee demonstrates skills under coaching. Apply learned concepts, practice S-O-A feedback techniques, and refine techniques." },
+      { dayNumber: 4, assignmentId, stepFocus: "Step 4: Trainee Does/Trainer Observes", objectives: "Independent task completion with observation. Final competency verification and certification signoff." },
     ];
     
-    const existing = await db.select().from(trainingPlanDays);
+    const existing = await db.select().from(trainingPlanDays)
+      .where(eq(trainingPlanDays.assignmentId, assignmentId));
     if (existing.length > 0) {
-      return res.status(400).json({ error: 'Training plan already initialized' });
+      return res.status(400).json({ error: 'Training plan already initialized for this assignment' });
     }
     
     const created = await db.insert(trainingPlanDays).values(defaultDays).returning();
@@ -3797,7 +3812,7 @@ router.put('/plan-days/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [updated] = await db.update(trainingPlanDays)
-      .set({ title: req.body.title, objectives: req.body.objectives })
+      .set({ stepFocus: req.body.stepFocus, objectives: req.body.objectives })
       .where(eq(trainingPlanDays.id, id))
       .returning();
     if (!updated) {
@@ -3819,7 +3834,7 @@ router.post('/plan-days/:dayId/topics', async (req, res) => {
     const existing = await db.select().from(trainingPlanDayTopics)
       .where(and(
         eq(trainingPlanDayTopics.planDayId, dayId),
-        eq(trainingPlanDayTopics.topicId, topicId)
+        eq(trainingPlanDayTopics.facilityTopicId, topicId)
       ));
     
     if (existing.length > 0) {
@@ -3827,7 +3842,7 @@ router.post('/plan-days/:dayId/topics', async (req, res) => {
     }
     
     const [link] = await db.insert(trainingPlanDayTopics)
-      .values({ planDayId: dayId, topicId })
+      .values({ planDayId: dayId, facilityTopicId: topicId })
       .returning();
     res.status(201).json(link);
   } catch (error: any) {
@@ -3845,7 +3860,7 @@ router.delete('/plan-days/:dayId/topics/:topicId', async (req, res) => {
     await db.delete(trainingPlanDayTopics)
       .where(and(
         eq(trainingPlanDayTopics.planDayId, dayId),
-        eq(trainingPlanDayTopics.topicId, topicId)
+        eq(trainingPlanDayTopics.facilityTopicId, topicId)
       ));
     
     res.json({ success: true });
@@ -4124,9 +4139,13 @@ router.post('/content-library/extract-text', upload.single('file'), async (req, 
 
     if (fileName.endsWith('.pdf')) {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse();
-      const pdfData = await parser.loadPDF(file.buffer);
-      extractedText = pdfData.text;
+      const parser = new PDFParse({ data: file.buffer });
+      try {
+        const pdfData = await parser.getText();
+        extractedText = pdfData.text;
+      } finally {
+        await parser.destroy();
+      }
     } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
       const mammothModule = await import('mammoth');
       const result = await mammothModule.extractRawText({ buffer: file.buffer });

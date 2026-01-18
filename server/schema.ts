@@ -6793,8 +6793,6 @@ export const insertSurveySchema = createInsertSchema(surveys)
 export const insertSurveyResponseSchema = createInsertSchema(surveyResponses)
   .omit({
     id: true,
-    createdAt: true,
-    updatedAt: true,
   })
   .extend({
     surveyId: z.string().uuid('Survey ID must be a valid UUID'),

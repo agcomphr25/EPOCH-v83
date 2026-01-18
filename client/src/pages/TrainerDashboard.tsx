@@ -97,6 +97,26 @@ interface TrainingAssignment {
   notes: string | null;
 }
 
+interface AiTrainingPlan {
+  id: number;
+  traineeId: number;
+  traineeName: string | null;
+  title: string;
+  description: string | null;
+  totalTopics: number | null;
+  status: string;
+  createdAt: string;
+  planStructure?: string;
+  assignments?: {
+    id: number;
+    topicId: number;
+    dayNumber: number;
+    status: string;
+    topicTitle: string;
+    topicDuration: number | null;
+  }[];
+}
+
 const stepDescriptions = [
   { step: 1, title: "Trainer Does / Explains", icon: Eye, bgClass: "bg-blue-500", ringClass: "ring-blue-200", description: "Demonstrate while explaining what and why" },
   { step: 2, title: "Trainer Does / Trainee Explains", icon: MessageCircle, bgClass: "bg-teal-500", ringClass: "ring-teal-200", description: "Trainee verbalizes understanding" },
@@ -162,6 +182,13 @@ export default function TrainerDashboard() {
   const { data: trainingAssignments = [] } = useQuery<TrainingAssignment[]>({
     queryKey: ['/api/training/matrix'],
   });
+
+  const { data: aiTrainingPlans = [] } = useQuery<AiTrainingPlan[]>({
+    queryKey: ['/api/training/content-library/training-plans'],
+  });
+
+  // Filter AI plans that are active (assigned and ready for training)
+  const activePlans = aiTrainingPlans.filter(p => p.status === 'active');
 
   const searchLower = searchTerm.toLowerCase();
   
@@ -588,6 +615,10 @@ export default function TrainerDashboard() {
               <ListTodo className="h-4 w-4" />
               Pending ({pendingAssignments.length})
             </TabsTrigger>
+            <TabsTrigger value="ai-plans" className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4" />
+              Training Plans ({activePlans.length})
+            </TabsTrigger>
             <TabsTrigger value="active" className="flex items-center gap-2">
               <Play className="h-4 w-4" />
               Active ({activeSessions.length})
@@ -669,6 +700,102 @@ export default function TrainerDashboard() {
                   </CardHeader>
                 </Card>
               ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="ai-plans" className="space-y-4">
+            {activePlans.length === 0 ? (
+              <Card>
+                <CardContent className="py-12">
+                  <div className="text-center">
+                    <GraduationCap className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No Active Training Plans</h3>
+                    <p className="text-muted-foreground">
+                      AI-generated training plans from the Content Library will appear here when assigned
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              activePlans
+                .filter(plan => 
+                  searchTerm === '' || 
+                  plan.title.toLowerCase().includes(searchLower) ||
+                  (plan.traineeName && plan.traineeName.toLowerCase().includes(searchLower))
+                )
+                .map((plan) => {
+                  let planData: any = null;
+                  try {
+                    planData = plan.planStructure ? JSON.parse(plan.planStructure) : null;
+                  } catch (e) {}
+                  
+                  const trainee = employees.find(e => e.id === plan.traineeId);
+                  
+                  return (
+                    <Card key={plan.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <CardTitle className="text-lg">{plan.title}</CardTitle>
+                              <Badge variant="default">Active</Badge>
+                            </div>
+                            <CardDescription className="flex items-center gap-4">
+                              <span className="flex items-center gap-1">
+                                <Users className="h-4 w-4" />
+                                {plan.traineeName || trainee?.name || 'Unknown trainee'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                {new Date(plan.createdAt).toLocaleDateString()}
+                              </span>
+                              {plan.totalTopics && (
+                                <span className="flex items-center gap-1">
+                                  <Target className="h-4 w-4" />
+                                  {plan.totalTopics} topics
+                                </span>
+                              )}
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                        {planData?.days && (
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-sm">4-Day Training Schedule:</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                              {planData.days.map((day: any) => (
+                                <div key={day.dayNumber} className="p-3 bg-muted rounded-lg">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className="font-medium text-sm">Day {day.dayNumber}</p>
+                                    <Badge variant="outline" className="text-xs">{day.estimatedHours}h</Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{day.theme}</p>
+                                  {day.topics && (
+                                    <p className="text-xs mt-1">{day.topics.length} topic(s)</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-4">
+                          <Button 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedTraineeId(plan.traineeId.toString());
+                              setStartSessionOpen(true);
+                            }}
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            Start Training Session
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
             )}
           </TabsContent>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,38 @@ interface FacilityTopic {
   code: string;
   title: string;
   description: string;
+  overview?: string;
+  contentHtml?: string;
+}
+
+interface WorkInstruction {
+  id: number;
+  title: string;
+  department: string;
+  documentNumber: string;
+  objective: string;
+  steps: { stepNumber: number; instruction: string; notes?: string }[];
+  ppeRequired: string[];
+  tools: string[];
+}
+
+interface CriticalPoint {
+  id: number;
+  workInstructionId: number;
+  label: string;
+  detail: string;
+  severity: string;
+}
+
+interface TopicContent {
+  id: number;
+  code: string;
+  title: string;
+  overview: string;
+  contentHtml: string;
+  workInstructions: WorkInstruction[];
+  criticalPoints: CriticalPoint[];
+  questions: any[];
 }
 
 interface TrainingAssignment {
@@ -152,6 +184,8 @@ export default function TrainerDashboard() {
   const [currentStep, setCurrentStep] = useState(1);
   const [soaFeedback, setSoaFeedback] = useState({ strength: '', opportunity: '', action: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTopicContent, setActiveTopicContent] = useState<TopicContent | null>(null);
+  const [loadingTopicContent, setLoadingTopicContent] = useState(false);
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
@@ -405,6 +439,34 @@ export default function TrainerDashboard() {
   const activeSessions = mySessions.filter(s => s.status === 'active' && filterSession(s));
   const completedSessions = mySessions.filter(s => s.status === 'completed' && filterSession(s));
 
+  // Fetch topic content when an active session is selected
+  useEffect(() => {
+    const fetchTopicContent = async () => {
+      if (!activeSessionId) {
+        setActiveTopicContent(null);
+        return;
+      }
+      
+      const session = activeSessions.find(s => s.id === activeSessionId);
+      if (!session?.facilityTopicId) return;
+      
+      setLoadingTopicContent(true);
+      try {
+        const response = await fetch(`/api/training/facility-topics/${session.facilityTopicId}/full-content`);
+        if (response.ok) {
+          const data = await response.json();
+          setActiveTopicContent(data);
+        }
+      } catch (error) {
+        console.error('Error fetching topic content:', error);
+      } finally {
+        setLoadingTopicContent(false);
+      }
+    };
+    
+    fetchTopicContent();
+  }, [activeSessionId, activeSessions]);
+
   const renderStepTracker = () => (
     <Card className="mb-6">
       <CardHeader className="pb-2">
@@ -546,8 +608,12 @@ export default function TrainerDashboard() {
                 <h3 className="text-lg font-semibold">Training: {getEmployeeName(session.traineeId)}</h3>
                 <p className="text-muted-foreground">Topic: {getTopicTitle(session.facilityTopicId)}</p>
               </div>
-              <div className="text-right">
-                <Badge variant="outline" className="mb-2">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setActiveSessionId(null)}>
+                  <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
+                  Back to List
+                </Button>
+                <Badge variant="outline">
                   <Clock className="h-3 w-3 mr-1" />
                   {new Date(session.sessionDate).toLocaleDateString()}
                 </Badge>
@@ -555,6 +621,138 @@ export default function TrainerDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Training Content Section */}
+        {loadingTopicContent ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <div className="animate-pulse">Loading training content...</div>
+            </CardContent>
+          </Card>
+        ) : activeTopicContent ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Overview & Instructions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-blue-500" />
+                  Training Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {activeTopicContent.overview && (
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Overview</h4>
+                    <p className="text-sm">{activeTopicContent.overview}</p>
+                  </div>
+                )}
+                {activeTopicContent.contentHtml && (
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Instructions</h4>
+                    <div 
+                      className="text-sm prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: activeTopicContent.contentHtml }}
+                    />
+                  </div>
+                )}
+                {!activeTopicContent.overview && !activeTopicContent.contentHtml && (
+                  <p className="text-sm text-muted-foreground">No training content available for this topic.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Critical Points */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-orange-500" />
+                  Critical Points
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {activeTopicContent.criticalPoints && activeTopicContent.criticalPoints.length > 0 ? (
+                  <div className="space-y-3">
+                    {activeTopicContent.criticalPoints.map((cp) => (
+                      <div 
+                        key={cp.id} 
+                        className={`p-3 rounded-lg border-l-4 ${
+                          cp.severity === 'critical' ? 'border-l-red-500 bg-red-50 dark:bg-red-950/30' :
+                          cp.severity === 'major' ? 'border-l-orange-500 bg-orange-50 dark:bg-orange-950/30' :
+                          'border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium">{cp.label}</span>
+                          <Badge variant="outline" className="text-xs capitalize">{cp.severity}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{cp.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No critical points defined for this topic.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Work Instructions */}
+            {activeTopicContent.workInstructions && activeTopicContent.workInstructions.length > 0 && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Target className="h-5 w-5 text-green-500" />
+                    Work Instructions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {activeTopicContent.workInstructions.map((wi) => (
+                    <div key={wi.id} className="mb-6 last:mb-0">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold">{wi.title}</h4>
+                        {wi.documentNumber && (
+                          <Badge variant="outline">{wi.documentNumber}</Badge>
+                        )}
+                      </div>
+                      {wi.objective && (
+                        <p className="text-sm text-muted-foreground mb-3">{wi.objective}</p>
+                      )}
+                      {wi.ppeRequired && wi.ppeRequired.length > 0 && (
+                        <div className="mb-3">
+                          <span className="text-sm font-medium">PPE Required: </span>
+                          <span className="text-sm">{wi.ppeRequired.join(', ')}</span>
+                        </div>
+                      )}
+                      {wi.steps && wi.steps.length > 0 && (
+                        <div className="space-y-2">
+                          {wi.steps.map((step) => (
+                            <div key={step.stepNumber} className="flex gap-3 p-2 bg-muted rounded">
+                              <span className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                                {step.stepNumber}
+                              </span>
+                              <div>
+                                <p className="text-sm">{step.instruction}</p>
+                                {step.notes && (
+                                  <p className="text-xs text-muted-foreground mt-1">{step.notes}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <p>No detailed training content available for this topic.</p>
+              <p className="text-sm mt-2">Add work instructions and critical points in the training module settings.</p>
+            </CardContent>
+          </Card>
+        )}
 
         {renderStepTracker()}
         {renderSOAFeedback()}

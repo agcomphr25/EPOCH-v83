@@ -2363,7 +2363,7 @@ router.get('/sessions/:sessionId/quiz', async (req, res) => {
 // WORK INSTRUCTIONS - Task-specific procedural documents
 // ============================================================================
 
-import { workInstructions, trainingTaskWorkInstructions, trainingSOAFeedback, insertWorkInstructionSchema } from '@shared/schema';
+import { workInstructions, trainingTaskWorkInstructions, trainingSOAFeedback, insertWorkInstructionSchema, criticalPoints } from '@shared/schema';
 
 // Get all work instructions
 router.get('/work-instructions', async (req, res) => {
@@ -3267,6 +3267,57 @@ router.put('/facility-topics/:id', async (req, res) => {
     res.json(updated);
   } catch (error: any) {
     console.error('Error updating facility topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get detailed facility topic with work instructions and critical points
+router.get('/facility-topics/:id/full-content', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    // Get the facility topic
+    const [topic] = await db.select().from(facilityTopics).where(eq(facilityTopics.id, id));
+    if (!topic) {
+      return res.status(404).json({ error: 'Facility topic not found' });
+    }
+    
+    // Get linked work instructions via moduleId if exists
+    let workInstructionsList: any[] = [];
+    let criticalPointsList: any[] = [];
+    
+    if (topic.moduleId) {
+      // Get work instructions for this module
+      const wiResults = await db.select()
+        .from(workInstructions)
+        .where(eq(workInstructions.status, 'active'));
+      workInstructionsList = wiResults;
+      
+      // Get critical points for each work instruction
+      for (const wi of workInstructionsList) {
+        const cpResults = await db.select()
+          .from(criticalPoints)
+          .where(eq(criticalPoints.workInstructionId, wi.id));
+        criticalPointsList.push(...cpResults);
+      }
+    }
+    
+    // Get questions for the topic
+    let questions: any[] = [];
+    try {
+      questions = await db.select()
+        .from(facilityTopicQuestions)
+        .where(eq(facilityTopicQuestions.topicId, id));
+    } catch (e) {}
+    
+    res.json({
+      ...topic,
+      workInstructions: workInstructionsList,
+      criticalPoints: criticalPointsList,
+      questions
+    });
+  } catch (error: any) {
+    console.error('Error fetching facility topic content:', error);
     res.status(500).json({ error: error.message });
   }
 });

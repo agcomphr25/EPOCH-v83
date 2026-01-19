@@ -4797,7 +4797,7 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
 
     // Fetch topic content including materials
     const topicMaterials = await pgPool.query(`
-      SELECT tm.*, t.title as topic_title, t.content as topic_content
+      SELECT tm.*, t.title as topic_title, t.description as topic_description
       FROM training_topic_materials tm
       JOIN training_library_topics t ON tm.topic_id = t.id
       WHERE tm.topic_id = ANY($1)
@@ -4809,7 +4809,7 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
       return {
         id: t.id,
         title: t.title,
-        content: t.content,
+        description: t.description,
         duration: t.estimatedDuration,
         prerequisites: t.prerequisites,
         materials: materials.map(m => ({

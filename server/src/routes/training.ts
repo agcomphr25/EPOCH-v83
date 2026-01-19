@@ -4140,25 +4140,31 @@ router.post('/content-library/documents', async (req, res) => {
   try {
     const { title, originalFilename, fileUrl, fileType, fileSize, categoryIds, uploadedBy, extractedText } = req.body;
 
-    // Create document record
-    const [doc] = await db.insert(trainingLibraryDocuments).values({
-      title,
-      originalFilename,
-      fileUrl,
-      fileType,
-      fileSize,
-      extractedContent: extractedText,
-      status: extractedText ? 'processing' : 'uploaded',
-      uploadedBy,
-    }).returning();
+    // Create document record using raw SQL to avoid ORM column mapping issues
+    const status = extractedText ? 'processing' : 'uploaded';
+    const insertResult = await db.execute(sql`
+      INSERT INTO training_library_documents 
+        (title, original_filename, file_url, file_type, file_size, extracted_content, status, uploaded_by, created_at, updated_at)
+      VALUES 
+        (${title}, ${originalFilename}, ${fileUrl || null}, ${fileType || null}, ${fileSize || null}, ${extractedText || null}, ${status}, ${uploadedBy || null}, NOW(), NOW())
+      RETURNING id, title, original_filename as "originalFilename", file_url as "fileUrl", file_type as "fileType", 
+                file_size as "fileSize", extracted_content as "extractedContent", summary, key_points as "keyPoints", 
+                status, uploaded_by as "uploadedBy", created_at as "createdAt", updated_at as "updatedAt"
+    `);
+    
+    const doc = insertResult.rows[0] as any;
+    
+    if (!doc) {
+      throw new Error('Failed to insert document');
+    }
 
     // Assign categories
     if (categoryIds && categoryIds.length > 0) {
       for (const categoryId of categoryIds) {
-        await db.insert(documentCategoryAssignments).values({
-          documentId: doc.id,
-          categoryId,
-        });
+        await db.execute(sql`
+          INSERT INTO document_category_assignments (document_id, category_id, created_at)
+          VALUES (${doc.id}, ${categoryId}, NOW())
+        `);
       }
     }
 
@@ -4185,23 +4191,20 @@ router.post('/content-library/documents', async (req, res) => {
 
         const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
         
-        await db.update(trainingLibraryDocuments)
-          .set({
-            summary: parsed.summary,
-            keyPoints: JSON.stringify(parsed.keyPoints),
-            status: 'ready',
-            updatedAt: new Date(),
-          })
-          .where(eq(trainingLibraryDocuments.id, doc.id));
+        await db.execute(sql`
+          UPDATE training_library_documents
+          SET summary = ${parsed.summary}, key_points = ${JSON.stringify(parsed.keyPoints)}, status = 'ready', updated_at = NOW()
+          WHERE id = ${doc.id}
+        `);
 
         doc.summary = parsed.summary;
         doc.keyPoints = JSON.stringify(parsed.keyPoints);
         doc.status = 'ready';
       } catch (aiError: any) {
         console.error('AI extraction error:', aiError);
-        await db.update(trainingLibraryDocuments)
-          .set({ status: 'failed', updatedAt: new Date() })
-          .where(eq(trainingLibraryDocuments.id, doc.id));
+        await db.execute(sql`
+          UPDATE training_library_documents SET status = 'failed', updated_at = NOW() WHERE id = ${doc.id}
+        `);
       }
     }
 

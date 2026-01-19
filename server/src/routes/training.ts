@@ -4142,11 +4142,15 @@ router.post('/content-library/documents', async (req, res) => {
 
     // Create document record using raw SQL to avoid ORM column mapping issues
     const status = extractedText ? 'processing' : 'uploaded';
+    // Convert fileSize to integer or null, handling empty string
+    const fileSizeInt = fileSize && fileSize !== '' ? parseInt(fileSize, 10) : null;
+    const uploadedByInt = uploadedBy && uploadedBy !== '' ? parseInt(uploadedBy, 10) : null;
+    
     const insertResult = await db.execute(sql`
       INSERT INTO training_library_documents 
         (title, original_filename, file_url, file_type, file_size, extracted_content, status, uploaded_by, created_at, updated_at)
       VALUES 
-        (${title}, ${originalFilename}, ${fileUrl || null}, ${fileType || null}, ${fileSize || null}, ${extractedText || null}, ${status}, ${uploadedBy || null}, NOW(), NOW())
+        (${title}, ${originalFilename}, ${fileUrl || null}, ${fileType || null}, ${fileSizeInt}, ${extractedText || null}, ${status}, ${uploadedByInt}, NOW(), NOW())
       RETURNING id, title, original_filename as "originalFilename", file_url as "fileUrl", file_type as "fileType", 
                 file_size as "fileSize", extracted_content as "extractedContent", summary, key_points as "keyPoints", 
                 status, uploaded_by as "uploadedBy", created_at as "createdAt", updated_at as "updatedAt"

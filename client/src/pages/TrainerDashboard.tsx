@@ -196,6 +196,8 @@ export default function TrainerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTopicContent, setActiveTopicContent] = useState<TopicContent | null>(null);
   const [loadingTopicContent, setLoadingTopicContent] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedStep, setSelectedStep] = useState<string>('');
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
@@ -1102,6 +1104,8 @@ export default function TrainerDashboard() {
                               const traineeId = plan.traineeId || plan.trainee_id;
                               if (traineeId) {
                                 setSelectedTraineeId(traineeId.toString());
+                                setSelectedPlan(plan);
+                                setSelectedStep('1');
                                 setStartSessionOpen(true);
                               }
                             }}
@@ -1273,96 +1277,163 @@ export default function TrainerDashboard() {
         </Tabs>
       )}
 
-      <Dialog open={startSessionOpen} onOpenChange={setStartSessionOpen}>
-        <DialogContent>
+      <Dialog open={startSessionOpen} onOpenChange={(open) => {
+        setStartSessionOpen(open);
+        if (!open) {
+          setSelectedPlan(null);
+          setSelectedStep('');
+        }
+      }}>
+        <DialogContent className={selectedPlan ? "max-w-2xl" : ""}>
           <DialogHeader>
             <DialogTitle>Start Training Session</DialogTitle>
             <DialogDescription>
-              Select a trainee and training module to begin a new training session
+              {selectedPlan 
+                ? `Training: ${selectedPlan.title}`
+                : 'Select a trainee and training module to begin a new training session'
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Trainee <span className="text-destructive">*</span></Label>
-              <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select trainee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name} - {emp.department}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Training Material <span className="text-destructive">*</span></Label>
-              <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select training material" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contentLibraryTopics.length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
-                        Content Library Topics
+          
+          {selectedPlan ? (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4" />
+                  <span className="font-medium">Trainee:</span>
+                  <span>{selectedPlan.traineeName || selectedPlan.trainee_name || 'Unknown'}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{selectedPlan.description}</p>
+              </div>
+              
+              <div>
+                <Label>Select Training Step <span className="text-destructive">*</span></Label>
+                <Select value={selectedStep} onValueChange={setSelectedStep}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select step to train" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Step 1: Trainer Does / Trainer Explains</SelectItem>
+                    <SelectItem value="2">Step 2: Trainer Does / Trainee Explains</SelectItem>
+                    <SelectItem value="3">Step 3: Trainee Does / Trainer Coaches</SelectItem>
+                    <SelectItem value="4">Step 4: Trainee Does / Trainer Observes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedStep && (() => {
+                const planData = selectedPlan.planStructure || selectedPlan.plan_structure;
+                let stepContent = null;
+                try {
+                  const parsed = planData ? JSON.parse(planData) : null;
+                  stepContent = parsed?.steps?.find((s: any) => s.stepNumber === parseInt(selectedStep));
+                } catch (e) {}
+                
+                return stepContent ? (
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-blue-600">Step {selectedStep}</Badge>
+                      <span className="font-medium">{stepContent.stepTitle}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{stepContent.theme}</p>
+                    
+                    {stepContent.objectives && stepContent.objectives.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium mb-1">Objectives:</p>
+                        <ul className="text-sm list-disc list-inside text-muted-foreground">
+                          {stepContent.objectives.map((obj: string, i: number) => (
+                            <li key={i}>{obj}</li>
+                          ))}
+                        </ul>
                       </div>
-                      {contentLibraryTopics.map((topic) => (
-                        <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
-                          {topic.title} {topic.isAiGenerated && '(AI)'}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                  {trainingModules.length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
-                        Training Modules
-                      </div>
-                      {trainingModules.map((mod) => (
-                        <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
-                          {mod.title}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Select from Content Library topics (from documents) or Training Modules
-              </p>
+                    )}
+                    
+                    {stepContent.quizQuestions && stepContent.quizQuestions.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        <ClipboardCheck className="h-3 w-3 mr-1" />
+                        {stepContent.quizQuestions.length} Quiz Questions
+                      </Badge>
+                    )}
+                  </div>
+                ) : null;
+              })()}
+              
+              <div>
+                <Label>Session Notes (Optional)</Label>
+                <Textarea
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  placeholder="Any notes for this session..."
+                />
+              </div>
             </div>
-            <div>
-              <Label>Training Day (Optional)</Label>
-              <Select value={selectedDayId} onValueChange={setSelectedDayId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select day" />
-                </SelectTrigger>
-                <SelectContent>
-                  {planDays.map((day: any) => (
-                    <SelectItem key={day.id} value={day.id.toString()}>
-                      Day {day.dayNumber}: {day.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label>Trainee <span className="text-destructive">*</span></Label>
+                <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select trainee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name} - {emp.department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Training Material <span className="text-destructive">*</span></Label>
+                <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select training material" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contentLibraryTopics.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
+                          Content Library Topics
+                        </div>
+                        {contentLibraryTopics.map((topic) => (
+                          <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
+                            {topic.title} {topic.isAiGenerated && '(AI)'}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {trainingModules.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
+                          Training Modules
+                        </div>
+                        {trainingModules.map((mod) => (
+                          <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
+                            {mod.title}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  placeholder="Any notes for this session..."
+                />
+              </div>
             </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-                placeholder="Any notes for this session..."
-              />
-            </div>
-          </div>
+          )}
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setStartSessionOpen(false)}>Cancel</Button>
             <Button
               onClick={() => startSessionMutation.mutate()}
-              disabled={!selectedTraineeId || !selectedTopicId || startSessionMutation.isPending}
+              disabled={selectedPlan ? !selectedStep : (!selectedTraineeId || !selectedTopicId) || startSessionMutation.isPending}
             >
               <Play className="h-4 w-4 mr-2" />
               Start Session

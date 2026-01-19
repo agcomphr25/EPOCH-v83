@@ -89,6 +89,15 @@ interface TrainingPlan {
   productionLine?: string;
 }
 
+interface FacilityTopic {
+  id: number;
+  code: string;
+  title: string;
+  overview: string | null;
+  estimatedMinutes: number | null;
+  isActive: boolean;
+}
+
 interface TrainingStep {
   stepNumber: number;
   stepTitle: string;
@@ -96,6 +105,7 @@ interface TrainingStep {
   trainerActivities: string;
   traineeActivities: string;
   facilityModules: string;
+  facilityTopicIds?: number[];
   scheduledDate?: string;
   scheduledTime?: string;
   duration?: number;
@@ -160,6 +170,7 @@ export default function TrainingContentLibrary() {
     trainerActivities: '',
     traineeActivities: '',
     facilityModules: '',
+    facilityTopicIds: [],
     scheduledDate: '',
     scheduledTime: '',
     duration: 30,
@@ -259,6 +270,10 @@ export default function TrainingContentLibrary() {
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
+  });
+
+  const { data: facilityTopics = [] } = useQuery<FacilityTopic[]>({
+    queryKey: ['/api/training/facility-topics'],
   });
 
   const { data: trainingPlans = [] } = useQuery<TrainingPlan[]>({
@@ -530,6 +545,7 @@ export default function TrainingContentLibrary() {
             trainerActivities: step.trainerActivities || '',
             traineeActivities: step.traineeActivities || '',
             facilityModules: step.facilityModules || '',
+            facilityTopicIds: step.facilityTopicIds || [],
             scheduledDate: step.scheduledDate || '',
             scheduledTime: step.scheduledTime || '',
             duration: step.duration || 30,
@@ -1583,6 +1599,7 @@ export default function TrainingContentLibrary() {
                     trainerActivities: '',
                     traineeActivities: '',
                     facilityModules: '',
+                    facilityTopicIds: [],
                     scheduledDate: '',
                     scheduledTime: '',
                     duration: 30,
@@ -1629,10 +1646,12 @@ export default function TrainingContentLibrary() {
                                   {step.duration} min
                                 </span>
                               )}
-                              {step.facilityModules && (
+                              {((step.facilityTopicIds && step.facilityTopicIds.length > 0) || step.facilityModules) && (
                                 <span className="flex items-center gap-1">
                                   <BookOpen className="h-3 w-3" />
-                                  Facility Training
+                                  {step.facilityTopicIds && step.facilityTopicIds.length > 0 
+                                    ? `${step.facilityTopicIds.length} Module(s)` 
+                                    : 'Facility Training'}
                                 </span>
                               )}
                             </div>
@@ -1893,11 +1912,48 @@ export default function TrainingContentLibrary() {
               />
             </div>
             <div>
-              <Label>Facility Modules / Equipment</Label>
+              <Label>Facility Training Modules</Label>
+              <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
+                {facilityTopics.filter(ft => ft.isActive).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No facility modules available</p>
+                ) : (
+                  facilityTopics.filter(ft => ft.isActive).map((topic) => (
+                    <div key={topic.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`facility-${topic.id}`}
+                        checked={(newStep.facilityTopicIds || []).includes(topic.id)}
+                        onCheckedChange={(checked) => {
+                          const currentIds = newStep.facilityTopicIds || [];
+                          if (checked) {
+                            setNewStep({ ...newStep, facilityTopicIds: [...currentIds, topic.id] });
+                          } else {
+                            setNewStep({ ...newStep, facilityTopicIds: currentIds.filter(id => id !== topic.id) });
+                          }
+                        }}
+                      />
+                      <label htmlFor={`facility-${topic.id}`} className="text-sm cursor-pointer flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{topic.code}</Badge>
+                        {topic.title}
+                        {topic.estimatedMinutes && (
+                          <span className="text-xs text-muted-foreground">({topic.estimatedMinutes} min)</span>
+                        )}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+              {(newStep.facilityTopicIds || []).length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(newStep.facilityTopicIds || []).length} module(s) selected
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Additional Equipment Notes</Label>
               <Textarea
                 value={newStep.facilityModules || ''}
                 onChange={(e) => setNewStep({ ...newStep, facilityModules: e.target.value })}
-                placeholder="Required facility training, equipment, or modules"
+                placeholder="Any additional equipment or notes"
                 rows={2}
               />
             </div>
@@ -1930,6 +1986,7 @@ export default function TrainingContentLibrary() {
                 trainerActivities: newStep.trainerActivities || '',
                 traineeActivities: newStep.traineeActivities || '',
                 facilityModules: newStep.facilityModules || '',
+                facilityTopicIds: newStep.facilityTopicIds || [],
                 scheduledDate: newStep.scheduledDate,
                 scheduledTime: newStep.scheduledTime,
                 duration: newStep.duration,

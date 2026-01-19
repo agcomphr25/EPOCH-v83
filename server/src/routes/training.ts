@@ -4798,8 +4798,11 @@ router.get('/content-library/training-plans', async (req, res) => {
              p.objectives, p.four_step_content as "fourStepContent", p.quiz_questions as "quizQuestions",
              p.part_number as "partNumber", p.department, p.production_line as "productionLine",
              p.assigned_trainers as "assignedTrainers", p.status, 
-             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt"
+             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt",
+             p.trainee_id as "traineeId", p.plan_structure as "planStructure",
+             e.name as "traineeName"
       FROM ai_training_plans p
+      LEFT JOIN employees e ON p.trainee_id = e.id
       ORDER BY p.created_at DESC
     `);
 

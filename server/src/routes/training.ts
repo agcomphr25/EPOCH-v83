@@ -205,20 +205,31 @@ router.get('/modules/:id', async (req, res) => {
       return res.status(404).json({ error: 'Training module not found' });
     }
 
-    const questions = await db
-      .select()
-      .from(trainingQuestions)
-      .where(eq(trainingQuestions.moduleId, moduleId))
-      .orderBy(trainingQuestions.sortOrder);
+    let questions: any[] = [];
+    try {
+      const questionsResult = await db
+        .select()
+        .from(trainingQuestions)
+        .where(eq(trainingQuestions.moduleId, moduleId))
+        .orderBy(trainingQuestions.sortOrder);
+      questions = questionsResult || [];
+    } catch (e) {
+      questions = [];
+    }
 
     const questionsWithOptions = await Promise.all(
       questions.map(async (question) => {
-        const options = await db
-          .select()
-          .from(trainingQuestionOptions)
-          .where(eq(trainingQuestionOptions.questionId, question.id))
-          .orderBy(trainingQuestionOptions.sortOrder);
-
+        let options: any[] = [];
+        try {
+          const optionsResult = await db
+            .select()
+            .from(trainingQuestionOptions)
+            .where(eq(trainingQuestionOptions.questionId, question.id))
+            .orderBy(trainingQuestionOptions.sortOrder);
+          options = optionsResult || [];
+        } catch (e) {
+          options = [];
+        }
         return { ...question, options };
       })
     );

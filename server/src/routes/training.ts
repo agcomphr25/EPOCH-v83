@@ -3414,17 +3414,13 @@ router.get('/daily-sessions', async (req, res) => {
 // Start a new daily training session
 router.post('/daily-sessions', async (req, res) => {
   try {
-    const { traineeId, trainerId, facilityTopicId, planDayId, notes } = req.body;
-    const [session] = await db.insert(dailyTrainingSessions).values({
-      traineeId,
-      trainerId,
-      facilityTopicId,
-      planDayId,
-      sessionDate: new Date(),
-      notes,
-      status: 'active',
-    }).returning();
-    res.status(201).json(session);
+    const { traineeId, trainerId, facilityTopicId, planDayId, planId, stepNumber, notes } = req.body;
+    const result = await pgPool.query(`
+      INSERT INTO daily_training_sessions (trainee_id, trainer_id, facility_topic_id, plan_day_id, plan_id, step_number, notes, status, started_at, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'in_progress', NOW(), NOW(), NOW())
+      RETURNING *
+    `, [traineeId, trainerId, facilityTopicId || null, planDayId || null, planId || null, stepNumber || 1, notes || null]);
+    res.status(201).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error starting daily session:', error);
     res.status(500).json({ error: error.message });

@@ -34,10 +34,13 @@ import {
   Plus,
   ListTodo,
   AlertCircle,
+  AlertTriangle,
   Edit,
   Trash2,
   MoreVertical,
   Search,
+  FileText,
+  Shield,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -253,11 +256,14 @@ export default function TrainerDashboard() {
 
   const startSessionMutation = useMutation({
     mutationFn: async () => {
+      const stepNum = selectedStep ? parseInt(selectedStep) : 1;
       return apiRequest('/api/training/daily-sessions', {
         method: 'POST',
         body: JSON.stringify({
           traineeId: parseInt(selectedTraineeId),
           trainerId: trainerId,
+          planId: selectedPlan?.id || null,
+          stepNumber: stepNum,
           facilityTopicId: selectedTopicId ? parseInt(selectedTopicId.replace('topic-', '').replace('module-', '')) : null,
           topicType: selectedTopicId?.startsWith('topic-') ? 'content-library' : 'module',
           planDayId: selectedDayId ? parseInt(selectedDayId) : null,
@@ -269,8 +275,10 @@ export default function TrainerDashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
       setStartSessionOpen(false);
       setActiveSessionId(data.id);
-      setCurrentStep(1);
-      toast({ title: 'Session Started', description: 'Begin with Step 1: Trainer Does / Explains' });
+      const stepNum = selectedStep ? parseInt(selectedStep) : 1;
+      setCurrentStep(stepNum);
+      const stepNames = ['', 'Trainer Does / Explains', 'Trainer Does / Trainee Explains', 'Trainee Does / Trainer Coaches', 'Trainee Does / Trainer Observes'];
+      toast({ title: 'Session Started', description: `Begin with Step ${stepNum}: ${stepNames[stepNum]}` });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -1324,13 +1332,14 @@ export default function TrainerDashboard() {
               {selectedStep && (() => {
                 const planData = selectedPlan.planStructure || selectedPlan.plan_structure;
                 let stepContent = null;
+                let parsedPlan = null;
                 try {
-                  const parsed = planData ? JSON.parse(planData) : null;
-                  stepContent = parsed?.steps?.find((s: any) => s.stepNumber === parseInt(selectedStep));
+                  parsedPlan = planData ? JSON.parse(planData) : null;
+                  stepContent = parsedPlan?.steps?.find((s: any) => s.stepNumber === parseInt(selectedStep));
                 } catch (e) {}
                 
                 return stepContent ? (
-                  <div className="border rounded-lg p-4 space-y-3">
+                  <div className="border rounded-lg p-4 space-y-4 max-h-[400px] overflow-y-auto">
                     <div className="flex items-center gap-2">
                       <Badge className="bg-blue-600">Step {selectedStep}</Badge>
                       <span className="font-medium">{stepContent.stepTitle}</span>
@@ -1338,11 +1347,76 @@ export default function TrainerDashboard() {
                     <p className="text-sm text-muted-foreground">{stepContent.theme}</p>
                     
                     {stepContent.objectives && stepContent.objectives.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-1">Objectives:</p>
-                        <ul className="text-sm list-disc list-inside text-muted-foreground">
+                      <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Target className="h-4 w-4 text-blue-600" />
+                          Learning Objectives
+                        </p>
+                        <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
                           {stepContent.objectives.map((obj: string, i: number) => (
                             <li key={i}>{obj}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {(stepContent.workInstructions || parsedPlan?.workInstructions) && (
+                      <div className="bg-amber-50 dark:bg-amber-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-amber-600" />
+                          Work Instructions
+                        </p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {stepContent.workInstructions || parsedPlan?.workInstructions}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {(stepContent.criticalPoints || parsedPlan?.criticalPoints) && (
+                      <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          Critical Points
+                        </p>
+                        {Array.isArray(stepContent.criticalPoints || parsedPlan?.criticalPoints) ? (
+                          <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                            {(stepContent.criticalPoints || parsedPlan?.criticalPoints).map((point: string, i: number) => (
+                              <li key={i}>{point}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{stepContent.criticalPoints || parsedPlan?.criticalPoints}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions) && (
+                      <div className="bg-orange-50 dark:bg-orange-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-orange-600" />
+                          Safety Precautions
+                        </p>
+                        {Array.isArray(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions) ? (
+                          <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                            {(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions).map((safety: string, i: number) => (
+                              <li key={i}>{safety}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {stepContent.demonstrations && stepContent.demonstrations.length > 0 && (
+                      <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-green-600" />
+                          Demonstrations
+                        </p>
+                        <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                          {stepContent.demonstrations.map((demo: string, i: number) => (
+                            <li key={i}>{demo}</li>
                           ))}
                         </ul>
                       </div>
@@ -1351,7 +1425,7 @@ export default function TrainerDashboard() {
                     {stepContent.quizQuestions && stepContent.quizQuestions.length > 0 && (
                       <Badge variant="outline" className="text-xs">
                         <ClipboardCheck className="h-3 w-3 mr-1" />
-                        {stepContent.quizQuestions.length} Quiz Questions
+                        {stepContent.quizQuestions.length} Quiz Questions for this step
                       </Badge>
                     )}
                   </div>

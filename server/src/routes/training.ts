@@ -4443,17 +4443,18 @@ Return JSON with this structure:
     for (const material of generated.materials || []) {
       await pgPool.query(`
         INSERT INTO training_topic_materials 
-          (topic_id, step_number, step_title, trainer_instructions, key_points, demonstrations, safety_notes, estimated_time, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+          (topic_id, step_number, step_title, trainer_instructions, trainee_activities, key_points, visual_aids, estimated_duration, facility_modules, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
       `, [
         topic.id,
         material.stepNumber,
         material.stepTitle,
         material.trainerInstructions,
-        JSON.stringify(material.keyPoints),
         material.demonstrations || null,
+        JSON.stringify(material.keyPoints),
         material.safetyNotes || null,
-        material.estimatedTime || 15
+        material.estimatedTime || 15,
+        null
       ]);
     }
 
@@ -4461,17 +4462,17 @@ Return JSON with this structure:
     for (const q of generated.quizQuestions || []) {
       await pgPool.query(`
         INSERT INTO training_topic_quiz_questions 
-          (topic_id, question, question_type, options, correct_answer, explanation, difficulty, step_number, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+          (topic_id, step_number, question, question_type, options, correct_answer, explanation, points, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       `, [
         topic.id,
+        q.stepNumber || 1,
         q.question,
         q.questionType || 'multiple_choice',
         JSON.stringify(q.options),
         q.correctAnswer,
         q.explanation || null,
-        q.difficulty || 'medium',
-        q.stepNumber || 1
+        10
       ]);
     }
 

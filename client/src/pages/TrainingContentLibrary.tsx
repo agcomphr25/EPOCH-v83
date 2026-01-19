@@ -82,6 +82,35 @@ interface TrainingPlan {
   status: string;
   createdAt: string;
   planStructure?: string;
+  quizQuestions?: string;
+  fourStepContent?: string;
+  partNumber?: string;
+  department?: string;
+  productionLine?: string;
+}
+
+interface TrainingStep {
+  stepNumber: number;
+  stepTitle: string;
+  theme: string;
+  trainerActivities: string;
+  traineeActivities: string;
+  facilityModules: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  duration?: number;
+  completed?: boolean;
+}
+
+interface QuizSchedule {
+  id: string;
+  stepNumber: number;
+  quizTitle: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  duration?: number;
+  passingScore?: number;
+  completed?: boolean;
 }
 
 export default function TrainingContentLibrary() {
@@ -120,6 +149,22 @@ export default function TrainingContentLibrary() {
   const [planToEdit, setPlanToEdit] = useState<TrainingPlan | null>(null);
   const [planToDelete, setPlanToDelete] = useState<TrainingPlan | null>(null);
   const [editPlanForm, setEditPlanForm] = useState({ title: '', description: '', status: '' });
+  const [editPlanTab, setEditPlanTab] = useState('details');
+  const [trainingSteps, setTrainingSteps] = useState<TrainingStep[]>([]);
+  const [quizSchedules, setQuizSchedules] = useState<QuizSchedule[]>([]);
+  const [addStepOpen, setAddStepOpen] = useState(false);
+  const [newStep, setNewStep] = useState<Partial<TrainingStep>>({
+    stepNumber: 1,
+    stepTitle: '',
+    theme: '',
+    trainerActivities: '',
+    traineeActivities: '',
+    facilityModules: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    duration: 30,
+  });
+  const [editStepIndex, setEditStepIndex] = useState<number | null>(null);
 
   // CRUD state for training topics
   const [newTopicOpen, setNewTopicOpen] = useState(false);
@@ -353,7 +398,7 @@ export default function TrainingContentLibrary() {
 
   // Training Plan CRUD mutations
   const updatePlanMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: { title?: string; description?: string; status?: string } }) => {
+    mutationFn: async ({ id, data }: { id: number; data: { title?: string; description?: string; status?: string; planStructure?: string; quizQuestions?: string; fourStepContent?: string; objectives?: string } }) => {
       return apiRequest(`/api/training/content-library/training-plans/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -471,6 +516,62 @@ export default function TrainingContentLibrary() {
   const openEditPlan = (plan: TrainingPlan) => {
     setPlanToEdit(plan);
     setEditPlanForm({ title: plan.title, description: plan.description || '', status: plan.status });
+    setEditPlanTab('details');
+    
+    // Parse plan structure to get training steps
+    if (plan.planStructure) {
+      try {
+        const structure = JSON.parse(plan.planStructure);
+        if (structure.steps && Array.isArray(structure.steps)) {
+          setTrainingSteps(structure.steps.map((step: any, idx: number) => ({
+            stepNumber: step.stepNumber || idx + 1,
+            stepTitle: step.stepTitle || '',
+            theme: step.theme || '',
+            trainerActivities: step.trainerActivities || '',
+            traineeActivities: step.traineeActivities || '',
+            facilityModules: step.facilityModules || '',
+            scheduledDate: step.scheduledDate || '',
+            scheduledTime: step.scheduledTime || '',
+            duration: step.duration || 30,
+            completed: step.completed || false,
+          })));
+        } else {
+          setTrainingSteps([]);
+        }
+      } catch (e) {
+        toast({ title: 'Warning', description: 'Could not parse existing training steps. Starting fresh.', variant: 'destructive' });
+        setTrainingSteps([]);
+      }
+    } else {
+      setTrainingSteps([]);
+    }
+    
+    // Parse quiz questions
+    if (plan.quizQuestions) {
+      try {
+        const quizzes = JSON.parse(plan.quizQuestions);
+        if (Array.isArray(quizzes)) {
+          setQuizSchedules(quizzes.map((q: any, idx: number) => ({
+            id: q.id || `quiz-${idx}`,
+            stepNumber: q.stepNumber || 1,
+            quizTitle: q.quizTitle || q.question || `Quiz ${idx + 1}`,
+            scheduledDate: q.scheduledDate || '',
+            scheduledTime: q.scheduledTime || '',
+            duration: q.duration || 15,
+            passingScore: q.passingScore || 70,
+            completed: q.completed || false,
+          })));
+        } else {
+          setQuizSchedules([]);
+        }
+      } catch (e) {
+        toast({ title: 'Warning', description: 'Could not parse existing quiz schedules. Starting fresh.', variant: 'destructive' });
+        setQuizSchedules([]);
+      }
+    } else {
+      setQuizSchedules([]);
+    }
+    
     setEditPlanOpen(true);
   };
 
@@ -1421,59 +1522,428 @@ export default function TrainingContentLibrary() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Training Plan Dialog */}
+      {/* Edit Training Plan Dialog - Full Featured */}
       <Dialog open={editPlanOpen} onOpenChange={setEditPlanOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Training Plan</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={editPlanForm.title}
-                onChange={(e) => setEditPlanForm({ ...editPlanForm, title: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={editPlanForm.description}
-                onChange={(e) => setEditPlanForm({ ...editPlanForm, description: e.target.value })}
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label>Status</Label>
-              <Select 
-                value={editPlanForm.status} 
-                onValueChange={(value) => setEditPlanForm({ ...editPlanForm, status: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
+          
+          <Tabs value={editPlanTab} onValueChange={setEditPlanTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="details">Plan Details</TabsTrigger>
+              <TabsTrigger value="steps">Training Steps ({trainingSteps.length})</TabsTrigger>
+              <TabsTrigger value="quizzes">Quizzes ({quizSchedules.length})</TabsTrigger>
+            </TabsList>
+            
+            {/* Plan Details Tab */}
+            <TabsContent value="details" className="space-y-4 mt-4">
+              <div>
+                <Label>Title</Label>
+                <Input
+                  value={editPlanForm.title}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={editPlanForm.description}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select 
+                  value={editPlanForm.status} 
+                  onValueChange={(value) => setEditPlanForm({ ...editPlanForm, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+            
+            {/* Training Steps Tab */}
+            <TabsContent value="steps" className="space-y-4 mt-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">Manage facility training steps and schedule discussions</p>
+                <Button size="sm" onClick={() => {
+                  setNewStep({
+                    stepNumber: trainingSteps.length + 1,
+                    stepTitle: '',
+                    theme: '',
+                    trainerActivities: '',
+                    traineeActivities: '',
+                    facilityModules: '',
+                    scheduledDate: '',
+                    scheduledTime: '',
+                    duration: 30,
+                  });
+                  setEditStepIndex(null);
+                  setAddStepOpen(true);
+                }}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Step
+                </Button>
+              </div>
+              
+              {trainingSteps.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                    <p>No training steps defined yet.</p>
+                    <p className="text-sm">Add steps to structure the training program.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {trainingSteps.map((step, index) => (
+                    <Card key={index} className={step.completed ? 'bg-green-50 border-green-200' : ''}>
+                      <CardContent className="py-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">Step {step.stepNumber}</Badge>
+                              <span className="font-medium">{step.stepTitle}</span>
+                              {step.completed && <CheckCircle className="h-4 w-4 text-green-600" />}
+                            </div>
+                            {step.theme && <p className="text-sm text-muted-foreground mt-1">{step.theme}</p>}
+                            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                              {step.scheduledDate && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {step.scheduledDate} {step.scheduledTime && `at ${step.scheduledTime}`}
+                                </span>
+                              )}
+                              {step.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {step.duration} min
+                                </span>
+                              )}
+                              {step.facilityModules && (
+                                <span className="flex items-center gap-1">
+                                  <BookOpen className="h-3 w-3" />
+                                  Facility Training
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                              setNewStep(step);
+                              setEditStepIndex(index);
+                              setAddStepOpen(true);
+                            }}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                              setTrainingSteps(prev => prev.filter((_, i) => i !== index));
+                            }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+            
+            {/* Quizzes Tab */}
+            <TabsContent value="quizzes" className="space-y-4 mt-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">Schedule when quizzes should be taken</p>
+                <Button size="sm" onClick={() => {
+                  const newQuiz: QuizSchedule = {
+                    id: `quiz-${Date.now()}`,
+                    stepNumber: 1,
+                    quizTitle: '',
+                    scheduledDate: '',
+                    scheduledTime: '',
+                    duration: 15,
+                    passingScore: 70,
+                    completed: false,
+                  };
+                  setQuizSchedules(prev => [...prev, newQuiz]);
+                }}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Quiz
+                </Button>
+              </div>
+              
+              {quizSchedules.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    <Brain className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                    <p>No quizzes scheduled yet.</p>
+                    <p className="text-sm">Add quizzes to assess trainee knowledge.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {quizSchedules.map((quiz, index) => (
+                    <Card key={quiz.id} className={quiz.completed ? 'bg-green-50 border-green-200' : ''}>
+                      <CardContent className="py-3">
+                        <div className="grid grid-cols-12 gap-3 items-center">
+                          <div className="col-span-3">
+                            <Label className="text-xs">Quiz Title</Label>
+                            <Input
+                              value={quiz.quizTitle}
+                              onChange={(e) => {
+                                const updated = [...quizSchedules];
+                                updated[index] = { ...quiz, quizTitle: e.target.value };
+                                setQuizSchedules(updated);
+                              }}
+                              placeholder="Quiz title"
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">After Step</Label>
+                            <Select
+                              value={quiz.stepNumber.toString()}
+                              onValueChange={(v) => {
+                                const updated = [...quizSchedules];
+                                updated[index] = { ...quiz, stepNumber: parseInt(v) };
+                                setQuizSchedules(updated);
+                              }}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {trainingSteps.length > 0 ? (
+                                  trainingSteps.map((step, idx) => (
+                                    <SelectItem key={idx} value={step.stepNumber.toString()}>
+                                      Step {step.stepNumber}: {step.stepTitle || 'Untitled'}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  [1,2,3,4].map(n => (
+                                    <SelectItem key={n} value={n.toString()}>Step {n}</SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Date</Label>
+                            <Input
+                              type="date"
+                              value={quiz.scheduledDate || ''}
+                              onChange={(e) => {
+                                const updated = [...quizSchedules];
+                                updated[index] = { ...quiz, scheduledDate: e.target.value };
+                                setQuizSchedules(updated);
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Time</Label>
+                            <Input
+                              type="time"
+                              value={quiz.scheduledTime || ''}
+                              onChange={(e) => {
+                                const updated = [...quizSchedules];
+                                updated[index] = { ...quiz, scheduledTime: e.target.value };
+                                setQuizSchedules(updated);
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Passing %</Label>
+                            <Input
+                              type="number"
+                              value={quiz.passingScore || 70}
+                              onChange={(e) => {
+                                const updated = [...quizSchedules];
+                                updated[index] = { ...quiz, passingScore: parseInt(e.target.value) };
+                                setQuizSchedules(updated);
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                              setQuizSchedules(prev => prev.filter((_, i) => i !== index));
+                            }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+          
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditPlanOpen(false)}>Cancel</Button>
             <Button 
-              onClick={() => planToEdit && updatePlanMutation.mutate({ 
-                id: planToEdit.id, 
-                data: { 
-                  title: editPlanForm.title, 
-                  description: editPlanForm.description,
-                  status: editPlanForm.status 
-                } 
-              })}
+              onClick={() => {
+                if (!planToEdit) return;
+                
+                // Build updated plan structure
+                const currentStructure = planToEdit.planStructure ? JSON.parse(planToEdit.planStructure) : {};
+                const updatedStructure = {
+                  ...currentStructure,
+                  steps: trainingSteps,
+                };
+                
+                updatePlanMutation.mutate({ 
+                  id: planToEdit.id, 
+                  data: { 
+                    title: editPlanForm.title, 
+                    description: editPlanForm.description,
+                    status: editPlanForm.status,
+                    planStructure: JSON.stringify(updatedStructure),
+                    quizQuestions: JSON.stringify(quizSchedules),
+                  } 
+                });
+              }}
               disabled={updatePlanMutation.isPending}
             >
               {updatePlanMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Add/Edit Training Step Dialog */}
+      <Dialog open={addStepOpen} onOpenChange={setAddStepOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editStepIndex !== null ? 'Edit Training Step' : 'Add Training Step'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Step Number</Label>
+                <Select
+                  value={newStep.stepNumber?.toString() || '1'}
+                  onValueChange={(v) => setNewStep({ ...newStep, stepNumber: parseInt(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Step 1: Trainer Does / Explains</SelectItem>
+                    <SelectItem value="2">Step 2: Trainer Does / Trainee Explains</SelectItem>
+                    <SelectItem value="3">Step 3: Trainee Does / Trainer Explains</SelectItem>
+                    <SelectItem value="4">Step 4: Trainee Does / Trainee Explains</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  value={newStep.duration || 30}
+                  onChange={(e) => setNewStep({ ...newStep, duration: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Step Title</Label>
+              <Input
+                value={newStep.stepTitle || ''}
+                onChange={(e) => setNewStep({ ...newStep, stepTitle: e.target.value })}
+                placeholder="e.g., Introduction to Equipment"
+              />
+            </div>
+            <div>
+              <Label>Theme / Topic</Label>
+              <Textarea
+                value={newStep.theme || ''}
+                onChange={(e) => setNewStep({ ...newStep, theme: e.target.value })}
+                placeholder="What will be covered in this step"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label>Trainer Activities</Label>
+              <Textarea
+                value={newStep.trainerActivities || ''}
+                onChange={(e) => setNewStep({ ...newStep, trainerActivities: e.target.value })}
+                placeholder="What the trainer will do/demonstrate"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label>Trainee Activities</Label>
+              <Textarea
+                value={newStep.traineeActivities || ''}
+                onChange={(e) => setNewStep({ ...newStep, traineeActivities: e.target.value })}
+                placeholder="What the trainee will do/practice"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label>Facility Modules / Equipment</Label>
+              <Textarea
+                value={newStep.facilityModules || ''}
+                onChange={(e) => setNewStep({ ...newStep, facilityModules: e.target.value })}
+                placeholder="Required facility training, equipment, or modules"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Scheduled Date</Label>
+                <Input
+                  type="date"
+                  value={newStep.scheduledDate || ''}
+                  onChange={(e) => setNewStep({ ...newStep, scheduledDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Scheduled Time</Label>
+                <Input
+                  type="time"
+                  value={newStep.scheduledTime || ''}
+                  onChange={(e) => setNewStep({ ...newStep, scheduledTime: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddStepOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              const step: TrainingStep = {
+                stepNumber: newStep.stepNumber || 1,
+                stepTitle: newStep.stepTitle || '',
+                theme: newStep.theme || '',
+                trainerActivities: newStep.trainerActivities || '',
+                traineeActivities: newStep.traineeActivities || '',
+                facilityModules: newStep.facilityModules || '',
+                scheduledDate: newStep.scheduledDate,
+                scheduledTime: newStep.scheduledTime,
+                duration: newStep.duration,
+                completed: false,
+              };
+              
+              if (editStepIndex !== null) {
+                setTrainingSteps(prev => prev.map((s, i) => i === editStepIndex ? step : s));
+              } else {
+                setTrainingSteps(prev => [...prev, step]);
+              }
+              setAddStepOpen(false);
+            }}>
+              {editStepIndex !== null ? 'Update Step' : 'Add Step'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -5081,7 +5081,7 @@ router.get('/content-library/training-plans/:id', async (req, res) => {
 router.put('/content-library/training-plans/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { title, description, status } = req.body;
+    const { title, description, status, planStructure, quizQuestions, fourStepContent, objectives } = req.body;
     
     // Build dynamic update query
     const updates: string[] = [];
@@ -5100,6 +5100,22 @@ router.put('/content-library/training-plans/:id', async (req, res) => {
       updates.push(`status = $${paramIndex++}`);
       values.push(status);
     }
+    if (planStructure !== undefined) {
+      updates.push(`plan_structure = $${paramIndex++}`);
+      values.push(planStructure);
+    }
+    if (quizQuestions !== undefined) {
+      updates.push(`quiz_questions = $${paramIndex++}`);
+      values.push(quizQuestions);
+    }
+    if (fourStepContent !== undefined) {
+      updates.push(`four_step_content = $${paramIndex++}`);
+      values.push(fourStepContent);
+    }
+    if (objectives !== undefined) {
+      updates.push(`objectives = $${paramIndex++}`);
+      values.push(objectives);
+    }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -5108,17 +5124,22 @@ router.put('/content-library/training-plans/:id', async (req, res) => {
     updates.push(`updated_at = NOW()`);
     values.push(id);
     
-    const result = await pgPool.query(`
+    // Use update without RETURNING due to Neon driver issues, then fetch
+    await pgPool.query(`
       UPDATE ai_training_plans 
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING *
     `, values);
     
-    if (result.rows.length === 0) {
+    // Fetch the updated record
+    const fetchResult = await pgPool.query(`
+      SELECT * FROM ai_training_plans WHERE id = $1
+    `, [id]);
+    
+    if (fetchResult.rows.length === 0) {
       return res.status(404).json({ error: 'Training plan not found' });
     }
-    res.json(result.rows[0]);
+    res.json(fetchResult.rows[0]);
   } catch (error: any) {
     console.error('Error updating training plan:', error);
     res.status(500).json({ error: error.message });

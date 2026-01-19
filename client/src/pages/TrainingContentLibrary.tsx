@@ -121,6 +121,29 @@ export default function TrainingContentLibrary() {
   const [planToDelete, setPlanToDelete] = useState<TrainingPlan | null>(null);
   const [editPlanForm, setEditPlanForm] = useState({ title: '', description: '', status: '' });
 
+  // CRUD state for training topics
+  const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const [editTopicOpen, setEditTopicOpen] = useState(false);
+  const [deleteTopicOpen, setDeleteTopicOpen] = useState(false);
+  const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
+  const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
+  const [newTopicForm, setNewTopicForm] = useState({
+    title: '',
+    description: '',
+    objectives: '',
+    estimatedDuration: '',
+    difficultyLevel: 'beginner',
+    categoryId: '',
+  });
+  const [editTopicForm, setEditTopicForm] = useState({
+    title: '',
+    description: '',
+    objectives: '',
+    estimatedDuration: '',
+    difficultyLevel: '',
+    categoryId: '',
+  });
+
   const handleFileSelect = async (file: File) => {
     setIsExtractingFile(true);
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -363,6 +386,81 @@ export default function TrainingContentLibrary() {
       toast({ title: 'Error deleting training plan', description: error.message, variant: 'destructive' });
     },
   });
+
+  // Training Topic CRUD mutations
+  const createTopicMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/training/content-library/topics', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: newTopicForm.title,
+          description: newTopicForm.description || null,
+          objectives: newTopicForm.objectives || null,
+          estimatedDuration: newTopicForm.estimatedDuration ? parseInt(newTopicForm.estimatedDuration) : null,
+          difficultyLevel: newTopicForm.difficultyLevel,
+          categoryId: newTopicForm.categoryId ? parseInt(newTopicForm.categoryId) : null,
+          isAiGenerated: false,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/topics'] });
+      setNewTopicOpen(false);
+      setNewTopicForm({ title: '', description: '', objectives: '', estimatedDuration: '', difficultyLevel: 'beginner', categoryId: '' });
+      toast({ title: 'Training topic created successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error creating topic', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateTopicMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return apiRequest(`/api/training/content-library/topics/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/topics'] });
+      setEditTopicOpen(false);
+      setTopicToEdit(null);
+      toast({ title: 'Training topic updated successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error updating topic', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteTopicMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/content-library/topics/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/topics'] });
+      setDeleteTopicOpen(false);
+      setTopicToDelete(null);
+      toast({ title: 'Training topic deleted successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error deleting topic', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const openEditTopic = (topic: Topic) => {
+    setTopicToEdit(topic);
+    setEditTopicForm({
+      title: topic.title,
+      description: topic.description || '',
+      objectives: topic.objectives || '',
+      estimatedDuration: topic.estimatedDuration?.toString() || '',
+      difficultyLevel: topic.difficultyLevel,
+      categoryId: categories.find(c => c.name === topic.categoryName)?.id?.toString() || '',
+    });
+    setEditTopicOpen(true);
+  };
 
   const openEditDoc = (doc: Document) => {
     setDocToEdit(doc);
@@ -767,6 +865,14 @@ export default function TrainingContentLibrary() {
         </TabsContent>
 
         <TabsContent value="topics" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Training Topics</h3>
+            <Button onClick={() => setNewTopicOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Topic
+            </Button>
+          </div>
+
           {selectedTopics.length > 0 && (
             <Card className="bg-gradient-to-r from-green-50 to-teal-50 border-green-200">
               <CardContent className="py-4">
@@ -833,10 +939,32 @@ export default function TrainingContentLibrary() {
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleViewTopic(topic.id); }}>
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleViewTopic(topic.id); }}>
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditTopic(topic); }}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={(e) => { e.stopPropagation(); setTopicToDelete(topic); setDeleteTopicOpen(true); }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1367,6 +1495,211 @@ export default function TrainingContentLibrary() {
               onClick={() => planToDelete && deletePlanMutation.mutate(planToDelete.id)}
             >
               {deletePlanMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create Topic Dialog */}
+      <Dialog open={newTopicOpen} onOpenChange={setNewTopicOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Training Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title *</Label>
+              <Input
+                value={newTopicForm.title}
+                onChange={(e) => setNewTopicForm({ ...newTopicForm, title: e.target.value })}
+                placeholder="Enter topic title"
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={newTopicForm.description}
+                onChange={(e) => setNewTopicForm({ ...newTopicForm, description: e.target.value })}
+                placeholder="Brief description of the topic"
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Objectives</Label>
+              <Textarea
+                value={newTopicForm.objectives}
+                onChange={(e) => setNewTopicForm({ ...newTopicForm, objectives: e.target.value })}
+                placeholder="Learning objectives (one per line)"
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  value={newTopicForm.estimatedDuration}
+                  onChange={(e) => setNewTopicForm({ ...newTopicForm, estimatedDuration: e.target.value })}
+                  placeholder="30"
+                />
+              </div>
+              <div>
+                <Label>Difficulty Level</Label>
+                <Select 
+                  value={newTopicForm.difficultyLevel} 
+                  onValueChange={(value) => setNewTopicForm({ ...newTopicForm, difficultyLevel: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="beginner">Beginner</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select 
+                value={newTopicForm.categoryId} 
+                onValueChange={(value) => setNewTopicForm({ ...newTopicForm, categoryId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewTopicOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => createTopicMutation.mutate()}
+              disabled={!newTopicForm.title || createTopicMutation.isPending}
+            >
+              {createTopicMutation.isPending ? 'Creating...' : 'Create Topic'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Topic Dialog */}
+      <Dialog open={editTopicOpen} onOpenChange={setEditTopicOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Training Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title *</Label>
+              <Input
+                value={editTopicForm.title}
+                onChange={(e) => setEditTopicForm({ ...editTopicForm, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={editTopicForm.description}
+                onChange={(e) => setEditTopicForm({ ...editTopicForm, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Objectives</Label>
+              <Textarea
+                value={editTopicForm.objectives}
+                onChange={(e) => setEditTopicForm({ ...editTopicForm, objectives: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  value={editTopicForm.estimatedDuration}
+                  onChange={(e) => setEditTopicForm({ ...editTopicForm, estimatedDuration: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Difficulty Level</Label>
+                <Select 
+                  value={editTopicForm.difficultyLevel} 
+                  onValueChange={(value) => setEditTopicForm({ ...editTopicForm, difficultyLevel: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="beginner">Beginner</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select 
+                value={editTopicForm.categoryId} 
+                onValueChange={(value) => setEditTopicForm({ ...editTopicForm, categoryId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTopicOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => topicToEdit && updateTopicMutation.mutate({ 
+                id: topicToEdit.id, 
+                data: { 
+                  title: editTopicForm.title, 
+                  description: editTopicForm.description || null,
+                  objectives: editTopicForm.objectives || null,
+                  estimatedDuration: editTopicForm.estimatedDuration ? parseInt(editTopicForm.estimatedDuration) : null,
+                  difficultyLevel: editTopicForm.difficultyLevel,
+                  categoryId: editTopicForm.categoryId ? parseInt(editTopicForm.categoryId) : null,
+                } 
+              })}
+              disabled={!editTopicForm.title || updateTopicMutation.isPending}
+            >
+              {updateTopicMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Topic Confirmation */}
+      <AlertDialog open={deleteTopicOpen} onOpenChange={setDeleteTopicOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Training Topic</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{topicToDelete?.title}"? This will also remove all associated materials and assignments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => topicToDelete && deleteTopicMutation.mutate(topicToDelete.id)}
+            >
+              {deleteTopicMutation.isPending ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

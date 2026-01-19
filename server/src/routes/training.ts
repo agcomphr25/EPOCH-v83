@@ -4531,6 +4531,124 @@ router.get('/content-library/topics/:id', async (req, res) => {
   }
 });
 
+// Create topic manually
+router.post('/content-library/topics', async (req, res) => {
+  try {
+    const { title, description, objectives, prerequisites, estimatedDuration, difficultyLevel, categoryId, createdBy } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const parseIntOrUndefined = (val: any): number | undefined => {
+      if (val === null || val === undefined || val === '') return undefined;
+      const parsed = parseInt(String(val), 10);
+      return isNaN(parsed) ? undefined : parsed;
+    };
+
+    const insertData: any = {
+      title,
+      isAiGenerated: false,
+    };
+    
+    if (description) insertData.description = description;
+    if (objectives) insertData.objectives = typeof objectives === 'string' ? objectives : JSON.stringify(objectives);
+    if (prerequisites) insertData.prerequisites = prerequisites;
+    if (difficultyLevel) insertData.difficultyLevel = difficultyLevel;
+    
+    const parsedDuration = parseIntOrUndefined(estimatedDuration);
+    if (parsedDuration !== undefined) insertData.estimatedDuration = parsedDuration;
+    
+    const parsedCategoryId = parseIntOrUndefined(categoryId);
+    if (parsedCategoryId !== undefined) insertData.categoryId = parsedCategoryId;
+    
+    const parsedCreatedBy = parseIntOrUndefined(createdBy);
+    if (parsedCreatedBy !== undefined) insertData.createdBy = parsedCreatedBy;
+
+    // Insert the topic
+    await db.insert(trainingLibraryTopics).values(insertData);
+    
+    // Fetch the newly created topic (Neon driver has issues with .returning())
+    const { rawSql } = await import('../../db');
+    const result = await rawSql`SELECT * FROM training_library_topics WHERE title = ${insertData.title} ORDER BY id DESC LIMIT 1`;
+    const rows = Array.isArray(result) ? result : [];
+    const topic = rows[0] || insertData;
+
+    res.status(201).json(topic);
+  } catch (error: any) {
+    console.error('Error creating topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update topic
+router.put('/content-library/topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, description, objectives, prerequisites, estimatedDuration, difficultyLevel, categoryId } = req.body;
+
+    // Build dynamic update query based on provided fields
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+    
+    if (title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      params.push(title || null);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(description || null);
+    }
+    if (objectives !== undefined) {
+      updates.push(`objectives = $${paramIndex++}`);
+      params.push(objectives ? (typeof objectives === 'string' ? objectives : JSON.stringify(objectives)) : null);
+    }
+    if (prerequisites !== undefined) {
+      updates.push(`prerequisites = $${paramIndex++}`);
+      params.push(prerequisites || null);
+    }
+    if (estimatedDuration !== undefined && estimatedDuration !== null && estimatedDuration !== '') {
+      const parsed = parseInt(String(estimatedDuration), 10);
+      if (!isNaN(parsed)) {
+        updates.push(`estimated_duration = $${paramIndex++}`);
+        params.push(parsed);
+      }
+    }
+    if (difficultyLevel !== undefined) {
+      updates.push(`difficulty_level = $${paramIndex++}`);
+      params.push(difficultyLevel || null);
+    }
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
+      const parsed = parseInt(String(categoryId), 10);
+      if (!isNaN(parsed)) {
+        updates.push(`category_id = $${paramIndex++}`);
+        params.push(parsed);
+      }
+    }
+    
+    updates.push('updated_at = NOW()');
+    params.push(id);
+
+    // Perform the update without RETURNING (Neon driver has issues with it)
+    const { rawSql } = await import('../../db');
+    await rawSql(`UPDATE training_library_topics SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
+    
+    // Fetch the updated topic separately
+    const fetchResult = await rawSql`SELECT * FROM training_library_topics WHERE id = ${id}`;
+    const rows = Array.isArray(fetchResult) ? fetchResult : [];
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete topic
 router.delete('/content-library/topics/:id', async (req, res) => {
   try {

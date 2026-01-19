@@ -4621,34 +4621,75 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
     // Get trainee info
     const [trainee] = await db.select().from(employees).where(eq(employees.id, parsedTraineeId));
 
+    // Fetch topic content including materials
+    const topicMaterials = await pgPool.query(`
+      SELECT tm.*, t.title as topic_title, t.content as topic_content
+      FROM training_topic_materials tm
+      JOIN training_library_topics t ON tm.topic_id = t.id
+      WHERE tm.topic_id = ANY($1)
+    `, [parsedTopicIds]);
+
+    // Build comprehensive content context
+    const topicContentDetails = topics.map(t => {
+      const materials = topicMaterials.rows.filter(m => m.topic_id === t.id);
+      return {
+        id: t.id,
+        title: t.title,
+        content: t.content,
+        duration: t.estimatedDuration,
+        prerequisites: t.prerequisites,
+        materials: materials.map(m => ({
+          trainerActivities: m.trainer_activities,
+          traineeActivities: m.trainee_activities,
+          visualAids: m.visual_aids,
+          facilityModules: m.facility_modules
+        }))
+      };
+    });
+
     const client = getOpenAIClient();
     const completion = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { 
           role: 'system', 
-          content: `You are organizing training topics into an optimal 4-step training plan using the "Train the Trainer" 4-step method.
-Each step builds on the previous and should have appropriate content.
-Consider prerequisites and build skills progressively.
+          content: `You are creating a comprehensive 4-step training plan using the "Train the Trainer" method.
+Generate DETAILED training content that trainers need during each session.
 
 The 4 steps are:
-1. Trainer Does / Trainer Explains - Introduction and demonstration
-2. Trainer Does / Trainee Explains - Verify comprehension
-3. Trainee Does / Trainer Coaches - Hands-on with guidance
-4. Trainee Does / Trainer Observes - Independent execution
+1. Trainer Does / Trainer Explains - Trainer demonstrates while explaining the process
+2. Trainer Does / Trainee Explains - Trainer performs, trainee describes what's happening
+3. Trainee Does / Trainer Coaches - Trainee practices with active coaching
+4. Trainee Does / Trainer Observes - Trainee performs independently, trainer observes
+
+For EACH step, you MUST include:
+- workInstructions: Detailed step-by-step instructions from the source documents
+- criticalPoints: Array of critical points the trainer MUST emphasize (quality, precision, timing)
+- safetyPrecautions: Array of safety warnings and PPE requirements
+- demonstrations: Array of specific things to demonstrate during this step
+- objectives: What the trainee should learn in this step
+- quizQuestions: 4-5 comprehension questions for this step
 
 Return JSON with:
 {
-  "title": "Training Plan for [Area]",
-  "description": "Overview of this training program",
+  "title": "Training Plan for [specific task/part]",
+  "description": "Comprehensive overview of this training program",
+  "workInstructions": "Overall work instructions extracted from documents",
+  "criticalPoints": ["Critical point 1", "Critical point 2", ...],
+  "safetyPrecautions": ["Safety precaution 1", "Safety precaution 2", ...],
   "steps": [
     {
       "stepNumber": 1,
       "stepTitle": "Trainer Does / Trainer Explains",
-      "theme": "Step theme/focus",
-      "objectives": ["what trainee will learn"],
-      "topicIds": [list of topic IDs for this step],
+      "theme": "Introduction and Demonstration",
+      "objectives": ["Objective 1", "Objective 2"],
+      "workInstructions": "Step-specific detailed work instructions for this phase",
+      "criticalPoints": ["Critical point specific to this step"],
+      "safetyPrecautions": ["Safety items for this step"],
+      "demonstrations": ["What to demonstrate during this step"],
+      "trainerTalkingPoints": ["Key points trainer should cover"],
       "estimatedHours": 2,
+      "topicIds": [topic IDs for this step],
       "quizQuestions": [
         {
           "question": "Question about this step",
@@ -4658,13 +4699,33 @@ Return JSON with:
         }
       ]
     },
-    ...repeat for steps 2-4
+    ...repeat for steps 2-4 with appropriate content
   ]
-}`
+}
+
+IMPORTANT: Extract actual work instructions, safety info, and critical points from the provided document content. Do NOT use generic placeholders.`
         },
         { 
           role: 'user', 
-          content: `Create a 4-step training plan for ${trainee?.name || 'trainee'}${partNumber ? ` for Part #${partNumber}` : ''}${department ? ` in ${department}` : ''}${productionLine ? ` on ${productionLine}` : ''} using these topics:\n\n${topics.map(t => `ID: ${t.id}, Title: ${t.title}, Duration: ${t.estimatedDuration}min, Prerequisites: ${t.prerequisites || 'None'}`).join('\n')}\n\nGenerate 4-5 quiz questions for each step to test comprehension.`
+          content: `Create a comprehensive 4-step training plan for ${trainee?.name || 'trainee'}${partNumber ? ` for Part #${partNumber}` : ''}${department ? ` in ${department}` : ''}${productionLine ? ` on ${productionLine}` : ''}.
+
+TOPIC CONTENT TO USE:
+${topicContentDetails.map(t => `
+=== Topic: ${t.title} (ID: ${t.id}) ===
+Duration: ${t.duration}min
+Prerequisites: ${t.prerequisites || 'None'}
+Content: ${t.content || 'No content available'}
+${t.materials.length > 0 ? `Materials: ${JSON.stringify(t.materials)}` : ''}
+`).join('\n')}
+
+Based on this content, generate:
+1. Detailed work instructions extracted from the documents
+2. Critical points and quality checkpoints the trainer must emphasize
+3. Safety precautions and PPE requirements
+4. Specific demonstrations for each step
+5. 4-5 quiz questions per step to verify understanding
+
+Make the content specific to the actual training task, not generic.`
         }
       ],
       response_format: { type: 'json_object' },

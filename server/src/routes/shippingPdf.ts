@@ -927,380 +927,112 @@ function truncateText(
   return text.substring(0, maxChars - 3) + '...';
 }
 
-// Generate Sales Order PDF
+// Generate Sales Order PDF - Uses centralized schema-safe PDF service
 router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   const { orderId } = req.params;
   console.log(`📄 [Route] Sales order PDF requested for: ${orderId}`);
   console.log(`📄 [Route] Environment: ${process.env.NODE_ENV}`);
   
   try {
-    // Get comprehensive order data from storage with payment status
+    // Use centralized PDF service which uses schema-safe queries
+    const { generateOrderPdf, PdfIntent } = await import('../../services/orderPdfService');
+    
+    console.log(`📄 [Route] Using centralized PDF service for: ${orderId}`);
+    
+    // Generate PDF using the customer view intent (live data without signature)
+    const result = await generateOrderPdf(orderId, PdfIntent.CUSTOMER_VIEW);
+    
+    if (!result || !result.buffer) {
+      console.error(`❌ [Route] PDF generation failed for ${orderId} - no buffer returned`);
+      return res.status(500).json({ error: 'Failed to generate sales order PDF', orderId });
+    }
+    
+    console.log(`📄 [Route] PDF generated successfully for ${orderId}`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="sales_order_${orderId}.pdf"`);
+    return res.send(result.buffer);
+    
+  } catch (error: any) {
+    console.error(`❌ [Route] Error generating sales order PDF:`, error);
+    console.error(`❌ [Route] Error details:`, { orderId, message: error.message, stack: error.stack, type: typeof error });
+    return res.status(500).json({ error: 'Failed to generate sales order PDF', details: error.message, orderId });
+  }
+});
+
+// Legacy route - redirect to centralized service
+router.get('/sales-order-legacy/:orderId', async (req: Request, res: Response) => {
+  const { orderId } = req.params;
+  console.log(`📄 [Route] Legacy sales order PDF requested for: ${orderId}`);
+  
+  try {
     const { storage } = await import('../../storage');
+    const { db } = await import('../../db');
+    const { sql } = await import('drizzle-orm');
     
-    console.log(`📄 [Route] Loading order data for: ${orderId}`);
+    // Schema-safe query for core order data
+    const result = await db.execute(sql`
+      SELECT 
+        order_id as "orderId",
+        order_date as "orderDate",
+        due_date as "dueDate",
+        customer_id as "customerId",
+        customer_po as "customerPO",
+        fb_order_number as "fbOrderNumber",
+        model_id as "modelId",
+        features,
+        feature_quantities as "featureQuantities",
+        notes,
+        shipping,
+        handedness,
+        status,
+        barcode
+      FROM all_orders 
+      WHERE order_id = ${orderId}
+      LIMIT 1
+    `);
     
-    // Check if there's a signed PDF for this order
-    let followupOrder = null;
-    try {
-      followupOrder = await storage.getFollowupOrderByOrderId(orderId);
-    } catch (followupError) {
-      console.warn(`⚠️ [Route] Could not fetch followup order for ${orderId}, proceeding with fresh PDF generation:`, followupError);
-    }
-    if (followupOrder && followupOrder.signedPdfPath && followupOrder.signatureSigned) {
-      // Serve the signed PDF if it exists
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      const signedPdfPath = path.join(process.cwd(), followupOrder.signedPdfPath);
-      
-      if (fs.existsSync(signedPdfPath)) {
-        console.log(`📄 Serving signed PDF for order ${orderId}`);
-        const pdfBuffer = fs.readFileSync(signedPdfPath);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename="sales_order_${orderId}_signed.pdf"`);
-        return res.send(pdfBuffer);
-      } else {
-        console.warn(`⚠️ Signed PDF path exists in database but file not found: ${signedPdfPath}`);
-      }
-    }
-    
-    // If no signed PDF exists, generate a new one using centralized generator
-    console.log(`📄 Generating new sales order PDF for ${orderId}`);
-    let order = await storage.getOrderById(orderId);
-    
-    // If not found and this is a P1 order, check production_orders table
-    if (!order && orderId.startsWith('P1-')) {
-      console.log(`📄 Order not found in regular tables, checking production_orders for P1 order: ${orderId}`);
-      const productionOrder = await storage.getProductionOrderByOrderId(orderId);
-      if (productionOrder) {
-        // Convert production order to a format compatible with PDF generation
-        order = {
-          orderId: productionOrder.orderId,
-          customerId: productionOrder.customerId,
-          customer: productionOrder.customerName,
-          modelId: productionOrder.itemId || '',
-          orderDate: productionOrder.orderDate,
-          dueDate: productionOrder.dueDate,
-          currentDepartment: productionOrder.currentDepartment,
-          status: productionOrder.productionStatus || 'IN_PROGRESS',
-          notes: productionOrder.notes,
-          features: productionOrder.specifications || {},
-          // P1-specific fields
-          poNumber: productionOrder.poNumber,
-          itemName: productionOrder.itemName,
-          itemType: productionOrder.itemType,
-        } as any;
+    let order = null;
+    if (result.rows && result.rows.length > 0) {
+      order = result.rows[0];
+    } else {
+      // Try order_drafts
+      const draftResult = await db.execute(sql`
+        SELECT 
+          order_id as "orderId",
+          order_date as "orderDate",
+          due_date as "dueDate",
+          customer_id as "customerId",
+          customer_po as "customerPO",
+          fb_order_number as "fbOrderNumber",
+          model_id as "modelId",
+          features,
+          feature_quantities as "featureQuantities",
+          notes,
+          shipping,
+          handedness,
+          status,
+          barcode
+        FROM order_drafts 
+        WHERE order_id = ${orderId}
+        LIMIT 1
+      `);
+      if (draftResult.rows && draftResult.rows.length > 0) {
+        order = draftResult.rows[0];
       }
     }
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-
-    // Get all necessary data for PDF generation
-    const allStockModels = await storage.getAllStockModels();
-    const allCustomers = await storage.getAllCustomers();
-    const allFeatures = await storage.getAllFeatures();
-    const addresses = await storage.getAllAddresses();
-    const payments = await storage.getPaymentsByOrderId(orderId);
-
-    // Get related data
-    const stockModel = allStockModels.find((m) => m.id === order.modelId);
-    const customer = allCustomers.find(
-      (c) => c.id?.toString() === (order as any).customerId?.toString()
-    );
-    const customerAddresses = addresses.filter(
-      (a) => a.customerId?.toString() === (order as any).customerId?.toString()
-    );
-    const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
-
-    // Helper function to create fallback display names
-    const createFallbackDisplayName = (value: string): string => {
-      return value
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-    };
-
-    // Build comprehensive feature data for PDF
-    const featurePrices: Record<string, number> = {};
-    const featureDisplayNames: Record<string, string> = {};
-    const featureSelectionDisplayNames: Record<string, string> = {};
-    const featureSelectionPrices: Record<string, number> = {};
-
-    if (order.features && typeof order.features === 'object') {
-      for (const [featureKey, featureValue] of Object.entries(order.features)) {
-        if (featureValue && featureValue !== false && featureValue !== '') {
-          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
-          if (featureDetail) {
-            // Store feature-level display name
-            featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
-
-            // Process feature selections to get display names and prices
-            const featureOptions = (featureDetail as any).options || [];
-
-            if (Array.isArray(featureValue)) {
-              // Handle array of selections (like rails)
-              let totalPrice = 0;
-              for (const selectionValue of featureValue) {
-                const option = featureOptions.find((opt: any) => opt.value === selectionValue);
-                if (option) {
-                  featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
-                  const selectionPrice = option.price || 0;
-                  featureSelectionPrices[selectionValue] = selectionPrice;
-                  totalPrice += selectionPrice;
-                } else {
-                  featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
-                }
-              }
-              featurePrices[featureKey] = totalPrice;
-            } else {
-              // Handle single selection
-              const option = featureOptions.find((opt: any) => opt.value === featureValue);
-              if (option) {
-                featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
-                const selectionPrice = option.price || 0;
-                featureSelectionPrices[featureValue] = selectionPrice;
-                featurePrices[featureKey] = selectionPrice;
-              } else {
-                featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
-                featurePrices[featureKey] = featureDetail.price || 0;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // FIX: Ensure paint options have proper display names and prices
-    const orderFeatures = order.features as any;
-    if (orderFeatures) {
-      // Get the paint selection, skipping 'none' values to find the actual paint choice
-      const currentPaint = 
-        (orderFeatures.metallic_finishes && orderFeatures.metallic_finishes !== 'none' ? orderFeatures.metallic_finishes : null) ||
-        (orderFeatures.paint_options && orderFeatures.paint_options !== 'none' ? orderFeatures.paint_options : null) ||
-        (orderFeatures.paint_options_combined && orderFeatures.paint_options_combined !== 'none' ? orderFeatures.paint_options_combined : null);
-
-      if (currentPaint) {
-        // Find the paint feature and option
-        const paintFeatures = allFeatures.filter(
-          (f: any) =>
-            f.displayName?.includes('Options') ||
-            f.displayName?.includes('Camo') ||
-            f.displayName?.includes('Cerakote') ||
-            f.displayName?.includes('Paint') ||
-            f.displayName?.includes('Terrain') ||
-            f.displayName?.includes('Rogue') ||
-            f.displayName?.includes('Standard') ||
-            f.id === 'metallic_finishes' ||
-            f.id === 'paint_options' ||
-            f.id === 'paint_options_combined' ||
-            f.category === 'paint'
-        );
-
-        for (const paintFeature of paintFeatures) {
-          const paintOptions = (paintFeature as any).options || [];
-          if (paintOptions.length > 0) {
-            const paintOption = paintOptions.find(
-              (opt: any) => opt.value === currentPaint
-            );
-            if (paintOption) {
-              // Set the display name and price for the paint selection
-              featureSelectionDisplayNames[currentPaint] = paintOption.displayName || paintOption.label || currentPaint;
-              featureSelectionPrices[currentPaint] = paintOption.price || 0;
-              
-              // Determine which paint key is being used (same logic as currentPaint to avoid 'none' values)
-              const paintKey = 
-                (orderFeatures.metallic_finishes && orderFeatures.metallic_finishes !== 'none' ? 'metallic_finishes' : null) ||
-                (orderFeatures.paint_options && orderFeatures.paint_options !== 'none' ? 'paint_options' : null) ||
-                (orderFeatures.paint_options_combined && orderFeatures.paint_options_combined !== 'none' ? 'paint_options_combined' : null) ||
-                'paint_options'; // Fallback
-              featurePrices[paintKey] = paintOption.price || 0;
-              
-              console.log(`📄 [Paint Fix] Paint option resolved: ${currentPaint} (key: ${paintKey}) -> ${paintOption.displayName || paintOption.label} ($${paintOption.price || 0})`);
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Extract miscellaneous items from features object
-    const miscItems = (order.features as any)?.miscItems || [];
-
-    // Calculate payment status and discount information
-    const paymentTotal = payments.reduce((sum, p) => sum + (p.paymentAmount || 0), 0);
     
-    // Calculate discount information dynamically
-    let calculatedDiscountType: string | undefined;
-    let calculatedDiscountValue: number | undefined;
-    let calculatedDiscountCode: string | undefined;
-    let calculatedDiscountDisplayName: string | undefined;
-    let calculatedDiscountAppliesTo: 'stock_model' | 'total_order' | undefined;
-    let shouldShowDiscount = false;
-
-    // Get persistent and seasonal discounts to check if this order has one
-    const persistentDiscounts = await storage.getAllPersistentDiscounts();
-    const seasonalDiscounts = await storage.getAllShortTermSales();
-    
-    if (order.discountCode && order.discountCode !== 'none') {
-      calculatedDiscountCode = order.discountCode;
-      
-      // Check if it's a persistent discount
-      let discount: any = null;
-      if (order.discountCode.startsWith('persistent_')) {
-        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        discount = persistentDiscounts.find((d) => d.id === discountId);
-      } else if (order.discountCode.startsWith('short_term_')) {
-        // Check for seasonal/short-term discount
-        const discountId = parseInt(order.discountCode.replace('short_term_', ''));
-        discount = seasonalDiscounts.find((d) => d.id === discountId);
-      } else {
-        // Try finding by name in both persistent and seasonal
-        discount = persistentDiscounts.find((d) => d.name === order.discountCode) ||
-                   seasonalDiscounts.find((d) => d.name === order.discountCode);
-      }
-
-      if (discount) {
-        // Show discount on PDF regardless of whether it's currently active
-        // The discount was applied when the order was created
-        shouldShowDiscount = true;
-        
-        // Get the display name from the discount
-        calculatedDiscountDisplayName = discount.name || discount.description || order.discountCode;
-        
-        // Get the appliesTo setting
-        calculatedDiscountAppliesTo = discount.appliesTo || 'total_order';
-        
-        if (discount.percent !== null && discount.percent > 0) {
-          calculatedDiscountType = 'percent';
-          calculatedDiscountValue = discount.percent;
-        } else if (discount.fixedAmount) {
-          calculatedDiscountType = 'fixed';
-          calculatedDiscountValue = Number(discount.fixedAmount) / 100; // Convert cents to dollars
-        }
-        
-        const discountType = order.discountCode.startsWith('short_term_') ? 'Seasonal' : 'Persistent';
-        const activeStatus = discount.isActive ? 'active' : 'inactive';
-        console.log(`📄 [Discount] ${discountType} discount found (${activeStatus}): ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}, appliesTo: ${calculatedDiscountAppliesTo}, displayName: ${calculatedDiscountDisplayName}`);
-      } else {
-        // Discount code exists but discount not found in database - use stored order values
-        console.log(`📄 [Discount] Discount code ${order.discountCode} not found in database, checking order stored values`);
-        if (order.customDiscountValue) {
-          shouldShowDiscount = true;
-          calculatedDiscountType = order.customDiscountType || 'percent';
-          calculatedDiscountValue = order.customDiscountValue;
-          calculatedDiscountAppliesTo = (order.discountAppliesTo as 'stock_model' | 'total_order') || 'total_order';
-          console.log(`📄 [Discount] Using order stored discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
-        }
-      }
-    }
-    
-    // If custom discount is set on the order directly (manual discount), use that
-    if (order.showCustomDiscount && order.customDiscountValue) {
-      shouldShowDiscount = true;
-      calculatedDiscountType = order.customDiscountType || 'percent';
-      calculatedDiscountValue = order.customDiscountValue;
-      calculatedDiscountCode = order.discountCode || undefined;
-      // Keep the display name and appliesTo from above if they were set
-      console.log(`📄 [Discount] Using order custom discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
-    }
-    
-    const basePriceForPayment = stockModel?.price || 0;
-    let featuresCostForPayment = 0;
-
-    if (order.features && Object.keys(order.features).length > 0) {
-      Object.entries(order.features).forEach(([featureKey, featureValue]) => {
-        if (featureValue && featureValue !== false && featureValue !== '') {
-          const featureDetail = allFeatures.find((f) => f.id === featureKey);
-          featuresCostForPayment += featureDetail?.price || 0;
-        }
-      });
-    }
-
-    const shippingForPayment = order.shipping || 0;
-    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
-    const isFullyPaid = order.paymentAmount !== null
-      ? order.paymentAmount >= orderTotal
-      : paymentTotal >= orderTotal;
-    const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
-
-    // Prepare order data for PDF generator
-    const pdfOrderData = {
-      orderId: order.orderId,
-      orderDate: new Date(order.orderDate),
-      dueDate: new Date(order.dueDate),
-      customerId: order.customerId || '',
-      customerPO: order.customerPO || undefined,
-      customerName: customer?.name || '',
-      customerEmail: customer?.email || undefined,
-      customerPhone: customer?.phone || undefined,
-      customerAddress: defaultAddress ? {
-        street: defaultAddress.street,
-        street2: defaultAddress.street2 || undefined,
-        city: defaultAddress.city,
-        state: defaultAddress.state,
-        zipCode: defaultAddress.zipCode,
-        country: defaultAddress.country,
-      } : undefined,
-      modelId: order.modelId || undefined,
-      modelName: stockModel?.name || undefined,
-      modelDisplayName: stockModel?.displayName || undefined,
-      modelPrice: stockModel?.price || 0,
-      handedness: order.handedness || undefined,
-      features: order.features as Record<string, any> || undefined,
-      featurePrices,
-      featureDisplayNames,
-      featureSelectionDisplayNames,
-      featureSelectionPrices,
-      featureQuantities: order.featureQuantities as Record<string, number> || undefined,
-      miscItems: miscItems.length > 0 ? miscItems : undefined,
-      notes: order.notes || undefined,
-      shipping: order.shipping || 0,
-      paymentStatus: paymentStatus as 'PAID' | 'PENDING',
-      // Use calculated discount information
-      discountCode: calculatedDiscountCode || undefined,
-      discountDisplayName: calculatedDiscountDisplayName || undefined,
-      discountAppliesTo: calculatedDiscountAppliesTo || undefined,
-      customDiscountType: calculatedDiscountType || undefined,
-      customDiscountValue: calculatedDiscountValue || undefined,
-      showCustomDiscount: shouldShowDiscount,
-    };
-
-    // Generate PDF via unified service (CUSTOMER_VIEW uses live data, no signature box)
-    console.log(`📄 [Route] Generating CUSTOMER_VIEW PDF for ${orderId}`);
-    const pdfResult = await generateOrderPdf(orderId, PdfIntent.CUSTOMER_VIEW);
-    const pdfBuffer = pdfResult.buffer!;
-    console.log(`✅ [Route] PDF generated successfully (${pdfBuffer.length} bytes)`);
-
-    // Set response headers for PDF inline display
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="Sales-Order-${orderId}.pdf"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-
-    // Send PDF
-    console.log(`📄 [Route] Sending PDF response to client`);
-    res.send(pdfBuffer);
-    console.log(`✅ [Route] PDF sent successfully`);
-
-  } catch (error: unknown) {
-    console.error('❌ [Route] Error generating sales order PDF:', error);
-    console.error('❌ [Route] Error details:', {
-      orderId,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      type: typeof error,
-    });
-    
-    // Send detailed error response
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    res.status(500).json({ 
-      error: 'Failed to generate sales order PDF',
-      details: errorMessage,
-      orderId: orderId
-    });
+    // Redirect to centralized PDF service
+    return res.redirect(`/api/sales-order-pdf/${orderId}`);
+  } catch (error: any) {
+    console.error(`❌ [Route] Legacy route error:`, error);
+    return res.status(500).json({ error: 'Failed to generate sales order PDF', details: error.message });
   }
 });
+
 
 // POST route for UPS Shipping Label with custom package details - REAL UPS API INTEGRATION
 router.post(

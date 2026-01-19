@@ -2,7 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 import { db } from '../../db';
+
+// Direct pg Pool for raw SQL queries (bypasses Neon serverless driver issues)
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined
+});
 import {
   trainingModules,
   trainingQuestions,
@@ -4014,7 +4021,7 @@ import {
 // Get all categories
 router.get('/content-library/categories', async (req, res) => {
   try {
-    const result = await db.execute(sql`
+    const result = await pgPool.query(`
       SELECT id, name, type, description, color, parent_id as "parentId", 
              created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
       FROM training_content_categories 
@@ -4030,15 +4037,13 @@ router.get('/content-library/categories', async (req, res) => {
 // Create category
 router.post('/content-library/categories', async (req, res) => {
   try {
-    const [category] = await db.insert(trainingContentCategories).values({
-      name: req.body.name,
-      type: req.body.type || 'custom',
-      description: req.body.description,
-      color: req.body.color,
-      parentId: req.body.parentId,
-      createdBy: req.body.createdBy,
-    }).returning();
-    res.status(201).json(category);
+    const { name, type, description, color, parentId, createdBy } = req.body;
+    const result = await pgPool.query(`
+      INSERT INTO training_content_categories (name, type, description, color, parent_id, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING id, name, type, description, color, parent_id as "parentId", created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+    `, [name, type || 'custom', description || null, color || null, parentId || null, createdBy || null]);
+    res.status(201).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error creating category:', error);
     res.status(500).json({ error: error.message });
@@ -4049,16 +4054,14 @@ router.post('/content-library/categories', async (req, res) => {
 router.put('/content-library/categories/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [updated] = await db.update(trainingContentCategories)
-      .set({
-        name: req.body.name,
-        description: req.body.description,
-        color: req.body.color,
-        updatedAt: new Date(),
-      })
-      .where(eq(trainingContentCategories.id, id))
-      .returning();
-    res.json(updated);
+    const { name, description, color } = req.body;
+    const result = await pgPool.query(`
+      UPDATE training_content_categories 
+      SET name = $1, description = $2, color = $3, updated_at = NOW()
+      WHERE id = $4
+      RETURNING id, name, type, description, color, parent_id as "parentId", created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+    `, [name, description || null, color || null, id]);
+    res.json(result.rows[0]);
   } catch (error: any) {
     console.error('Error updating category:', error);
     res.status(500).json({ error: error.message });
@@ -4069,7 +4072,7 @@ router.put('/content-library/categories/:id', async (req, res) => {
 router.delete('/content-library/categories/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await db.delete(trainingContentCategories).where(eq(trainingContentCategories.id, id));
+    await pgPool.query(`DELETE FROM training_content_categories WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting category:', error);
@@ -4082,24 +4085,24 @@ router.delete('/content-library/categories/:id', async (req, res) => {
 // Get all documents with categories
 router.get('/content-library/documents', async (req, res) => {
   try {
-    const docsResult = await db.execute(sql`
+    const docsResult = await pgPool.query(`
       SELECT id, title, original_filename as "originalFilename", file_url as "fileUrl",
              file_type as "fileType", file_size as "fileSize", summary, status,
              uploaded_by as "uploadedBy", created_at as "createdAt"
       FROM training_library_documents
       ORDER BY created_at DESC
     `);
-    const docs = docsResult.rows as any[];
+    const docs = docsResult.rows;
 
     // Get categories for each document
-    const docsWithCategories = await Promise.all(docs.map(async (doc) => {
-      const assignmentsResult = await db.execute(sql`
+    const docsWithCategories = await Promise.all(docs.map(async (doc: any) => {
+      const assignmentsResult = await pgPool.query(`
         SELECT dca.category_id as "categoryId", tcc.name as "categoryName", 
                tcc.type as "categoryType", tcc.color as "categoryColor"
         FROM document_category_assignments dca
         LEFT JOIN training_content_categories tcc ON dca.category_id = tcc.id
-        WHERE dca.document_id = ${doc.id}
-      `);
+        WHERE dca.document_id = $1
+      `, [doc.id]);
       
       return { ...doc, categories: assignmentsResult.rows };
     }));
@@ -4142,21 +4145,35 @@ router.post('/content-library/documents', async (req, res) => {
 
     // Create document record using raw SQL to avoid ORM column mapping issues
     const status = extractedText ? 'processing' : 'uploaded';
-    // Convert fileSize to integer or null, handling empty string
-    const fileSizeInt = fileSize && fileSize !== '' ? parseInt(fileSize, 10) : null;
-    const uploadedByInt = uploadedBy && uploadedBy !== '' ? parseInt(uploadedBy, 10) : null;
+    // Convert fileSize to integer or null, handling empty string and NaN
+    let fileSizeInt: number | null = null;
+    if (fileSize !== undefined && fileSize !== null && fileSize !== '') {
+      const parsed = parseInt(String(fileSize), 10);
+      if (!isNaN(parsed)) {
+        fileSizeInt = parsed;
+      }
+    }
+    let uploadedByInt: number | null = null;
+    if (uploadedBy !== undefined && uploadedBy !== null && uploadedBy !== '') {
+      const parsed = parseInt(String(uploadedBy), 10);
+      if (!isNaN(parsed)) {
+        uploadedByInt = parsed;
+      }
+    }
     
-    const insertResult = await db.execute(sql`
+    console.log('Document upload params:', { title, originalFilename, fileUrl, fileType, fileSize, fileSizeInt, uploadedBy, uploadedByInt });
+    
+    const insertResult = await pgPool.query(`
       INSERT INTO training_library_documents 
         (title, original_filename, file_url, file_type, file_size, extracted_content, status, uploaded_by, created_at, updated_at)
       VALUES 
-        (${title}, ${originalFilename}, ${fileUrl || null}, ${fileType || null}, ${fileSizeInt}, ${extractedText || null}, ${status}, ${uploadedByInt}, NOW(), NOW())
+        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
       RETURNING id, title, original_filename as "originalFilename", file_url as "fileUrl", file_type as "fileType", 
                 file_size as "fileSize", extracted_content as "extractedContent", summary, key_points as "keyPoints", 
                 status, uploaded_by as "uploadedBy", created_at as "createdAt", updated_at as "updatedAt"
-    `);
+    `, [title, originalFilename, fileUrl || null, fileType || null, fileSizeInt, extractedText || null, status, uploadedByInt]);
     
-    const doc = insertResult.rows[0] as any;
+    const doc = insertResult.rows[0];
     
     if (!doc) {
       throw new Error('Failed to insert document');
@@ -4165,10 +4182,10 @@ router.post('/content-library/documents', async (req, res) => {
     // Assign categories
     if (categoryIds && categoryIds.length > 0) {
       for (const categoryId of categoryIds) {
-        await db.execute(sql`
+        await pgPool.query(`
           INSERT INTO document_category_assignments (document_id, category_id, created_at)
-          VALUES (${doc.id}, ${categoryId}, NOW())
-        `);
+          VALUES ($1, $2, NOW())
+        `, [doc.id, categoryId]);
       }
     }
 
@@ -4446,7 +4463,7 @@ Return JSON with this structure:
 // Get all topics with materials count
 router.get('/content-library/topics', async (req, res) => {
   try {
-    const result = await db.execute(sql`
+    const result = await pgPool.query(`
       SELECT t.id, t.title, t.description, t.objectives, 
              t.estimated_duration as "estimatedDuration", t.difficulty_level as "difficultyLevel",
              t.category_id as "categoryId", t.is_ai_generated as "isAiGenerated",
@@ -4741,7 +4758,7 @@ router.put('/content-library/assignments/:id/status', async (req, res) => {
 // Get AI training plans
 router.get('/content-library/training-plans', async (req, res) => {
   try {
-    const result = await db.execute(sql`
+    const result = await pgPool.query(`
       SELECT p.id, p.title, p.description, p.source_document_ids as "sourceDocumentIds",
              p.objectives, p.four_step_content as "fourStepContent", p.quiz_questions as "quizQuestions",
              p.part_number as "partNumber", p.department, p.production_line as "productionLine",

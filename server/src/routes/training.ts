@@ -4014,8 +4014,13 @@ import {
 // Get all categories
 router.get('/content-library/categories', async (req, res) => {
   try {
-    const categories = await db.select().from(trainingContentCategories).orderBy(trainingContentCategories.type, trainingContentCategories.name);
-    res.json(categories);
+    const result = await db.execute(sql`
+      SELECT id, name, type, description, color, parent_id as "parentId", 
+             created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+      FROM training_content_categories 
+      ORDER BY type, name
+    `);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ error: error.message });
@@ -4077,31 +4082,26 @@ router.delete('/content-library/categories/:id', async (req, res) => {
 // Get all documents with categories
 router.get('/content-library/documents', async (req, res) => {
   try {
-    const docs = await db.select({
-      id: trainingLibraryDocuments.id,
-      title: trainingLibraryDocuments.title,
-      originalFilename: trainingLibraryDocuments.originalFilename,
-      fileUrl: trainingLibraryDocuments.fileUrl,
-      fileType: trainingLibraryDocuments.fileType,
-      fileSize: trainingLibraryDocuments.fileSize,
-      summary: trainingLibraryDocuments.summary,
-      status: trainingLibraryDocuments.status,
-      uploadedBy: trainingLibraryDocuments.uploadedBy,
-      createdAt: trainingLibraryDocuments.createdAt,
-    }).from(trainingLibraryDocuments).orderBy(desc(trainingLibraryDocuments.createdAt));
+    const docsResult = await db.execute(sql`
+      SELECT id, title, original_filename as "originalFilename", file_url as "fileUrl",
+             file_type as "fileType", file_size as "fileSize", summary, status,
+             uploaded_by as "uploadedBy", created_at as "createdAt"
+      FROM training_library_documents
+      ORDER BY created_at DESC
+    `);
+    const docs = docsResult.rows as any[];
 
     // Get categories for each document
     const docsWithCategories = await Promise.all(docs.map(async (doc) => {
-      const assignments = await db.select({
-        categoryId: documentCategoryAssignments.categoryId,
-        categoryName: trainingContentCategories.name,
-        categoryType: trainingContentCategories.type,
-        categoryColor: trainingContentCategories.color,
-      }).from(documentCategoryAssignments)
-        .leftJoin(trainingContentCategories, eq(documentCategoryAssignments.categoryId, trainingContentCategories.id))
-        .where(eq(documentCategoryAssignments.documentId, doc.id));
+      const assignmentsResult = await db.execute(sql`
+        SELECT dca.category_id as "categoryId", tcc.name as "categoryName", 
+               tcc.type as "categoryType", tcc.color as "categoryColor"
+        FROM document_category_assignments dca
+        LEFT JOIN training_content_categories tcc ON dca.category_id = tcc.id
+        WHERE dca.document_id = ${doc.id}
+      `);
       
-      return { ...doc, categories: assignments };
+      return { ...doc, categories: assignmentsResult.rows };
     }));
 
     res.json(docsWithCategories);
@@ -4446,23 +4446,17 @@ Return JSON with this structure:
 // Get all topics with materials count
 router.get('/content-library/topics', async (req, res) => {
   try {
-    const topics = await db.select({
-      id: trainingLibraryTopics.id,
-      title: trainingLibraryTopics.title,
-      description: trainingLibraryTopics.description,
-      objectives: trainingLibraryTopics.objectives,
-      estimatedDuration: trainingLibraryTopics.estimatedDuration,
-      difficultyLevel: trainingLibraryTopics.difficultyLevel,
-      categoryId: trainingLibraryTopics.categoryId,
-      isAiGenerated: trainingLibraryTopics.isAiGenerated,
-      createdAt: trainingLibraryTopics.createdAt,
-      categoryName: trainingContentCategories.name,
-      categoryColor: trainingContentCategories.color,
-    }).from(trainingLibraryTopics)
-      .leftJoin(trainingContentCategories, eq(trainingLibraryTopics.categoryId, trainingContentCategories.id))
-      .orderBy(desc(trainingLibraryTopics.createdAt));
+    const result = await db.execute(sql`
+      SELECT t.id, t.title, t.description, t.objectives, 
+             t.estimated_duration as "estimatedDuration", t.difficulty_level as "difficultyLevel",
+             t.category_id as "categoryId", t.is_ai_generated as "isAiGenerated",
+             t.created_at as "createdAt", c.name as "categoryName", c.color as "categoryColor"
+      FROM training_library_topics t
+      LEFT JOIN training_content_categories c ON t.category_id = c.id
+      ORDER BY t.created_at DESC
+    `);
 
-    res.json(topics);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching topics:', error);
     res.status(500).json({ error: error.message });
@@ -4747,21 +4741,17 @@ router.put('/content-library/assignments/:id/status', async (req, res) => {
 // Get AI training plans
 router.get('/content-library/training-plans', async (req, res) => {
   try {
-    const plans = await db.select({
-      id: aiTrainingPlans.id,
-      traineeId: aiTrainingPlans.traineeId,
-      title: aiTrainingPlans.title,
-      description: aiTrainingPlans.description,
-      planStructure: aiTrainingPlans.planStructure,
-      totalTopics: aiTrainingPlans.totalTopics,
-      status: aiTrainingPlans.status,
-      createdAt: aiTrainingPlans.createdAt,
-      traineeName: employees.name,
-    }).from(aiTrainingPlans)
-      .leftJoin(employees, eq(aiTrainingPlans.traineeId, employees.id))
-      .orderBy(desc(aiTrainingPlans.createdAt));
+    const result = await db.execute(sql`
+      SELECT p.id, p.title, p.description, p.source_document_ids as "sourceDocumentIds",
+             p.objectives, p.four_step_content as "fourStepContent", p.quiz_questions as "quizQuestions",
+             p.part_number as "partNumber", p.department, p.production_line as "productionLine",
+             p.assigned_trainers as "assignedTrainers", p.status, 
+             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt"
+      FROM ai_training_plans p
+      ORDER BY p.created_at DESC
+    `);
 
-    res.json(plans);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching training plans:', error);
     res.status(500).json({ error: error.message });

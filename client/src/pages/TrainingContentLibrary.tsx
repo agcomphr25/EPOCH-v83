@@ -101,6 +101,10 @@ export default function TrainingContentLibrary() {
   const [newCategory, setNewCategory] = useState({ name: '', type: 'custom', description: '', color: '#3B82F6' });
   const [newDoc, setNewDoc] = useState({ title: '', extractedText: '', categoryIds: [] as number[], fileName: '' });
   const [selectedTrainee, setSelectedTrainee] = useState<string>('');
+  const [selectedTrainers, setSelectedTrainers] = useState<string[]>([]);
+  const [partNumber, setPartNumber] = useState('');
+  const [departmentForPlan, setDepartmentForPlan] = useState('');
+  const [productionLine, setProductionLine] = useState('');
   const [isExtractingFile, setIsExtractingFile] = useState(false);
   
   // Edit/Delete state for documents
@@ -263,15 +267,24 @@ export default function TrainingContentLibrary() {
         body: JSON.stringify({
           traineeId: parseInt(selectedTrainee),
           topicIds: selectedTopics,
+          trainerIds: selectedTrainers.map(id => parseInt(id)),
+          partNumber: partNumber || null,
+          department: departmentForPlan || null,
+          productionLine: productionLine || null,
         }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/training-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/epoch/training-plans'] });
       setAssignTrainingOpen(false);
       setSelectedTopics([]);
       setSelectedTrainee('');
-      toast({ title: 'Training plan created and topics assigned!' });
+      setSelectedTrainers([]);
+      setPartNumber('');
+      setDepartmentForPlan('');
+      setProductionLine('');
+      toast({ title: 'Training plan created with trainer assignment and production authorization!' });
     },
     onError: (error: any) => {
       toast({ title: 'Error creating training plan', description: error.message, variant: 'destructive' });
@@ -1014,22 +1027,23 @@ export default function TrainingContentLibrary() {
       </Dialog>
 
       <Dialog open={assignTrainingOpen} onOpenChange={setAssignTrainingOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-green-500" />
-              Assign Training to Trainee
+              Assign Training Program
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-muted-foreground">
-              AI will organize {selectedTopics.length} topic(s) into an optimal 4-day training plan.
+            <p className="text-muted-foreground text-sm">
+              AI will create a 4-step training program from {selectedTopics.length} topic(s) with quizzes for each step.
             </p>
+            
             <div>
-              <Label>Select Trainee</Label>
+              <Label>Trainee *</Label>
               <Select value={selectedTrainee} onValueChange={setSelectedTrainee}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose an employee" />
+                  <SelectValue placeholder="Select trainee" />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map(emp => (
@@ -1040,15 +1054,79 @@ export default function TrainingContentLibrary() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div>
+              <Label>Trainer(s) *</Label>
+              <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
+                {employees.map(emp => (
+                  <div key={emp.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`trainer-${emp.id}`}
+                      checked={selectedTrainers.includes(emp.id.toString())}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedTrainers(prev => [...prev, emp.id.toString()]);
+                        } else {
+                          setSelectedTrainers(prev => prev.filter(id => id !== emp.id.toString()));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`trainer-${emp.id}`} className="text-sm font-normal cursor-pointer">
+                      {emp.name} {emp.department ? `(${emp.department})` : ''}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Part Number</Label>
+                <Input
+                  placeholder="e.g., ABC-123"
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Department</Label>
+                <Input
+                  placeholder="e.g., Assembly"
+                  value={departmentForPlan}
+                  onChange={(e) => setDepartmentForPlan(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <Label>Production Line</Label>
+              <Select value={productionLine} onValueChange={setProductionLine}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select production line" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="P1">P1 - Production Line 1</SelectItem>
+                  <SelectItem value="P2">P2 - Production Line 2</SelectItem>
+                  <SelectItem value="P3">P3 - Production Line 3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {partNumber && (
+              <p className="text-xs text-muted-foreground bg-green-50 dark:bg-green-950/50 p-2 rounded">
+                Upon completion, trainee will be authorized to work on Part #{partNumber} 
+                {productionLine ? ` on ${productionLine}` : ''} via the Traveler system.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignTrainingOpen(false)}>Cancel</Button>
             <Button 
               onClick={() => generatePlanMutation.mutate()} 
-              disabled={!selectedTrainee || generatePlanMutation.isPending}
+              disabled={!selectedTrainee || selectedTrainers.length === 0 || generatePlanMutation.isPending}
               className="bg-gradient-to-r from-green-500 to-teal-500"
             >
-              {generatePlanMutation.isPending ? 'Creating Plan...' : 'Create 4-Day Training Plan'}
+              {generatePlanMutation.isPending ? 'Creating Program...' : 'Create Training Program'}
             </Button>
           </DialogFooter>
         </DialogContent>

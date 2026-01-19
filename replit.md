@@ -55,6 +55,14 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Routing Document Management System**: AI-powered document management for P2 Control Center supporting work instructions, spec sheets, and traveler templates, including AI parsing, generation, template learning, and linking to part routings and certifications.
 - **Training Builder Module**: Self-contained training program management system using Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, 4-Step Training Model integration, S-O-A Coaching Feedback, Quiz Management, and Certification Workflow.
 - **Training Content Library**: Central repository for training materials with category management, document upload with AI content extraction, AI Training Topic Generator for 4-Step Method materials, trainee assignment interface with AI-powered 4-day training plan generation, and progress tracking.
+- **Epoch 4-Step Training System**: Comprehensive training management system using the Train-the-Trainer 4-step methodology:
+  - **4-Step Method**: Step 1 (Trainer Does/Explains) → Step 2 (Trainer Does/Trainee Explains) → Step 3 (Trainee Does/Trainer Coaches) → Step 4 (Trainee Does/Trainer Observes)
+  - **Training Plans**: AI-generated training programs with quizzes for each step, trainer assignments (primary + secondary), and production authorization data (part number, department, production line)
+  - **Step Progression**: Sequential step completion with quiz requirements - steps 2-4 locked until previous step quiz passed
+  - **Quiz System**: AI-generated quiz questions per step with 80% passing score, secure quiz-taking (answers not exposed until submission), and score tracking
+  - **Traveler Authorization**: Automatic authorization granted upon completing all 4 steps for specific part #/department/production line combinations
+  - **Trainee Portal**: Dedicated portal for trainees to view training plans, complete quizzes, and track progress (/training/my-training)
+  - **Security**: Quiz answers hidden during quiz-taking, step availability validation, and completion checks to prevent retakes
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

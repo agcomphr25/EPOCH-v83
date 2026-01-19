@@ -56,6 +56,9 @@ interface OrderData {
   customDiscountType?: string;
   customDiscountValue?: number;
   showCustomDiscount?: boolean;
+  // Promo code discount fields
+  discountType?: string; // 'none' | 'percent' | 'dollar'
+  discountValue?: number;
 }
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
@@ -439,10 +442,23 @@ export async function generateSalesOrderPDF(
     featureCount += miscItemsCount + 1; // +1 for "Miscellaneous Items" header
   }
   
-  // Calculate height: header (20) + model line (15) + features (15 each) + separator (20) + subtotal (25) + [discount (25)] + shipping (25) + total (30) + padding (20)
-  const hasDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
-  const discountLineHeight = hasDiscount ? 25 : 0;
-  const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + discountLineHeight + 25 + 30 + 20;
+  // Add customer notes to count if present (will be rendered as feature row with possible wrapped text)
+  const hasCustomerNotes = orderData.notes && orderData.notes.trim();
+  let customerNotesLineCount = 0;
+  if (hasCustomerNotes) {
+    const maxNotesWidth = printableWidth - 160; // Width for selection column
+    const tempNotesLines = wrapText(orderData.notes!.trim(), maxNotesWidth, 8, font);
+    customerNotesLineCount = Math.max(1, tempNotesLines.length);
+    featureCount += customerNotesLineCount; // Each wrapped line takes a row
+  }
+  
+  // Calculate height: header (18) + model line (14) + features (14 each) + separator (15) + subtotal (20) + [discount (20)] + shipping (20) + total (25) + padding (15)
+  // Check for discount: either custom discount OR promo code discount (type != 'none' and value > 0)
+  const hasCustomDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
+  const hasPromoDiscount = orderData.discountType && orderData.discountType !== 'none' && orderData.discountValue && orderData.discountValue > 0;
+  const hasDiscount = hasCustomDiscount || hasPromoDiscount;
+  const discountLineHeight = hasDiscount ? 20 : 0;
+  const featuresTableHeight = 18 + (featureCount * 14) + 15 + 20 + discountLineHeight + 20 + 25 + 15;
   
   page.drawRectangle({
     x: margin,
@@ -456,9 +472,9 @@ export async function generateSalesOrderPDF(
   // Table header
   page.drawRectangle({
     x: margin,
-    y: currentY - 20,
+    y: currentY - 18,
     width: printableWidth,
-    height: 20,
+    height: 18,
     color: rgb(0.9, 0.9, 0.9),
     borderColor: rgb(0, 0, 0),
     borderWidth: 1,
@@ -466,26 +482,26 @@ export async function generateSalesOrderPDF(
 
   page.drawText('Feature', {
     x: margin + 8,
-    y: currentY - 12,
+    y: currentY - 11,
     size: 8,
     font: boldFont,
   });
 
   page.drawText('Selection', {
     x: margin + 140,
-    y: currentY - 12,
+    y: currentY - 11,
     size: 8,
     font: boldFont,
   });
 
   page.drawText('Price', {
     x: margin + printableWidth - 70,
-    y: currentY - 12,
+    y: currentY - 11,
     size: 8,
     font: boldFont,
   });
 
-  let summaryLineY = currentY - 35;
+  let summaryLineY = currentY - 30;
 
   // Stock Model
   page.drawText('Stock Model:', {
@@ -511,7 +527,7 @@ export async function generateSalesOrderPDF(
     font: font,
   });
 
-  summaryLineY -= 15;
+  summaryLineY -= 14;
 
   // Add all features
   let calculatedSubtotal = basePrice;
@@ -557,7 +573,7 @@ export async function generateSalesOrderPDF(
             font: boldFont,
             color: rgb(0.2, 0.2, 0.2),
           });
-          summaryLineY -= 15;
+          summaryLineY -= 14;
 
           // Display each option separately with its quantity
           for (const optionValue of featureValue) {
@@ -587,7 +603,7 @@ export async function generateSalesOrderPDF(
               font: font,
             });
 
-            summaryLineY -= 15;
+            summaryLineY -= 14;
           }
         } else {
           // Standard feature rendering - check for quantities in featureQuantities
@@ -644,7 +660,7 @@ export async function generateSalesOrderPDF(
             font: font,
           });
 
-          summaryLineY -= 15;
+          summaryLineY -= 14;
         }
       }
     }
@@ -660,7 +676,7 @@ export async function generateSalesOrderPDF(
       font: boldFont,
       color: rgb(0.2, 0.2, 0.2),
     });
-    summaryLineY -= 15;
+    summaryLineY -= 14;
 
     // Add each misc item
     for (const item of orderData.miscItems) {
@@ -684,8 +700,46 @@ export async function generateSalesOrderPDF(
         font: font,
       });
 
-      summaryLineY -= 15;
+      summaryLineY -= 14;
     }
+  }
+
+  // Add Customer Notes as a feature row (if present)
+  if (hasCustomerNotes) {
+    page.drawText('Customer Notes:', {
+      x: margin + 8,
+      y: summaryLineY,
+      size: 8,
+      font: font,
+    });
+
+    // Wrap notes text for the selection column
+    const maxNotesWidth = printableWidth - 160;
+    const notesLines = wrapText(orderData.notes!.trim(), maxNotesWidth, 8, font);
+    
+    // Draw each line of the wrapped notes text
+    let notesY = summaryLineY;
+    for (let i = 0; i < notesLines.length; i++) {
+      page.drawText(notesLines[i], {
+        x: margin + 140,
+        y: notesY,
+        size: 8,
+        font: font,
+        color: rgb(0.3, 0.3, 0.3),
+      });
+      notesY -= 14;
+    }
+    
+    // Draw dash for price column on first line
+    page.drawText('—', {
+      x: margin + printableWidth - 70,
+      y: summaryLineY,
+      size: 8,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    summaryLineY = notesY;
   }
 
   // Separator line before totals
@@ -697,7 +751,7 @@ export async function generateSalesOrderPDF(
     color: rgb(0, 0, 0),
   });
 
-  summaryLineY -= 18;
+  summaryLineY -= 15;
 
   // Subtotal
   page.drawText('Subtotal:', {
@@ -714,31 +768,58 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  summaryLineY -= 25;
+  summaryLineY -= 20;
 
-  // Discount (if applicable)
+  // Discount (if applicable) - supports both custom discounts and promo code discounts
+  // Note: hasCustomDiscount and hasPromoDiscount are already defined earlier in the function for height calculation
   let discountAmount = 0;
-  if (orderData.showCustomDiscount && orderData.customDiscountValue) {
-    // Determine the base amount for discount calculation
+  let discountLabel = '';
+  
+  if (hasCustomDiscount) {
+    // Custom discount logic
     const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
       ? basePrice  // Apply only to stock model price
       : calculatedSubtotal;  // Apply to full subtotal
     
     if (orderData.customDiscountType === 'percent') {
-      discountAmount = baseAmountForDiscount * (orderData.customDiscountValue / 100);
+      discountAmount = baseAmountForDiscount * (orderData.customDiscountValue! / 100);
     } else {
-      discountAmount = orderData.customDiscountValue;
+      discountAmount = orderData.customDiscountValue!;
     }
 
     // Use friendly display name if available, otherwise fall back to code or generic label
-    const discountLabel = orderData.discountDisplayName 
+    // Human-readable labels only - never show internal enum values
+    discountLabel = orderData.discountDisplayName 
       ? `Discount (${orderData.discountDisplayName}):`
       : orderData.discountCode 
         ? `Discount (${orderData.discountCode}):`
         : orderData.customDiscountType === 'percent'
           ? `Discount (${orderData.customDiscountValue}%):`
           : 'Discount:';
+  } else if (hasPromoDiscount) {
+    // Promo code discount logic
+    const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
+      ? basePrice  // Apply only to stock model price
+      : calculatedSubtotal;  // Apply to full subtotal
+    
+    if (orderData.discountType === 'percent') {
+      discountAmount = baseAmountForDiscount * (orderData.discountValue! / 100);
+    } else {
+      // 'dollar' or any other type - use value directly
+      discountAmount = orderData.discountValue!;
+    }
 
+    // Human-readable labels only - never show internal enum values like 'percent' or 'dollar'
+    discountLabel = orderData.discountDisplayName 
+      ? `Discount (${orderData.discountDisplayName}):`
+      : orderData.discountCode 
+        ? `Discount (${orderData.discountCode}):`
+        : orderData.discountType === 'percent'
+          ? `Discount (${orderData.discountValue}%):`
+          : 'Discount:';
+  }
+  
+  if (discountAmount > 0) {
     page.drawText(discountLabel, {
       x: margin + 8,
       y: summaryLineY,
@@ -755,7 +836,7 @@ export async function generateSalesOrderPDF(
       color: rgb(0.8, 0, 0),
     });
 
-    summaryLineY -= 25;
+    summaryLineY -= 20;
   }
 
   // Shipping
@@ -774,7 +855,7 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  summaryLineY -= 30;
+  summaryLineY -= 25;
 
   // TOTAL
   const totalAmount = calculatedSubtotal - discountAmount + shippingAmount;
@@ -892,48 +973,8 @@ export async function generateSalesOrderPDF(
     font: font,
   });
 
-  // Notes Section (if present)
-  page2Y -= 100;
-  if (orderData.notes && orderData.notes.trim()) {
-    page2.drawText('CUSTOMER NOTES / SPECIAL INSTRUCTIONS', {
-      x: margin,
-      y: page2Y,
-      size: 12,
-      font: boldFont,
-    });
-
-    page2Y -= 20;
-
-    // Wrap notes text to fit within page width
-    const maxNotesWidth = printableWidth - 20;
-    const notesLines = wrapText(orderData.notes.trim(), maxNotesWidth, 9, font);
-
-    // Draw notes with a light background box
-    const notesBoxHeight = (notesLines.length * 12) + 20;
-    page2.drawRectangle({
-      x: margin,
-      y: page2Y - notesBoxHeight + 10,
-      width: printableWidth,
-      height: notesBoxHeight,
-      color: rgb(0.98, 0.98, 0.98),
-      borderColor: rgb(0.8, 0.8, 0.8),
-      borderWidth: 1,
-    });
-
-    let notesY = page2Y - 5;
-    for (const line of notesLines) {
-      page2.drawText(line, {
-        x: margin + 10,
-        y: notesY,
-        size: 9,
-        font: font,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-      notesY -= 12;
-    }
-
-    page2Y -= notesBoxHeight + 20;
-  }
+  // Customer notes are now displayed on page 1 in the Features table
+  page2Y -= 20;
 
   // Terms and Conditions Section
   page2.drawText('Initial Terms and Conditions', {

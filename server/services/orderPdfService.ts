@@ -22,7 +22,199 @@ import { storage } from '../storage';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../utils/pdf/salesOrderPdf';
 import { db } from '../db';
 import { followupOrders, persistentDiscounts, creditCardTransactions } from '../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
+
+/**
+ * Core order data structure - only contains guaranteed database columns.
+ * This is the safe interface for querying orders without schema failures.
+ */
+interface CoreOrderData {
+  orderId: string;
+  orderDate: Date | null;
+  dueDate: Date | null;
+  customerId: string | null;
+  customerPO: string | null;
+  fbOrderNumber: string | null;
+  modelId: string | null;
+  features: Record<string, any> | null;
+  featureQuantities: Record<string, number> | null;
+  notes: string | null;
+  shipping: number | null;
+  handedness: string | null;
+  status: string | null;
+  barcode: string | null;
+}
+
+/**
+ * SCHEMA-SAFE query: Only selects guaranteed core columns that exist in the database.
+ * This prevents PDF generation from failing due to missing optional columns.
+ * 
+ * Feature-related data, discounts, flags, and experimental options are read
+ * from the 'features' JSONB field - NOT from individual columns.
+ */
+async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | null> {
+  // RESILIENT: This function never throws - returns null on any error
+  // Callers should fall back to stored snapshots when this returns null
+  try {
+    // First try all_orders table (finalized orders)
+    const result = await db.execute(sql`
+      SELECT 
+        order_id as "orderId",
+        order_date as "orderDate",
+        due_date as "dueDate",
+        customer_id as "customerId",
+        customer_po as "customerPO",
+        fb_order_number as "fbOrderNumber",
+        model_id as "modelId",
+        features,
+        feature_quantities as "featureQuantities",
+        notes,
+        shipping,
+        handedness,
+        status,
+        barcode
+      FROM all_orders 
+      WHERE order_id = ${orderId}
+      LIMIT 1
+    `);
+    
+    if (result.rows && result.rows.length > 0) {
+      const row = result.rows[0] as any;
+      return {
+        orderId: row.orderId,
+        orderDate: row.orderDate ? new Date(row.orderDate) : null,
+        dueDate: row.dueDate ? new Date(row.dueDate) : null,
+        customerId: row.customerId,
+        customerPO: row.customerPO,
+        fbOrderNumber: row.fbOrderNumber,
+        modelId: row.modelId,
+        features: row.features || {},
+        featureQuantities: row.featureQuantities || {},
+        notes: row.notes,
+        shipping: row.shipping ? parseFloat(row.shipping) : null,
+        handedness: row.handedness,
+        status: row.status,
+        barcode: row.barcode,
+      };
+    }
+    
+    // Try order_drafts table
+    const draftResult = await db.execute(sql`
+      SELECT 
+        order_id as "orderId",
+        order_date as "orderDate",
+        due_date as "dueDate",
+        customer_id as "customerId",
+        customer_po as "customerPO",
+        fb_order_number as "fbOrderNumber",
+        model_id as "modelId",
+        features,
+        feature_quantities as "featureQuantities",
+        notes,
+        shipping,
+        handedness,
+        status,
+        barcode
+      FROM order_drafts 
+      WHERE order_id = ${orderId}
+      LIMIT 1
+    `);
+    
+    if (draftResult.rows && draftResult.rows.length > 0) {
+      const row = draftResult.rows[0] as any;
+      return {
+        orderId: row.orderId,
+        orderDate: row.orderDate ? new Date(row.orderDate) : null,
+        dueDate: row.dueDate ? new Date(row.dueDate) : null,
+        customerId: row.customerId,
+        customerPO: row.customerPO,
+        fbOrderNumber: row.fbOrderNumber,
+        modelId: row.modelId,
+        features: row.features || {},
+        featureQuantities: row.featureQuantities || {},
+        notes: row.notes,
+        shipping: row.shipping ? parseFloat(row.shipping) : null,
+        handedness: row.handedness,
+        status: row.status,
+        barcode: row.barcode,
+      };
+    }
+    
+    // Try by FB Order Number
+    const fbResult = await db.execute(sql`
+      SELECT 
+        order_id as "orderId",
+        order_date as "orderDate",
+        due_date as "dueDate",
+        customer_id as "customerId",
+        customer_po as "customerPO",
+        fb_order_number as "fbOrderNumber",
+        model_id as "modelId",
+        features,
+        feature_quantities as "featureQuantities",
+        notes,
+        shipping,
+        handedness,
+        status,
+        barcode
+      FROM all_orders 
+      WHERE fb_order_number = ${orderId}
+      LIMIT 1
+    `);
+    
+    if (fbResult.rows && fbResult.rows.length > 0) {
+      const row = fbResult.rows[0] as any;
+      return {
+        orderId: row.orderId,
+        orderDate: row.orderDate ? new Date(row.orderDate) : null,
+        dueDate: row.dueDate ? new Date(row.dueDate) : null,
+        customerId: row.customerId,
+        customerPO: row.customerPO,
+        fbOrderNumber: row.fbOrderNumber,
+        modelId: row.modelId,
+        features: row.features || {},
+        featureQuantities: row.featureQuantities || {},
+        notes: row.notes,
+        shipping: row.shipping ? parseFloat(row.shipping) : null,
+        handedness: row.handedness,
+        status: row.status,
+        barcode: row.barcode,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    // RESILIENT: Log warning and return null instead of throwing
+    // This allows callers to fall back to stored snapshots
+    console.warn(`⚠️ [PDF-SERVICE] Error querying core order data for ${orderId}, will try fallback:`, error);
+    return null;
+  }
+}
+
+/**
+ * Extract discount information from the features JSONB or safe defaults.
+ * This reads discount data from the order's features field, NOT from database columns.
+ */
+function extractDiscountFromFeatures(features: Record<string, any> | null): {
+  discountCode?: string;
+  discountDisplayName?: string;
+  discountAppliesTo?: 'stock_model' | 'total_order';
+  customDiscountType?: string;
+  customDiscountValue?: number;
+  showCustomDiscount?: boolean;
+} {
+  if (!features) return {};
+  
+  // Discount data may be stored in the features JSONB under various keys
+  return {
+    discountCode: features.discountCode || features.discount_code || undefined,
+    discountDisplayName: features.discountDisplayName || features.discount_display_name || undefined,
+    discountAppliesTo: features.discountAppliesTo || features.discount_applies_to || undefined,
+    customDiscountType: features.customDiscountType || features.custom_discount_type || undefined,
+    customDiscountValue: features.customDiscountValue || features.custom_discount_value || undefined,
+    showCustomDiscount: features.showCustomDiscount || features.show_custom_discount || false,
+  };
+}
 
 export enum PdfIntent {
   SIGNATURE_EMAIL = 'signature_email',     // Frozen snapshot, pending payment, signature box
@@ -148,13 +340,30 @@ function ensureUploadsDir(): void {
 /**
  * Create a frozen snapshot of order data at the moment of signature request.
  * This snapshot is NEVER updated after creation.
+ * 
+ * SCHEMA-SAFE: Uses getOrderCoreDataForPdf() which only queries guaranteed core columns.
+ * All feature-related data is extracted from the 'features' JSONB field.
+ * 
+ * RESILIENT: If live query fails, attempts to use stored snapshot from followup_orders.
  */
 export async function createOrderSnapshot(orderId: string): Promise<OrderSnapshot> {
-  console.log(`📸 [PDF-SERVICE] Creating order snapshot for ${orderId}`);
+  console.log(`📸 [PDF-SERVICE] Creating order snapshot for ${orderId} (SCHEMA-SAFE)`);
   
-  const order = await storage.getOrderById(orderId);
+  // Use schema-safe query that only selects guaranteed core columns
+  const order = await getOrderCoreDataForPdf(orderId);
   if (!order) {
-    throw new Error(`Order ${orderId} not found`);
+    // FALLBACK: Try to use stored snapshot if available
+    console.warn(`⚠️ [PDF-SERVICE] Live query failed for ${orderId}, checking for stored snapshot...`);
+    try {
+      const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+      if (followupOrder?.orderSnapshot) {
+        console.log(`📸 [PDF-SERVICE] Using stored snapshot for ${orderId}`);
+        return followupOrder.orderSnapshot as OrderSnapshot;
+      }
+    } catch (err) {
+      console.warn(`⚠️ [PDF-SERVICE] Could not retrieve stored snapshot for ${orderId}:`, err);
+    }
+    throw new Error(`Order ${orderId} not found and no stored snapshot available`);
   }
 
   const customer = await storage.getCustomerById(order.customerId || '');
@@ -268,42 +477,56 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     }
   }
 
-  const miscItems = (order.features as any)?.miscItems || [];
+  const miscItems = order.features?.miscItems || [];
 
-  let discountDisplayName: string | undefined;
-  let discountAppliesTo: 'stock_model' | 'total_order' | undefined;
+  // Extract discount information from features JSONB (schema-safe approach)
+  // Discount data may be embedded in the features field or stored as separate columns
+  // We try features first, then fall back to safe defaults
+  const discountFromFeatures = extractDiscountFromFeatures(order.features);
+  
+  let discountDisplayName: string | undefined = discountFromFeatures.discountDisplayName;
+  let discountAppliesTo: 'stock_model' | 'total_order' | undefined = discountFromFeatures.discountAppliesTo;
+  const discountCode = discountFromFeatures.discountCode;
 
-  if (order.discountCode) {
-    if (order.discountCode.startsWith('persistent_')) {
-      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-      const discountResults = await db
-        .select()
-        .from(persistentDiscounts)
-        .where(eq(persistentDiscounts.id, discountId))
-        .limit(1);
-      if (discountResults.length > 0) {
-        const discount = discountResults[0];
-        discountDisplayName = discount.description || discount.name;
-        discountAppliesTo = discount.appliesTo as 'stock_model' | 'total_order' || 'stock_model';
+  // If discount code exists, try to look up display name from persistent discounts
+  if (discountCode && !discountDisplayName) {
+    try {
+      if (discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(discountCode.replace('persistent_', ''));
+        const discountResults = await db
+          .select()
+          .from(persistentDiscounts)
+          .where(eq(persistentDiscounts.id, discountId))
+          .limit(1);
+        if (discountResults.length > 0) {
+          const discount = discountResults[0];
+          discountDisplayName = discount.description || discount.name;
+          discountAppliesTo = discount.appliesTo as 'stock_model' | 'total_order' || 'stock_model';
+        }
+      } else {
+        const discountResults = await db
+          .select()
+          .from(persistentDiscounts)
+          .where(eq(persistentDiscounts.name, discountCode))
+          .limit(1);
+        if (discountResults.length > 0) {
+          const discount = discountResults[0];
+          discountDisplayName = discount.description || discount.name;
+          discountAppliesTo = discount.appliesTo as 'stock_model' | 'total_order' || 'stock_model';
+        }
       }
-    } else {
-      const discountResults = await db
-        .select()
-        .from(persistentDiscounts)
-        .where(eq(persistentDiscounts.name, order.discountCode))
-        .limit(1);
-      if (discountResults.length > 0) {
-        const discount = discountResults[0];
-        discountDisplayName = discount.description || discount.name;
-        discountAppliesTo = discount.appliesTo as 'stock_model' | 'total_order' || 'stock_model';
-      }
+    } catch (err) {
+      console.warn(`⚠️ [PDF-SERVICE] Could not look up discount ${discountCode}:`, err);
+      // Continue without discount display name - won't throw
     }
   }
 
+  // Build snapshot using only data from core columns and features JSONB
+  // This is schema-safe and won't fail due to missing columns
   const snapshot: OrderSnapshot = {
     orderId: order.orderId,
-    orderDate: new Date(order.orderDate).toISOString(),
-    dueDate: new Date(order.dueDate).toISOString(),
+    orderDate: order.orderDate ? new Date(order.orderDate).toISOString() : new Date().toISOString(),
+    dueDate: order.dueDate ? new Date(order.dueDate).toISOString() : new Date().toISOString(),
     customerId: order.customerId || '',
     customerPO: order.customerPO || undefined,
     customerName: customer.name,
@@ -322,22 +545,22 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     modelName: stockModel?.name || undefined,
     modelDisplayName: stockModel?.displayName || undefined,
     modelPrice: stockModel?.price || 0,
-    handedness: order.handedness || undefined,
-    features: order.features as Record<string, any> || undefined,
+    handedness: order.handedness || order.features?.handedness || undefined,
+    features: order.features || undefined,
     featurePrices,
     featureDisplayNames,
     featureSelectionDisplayNames,
     featureSelectionPrices,
-    featureQuantities: order.featureQuantities as Record<string, number> || undefined,
+    featureQuantities: order.featureQuantities || undefined,
     miscItems: miscItems.length > 0 ? miscItems : undefined,
     notes: order.notes || undefined,
     shipping: order.shipping || 0,
-    discountCode: order.discountCode || undefined,
+    discountCode: discountCode || undefined,
     discountDisplayName,
     discountAppliesTo,
-    customDiscountType: order.customDiscountType || undefined,
-    customDiscountValue: order.customDiscountValue || undefined,
-    showCustomDiscount: order.showCustomDiscount || undefined,
+    customDiscountType: discountFromFeatures.customDiscountType || undefined,
+    customDiscountValue: discountFromFeatures.customDiscountValue || undefined,
+    showCustomDiscount: discountFromFeatures.showCustomDiscount || false,
   };
 
   console.log(`📸 [PDF-SERVICE] Snapshot created for ${orderId}:`, {
@@ -353,29 +576,38 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
 /**
  * Fetch live order data (for CUSTOMER_VIEW and SHIPPING_PRINT intents).
  * This always queries the current state of the order.
+ * 
+ * SCHEMA-SAFE: Uses getOrderCoreDataForPdf() which only queries guaranteed core columns.
  */
 async function fetchLiveOrderData(orderId: string, notesField: 'customer_notes' | 'internal_notes'): Promise<OrderSnapshot & { paymentStatus: 'PAID' | 'PENDING' }> {
-  console.log(`📊 [PDF-SERVICE] Fetching live data for ${orderId}`);
+  console.log(`📊 [PDF-SERVICE] Fetching live data for ${orderId} (SCHEMA-SAFE)`);
   
+  // createOrderSnapshot already uses the schema-safe query
   const snapshot = await createOrderSnapshot(orderId);
   
-  const order = await storage.getOrderById(orderId);
-  if (!order) {
-    throw new Error(`Order ${orderId} not found`);
+  // If internal notes are needed, re-query just the notes field using the safe query
+  if (notesField === 'internal_notes') {
+    const order = await getOrderCoreDataForPdf(orderId);
+    if (order) {
+      snapshot.notes = order.notes || undefined;
+    }
   }
 
-  const paymentRecords = await db
-    .select()
-    .from(creditCardTransactions)
-    .where(and(
-      eq(creditCardTransactions.orderId, orderId),
-      eq(creditCardTransactions.status, 'completed')
-    ));
-  
-  const paymentStatus: 'PAID' | 'PENDING' = paymentRecords.length > 0 ? 'PAID' : 'PENDING';
-
-  if (notesField === 'internal_notes') {
-    snapshot.notes = order.notes || undefined;
+  // Check payment status using a separate safe query
+  let paymentStatus: 'PAID' | 'PENDING' = 'PENDING';
+  try {
+    const paymentRecords = await db
+      .select()
+      .from(creditCardTransactions)
+      .where(and(
+        eq(creditCardTransactions.orderId, orderId),
+        eq(creditCardTransactions.status, 'completed')
+      ));
+    
+    paymentStatus = paymentRecords.length > 0 ? 'PAID' : 'PENDING';
+  } catch (err) {
+    console.warn(`⚠️ [PDF-SERVICE] Could not check payment status for ${orderId}:`, err);
+    // Continue with PENDING status - won't throw
   }
 
   return {

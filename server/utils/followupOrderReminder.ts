@@ -81,6 +81,7 @@ export async function sendReminderForOverdueOrders() {
             status: 'skipped',
             skipReason: 'legacy_order_before_cutoff',
             signatureToken: followupOrder.signatureToken || undefined,
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             message: `Reminder skipped for ${followupOrder.orderId}: legacy order created before cutoff (${dateInfo})`,
             sentAt: new Date(),
           });
@@ -106,6 +107,7 @@ export async function sendReminderForOverdueOrders() {
             status: 'skipped',
             skipReason: 'already_signed',
             signatureToken: followupOrder.signatureToken || undefined,
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             message: `Reminder skipped for ${followupOrder.orderId}: order already signed`,
             sentAt: new Date(),
           });
@@ -132,6 +134,7 @@ export async function sendReminderForOverdueOrders() {
             status: 'skipped',
             skipReason: 'max_attempts',
             signatureToken: followupOrder.signatureToken || undefined,
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             message: `Reminder skipped for ${followupOrder.orderId}: max attempts (${MAX_REMINDER_ATTEMPTS}) reached`,
             sentAt: new Date(),
           });
@@ -160,6 +163,7 @@ export async function sendReminderForOverdueOrders() {
               status: 'skipped',
               skipReason: 'cooldown',
               signatureToken: followupOrder.signatureToken || undefined,
+              publicSignatureId: followupOrder.publicSignatureId || undefined,
               message: `Reminder skipped for ${followupOrder.orderId}: cooldown (${hoursSinceLastReminder.toFixed(1)}h since last reminder)`,
               sentAt: new Date(),
             });
@@ -184,6 +188,7 @@ export async function sendReminderForOverdueOrders() {
             recipient: followupOrder.customerEmail,
             status: 'failed',
             signatureToken: null, // Token unavailable - explicit null per contract
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             error: 'No signature token available',
             message: `Reminder failed for ${followupOrder.orderId}: no signature token`,
             sentAt: new Date(),
@@ -207,6 +212,7 @@ export async function sendReminderForOverdueOrders() {
             recipient: followupOrder.customerEmail,
             status: 'failed',
             signatureToken: followupOrder.signatureToken || undefined,
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             error: 'No PDF path available',
             message: `Reminder failed for ${followupOrder.orderId}: no PDF path`,
             sentAt: new Date(),
@@ -241,6 +247,7 @@ export async function sendReminderForOverdueOrders() {
             status: 'blocked',
             skipReason: 'cross_environment',
             signatureToken: followupOrder.signatureToken || undefined,
+            publicSignatureId: followupOrder.publicSignatureId || undefined,
             error: envGuard.reason,
             message: `Reminder blocked for ${followupOrder.orderId}: cross-environment safety`,
             sentAt: new Date(),
@@ -282,6 +289,7 @@ export async function sendReminderForOverdueOrders() {
           customerId: followupOrder.customerId,
           customerEmail: followupOrder.customerEmail,
           signatureToken: followupOrder.signatureToken,
+          publicSignatureId: followupOrder.publicSignatureId || '',
           pdfPath: followupOrder.pdfPath,
           context: 'reminder', // Automated reminder email
           orderData: {

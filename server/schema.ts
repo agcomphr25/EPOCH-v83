@@ -3324,7 +3324,8 @@ export const communicationLogs = pgTable('communication_logs', {
   direction: text('direction').default('outbound'), // inbound, outbound
   externalId: text('external_id'), // External message ID from Twilio/SendGrid
   trackingNumber: text('tracking_number'), // For shipping notifications - enables structured deduplication
-  signatureToken: text('signature_token'), // For order confirmations - enables structured deduplication
+  signatureToken: text('signature_token'), // For order confirmations - legacy deduplication key
+  publicSignatureId: text('public_signature_id'), // HARDENING: User-visible dedup key (sig_XXXXXXXX)
   isRead: boolean('is_read').default(false), // Whether message has been read
   sentAt: timestamp('sent_at'),
   receivedAt: timestamp('received_at'), // For inbound messages

@@ -8459,13 +8459,15 @@ export class DatabaseStorage implements IStorage {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
     
+    // HARDENING: Remove reminderSent boolean from selection criteria
+    // Use reminderCount and lastReminderAt in the reminder logic instead
+    // This allows multiple reminders to be sent (up to MAX_REMINDER_ATTEMPTS)
     return await db
       .select()
       .from(followupOrders)
       .where(
         and(
           eq(followupOrders.signatureSigned, false),
-          eq(followupOrders.reminderSent, false),
           lt(followupOrders.createdAt, cutoffDate)
         )
       )

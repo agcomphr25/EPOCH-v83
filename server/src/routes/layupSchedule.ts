@@ -390,14 +390,25 @@ router.post('/save', async (req: Request, res: Response) => {
     await pool.query('BEGIN');
 
     try {
-      // Get existing schedule for this week to decrement PO item counts
+      // Derive the distinct layup_day values from the incoming entries
+      const layupDaysSet = new Set(entries.map((e: any) => {
+        const scheduledDate = typeof e.scheduledDate === 'string' 
+          ? new Date(e.scheduledDate) 
+          : e.scheduledDate;
+        return scheduledDate.toISOString().split('T')[0];
+      }));
+      const layupDays = Array.from(layupDaysSet);
+      
+      console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
+      
+      // Get existing schedule ONLY for the specific days being saved (to decrement PO item counts)
       const existingRows = await pool.query<{ order_id: string }>(
         `
         SELECT order_id 
         FROM layup_schedule 
-        WHERE scheduled_date >= $1 AND scheduled_date < $1::date + INTERVAL '7 days'
+        WHERE layup_day = ANY($1::date[])
       `,
-        [weekStart]
+        [layupDays]
       );
       
       // Decrement PO item counts for items being removed
@@ -433,14 +444,16 @@ router.post('/save', async (req: Request, res: Response) => {
         }
       }
       
-      // Clear existing schedule for this week
+      // Clear existing schedule ONLY for the specific days being saved (not entire week)
       await pool.query(
         `
         DELETE FROM layup_schedule 
-        WHERE scheduled_date >= $1 AND scheduled_date < $1::date + INTERVAL '7 days'
+        WHERE layup_day = ANY($1::date[])
       `,
-        [weekStart]
+        [layupDays]
       );
+      
+      console.log(`🗑️ Cleared existing entries for days: ${layupDays.join(', ')} (preserving other days in the week)`);
 
       let savedCount = 0;
       let progressedCount = 0;

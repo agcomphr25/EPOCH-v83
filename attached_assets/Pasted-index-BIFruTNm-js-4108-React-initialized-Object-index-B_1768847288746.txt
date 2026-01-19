@@ -1,0 +1,77 @@
+index-BIFruTNm.js:4108 React initialized: Object
+index-BIFruTNm.js:4108 React hooks: Object
+index-BIFruTNm.js:4105 App component is rendering...
+index-BIFruTNm.js:4105 Environment: production
+index-BIFruTNm.js:4105 Base URL: /
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+user-management:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BIFruTNm.js:4108 Failed to fetch session for redirect: Error: Not authenticated
+    at index-BIFruTNm.js:4105:167617
+console.error @ index-BIFruTNm.js:4108
+(anonymous) @ index-BIFruTNm.js:4105
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-BIFruTNm.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-BIFruTNm.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-BIFruTNm.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-BIFruTNm.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/e13fab26-2309-4283-a8f8-7a1de424ee22 (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/e13fab26-2309-4283-a8f8-7a1de424ee22: 200
+index-BIFruTNm.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/8e0dd76a-4599-4ae6-95c6-22207d204fc7 (timeout: 15000ms, deployment: true)
+api/cutting-table/fabric-inventory/8e0dd76a-4599-4ae6-95c6-22207d204fc7:1  Failed to load resource: the server responded with a status of 500 ()
+index-BIFruTNm.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/8e0dd76a-4599-4ae6-95c6-22207d204fc7: 500
+index-BIFruTNm.js:4108 API error raw body: Internal Server Error
+console.error @ index-BIFruTNm.js:4108
+Xe @ index-BIFruTNm.js:235
+index-BIFruTNm.js:4108 💥 API Request failed for /api/cutting-table/fabric-inventory/8e0dd76a-4599-4ae6-95c6-22207d204fc7: Error: Internal Server Error
+    at Xe (index-BIFruTNm.js:235:6173)
+console.error @ index-BIFruTNm.js:4108
+Xe @ index-BIFruTNm.js:235
+index-BIFruTNm.js:3703 🔍 Fetching production queue...
+index-BIFruTNm.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-BIFruTNm.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-BIFruTNm.js:3703 🔍 Production queue result: 47 orders
+index-BIFruTNm.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 ()
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/documents/1 (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/training/content-library/documents/1: 200
+index-BIFruTNm.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BIFruTNm.js:1394
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/documents (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/training/content-library/documents: 201
+index-BIFruTNm.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BIFruTNm.js:1394
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/documents (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/training/content-library/documents: 201
+index-BIFruTNm.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BIFruTNm.js:1394
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/documents (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:235 ✅ API Response from /api/training/content-library/documents: 201
+index-BIFruTNm.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BIFruTNm.js:1394
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/generate-topic (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:4108 🚨 API TIMEOUT: /api/training/content-library/generate-topic took longer than 15000ms
+console.error @ index-BIFruTNm.js:4108
+index-BIFruTNm.js:4108 💥 API Request failed for /api/training/content-library/generate-topic: AbortError: signal is aborted without reason
+    at index-BIFruTNm.js:235:5217
+console.error @ index-BIFruTNm.js:4108
+index-BIFruTNm.js:235 🌐 API Request to /api/training/content-library/generate-topic (timeout: 15000ms, deployment: true)
+index-BIFruTNm.js:4108 🚨 API TIMEOUT: /api/training/content-library/generate-topic took longer than 15000ms
+console.error @ index-BIFruTNm.js:4108
+(anonymous) @ index-BIFruTNm.js:235
+index-BIFruTNm.js:4108 💥 API Request failed for /api/training/content-library/generate-topic: AbortError: signal is aborted without reason
+    at index-BIFruTNm.js:235:5217
+console.error @ index-BIFruTNm.js:4108
+Xe @ index-BIFruTNm.js:235

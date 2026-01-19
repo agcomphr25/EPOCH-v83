@@ -1,0 +1,47 @@
+Apply the following hardening changes to the sales order confirmation email system in EPOCH. 
+These are intentional, targeted improvements. Do not redesign the architecture.
+
+1) INITIAL EMAIL FAILURE BEHAVIOR
+Change initial confirmation email behavior so that:
+- The followup order and PDF are still created first (unchanged)
+- If email sending fails:
+  - DO NOT return HTTP 500
+  - Return HTTP 200 with { emailOutcome: 'failed' }
+  - Persist the failure in communication_logs (already implemented)
+  - Leave the order in PENDING_SIGNATURE state
+This ensures email failure is treated as a recoverable side-effect, not a transaction failure.
+
+2) REMINDER SELECTION LOGIC FIX
+Correct the reminder scheduling logic so multiple reminders can be sent:
+- Remove reminderSent from reminder selection criteria
+- Use ONLY:
+  - reminderCount < MAX_REMINDER_ATTEMPTS
+  - lastReminderAt older than REMINDER_COOLDOWN_HOURS
+- Continue to update reminderCount and reminderSentAt after each successful reminder
+Do not rely on a boolean to gate reminders.
+
+3) DEDUPLICATION HARDENING
+Harden deduplication to use a stable, user-visible key:
+- Update deduplication checks to use:
+  (order_id, type, context, public_signature_id)
+- Continue storing signatureToken, but do not rely on it alone for deduplication
+- Manual resend (forceResend=true) must still bypass deduplication entirely
+
+4) COMMUNICATION LOG CONSISTENCY
+Ensure every attempted send results in exactly ONE communication_logs row:
+- sent → status='sent'
+- skipped → status='skipped' with skipReason
+- blocked → status='blocked' with skipReason
+- failed → status='failed' with error populated
+No silent exits.
+
+5) NO FUNCTIONAL CHANGES BEYOND ABOVE
+- Do NOT change token generation behavior
+- Do NOT change public signature URLs
+- Do NOT change PDF generation
+- Do NOT alter order status transitions beyond what is required above
+
+After implementing, provide:
+- A brief summary of changes
+- Confirmation that existing tests still pass
+- A short note on any fields that became redundant (if applicable)

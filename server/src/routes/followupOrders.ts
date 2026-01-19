@@ -543,6 +543,7 @@ router.post('/', async (req, res) => {
       customerPhone: customer.phone,
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken,
+      publicSignatureId,
       pdfPath,
       context: 'initial', // Initial order finalization
       orderData: {
@@ -600,17 +601,20 @@ router.post('/', async (req, res) => {
         messageId: emailResult.messageId,
       });
     } else {
-      // Email failed - record the error and return failure
+      // Email failed - record the error but return success (email failure is recoverable)
+      // HARDENING: Email failure is a side-effect, not a transaction failure
+      // The followup order and PDF were created successfully - only notification failed
       await storage.updateFollowupOrder(followupOrder.id, {
         emailError: emailResult.error,
       });
 
-      res.status(500).json({
-        success: false,
+      console.log(`⚠️ [FINALIZE] Order ${order.orderId} finalized successfully but email failed: ${emailResult.error}`);
+      res.json({
+        success: true,
         followupOrder,
         emailOutcome: 'failed',
         emailSent: false,
-        error: emailResult.error,
+        emailError: emailResult.error,
       });
     }
   } catch (error) {
@@ -1505,6 +1509,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       customerPhone: storedSnapshot.customerPhone || customer.phone,
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken: currentFollowupOrder.signatureToken || '',
+      publicSignatureId: currentFollowupOrder.publicSignatureId || '',
       pdfPath,
       context: 'resend', // Manual resend by user
       orderData: {
@@ -1711,6 +1716,7 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
       customerPhone: newSnapshot?.customerPhone || customer.phone,
       preferredCommunicationMethod: customer.preferredCommunicationMethod,
       signatureToken: signatureToken,
+      publicSignatureId: newPublicSignatureId,
       pdfPath,
       context: 'updated_order',
       orderData: {

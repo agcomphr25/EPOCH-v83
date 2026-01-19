@@ -464,6 +464,7 @@ export interface OrderConfirmationData {
   customerPhone?: string;
   preferredCommunicationMethod?: string; // 'email' | 'sms' | null
   signatureToken: string;
+  publicSignatureId: string; // HARDENING: User-visible dedup key (sig_XXXXXXXX)
   pdfPath: string;
   context: OrderConfirmationContext; // Required: initial, resend, or reminder
   orderData: {
@@ -499,8 +500,9 @@ export async function sendOrderConfirmationNotification(
   console.log('📧 [ORDER-CONFIRM] Starting order confirmation notification:', data.orderId);
 
   // ============================================================
-  // DEDUPLICATION GUARD: Check if confirmation already sent for this order + token
-  // Uses structured signature_token column (not message text parsing)
+  // DEDUPLICATION GUARD: Check if confirmation already sent for this order
+  // HARDENING: Uses stable, user-visible key (order_id, type, context, public_signature_id)
+  // signatureToken still stored but not used as sole dedup key
   // ============================================================
   if (!data.forceResend) {
     try {
@@ -511,15 +513,16 @@ export async function sendOrderConfirmationNotification(
           and(
             eq(communicationLogs.orderId, data.orderId),
             eq(communicationLogs.type, 'order-confirmation'),
+            eq(communicationLogs.context, data.context),
             eq(communicationLogs.status, 'sent'),
-            eq(communicationLogs.signatureToken, data.signatureToken)
+            eq(communicationLogs.publicSignatureId, data.publicSignatureId)
           )
         )
         .limit(1);
 
       if (existingNotification.length > 0) {
         const existing = existingNotification[0];
-        console.log(`⏭️ [DEDUP] Order confirmation already sent for ${data.orderId} with token ${data.signatureToken.substring(0, 8)}... at ${existing.sentAt} via ${existing.method}. Skipping.`);
+        console.log(`⏭️ [DEDUP] Order confirmation already sent for ${data.orderId} (${data.context}) with publicId ${data.publicSignatureId} at ${existing.sentAt} via ${existing.method}. Skipping.`);
         
         // MANDATORY LOGGING: Insert a communication_log record for this dedup skip
         // Each finalization attempt must have its own log entry, even if deduped
@@ -534,6 +537,7 @@ export async function sendOrderConfirmationNotification(
           status: 'skipped',
           skipReason: 'dedup',
           signatureToken: data.signatureToken,
+          publicSignatureId: data.publicSignatureId,
           externalId: existing.externalId,
           message: `Order confirmation skipped (dedup) for ${data.orderId} - already sent at ${existing.sentAt}`,
           sentAt: new Date(),
@@ -578,7 +582,7 @@ export async function sendOrderConfirmationNotification(
     const emailResult = await sendFollowupOrderEmail(data.orderData, data.pdfPath);
 
     if (emailResult.success) {
-      // Log success to communication_logs (with structured signature_token)
+      // Log success to communication_logs (with both signatureToken and publicSignatureId)
       await db.insert(communicationLogs).values({
         orderId: data.orderId,
         customerId: data.customerId,
@@ -589,6 +593,7 @@ export async function sendOrderConfirmationNotification(
         recipient: data.customerEmail,
         status: 'sent',
         signatureToken: data.signatureToken,
+        publicSignatureId: data.publicSignatureId,
         externalId: emailResult.messageId,
         message: `Order confirmation (${data.context}) with signature link for ${data.orderId}`,
         sentAt: new Date(),
@@ -612,6 +617,7 @@ export async function sendOrderConfirmationNotification(
         recipient: data.customerEmail,
         status: 'failed',
         signatureToken: data.signatureToken,
+        publicSignatureId: data.publicSignatureId,
         error: emailResult.error,
         message: `Failed order confirmation attempt (${data.context}) for ${data.orderId}`,
         sentAt: new Date(),
@@ -639,6 +645,7 @@ export async function sendOrderConfirmationNotification(
       recipient: data.customerEmail,
       status: 'failed',
       signatureToken: data.signatureToken,
+      publicSignatureId: data.publicSignatureId,
       error: errorMessage,
       message: `Exception during order confirmation (${data.context}) for ${data.orderId}`,
       sentAt: new Date(),

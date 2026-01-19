@@ -4743,9 +4743,9 @@ Return JSON with:
       const primaryTrainerId = allTrainerIds[0] || null;
       for (const topicId of step.topicIds || []) {
         await pgPool.query(`
-          INSERT INTO trainee_topic_assignments (trainee_id, topic_id, trainer_id, day_number, status, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-        `, [parsedTraineeId, topicId, primaryTrainerId, step.stepNumber, 'pending']);
+          INSERT INTO trainee_topic_assignments (trainee_id, topic_id, trainer_id, current_step, status, part_number, department, production_line, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+        `, [parsedTraineeId, topicId, primaryTrainerId, step.stepNumber, 'pending', partNumber || null, department || null, productionLine || null]);
       }
     }
 
@@ -4814,24 +4814,29 @@ router.get('/content-library/training-plans', async (req, res) => {
 router.get('/content-library/training-plans/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [plan] = await db.select().from(aiTrainingPlans).where(eq(aiTrainingPlans.id, id));
-    if (!plan) {
+    
+    const planResult = await pgPool.query(`
+      SELECT p.*, e.name as trainee_name
+      FROM ai_training_plans p
+      LEFT JOIN employees e ON p.trainee_id = e.id
+      WHERE p.id = $1
+    `, [id]);
+    
+    if (planResult.rows.length === 0) {
       return res.status(404).json({ error: 'Training plan not found' });
     }
+    const plan = planResult.rows[0];
 
-    const assignments = await db.select({
-      id: traineeTopicAssignments.id,
-      topicId: traineeTopicAssignments.topicId,
-      dayNumber: traineeTopicAssignments.dayNumber,
-      status: traineeTopicAssignments.status,
-      topicTitle: trainingLibraryTopics.title,
-      topicDuration: trainingLibraryTopics.estimatedDuration,
-    }).from(traineeTopicAssignments)
-      .leftJoin(trainingLibraryTopics, eq(traineeTopicAssignments.topicId, trainingLibraryTopics.id))
-      .where(eq(traineeTopicAssignments.traineeId, plan.traineeId))
-      .orderBy(traineeTopicAssignments.dayNumber);
+    const assignmentsResult = await pgPool.query(`
+      SELECT a.id, a.topic_id as "topicId", a.current_step as "currentStep", a.status,
+             t.title as "topicTitle", t.estimated_duration as "topicDuration"
+      FROM trainee_topic_assignments a
+      LEFT JOIN training_library_topics t ON a.topic_id = t.id
+      WHERE a.trainee_id = $1
+      ORDER BY a.id
+    `, [plan.trainee_id]);
 
-    res.json({ ...plan, assignments });
+    res.json({ ...plan, assignments: assignmentsResult.rows });
   } catch (error: any) {
     console.error('Error fetching training plan:', error);
     res.status(500).json({ error: error.message });
@@ -4844,20 +4849,42 @@ router.put('/content-library/training-plans/:id', async (req, res) => {
     const id = parseInt(req.params.id);
     const { title, description, status } = req.body;
     
-    const updateData: any = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (status !== undefined) updateData.status = status;
+    // Build dynamic update query
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
     
-    const [updated] = await db.update(aiTrainingPlans)
-      .set(updateData)
-      .where(eq(aiTrainingPlans.id, id))
-      .returning();
+    if (title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      values.push(title);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      values.push(description);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(status);
+    }
     
-    if (!updated) {
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+    
+    const result = await pgPool.query(`
+      UPDATE ai_training_plans 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `, values);
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Training plan not found' });
     }
-    res.json(updated);
+    res.json(result.rows[0]);
   } catch (error: any) {
     console.error('Error updating training plan:', error);
     res.status(500).json({ error: error.message });

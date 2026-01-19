@@ -940,7 +940,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     console.log(`📄 [Route] Loading order data for: ${orderId}`);
     
     // Check if there's a signed PDF for this order
-    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    let followupOrder = null;
+    try {
+      followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    } catch (followupError) {
+      console.warn(`⚠️ [Route] Could not fetch followup order for ${orderId}, proceeding with fresh PDF generation:`, followupError);
+    }
     if (followupOrder && followupOrder.signedPdfPath && followupOrder.signatureSigned) {
       // Serve the signed PDF if it exists
       const fs = await import('fs');

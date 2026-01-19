@@ -7,6 +7,10 @@ import { createSignatureLink, checkEnvironmentGuard, logSignatureEmailSend } fro
 const REMINDER_COOLDOWN_HOURS = 48; // Minimum hours between reminders
 const MAX_REMINDER_ATTEMPTS = 3; // Maximum reminder emails per order
 
+// PAUSE FLAG: Set PAUSE_ORDER_REMINDERS=true to temporarily pause all reminder emails
+// This can be toggled via environment variables without code changes
+const isRemindersPaused = () => process.env.PAUSE_ORDER_REMINDERS === 'true';
+
 // LEGACY ORDER CUTOFF: Orders created before this date will NOT receive reminder emails.
 // This prevents sending reminders for orders already in the system as of 1/8/26.
 // Only orders entered after 01/11/26 (i.e., created on 01/12/26 or later) will receive reminders.
@@ -20,6 +24,12 @@ const REMINDER_CUTOFF_DATE = new Date('2026-01-12T00:00:00Z');
  */
 export async function sendReminderForOverdueOrders() {
   console.log('📧 [REMINDER] Checking for overdue follow-up orders (>5 days without signature)...');
+  
+  // Check if reminders are paused
+  if (isRemindersPaused()) {
+    console.log('⏸️ [REMINDER] Order confirmation reminders are PAUSED (PAUSE_ORDER_REMINDERS=true)');
+    return { sent: 0, skipped: 0, failed: 0, paused: true, message: 'Reminders are paused' };
+  }
   
   try {
     // Get all follow-up orders that need reminders

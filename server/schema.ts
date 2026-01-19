@@ -11227,6 +11227,7 @@ export const trainingLibraryTopics = pgTable('training_library_topics', {
   categoryId: integer('category_id').references(() => trainingContentCategories.id),
   createdBy: integer('created_by').references(() => employees.id),
   isAiGenerated: boolean('is_ai_generated').default(false),
+  isTrashed: boolean('is_trashed').default(false), // Soft delete - trashed topics are hidden
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

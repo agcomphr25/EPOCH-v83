@@ -4481,22 +4481,78 @@ Return JSON with this structure:
 
 // --- TOPICS ---
 
-// Get all topics with materials count
+// Get all topics with materials count (excluding trashed unless ?includeTrash=true)
 router.get('/content-library/topics', async (req, res) => {
   try {
+    const includeTrash = req.query.includeTrash === 'true';
+    const onlyTrash = req.query.onlyTrash === 'true';
+    
+    let whereClause = '';
+    if (onlyTrash) {
+      whereClause = 'WHERE t.is_trashed = true';
+    } else if (!includeTrash) {
+      whereClause = 'WHERE t.is_trashed = false OR t.is_trashed IS NULL';
+    }
+    
     const result = await pgPool.query(`
       SELECT t.id, t.title, t.description, t.objectives, 
              t.estimated_duration as "estimatedDuration", t.difficulty_level as "difficultyLevel",
              t.category_id as "categoryId", t.is_ai_generated as "isAiGenerated",
+             t.is_trashed as "isTrashed",
              t.created_at as "createdAt", c.name as "categoryName", c.color as "categoryColor"
       FROM training_library_topics t
       LEFT JOIN training_content_categories c ON t.category_id = c.id
+      ${whereClause}
       ORDER BY t.created_at DESC
     `);
 
     res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching topics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trash or restore a topic (soft delete)
+router.patch('/content-library/topics/:id/trash', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { trashed } = req.body; // true to trash, false to restore
+    
+    const { rawSql } = await import('../../db');
+    await rawSql`UPDATE training_library_topics SET is_trashed = ${trashed === true}, updated_at = NOW() WHERE id = ${id}`;
+    
+    const result = await rawSql`SELECT * FROM training_library_topics WHERE id = ${id}`;
+    const rows = Array.isArray(result) ? result : [];
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+    
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating topic trash status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk trash topics
+router.post('/content-library/topics/bulk-trash', async (req, res) => {
+  try {
+    const { ids, trashed } = req.body; // array of topic IDs
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    
+    const { rawSql } = await import('../../db');
+    const idList = ids.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
+    
+    await rawSql(`UPDATE training_library_topics SET is_trashed = $1, updated_at = NOW() WHERE id = ANY($2)`, [trashed === true, idList]);
+    
+    res.json({ success: true, count: idList.length });
+  } catch (error: any) {
+    console.error('Error bulk trashing topics:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -11297,6 +11297,14 @@ export const aiTrainingPlans = pgTable('ai_training_plans', {
   createdBy: integer('created_by').references(() => employees.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  sourceDocumentIds: text('source_document_ids'), // JSON array of document IDs
+  objectives: text('objectives'), // JSON array of learning objectives
+  fourStepContent: text('four_step_content'), // JSON with 4-step methodology content
+  quizQuestions: text('quiz_questions'), // JSON array of quiz questions
+  partNumber: text('part_number'), // Associated part number
+  department: text('department'), // Department assignment
+  productionLine: text('production_line'), // P1/P2/P3
+  assignedTrainers: text('assigned_trainers'), // JSON array of trainer IDs
 });
 
 // Insert schemas for Content Library

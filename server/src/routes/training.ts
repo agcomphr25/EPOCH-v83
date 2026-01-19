@@ -4609,12 +4609,21 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
   try {
     const { traineeId, topicIds, trainerId, trainerIds, partNumber, department, productionLine, createdBy } = req.body;
 
+    // Parse and validate inputs
+    const parsedTraineeId = parseInt(traineeId);
+    const parsedCreatedBy = createdBy ? parseInt(createdBy) : null;
+    const parsedTopicIds = Array.isArray(topicIds) ? topicIds.map((id: any) => parseInt(id)) : [];
+    
+    if (isNaN(parsedTraineeId) || parsedTopicIds.length === 0) {
+      return res.status(400).json({ error: 'Valid traineeId and topicIds are required' });
+    }
+
     // Fetch topics
     const topics = await db.select().from(trainingLibraryTopics)
-      .where(inArray(trainingLibraryTopics.id, topicIds));
+      .where(inArray(trainingLibraryTopics.id, parsedTopicIds));
 
     // Get trainee info
-    const [trainee] = await db.select().from(employees).where(eq(employees.id, traineeId));
+    const [trainee] = await db.select().from(employees).where(eq(employees.id, parsedTraineeId));
 
     const client = getOpenAIClient();
     const completion = await client.chat.completions.create({
@@ -4668,83 +4677,84 @@ Return JSON with:
 
     const plan = JSON.parse(completion.choices[0]?.message?.content || '{}');
 
-    // Create the training plan
-    const [savedPlan] = await db.insert(aiTrainingPlans).values({
-      traineeId,
-      title: plan.title || `Training Plan for ${trainee?.name || 'Trainee'}`,
-      description: plan.description,
-      planStructure: JSON.stringify(plan),
-      totalTopics: topicIds.length,
-      status: 'active',
-      createdBy,
-    }).returning();
-
-    // Save trainer assignments
-    const allTrainerIds = trainerIds || (trainerId ? [trainerId] : []);
-    for (let i = 0; i < allTrainerIds.length; i++) {
-      await db.insert(trainingPlanTrainers).values({
-        planId: savedPlan.id,
-        trainerId: allTrainerIds[i],
-        isPrimary: i === 0, // First trainer is primary
-        assignedBy: createdBy,
-      });
+    // Create the training plan using pgPool for reliability
+    const planResult = await pgPool.query(`
+      INSERT INTO ai_training_plans 
+        (trainee_id, title, description, plan_structure, total_topics, status, created_by, part_number, department, production_line, assigned_trainers, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING *
+    `, [
+      parsedTraineeId,
+      plan.title || `Training Plan for ${trainee?.name || 'Trainee'}`,
+      plan.description || null,
+      JSON.stringify(plan),
+      parsedTopicIds.length,
+      'active',
+      parsedCreatedBy,
+      partNumber || null,
+      department || null,
+      productionLine || null,
+      JSON.stringify(trainerIds || (trainerId ? [trainerId] : [])),
+    ]);
+    const savedPlan = planResult.rows[0];
+    
+    if (!savedPlan) {
+      throw new Error('Failed to create training plan');
     }
 
-    // Save production info if provided
+    // Save trainer assignments (trainers also stored in main table for quick access)
+    const allTrainerIds = (trainerIds || (trainerId ? [trainerId] : [])).map((id: any) => parseInt(id));
+    for (let i = 0; i < allTrainerIds.length; i++) {
+      if (!isNaN(allTrainerIds[i])) {
+        await pgPool.query(`
+          INSERT INTO training_plan_trainers (plan_id, trainer_id, is_primary, assigned_by, created_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `, [savedPlan.id, allTrainerIds[i], i === 0, parsedCreatedBy]);
+      }
+    }
+
+    // Save production info if provided (also stored in main table)
     if (partNumber || department || productionLine) {
-      await db.insert(trainingPlanProductionInfo).values({
-        planId: savedPlan.id,
-        partNumber,
-        department,
-        productionLine,
-      });
+      await pgPool.query(`
+        INSERT INTO training_plan_production_info (plan_id, part_number, department, production_line, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+      `, [savedPlan.id, partNumber || null, department || null, productionLine || null]);
     }
 
     // Create step quizzes and questions
     for (const step of plan.steps || []) {
-      const [quiz] = await db.insert(trainingStepQuizzes).values({
-        planId: savedPlan.id,
-        stepNumber: step.stepNumber,
-        title: `Step ${step.stepNumber} Quiz: ${step.stepTitle}`,
-        description: step.theme,
-        passingScore: 80,
-        isAiGenerated: true,
-      }).returning();
+      const quizResult = await pgPool.query(`
+        INSERT INTO training_step_quizzes (plan_id, step_number, title, description, passing_score, is_ai_generated, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        RETURNING *
+      `, [savedPlan.id, step.stepNumber, `Step ${step.stepNumber} Quiz: ${step.stepTitle}`, step.theme, 80, true]);
+      const quiz = quizResult.rows[0];
 
       // Add quiz questions
       for (let i = 0; i < (step.quizQuestions || []).length; i++) {
         const q = step.quizQuestions[i];
-        await db.insert(trainingStepQuizQuestions).values({
-          quizId: quiz.id,
-          question: q.question,
-          questionType: 'multiple_choice',
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          sortOrder: i,
-        });
+        await pgPool.query(`
+          INSERT INTO training_step_quiz_questions (quiz_id, question, question_type, options, correct_answer, explanation, sort_order, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `, [quiz.id, q.question, 'multiple_choice', JSON.stringify(q.options), q.correctAnswer, q.explanation, i]);
       }
 
       // Create topic assignments for this step
+      const primaryTrainerId = allTrainerIds[0] || null;
       for (const topicId of step.topicIds || []) {
-        await db.insert(traineeTopicAssignments).values({
-          traineeId,
-          topicId,
-          trainerId: allTrainerIds[0] || trainerId,
-          dayNumber: step.stepNumber,
-          createdBy,
-        });
+        await pgPool.query(`
+          INSERT INTO trainee_topic_assignments (trainee_id, topic_id, trainer_id, day_number, status, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+        `, [parsedTraineeId, topicId, primaryTrainerId, step.stepNumber, 'pending']);
       }
     }
 
     // Create initial step progress for the trainee
     for (let stepNum = 1; stepNum <= 4; stepNum++) {
-      await db.insert(trainingStepProgress).values({
-        planId: savedPlan.id,
-        traineeId,
-        stepNumber: stepNum,
-        status: stepNum === 1 ? 'available' : 'locked',
-      });
+      await pgPool.query(`
+        INSERT INTO training_step_progress (plan_id, trainee_id, step_number, status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+      `, [savedPlan.id, parsedTraineeId, stepNum, stepNum === 1 ? 'available' : 'locked']);
     }
 
     res.status(201).json({ plan: savedPlan, structure: plan });

@@ -1,0 +1,681 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-01-19-1?replId=d2c31125-92fd-4acf-97a5-aae9440185f2&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-01-19-1?replId=d2c31125-92fd-4acf-97a5-aae9440185f2&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-01-19-1?replId=d2c31125-92fd-4acf-97a5-aae9440185f2&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+ 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+ Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+ [Coframe] Replit Enterprise watcher loaded
+ [LaunchDarkly] LaunchDarkly client initialized
+ [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+agcomphr-01-19-1?replId=d2c31125-92fd-4acf-97a5-aae9440185f2&projectPane=true:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:53ab8d72-a346-44f7-af91-c6d79a9b8af4"},{"__ref":"OrgPresenceSession:9b856167-b428-4cb1-814b-3c2ee6c18788"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:9b856167-b428-4cb1-814b-3c2ee6c18788"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+ WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSTZ2dTR5d1lTQmdpSm1MbkxCaUlGYzNCdlkyc3dBRHJPQVFva1pESmpNekV4TWpVdE9USm1aQzAwWVdObUxUazNZVFV0WVdGbE9UUTBNREU0TldZeUVnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJaEJoWjJOdmJYQm9jaTB3TVMweE9TMHhLZ2hoWjJOdmJYQm9ja0pSQ2hoeVpYQnNhWFF0Y21Wd2JDMWliRzlqYTNNdGMzQnZZMnNTRm5KbGNHeHBkQzF5WlhCc0xXMWxkR0V0YzNCdlkyc2FIWEpsY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxYTndiMk5yU2djSTNwcnJGQkFCVUFCeURBb0daWGx1ZDNockVBSWdBSGdBVWlVSUFSQ0FnSUNBUUJrQUFBQUFBQUFnUUNFQUFBQUFBQUFnUUNpQWdJQ0FnQWd3QWpnQVlBQnFEd2plbXVzVUVnaGhaMk52YlhCb2NvSUJBaW9BZ2dFQ01nQ2FBUW9LQ0RBdU1DNHlPVE13b0FFQtuw3R-zP5pZtXp34Gn4Zk7sUWwK9JaGCKqqCa5bAahZSg8JdyPvVXxSL_C6QJdUlrf1bvMWPBP9OsvHTxqjjwA.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 803eec1bacc00e5f.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+ Missing field 'thinkingEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'modelProfile' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'enableAutomatedTesting' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'webSearchEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'imageGenerationEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'autonomyLevel' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Missing field 'maxAutonomyEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Arra%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+ [vite] connecting...
+ [vite] connected.
+ React initialized: [object Object]
+ React hooks: [object Object]
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ Redirecting tasham to /admin-dashboard
+ Redirecting tasham to /admin-dashboard
+ [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+ [vite] hot updated: /src/index.css?v=EiSsVfb_KkLXvNKPo2YLL
+ [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+ [vite] hot updated: /src/index.css?v=EiSsVfb_KkLXvNKPo2YLL
+ [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+ [vite] hot updated: /src/index.css?v=EiSsVfb_KkLXvNKPo2YLL
+ [vite] server connection lost. Polling for restart...
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ [vite] connecting...
+ [vite] connected.
+ React initialized: [object Object]
+ React hooks: [object Object]
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ [vite] hot updated: /src/pages/TrainerDashboard.tsx
+ [vite] hot updated: /src/index.css?v=X08cKOd48hHQDcnPK-Kg6
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ [vite] server connection lost. Polling for restart...
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ [vite] connecting...
+ [vite] connected.
+ [vite] server connection lost. Polling for restart...
+InventoryManagerPage.tsx:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+InventoryScannerPage.tsx:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+InventoryReceivingPage.tsx:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+EnhancedInventoryMRPPage.tsx:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 React initialized: [object Object]
+injected.js:37 React hooks: [object Object]
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] hot updated: /src/App.tsx?v=knNQfQ1Ic8ITR17v31uQb
+injected.js:37 [vite] hot updated: /src/index.css?v=knNQfQ1Ic8ITR17v31uQb
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] hot updated: /src/App.tsx?v=knNQfQ1Ic8ITR17v31uQb
+injected.js:37 [vite] hot updated: /src/index.css?v=knNQfQ1Ic8ITR17v31uQb
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] server connection lost. Polling for restart...
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 React initialized: [object Object]
+injected.js:37 React hooks: [object Object]
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] hot updated: /src/pages/TraineeTrainingPortal.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=SsNk5jUvA4tkKC-XabGrV
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] hot updated: /src/pages/TraineeTrainingPortal.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=SsNk5jUvA4tkKC-XabGrV
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] hot updated: /src/pages/TraineeTrainingPortal.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=SsNk5jUvA4tkKC-XabGrV
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] server connection lost. Polling for restart...
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+ac9ba3e8ec8cc75b.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 🌐 API Request to /api/training/daily-sessions (timeout: 120000ms, deployment: false)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/daily-sessions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 ✅ API Response from /api/training/daily-sessions: 500
+injected.js:37 API error raw body: {"error":"relation \"daily_training_sessions\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/training/daily-sessions: Error: relation "daily_training_sessions" does not exist
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/categories:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/documents:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/categories:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/documents:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 🌐 API Request to /api/training/content-library/documents (timeout: 120000ms, deployment: false)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/documents:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 ✅ API Response from /api/training/content-library/documents: 500
+injected.js:37 API error raw body: {"error":"relation \"training_library_documents\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/training/content-library/documents: Error: relation "training_library_documents" does not exist
+    at apiRequest (queryClient.ts:133:13)
+(anonymous) @ injected.js:37

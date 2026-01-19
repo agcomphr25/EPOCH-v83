@@ -88,7 +88,7 @@ import {
   insertTrainerTopicCertificationSchema,
   insertTravelerAuthorizationSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, gte, lt, or, isNotNull } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,
@@ -3517,14 +3517,23 @@ router.put('/daily-sessions/:id/sign', async (req, res) => {
   }
 });
 
-// Complete session
+// Complete session with SOA feedback
 router.put('/daily-sessions/:id/complete', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [updated] = await db.update(dailyTrainingSessions)
-      .set({ status: 'completed' })
-      .where(eq(dailyTrainingSessions.id, id))
-      .returning();
+    const { soaStrength, soaOpportunity, soaAction } = req.body;
+    
+    await db.update(dailyTrainingSessions)
+      .set({ 
+        status: 'completed',
+        soaStrength: soaStrength || null,
+        soaOpportunity: soaOpportunity || null,
+        soaAction: soaAction || null,
+      })
+      .where(eq(dailyTrainingSessions.id, id));
+    
+    // Fetch after update for Neon driver compatibility
+    const [updated] = await db.select().from(dailyTrainingSessions).where(eq(dailyTrainingSessions.id, id));
     
     if (!updated) {
       return res.status(404).json({ error: 'Session not found' });
@@ -3532,6 +3541,65 @@ router.put('/daily-sessions/:id/complete', async (req, res) => {
     res.json(updated);
   } catch (error: any) {
     console.error('Error completing session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get yesterday's completed sessions with SOA feedback (for morning review)
+router.get('/daily-sessions/yesterday-feedback', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Get trainer ID from session if available
+    const trainerId = (req as any).session?.user?.employeeId;
+    
+    const conditions = [
+      eq(dailyTrainingSessions.status, 'completed'),
+      gte(dailyTrainingSessions.sessionDate, yesterday),
+      lt(dailyTrainingSessions.sessionDate, today),
+      or(
+        isNotNull(dailyTrainingSessions.soaStrength),
+        isNotNull(dailyTrainingSessions.soaOpportunity),
+        isNotNull(dailyTrainingSessions.soaAction)
+      )
+    ];
+    
+    // Scope to current trainer if logged in
+    if (trainerId) {
+      conditions.push(eq(dailyTrainingSessions.trainerId, trainerId));
+    }
+    
+    const sessions = await db.select()
+      .from(dailyTrainingSessions)
+      .where(and(...conditions));
+    
+    res.json(sessions);
+  } catch (error: any) {
+    console.error('Error fetching yesterday feedback:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark SOA feedback as reviewed
+router.put('/daily-sessions/:id/mark-reviewed', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    await db.update(dailyTrainingSessions)
+      .set({ soaReviewedAt: new Date() })
+      .where(eq(dailyTrainingSessions.id, id));
+    
+    const [updated] = await db.select().from(dailyTrainingSessions).where(eq(dailyTrainingSessions.id, id));
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error marking session reviewed:', error);
     res.status(500).json({ error: error.message });
   }
 });

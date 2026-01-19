@@ -11103,6 +11103,12 @@ export const dailyTrainingSessions = pgTable('daily_training_sessions', {
   signedAt: timestamp('signed_at'),
   competencyAttested: boolean('competency_attested').default(false),
   notes: text('notes'),
+  // S-O-A Coaching Feedback - saved when session is completed
+  soaStrength: text('soa_strength'),
+  soaOpportunity: text('soa_opportunity'),
+  soaAction: text('soa_action'),
+  // Flag to indicate if SOA feedback has been reviewed at start of next day
+  soaReviewedAt: timestamp('soa_reviewed_at'),
   status: text('status').default('active'), // active, completed
   createdAt: timestamp('created_at').defaultNow(),
 });

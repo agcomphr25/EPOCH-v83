@@ -78,6 +78,10 @@ interface DailySession {
   trainerSignature: string | null;
   traineeSignature: string | null;
   competencyAttested: boolean;
+  soaStrength?: string | null;
+  soaOpportunity?: string | null;
+  soaAction?: string | null;
+  soaReviewedAt?: string | null;
 }
 
 interface TrainingModule {
@@ -240,6 +244,11 @@ export default function TrainerDashboard() {
     queryKey: ['/api/training/content-library/training-plans'],
   });
 
+  // Yesterday's sessions with SOA feedback for morning review
+  const { data: yesterdayFeedback = [] } = useQuery<DailySession[]>({
+    queryKey: ['/api/training/daily-sessions/yesterday-feedback'],
+  });
+
   // Filter AI plans that are active (assigned and ready for training)
   const activePlans = aiTrainingPlans.filter(p => p.status === 'active');
 
@@ -289,14 +298,20 @@ export default function TrainerDashboard() {
     mutationFn: async (sessionId: number) => {
       return apiRequest(`/api/training/daily-sessions/${sessionId}/complete`, {
         method: 'PUT',
+        body: JSON.stringify({
+          soaStrength: soaFeedback.strength || null,
+          soaOpportunity: soaFeedback.opportunity || null,
+          soaAction: soaFeedback.action || null,
+        }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions/yesterday-feedback'] });
       setActiveSessionId(null);
       setCurrentStep(1);
       setSoaFeedback({ strength: '', opportunity: '', action: '' });
-      toast({ title: 'Session Completed', description: 'Training session has been marked complete' });
+      toast({ title: 'Session Completed', description: 'Training session has been marked complete with SOA feedback' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -371,6 +386,21 @@ export default function TrainerDashboard() {
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
       toast({ title: 'Session Deleted', description: 'Training session has been deleted' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const markReviewedMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/daily-sessions/${id}/mark-reviewed`, {
+        method: 'PUT',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions/yesterday-feedback'] });
+      toast({ title: 'Marked as Reviewed', description: 'SOA feedback has been discussed' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -689,6 +719,80 @@ export default function TrainerDashboard() {
     </Card>
   );
 
+  // Yesterday's SOA feedback for morning review
+  const renderYesterdayFeedback = () => {
+    const unreviewedFeedback = yesterdayFeedback.filter(s => !s.soaReviewedAt);
+    
+    if (unreviewedFeedback.length === 0) return null;
+    
+    return (
+      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            Yesterday's Training Feedback - Review Before Starting
+          </CardTitle>
+          <CardDescription>
+            Discuss these S-O-A notes with trainees at the beginning of today's session
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {unreviewedFeedback.map((session) => (
+            <Card key={session.id} className="bg-white dark:bg-gray-900">
+              <CardContent className="py-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline">{getEmployeeName(session.traineeId)}</Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {getTopicTitle(session.facilityTopicId)}
+                      </span>
+                    </div>
+                    <div className="grid md:grid-cols-3 gap-4 mt-3">
+                      {session.soaStrength && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-green-700 dark:text-green-400">
+                            <Star className="h-3 w-3" /> Strength
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaStrength}</p>
+                        </div>
+                      )}
+                      {session.soaOpportunity && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                            <Lightbulb className="h-3 w-3" /> Opportunity
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaOpportunity}</p>
+                        </div>
+                      )}
+                      {session.soaAction && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-blue-700 dark:text-blue-400">
+                            <Target className="h-3 w-3" /> Action
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaAction}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => markReviewedMutation.mutate(session.id)}
+                    disabled={markReviewedMutation.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Discussed
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderActiveSession = () => {
     const session = activeSessions.find(s => s.id === activeSessionId);
     if (!session) return null;
@@ -898,6 +1002,9 @@ export default function TrainerDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Yesterday's SOA feedback for morning discussion */}
+      {renderYesterdayFeedback()}
 
       {activeSessionId ? (
         renderActiveSession()

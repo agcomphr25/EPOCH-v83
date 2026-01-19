@@ -243,6 +243,7 @@ export default function TrainingContentLibrary() {
     mutationFn: async () => {
       return apiRequest('/api/training/content-library/generate-topic', {
         method: 'POST',
+        timeout: 120000, // 2 minutes for AI generation
         body: JSON.stringify({
           documentIds: selectedDocuments,
           categoryId: categoryFilter !== 'all' ? parseInt(categoryFilter) : null,

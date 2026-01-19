@@ -11246,10 +11246,11 @@ export const trainingTopicMaterials = pgTable('training_topic_materials', {
   stepNumber: integer('step_number').notNull(), // 1-4 for 4-step method
   stepTitle: text('step_title').notNull(), // e.g., "Trainer Does / Trainer Explains"
   trainerInstructions: text('trainer_instructions'), // What the trainer should do
+  traineeActivities: text('trainee_activities'), // What the trainee should do
   keyPoints: text('key_points'), // JSON array of key teaching points
-  demonstrations: text('demonstrations'), // Things to demonstrate
-  safetyNotes: text('safety_notes'),
-  estimatedTime: integer('estimated_time'), // minutes for this step
+  visualAids: text('visual_aids'), // Visual aids and demonstrations
+  estimatedDuration: integer('estimated_duration'), // minutes for this step
+  facilityModules: text('facility_modules'), // Linked facility training modules
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -11257,13 +11258,13 @@ export const trainingTopicMaterials = pgTable('training_topic_materials', {
 export const trainingTopicQuizQuestions = pgTable('training_topic_quiz_questions', {
   id: serial('id').primaryKey(),
   topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  stepNumber: integer('step_number'), // Which training step this relates to
   question: text('question').notNull(),
   questionType: text('question_type').default('multiple_choice'), // multiple_choice, true_false, short_answer
   options: text('options'), // JSON array for multiple choice
   correctAnswer: text('correct_answer').notNull(),
   explanation: text('explanation'), // Why this is the correct answer
-  difficulty: text('difficulty').default('medium'), // easy, medium, hard
-  stepNumber: integer('step_number'), // Which training step this relates to
+  points: integer('points').default(10), // Points for this question
   createdAt: timestamp('created_at').defaultNow(),
 });
 

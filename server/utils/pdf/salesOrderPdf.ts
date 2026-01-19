@@ -56,6 +56,9 @@ interface OrderData {
   customDiscountType?: string;
   customDiscountValue?: number;
   showCustomDiscount?: boolean;
+  // Promo code discount fields
+  discountType?: string; // 'none' | 'percent' | 'dollar'
+  discountValue?: number;
 }
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
@@ -450,7 +453,10 @@ export async function generateSalesOrderPDF(
   }
   
   // Calculate height: header (18) + model line (14) + features (14 each) + separator (15) + subtotal (20) + [discount (20)] + shipping (20) + total (25) + padding (15)
-  const hasDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
+  // Check for discount: either custom discount OR promo code discount (type != 'none' and value > 0)
+  const hasCustomDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
+  const hasPromoDiscount = orderData.discountType && orderData.discountType !== 'none' && orderData.discountValue && orderData.discountValue > 0;
+  const hasDiscount = hasCustomDiscount || hasPromoDiscount;
   const discountLineHeight = hasDiscount ? 20 : 0;
   const featuresTableHeight = 18 + (featureCount * 14) + 15 + 20 + discountLineHeight + 20 + 25 + 15;
   
@@ -764,29 +770,56 @@ export async function generateSalesOrderPDF(
 
   summaryLineY -= 20;
 
-  // Discount (if applicable)
+  // Discount (if applicable) - supports both custom discounts and promo code discounts
+  // Note: hasCustomDiscount and hasPromoDiscount are already defined earlier in the function for height calculation
   let discountAmount = 0;
-  if (orderData.showCustomDiscount && orderData.customDiscountValue) {
-    // Determine the base amount for discount calculation
+  let discountLabel = '';
+  
+  if (hasCustomDiscount) {
+    // Custom discount logic
     const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
       ? basePrice  // Apply only to stock model price
       : calculatedSubtotal;  // Apply to full subtotal
     
     if (orderData.customDiscountType === 'percent') {
-      discountAmount = baseAmountForDiscount * (orderData.customDiscountValue / 100);
+      discountAmount = baseAmountForDiscount * (orderData.customDiscountValue! / 100);
     } else {
-      discountAmount = orderData.customDiscountValue;
+      discountAmount = orderData.customDiscountValue!;
     }
 
     // Use friendly display name if available, otherwise fall back to code or generic label
-    const discountLabel = orderData.discountDisplayName 
+    // Human-readable labels only - never show internal enum values
+    discountLabel = orderData.discountDisplayName 
       ? `Discount (${orderData.discountDisplayName}):`
       : orderData.discountCode 
         ? `Discount (${orderData.discountCode}):`
         : orderData.customDiscountType === 'percent'
           ? `Discount (${orderData.customDiscountValue}%):`
           : 'Discount:';
+  } else if (hasPromoDiscount) {
+    // Promo code discount logic
+    const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
+      ? basePrice  // Apply only to stock model price
+      : calculatedSubtotal;  // Apply to full subtotal
+    
+    if (orderData.discountType === 'percent') {
+      discountAmount = baseAmountForDiscount * (orderData.discountValue! / 100);
+    } else {
+      // 'dollar' or any other type - use value directly
+      discountAmount = orderData.discountValue!;
+    }
 
+    // Human-readable labels only - never show internal enum values like 'percent' or 'dollar'
+    discountLabel = orderData.discountDisplayName 
+      ? `Discount (${orderData.discountDisplayName}):`
+      : orderData.discountCode 
+        ? `Discount (${orderData.discountCode}):`
+        : orderData.discountType === 'percent'
+          ? `Discount (${orderData.discountValue}%):`
+          : 'Discount:';
+  }
+  
+  if (discountAmount > 0) {
     page.drawText(discountLabel, {
       x: margin + 8,
       y: summaryLineY,

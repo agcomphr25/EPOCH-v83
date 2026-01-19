@@ -1001,18 +1001,21 @@ export default function TrainerDashboard() {
               </Card>
             ) : (
               activePlans
-                .filter(plan => 
-                  searchTerm === '' || 
-                  plan.title.toLowerCase().includes(searchLower) ||
-                  (plan.traineeName && plan.traineeName.toLowerCase().includes(searchLower))
-                )
+                .filter(plan => {
+                  const traineeName = plan.traineeName || plan.trainee_name || '';
+                  return searchTerm === '' || 
+                    plan.title.toLowerCase().includes(searchLower) ||
+                    traineeName.toLowerCase().includes(searchLower);
+                })
                 .map((plan) => {
                   let planData: any = null;
                   try {
-                    planData = plan.planStructure ? JSON.parse(plan.planStructure) : null;
+                    const planStructure = plan.planStructure || plan.plan_structure;
+                    planData = planStructure ? JSON.parse(planStructure) : null;
                   } catch (e) {}
                   
-                  const trainee = employees.find(e => e.id === plan.traineeId);
+                  const traineeId = plan.traineeId || plan.trainee_id;
+                  const trainee = employees.find(e => e.id === traineeId);
                   const hasSteps = planData?.steps && Array.isArray(planData.steps);
                   
                   return (
@@ -1027,11 +1030,11 @@ export default function TrainerDashboard() {
                             <CardDescription className="flex flex-wrap items-center gap-4">
                               <span className="flex items-center gap-1">
                                 <Users className="h-4 w-4" />
-                                {plan.traineeName || trainee?.name || 'Unknown trainee'}
+                                {plan.traineeName || plan.trainee_name || trainee?.name || 'Unknown trainee'}
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-4 w-4" />
-                                {new Date(plan.createdAt).toLocaleDateString()}
+                                {new Date(plan.createdAt || plan.created_at).toLocaleDateString()}
                               </span>
                               {plan.totalTopics && (
                                 <span className="flex items-center gap-1">
@@ -1096,8 +1099,11 @@ export default function TrainerDashboard() {
                           <Button 
                             size="sm" 
                             onClick={() => {
-                              setSelectedTraineeId(plan.traineeId.toString());
-                              setStartSessionOpen(true);
+                              const traineeId = plan.traineeId || plan.trainee_id;
+                              if (traineeId) {
+                                setSelectedTraineeId(traineeId.toString());
+                                setStartSessionOpen(true);
+                              }
                             }}
                           >
                             <Play className="h-4 w-4 mr-1" />

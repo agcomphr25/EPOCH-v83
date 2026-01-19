@@ -11366,3 +11366,161 @@ export type TrainerCertification = typeof trainerCertifications.$inferSelect;
 export type InsertTrainerCertification = z.infer<typeof insertTrainerCertificationSchema>;
 export type WorkInstructionImportJob = typeof workInstructionImportJobs.$inferSelect;
 export type InsertWorkInstructionImportJob = z.infer<typeof insertWorkInstructionImportJobSchema>;
+
+// ============================================================================
+// EPOCH TRAINING SYSTEM ENHANCEMENTS
+// ============================================================================
+
+// Training Plan Trainers - Assign one or more trainers to an AI training plan
+export const trainingPlanTrainers = pgTable('training_plan_trainers', {
+  id: serial('id').primaryKey(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  isPrimary: boolean('is_primary').default(false), // Primary vs secondary trainer
+  assignedAt: timestamp('assigned_at').defaultNow(),
+  assignedBy: integer('assigned_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Plan Production Info - Part #, department, production line for authorization
+export const trainingPlanProductionInfo = pgTable('training_plan_production_info', {
+  id: serial('id').primaryKey(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  partNumber: text('part_number'), // Part # this training authorizes
+  department: text('department'), // Department for this training
+  productionLine: text('production_line'), // P1, P2, P3, etc.
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Step Quizzes - One quiz per training step (4 quizzes per program)
+export const trainingStepQuizzes = pgTable('training_step_quizzes', {
+  id: serial('id').primaryKey(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  stepNumber: integer('step_number').notNull(), // 1-4 for the 4-step method
+  title: text('title').notNull(),
+  description: text('description'),
+  passingScore: integer('passing_score').default(80), // Percentage required to pass
+  isAiGenerated: boolean('is_ai_generated').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Training Step Quiz Questions - Questions for each step quiz
+export const trainingStepQuizQuestions = pgTable('training_step_quiz_questions', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => trainingStepQuizzes.id).notNull(),
+  question: text('question').notNull(),
+  questionType: text('question_type').default('multiple_choice'), // multiple_choice, true_false
+  options: jsonb('options').$type<string[]>(), // Array of options for multiple choice
+  correctAnswer: text('correct_answer').notNull(),
+  explanation: text('explanation'),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Step Quiz Attempts - Track trainee quiz attempts per step
+export const trainingStepQuizAttempts = pgTable('training_step_quiz_attempts', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => trainingStepQuizzes.id).notNull(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  score: integer('score').notNull(), // Percentage score
+  passed: boolean('passed').default(false),
+  answers: jsonb('answers').$type<{questionId: number; answer: string; correct: boolean}[]>(),
+  attemptNumber: integer('attempt_number').default(1),
+  completedAt: timestamp('completed_at').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Step Facility Modules - Link facility training modules to each step
+export const trainingStepFacilityModules = pgTable('training_step_facility_modules', {
+  id: serial('id').primaryKey(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  stepNumber: integer('step_number').notNull(), // 1-4 for the 4-step method
+  moduleId: integer('module_id').references(() => trainingModules.id), // Facility training module
+  facilityTopicId: integer('facility_topic_id').references(() => facilityTopics.id), // Or facility topic
+  sortOrder: integer('sort_order').default(0),
+  isRequired: boolean('is_required').default(true),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Training Step Progress - Track trainee progress through each step
+export const trainingStepProgress = pgTable('training_step_progress', {
+  id: serial('id').primaryKey(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id).notNull(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  stepNumber: integer('step_number').notNull(), // 1-4
+  status: text('status').default('locked'), // locked, available, in_progress, completed
+  quizPassed: boolean('quiz_passed').default(false),
+  quizScore: integer('quiz_score'),
+  facilityModulesComplete: boolean('facility_modules_complete').default(false),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  trainedBy: integer('trained_by').references(() => employees.id), // Trainer who conducted this step
+  trainerNotes: text('trainer_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Trainer Topic Certifications - Which topics/programs a trainer is certified to teach
+export const trainerTopicCertifications = pgTable('trainer_topic_certifications', {
+  id: serial('id').primaryKey(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  topicId: integer('topic_id').references(() => trainingLibraryTopics.id), // Topic they can train
+  moduleId: integer('module_id').references(() => trainingModules.id), // Or module they can train
+  department: text('department'), // Department scope
+  certifiedAt: timestamp('certified_at').defaultNow(),
+  certifiedBy: integer('certified_by').references(() => employees.id),
+  expiresAt: timestamp('expires_at'),
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Traveler Authorizations - Link training completion to traveler task authorization
+export const travelerAuthorizations = pgTable('traveler_authorizations', {
+  id: serial('id').primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  planId: integer('plan_id').references(() => aiTrainingPlans.id), // Training plan that granted this authorization
+  partNumber: text('part_number').notNull(), // Part # employee is authorized for
+  department: text('department'), // Department
+  productionLine: text('production_line'), // P1, P2, P3
+  authorizedAt: timestamp('authorized_at').defaultNow(),
+  authorizedBy: integer('authorized_by').references(() => employees.id),
+  expiresAt: timestamp('expires_at'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Insert schemas for Epoch Training System
+export const insertTrainingPlanTrainerSchema = createInsertSchema(trainingPlanTrainers).omit({ id: true, createdAt: true });
+export const insertTrainingPlanProductionInfoSchema = createInsertSchema(trainingPlanProductionInfo).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingStepQuizSchema = createInsertSchema(trainingStepQuizzes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingStepQuizQuestionSchema = createInsertSchema(trainingStepQuizQuestions).omit({ id: true, createdAt: true });
+export const insertTrainingStepQuizAttemptSchema = createInsertSchema(trainingStepQuizAttempts).omit({ id: true, createdAt: true });
+export const insertTrainingStepFacilityModuleSchema = createInsertSchema(trainingStepFacilityModules).omit({ id: true, createdAt: true });
+export const insertTrainingStepProgressSchema = createInsertSchema(trainingStepProgress).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainerTopicCertificationSchema = createInsertSchema(trainerTopicCertifications).omit({ id: true, createdAt: true });
+export const insertTravelerAuthorizationSchema = createInsertSchema(travelerAuthorizations).omit({ id: true, createdAt: true });
+
+// Types for Epoch Training System
+export type TrainingPlanTrainer = typeof trainingPlanTrainers.$inferSelect;
+export type InsertTrainingPlanTrainer = z.infer<typeof insertTrainingPlanTrainerSchema>;
+export type TrainingPlanProductionInfo = typeof trainingPlanProductionInfo.$inferSelect;
+export type InsertTrainingPlanProductionInfo = z.infer<typeof insertTrainingPlanProductionInfoSchema>;
+export type TrainingStepQuiz = typeof trainingStepQuizzes.$inferSelect;
+export type InsertTrainingStepQuiz = z.infer<typeof insertTrainingStepQuizSchema>;
+export type TrainingStepQuizQuestion = typeof trainingStepQuizQuestions.$inferSelect;
+export type InsertTrainingStepQuizQuestion = z.infer<typeof insertTrainingStepQuizQuestionSchema>;
+export type TrainingStepQuizAttempt = typeof trainingStepQuizAttempts.$inferSelect;
+export type InsertTrainingStepQuizAttempt = z.infer<typeof insertTrainingStepQuizAttemptSchema>;
+export type TrainingStepFacilityModule = typeof trainingStepFacilityModules.$inferSelect;
+export type InsertTrainingStepFacilityModule = z.infer<typeof insertTrainingStepFacilityModuleSchema>;
+export type TrainingStepProgress = typeof trainingStepProgress.$inferSelect;
+export type InsertTrainingStepProgress = z.infer<typeof insertTrainingStepProgressSchema>;
+export type TrainerTopicCertification = typeof trainerTopicCertifications.$inferSelect;
+export type InsertTrainerTopicCertification = z.infer<typeof insertTrainerTopicCertificationSchema>;
+export type TravelerAuthorization = typeof travelerAuthorizations.$inferSelect;
+export type InsertTravelerAuthorization = z.infer<typeof insertTravelerAuthorizationSchema>;

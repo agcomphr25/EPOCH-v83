@@ -2,7 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 import { db } from '../../db';
+
+// Direct pg Pool for raw SQL queries (bypasses Neon serverless driver issues)
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined
+});
 import {
   trainingModules,
   trainingQuestions,
@@ -62,6 +69,24 @@ import {
   type InsertTrainingBuilderSession,
   type InsertTrainingBuilderTaskProgress,
   type InsertTrainingProgramQuizRef,
+  trainingPlanTrainers,
+  trainingPlanProductionInfo,
+  trainingStepQuizzes,
+  trainingStepQuizQuestions,
+  trainingStepQuizAttempts,
+  trainingStepFacilityModules,
+  trainingStepProgress,
+  trainerTopicCertifications,
+  travelerAuthorizations,
+  insertTrainingPlanTrainerSchema,
+  insertTrainingPlanProductionInfoSchema,
+  insertTrainingStepQuizSchema,
+  insertTrainingStepQuizQuestionSchema,
+  insertTrainingStepQuizAttemptSchema,
+  insertTrainingStepFacilityModuleSchema,
+  insertTrainingStepProgressSchema,
+  insertTrainerTopicCertificationSchema,
+  insertTravelerAuthorizationSchema,
 } from '../../schema';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import {
@@ -3996,8 +4021,13 @@ import {
 // Get all categories
 router.get('/content-library/categories', async (req, res) => {
   try {
-    const categories = await db.select().from(trainingContentCategories).orderBy(trainingContentCategories.type, trainingContentCategories.name);
-    res.json(categories);
+    const result = await pgPool.query(`
+      SELECT id, name, type, description, color, parent_id as "parentId", 
+             created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+      FROM training_content_categories 
+      ORDER BY type, name
+    `);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ error: error.message });
@@ -4007,15 +4037,13 @@ router.get('/content-library/categories', async (req, res) => {
 // Create category
 router.post('/content-library/categories', async (req, res) => {
   try {
-    const [category] = await db.insert(trainingContentCategories).values({
-      name: req.body.name,
-      type: req.body.type || 'custom',
-      description: req.body.description,
-      color: req.body.color,
-      parentId: req.body.parentId,
-      createdBy: req.body.createdBy,
-    }).returning();
-    res.status(201).json(category);
+    const { name, type, description, color, parentId, createdBy } = req.body;
+    const result = await pgPool.query(`
+      INSERT INTO training_content_categories (name, type, description, color, parent_id, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING id, name, type, description, color, parent_id as "parentId", created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+    `, [name, type || 'custom', description || null, color || null, parentId || null, createdBy || null]);
+    res.status(201).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error creating category:', error);
     res.status(500).json({ error: error.message });
@@ -4026,16 +4054,14 @@ router.post('/content-library/categories', async (req, res) => {
 router.put('/content-library/categories/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [updated] = await db.update(trainingContentCategories)
-      .set({
-        name: req.body.name,
-        description: req.body.description,
-        color: req.body.color,
-        updatedAt: new Date(),
-      })
-      .where(eq(trainingContentCategories.id, id))
-      .returning();
-    res.json(updated);
+    const { name, description, color } = req.body;
+    const result = await pgPool.query(`
+      UPDATE training_content_categories 
+      SET name = $1, description = $2, color = $3, updated_at = NOW()
+      WHERE id = $4
+      RETURNING id, name, type, description, color, parent_id as "parentId", created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+    `, [name, description || null, color || null, id]);
+    res.json(result.rows[0]);
   } catch (error: any) {
     console.error('Error updating category:', error);
     res.status(500).json({ error: error.message });
@@ -4046,7 +4072,7 @@ router.put('/content-library/categories/:id', async (req, res) => {
 router.delete('/content-library/categories/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await db.delete(trainingContentCategories).where(eq(trainingContentCategories.id, id));
+    await pgPool.query(`DELETE FROM training_content_categories WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting category:', error);
@@ -4059,31 +4085,26 @@ router.delete('/content-library/categories/:id', async (req, res) => {
 // Get all documents with categories
 router.get('/content-library/documents', async (req, res) => {
   try {
-    const docs = await db.select({
-      id: trainingLibraryDocuments.id,
-      title: trainingLibraryDocuments.title,
-      originalFilename: trainingLibraryDocuments.originalFilename,
-      fileUrl: trainingLibraryDocuments.fileUrl,
-      fileType: trainingLibraryDocuments.fileType,
-      fileSize: trainingLibraryDocuments.fileSize,
-      summary: trainingLibraryDocuments.summary,
-      status: trainingLibraryDocuments.status,
-      uploadedBy: trainingLibraryDocuments.uploadedBy,
-      createdAt: trainingLibraryDocuments.createdAt,
-    }).from(trainingLibraryDocuments).orderBy(desc(trainingLibraryDocuments.createdAt));
+    const docsResult = await pgPool.query(`
+      SELECT id, title, original_filename as "originalFilename", file_url as "fileUrl",
+             file_type as "fileType", file_size as "fileSize", summary, status,
+             uploaded_by as "uploadedBy", created_at as "createdAt"
+      FROM training_library_documents
+      ORDER BY created_at DESC
+    `);
+    const docs = docsResult.rows;
 
     // Get categories for each document
-    const docsWithCategories = await Promise.all(docs.map(async (doc) => {
-      const assignments = await db.select({
-        categoryId: documentCategoryAssignments.categoryId,
-        categoryName: trainingContentCategories.name,
-        categoryType: trainingContentCategories.type,
-        categoryColor: trainingContentCategories.color,
-      }).from(documentCategoryAssignments)
-        .leftJoin(trainingContentCategories, eq(documentCategoryAssignments.categoryId, trainingContentCategories.id))
-        .where(eq(documentCategoryAssignments.documentId, doc.id));
+    const docsWithCategories = await Promise.all(docs.map(async (doc: any) => {
+      const assignmentsResult = await pgPool.query(`
+        SELECT dca.category_id as "categoryId", tcc.name as "categoryName", 
+               tcc.type as "categoryType", tcc.color as "categoryColor"
+        FROM document_category_assignments dca
+        LEFT JOIN training_content_categories tcc ON dca.category_id = tcc.id
+        WHERE dca.document_id = $1
+      `, [doc.id]);
       
-      return { ...doc, categories: assignments };
+      return { ...doc, categories: assignmentsResult.rows };
     }));
 
     res.json(docsWithCategories);
@@ -4122,25 +4143,49 @@ router.post('/content-library/documents', async (req, res) => {
   try {
     const { title, originalFilename, fileUrl, fileType, fileSize, categoryIds, uploadedBy, extractedText } = req.body;
 
-    // Create document record
-    const [doc] = await db.insert(trainingLibraryDocuments).values({
-      title,
-      originalFilename,
-      fileUrl,
-      fileType,
-      fileSize,
-      extractedContent: extractedText,
-      status: extractedText ? 'processing' : 'uploaded',
-      uploadedBy,
-    }).returning();
+    // Create document record using raw SQL to avoid ORM column mapping issues
+    const status = extractedText ? 'processing' : 'uploaded';
+    // Convert fileSize to integer or null, handling empty string and NaN
+    let fileSizeInt: number | null = null;
+    if (fileSize !== undefined && fileSize !== null && fileSize !== '') {
+      const parsed = parseInt(String(fileSize), 10);
+      if (!isNaN(parsed)) {
+        fileSizeInt = parsed;
+      }
+    }
+    let uploadedByInt: number | null = null;
+    if (uploadedBy !== undefined && uploadedBy !== null && uploadedBy !== '') {
+      const parsed = parseInt(String(uploadedBy), 10);
+      if (!isNaN(parsed)) {
+        uploadedByInt = parsed;
+      }
+    }
+    
+    console.log('Document upload params:', { title, originalFilename, fileUrl, fileType, fileSize, fileSizeInt, uploadedBy, uploadedByInt });
+    
+    const insertResult = await pgPool.query(`
+      INSERT INTO training_library_documents 
+        (title, original_filename, file_url, file_type, file_size, extracted_content, status, uploaded_by, created_at, updated_at)
+      VALUES 
+        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      RETURNING id, title, original_filename as "originalFilename", file_url as "fileUrl", file_type as "fileType", 
+                file_size as "fileSize", extracted_content as "extractedContent", summary, key_points as "keyPoints", 
+                status, uploaded_by as "uploadedBy", created_at as "createdAt", updated_at as "updatedAt"
+    `, [title, originalFilename, fileUrl || null, fileType || null, fileSizeInt, extractedText || null, status, uploadedByInt]);
+    
+    const doc = insertResult.rows[0];
+    
+    if (!doc) {
+      throw new Error('Failed to insert document');
+    }
 
     // Assign categories
     if (categoryIds && categoryIds.length > 0) {
       for (const categoryId of categoryIds) {
-        await db.insert(documentCategoryAssignments).values({
-          documentId: doc.id,
-          categoryId,
-        });
+        await pgPool.query(`
+          INSERT INTO document_category_assignments (document_id, category_id, created_at)
+          VALUES ($1, $2, NOW())
+        `, [doc.id, categoryId]);
       }
     }
 
@@ -4167,23 +4212,20 @@ router.post('/content-library/documents', async (req, res) => {
 
         const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
         
-        await db.update(trainingLibraryDocuments)
-          .set({
-            summary: parsed.summary,
-            keyPoints: JSON.stringify(parsed.keyPoints),
-            status: 'ready',
-            updatedAt: new Date(),
-          })
-          .where(eq(trainingLibraryDocuments.id, doc.id));
+        await db.execute(sql`
+          UPDATE training_library_documents
+          SET summary = ${parsed.summary}, key_points = ${JSON.stringify(parsed.keyPoints)}, status = 'ready', updated_at = NOW()
+          WHERE id = ${doc.id}
+        `);
 
         doc.summary = parsed.summary;
         doc.keyPoints = JSON.stringify(parsed.keyPoints);
         doc.status = 'ready';
       } catch (aiError: any) {
         console.error('AI extraction error:', aiError);
-        await db.update(trainingLibraryDocuments)
-          .set({ status: 'failed', updatedAt: new Date() })
-          .where(eq(trainingLibraryDocuments.id, doc.id));
+        await db.execute(sql`
+          UPDATE training_library_documents SET status = 'failed', updated_at = NOW() WHERE id = ${doc.id}
+        `);
       }
     }
 
@@ -4276,9 +4318,17 @@ router.post('/content-library/generate-topic', async (req, res) => {
   try {
     const { documentIds, categoryId, createdBy } = req.body;
 
-    // Fetch document contents
-    const docs = await db.select().from(trainingLibraryDocuments)
-      .where(inArray(trainingLibraryDocuments.id, documentIds));
+    // Parse integer values, handling empty strings
+    const categoryIdInt = categoryId && categoryId !== '' ? parseInt(String(categoryId), 10) : null;
+    const createdByInt = createdBy && createdBy !== '' ? parseInt(String(createdBy), 10) : null;
+
+    // Fetch document contents using pgPool
+    const docsResult = await pgPool.query(`
+      SELECT id, title, extracted_content as "extractedContent", summary
+      FROM training_library_documents
+      WHERE id = ANY($1)
+    `, [documentIds]);
+    const docs = docsResult.rows;
 
     const combinedContent = docs.map(d => 
       `Document: ${d.title}\n${d.extractedContent || d.summary || ''}`
@@ -4360,53 +4410,70 @@ Return JSON with this structure:
 
     const generated = JSON.parse(completion.choices[0]?.message?.content || '{}');
 
-    // Create the topic
-    const [topic] = await db.insert(trainingLibraryTopics).values({
-      title: generated.title,
-      description: generated.description,
-      objectives: JSON.stringify(generated.objectives),
-      prerequisites: generated.prerequisites,
-      estimatedDuration: generated.estimatedDuration,
-      difficultyLevel: generated.difficultyLevel,
-      categoryId,
-      createdBy,
-      isAiGenerated: true,
-    }).returning();
+    // Create the topic using pgPool
+    const topicResult = await pgPool.query(`
+      INSERT INTO training_library_topics 
+        (title, description, objectives, prerequisites, estimated_duration, difficulty_level, category_id, created_by, is_ai_generated, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING id, title, description, objectives, prerequisites, estimated_duration as "estimatedDuration", 
+                difficulty_level as "difficultyLevel", category_id as "categoryId", created_by as "createdBy", 
+                is_ai_generated as "isAiGenerated", created_at as "createdAt", updated_at as "updatedAt"
+    `, [
+      generated.title,
+      generated.description,
+      JSON.stringify(generated.objectives),
+      generated.prerequisites || null,
+      generated.estimatedDuration || 60,
+      generated.difficultyLevel || 'intermediate',
+      categoryIdInt,
+      createdByInt,
+      true
+    ]);
+    const topic = topicResult.rows[0];
 
     // Link documents to topic
     for (const docId of documentIds) {
-      await db.insert(topicDocumentLinks).values({
-        topicId: topic.id,
-        documentId: docId,
-      });
+      await pgPool.query(`
+        INSERT INTO topic_document_links (topic_id, document_id, created_at)
+        VALUES ($1, $2, NOW())
+      `, [topic.id, docId]);
     }
 
     // Create training materials for each step
     for (const material of generated.materials || []) {
-      await db.insert(trainingTopicMaterials).values({
-        topicId: topic.id,
-        stepNumber: material.stepNumber,
-        stepTitle: material.stepTitle,
-        trainerInstructions: material.trainerInstructions,
-        keyPoints: JSON.stringify(material.keyPoints),
-        demonstrations: material.demonstrations,
-        safetyNotes: material.safetyNotes,
-        estimatedTime: material.estimatedTime,
-      });
+      await pgPool.query(`
+        INSERT INTO training_topic_materials 
+          (topic_id, step_number, step_title, trainer_instructions, trainee_activities, key_points, visual_aids, estimated_duration, facility_modules, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      `, [
+        topic.id,
+        material.stepNumber,
+        material.stepTitle,
+        material.trainerInstructions,
+        material.demonstrations || null,
+        JSON.stringify(material.keyPoints),
+        material.safetyNotes || null,
+        material.estimatedTime || 15,
+        null
+      ]);
     }
 
     // Create quiz questions
     for (const q of generated.quizQuestions || []) {
-      await db.insert(trainingTopicQuizQuestions).values({
-        topicId: topic.id,
-        question: q.question,
-        questionType: q.questionType,
-        options: JSON.stringify(q.options),
-        correctAnswer: q.correctAnswer,
-        explanation: q.explanation,
-        difficulty: q.difficulty,
-        stepNumber: q.stepNumber,
-      });
+      await pgPool.query(`
+        INSERT INTO training_topic_quiz_questions 
+          (topic_id, step_number, question, question_type, options, correct_answer, explanation, points, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `, [
+        topic.id,
+        q.stepNumber || 1,
+        q.question,
+        q.questionType || 'multiple_choice',
+        JSON.stringify(q.options),
+        q.correctAnswer,
+        q.explanation || null,
+        10
+      ]);
     }
 
     res.status(201).json({ topic, materials: generated.materials, quizQuestions: generated.quizQuestions });
@@ -4421,23 +4488,17 @@ Return JSON with this structure:
 // Get all topics with materials count
 router.get('/content-library/topics', async (req, res) => {
   try {
-    const topics = await db.select({
-      id: trainingLibraryTopics.id,
-      title: trainingLibraryTopics.title,
-      description: trainingLibraryTopics.description,
-      objectives: trainingLibraryTopics.objectives,
-      estimatedDuration: trainingLibraryTopics.estimatedDuration,
-      difficultyLevel: trainingLibraryTopics.difficultyLevel,
-      categoryId: trainingLibraryTopics.categoryId,
-      isAiGenerated: trainingLibraryTopics.isAiGenerated,
-      createdAt: trainingLibraryTopics.createdAt,
-      categoryName: trainingContentCategories.name,
-      categoryColor: trainingContentCategories.color,
-    }).from(trainingLibraryTopics)
-      .leftJoin(trainingContentCategories, eq(trainingLibraryTopics.categoryId, trainingContentCategories.id))
-      .orderBy(desc(trainingLibraryTopics.createdAt));
+    const result = await pgPool.query(`
+      SELECT t.id, t.title, t.description, t.objectives, 
+             t.estimated_duration as "estimatedDuration", t.difficulty_level as "difficultyLevel",
+             t.category_id as "categoryId", t.is_ai_generated as "isAiGenerated",
+             t.created_at as "createdAt", c.name as "categoryName", c.color as "categoryColor"
+      FROM training_library_topics t
+      LEFT JOIN training_content_categories c ON t.category_id = c.id
+      ORDER BY t.created_at DESC
+    `);
 
-    res.json(topics);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching topics:', error);
     res.status(500).json({ error: error.message });
@@ -4546,7 +4607,7 @@ router.post('/content-library/assign-topics', async (req, res) => {
 // Generate AI training plan from selected topics
 router.post('/content-library/generate-training-plan', async (req, res) => {
   try {
-    const { traineeId, topicIds, trainerId, createdBy } = req.body;
+    const { traineeId, topicIds, trainerId, trainerIds, partNumber, department, productionLine, createdBy } = req.body;
 
     // Fetch topics
     const topics = await db.select().from(trainingLibraryTopics)
@@ -4561,29 +4622,44 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
       messages: [
         { 
           role: 'system', 
-          content: `You are organizing training topics into an optimal 4-day training plan.
-Each day should have a logical flow and appropriate workload.
+          content: `You are organizing training topics into an optimal 4-step training plan using the "Train the Trainer" 4-step method.
+Each step builds on the previous and should have appropriate content.
 Consider prerequisites and build skills progressively.
+
+The 4 steps are:
+1. Trainer Does / Trainer Explains - Introduction and demonstration
+2. Trainer Does / Trainee Explains - Verify comprehension
+3. Trainee Does / Trainer Coaches - Hands-on with guidance
+4. Trainee Does / Trainer Observes - Independent execution
 
 Return JSON with:
 {
   "title": "Training Plan for [Area]",
   "description": "Overview of this training program",
-  "days": [
+  "steps": [
     {
-      "dayNumber": 1,
-      "theme": "Day theme/focus",
+      "stepNumber": 1,
+      "stepTitle": "Trainer Does / Trainer Explains",
+      "theme": "Step theme/focus",
       "objectives": ["what trainee will learn"],
-      "topicIds": [list of topic IDs for this day],
-      "estimatedHours": 4
+      "topicIds": [list of topic IDs for this step],
+      "estimatedHours": 2,
+      "quizQuestions": [
+        {
+          "question": "Question about this step",
+          "options": ["A", "B", "C", "D"],
+          "correctAnswer": "A",
+          "explanation": "Why A is correct"
+        }
+      ]
     },
-    ...
+    ...repeat for steps 2-4
   ]
 }`
         },
         { 
           role: 'user', 
-          content: `Create a 4-day training plan for ${trainee?.name || 'trainee'} using these topics:\n\n${topics.map(t => `ID: ${t.id}, Title: ${t.title}, Duration: ${t.estimatedDuration}min, Prerequisites: ${t.prerequisites || 'None'}`).join('\n')}`
+          content: `Create a 4-step training plan for ${trainee?.name || 'trainee'}${partNumber ? ` for Part #${partNumber}` : ''}${department ? ` in ${department}` : ''}${productionLine ? ` on ${productionLine}` : ''} using these topics:\n\n${topics.map(t => `ID: ${t.id}, Title: ${t.title}, Duration: ${t.estimatedDuration}min, Prerequisites: ${t.prerequisites || 'None'}`).join('\n')}\n\nGenerate 4-5 quiz questions for each step to test comprehension.`
         }
       ],
       response_format: { type: 'json_object' },
@@ -4595,24 +4671,80 @@ Return JSON with:
     // Create the training plan
     const [savedPlan] = await db.insert(aiTrainingPlans).values({
       traineeId,
-      title: plan.title,
+      title: plan.title || `Training Plan for ${trainee?.name || 'Trainee'}`,
       description: plan.description,
       planStructure: JSON.stringify(plan),
       totalTopics: topicIds.length,
+      status: 'active',
       createdBy,
     }).returning();
 
-    // Create assignments based on the plan
-    for (const day of plan.days || []) {
-      for (const topicId of day.topicIds || []) {
+    // Save trainer assignments
+    const allTrainerIds = trainerIds || (trainerId ? [trainerId] : []);
+    for (let i = 0; i < allTrainerIds.length; i++) {
+      await db.insert(trainingPlanTrainers).values({
+        planId: savedPlan.id,
+        trainerId: allTrainerIds[i],
+        isPrimary: i === 0, // First trainer is primary
+        assignedBy: createdBy,
+      });
+    }
+
+    // Save production info if provided
+    if (partNumber || department || productionLine) {
+      await db.insert(trainingPlanProductionInfo).values({
+        planId: savedPlan.id,
+        partNumber,
+        department,
+        productionLine,
+      });
+    }
+
+    // Create step quizzes and questions
+    for (const step of plan.steps || []) {
+      const [quiz] = await db.insert(trainingStepQuizzes).values({
+        planId: savedPlan.id,
+        stepNumber: step.stepNumber,
+        title: `Step ${step.stepNumber} Quiz: ${step.stepTitle}`,
+        description: step.theme,
+        passingScore: 80,
+        isAiGenerated: true,
+      }).returning();
+
+      // Add quiz questions
+      for (let i = 0; i < (step.quizQuestions || []).length; i++) {
+        const q = step.quizQuestions[i];
+        await db.insert(trainingStepQuizQuestions).values({
+          quizId: quiz.id,
+          question: q.question,
+          questionType: 'multiple_choice',
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          sortOrder: i,
+        });
+      }
+
+      // Create topic assignments for this step
+      for (const topicId of step.topicIds || []) {
         await db.insert(traineeTopicAssignments).values({
           traineeId,
           topicId,
-          trainerId,
-          dayNumber: day.dayNumber,
+          trainerId: allTrainerIds[0] || trainerId,
+          dayNumber: step.stepNumber,
           createdBy,
         });
       }
+    }
+
+    // Create initial step progress for the trainee
+    for (let stepNum = 1; stepNum <= 4; stepNum++) {
+      await db.insert(trainingStepProgress).values({
+        planId: savedPlan.id,
+        traineeId,
+        stepNumber: stepNum,
+        status: stepNum === 1 ? 'available' : 'locked',
+      });
     }
 
     res.status(201).json({ plan: savedPlan, structure: plan });
@@ -4651,21 +4783,17 @@ router.put('/content-library/assignments/:id/status', async (req, res) => {
 // Get AI training plans
 router.get('/content-library/training-plans', async (req, res) => {
   try {
-    const plans = await db.select({
-      id: aiTrainingPlans.id,
-      traineeId: aiTrainingPlans.traineeId,
-      title: aiTrainingPlans.title,
-      description: aiTrainingPlans.description,
-      planStructure: aiTrainingPlans.planStructure,
-      totalTopics: aiTrainingPlans.totalTopics,
-      status: aiTrainingPlans.status,
-      createdAt: aiTrainingPlans.createdAt,
-      traineeName: employees.name,
-    }).from(aiTrainingPlans)
-      .leftJoin(employees, eq(aiTrainingPlans.traineeId, employees.id))
-      .orderBy(desc(aiTrainingPlans.createdAt));
+    const result = await pgPool.query(`
+      SELECT p.id, p.title, p.description, p.source_document_ids as "sourceDocumentIds",
+             p.objectives, p.four_step_content as "fourStepContent", p.quiz_questions as "quizQuestions",
+             p.part_number as "partNumber", p.department, p.production_line as "productionLine",
+             p.assigned_trainers as "assignedTrainers", p.status, 
+             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt"
+      FROM ai_training_plans p
+      ORDER BY p.created_at DESC
+    `);
 
-    res.json(plans);
+    res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching training plans:', error);
     res.status(500).json({ error: error.message });
@@ -4775,6 +4903,970 @@ router.put('/content-library/documents/:id', async (req, res) => {
     res.json(updated);
   } catch (error: any) {
     console.error('Error updating document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// EPOCH TRAINING SYSTEM API ROUTES
+// ============================================================================
+
+// Get all AI training plans with trainers and production info
+router.get('/epoch/training-plans', async (req, res) => {
+  try {
+    const plans = await db.select({
+      id: aiTrainingPlans.id,
+      traineeId: aiTrainingPlans.traineeId,
+      title: aiTrainingPlans.title,
+      description: aiTrainingPlans.description,
+      planStructure: aiTrainingPlans.planStructure,
+      totalTopics: aiTrainingPlans.totalTopics,
+      status: aiTrainingPlans.status,
+      createdAt: aiTrainingPlans.createdAt,
+    }).from(aiTrainingPlans)
+      .orderBy(desc(aiTrainingPlans.createdAt));
+    
+    // Get trainers and production info for each plan
+    const enrichedPlans = await Promise.all(plans.map(async (plan) => {
+      const trainers = await db.select({
+        id: trainingPlanTrainers.id,
+        trainerId: trainingPlanTrainers.trainerId,
+        isPrimary: trainingPlanTrainers.isPrimary,
+        trainerName: employees.name,
+      }).from(trainingPlanTrainers)
+        .leftJoin(employees, eq(trainingPlanTrainers.trainerId, employees.id))
+        .where(eq(trainingPlanTrainers.planId, plan.id));
+      
+      const [productionInfo] = await db.select()
+        .from(trainingPlanProductionInfo)
+        .where(eq(trainingPlanProductionInfo.planId, plan.id));
+      
+      const [trainee] = await db.select({ name: employees.name })
+        .from(employees)
+        .where(eq(employees.id, plan.traineeId));
+      
+      return {
+        ...plan,
+        traineeName: trainee?.name || null,
+        trainers,
+        productionInfo,
+      };
+    }));
+    
+    res.json(enrichedPlans);
+  } catch (error: any) {
+    console.error('Error fetching epoch training plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single training plan with all details
+router.get('/epoch/training-plans/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    const [plan] = await db.select().from(aiTrainingPlans).where(eq(aiTrainingPlans.id, id));
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    const trainers = await db.select({
+      id: trainingPlanTrainers.id,
+      trainerId: trainingPlanTrainers.trainerId,
+      isPrimary: trainingPlanTrainers.isPrimary,
+      trainerName: employees.name,
+    }).from(trainingPlanTrainers)
+      .leftJoin(employees, eq(trainingPlanTrainers.trainerId, employees.id))
+      .where(eq(trainingPlanTrainers.planId, id));
+    
+    const [productionInfo] = await db.select()
+      .from(trainingPlanProductionInfo)
+      .where(eq(trainingPlanProductionInfo.planId, id));
+    
+    const stepQuizzes = await db.select()
+      .from(trainingStepQuizzes)
+      .where(eq(trainingStepQuizzes.planId, id))
+      .orderBy(trainingStepQuizzes.stepNumber);
+    
+    const facilityModules = await db.select({
+      id: trainingStepFacilityModules.id,
+      stepNumber: trainingStepFacilityModules.stepNumber,
+      moduleId: trainingStepFacilityModules.moduleId,
+      facilityTopicId: trainingStepFacilityModules.facilityTopicId,
+      isRequired: trainingStepFacilityModules.isRequired,
+      moduleTitle: trainingModules.title,
+      facilityTopicTitle: facilityTopics.title,
+    }).from(trainingStepFacilityModules)
+      .leftJoin(trainingModules, eq(trainingStepFacilityModules.moduleId, trainingModules.id))
+      .leftJoin(facilityTopics, eq(trainingStepFacilityModules.facilityTopicId, facilityTopics.id))
+      .where(eq(trainingStepFacilityModules.planId, id))
+      .orderBy(trainingStepFacilityModules.stepNumber, trainingStepFacilityModules.sortOrder);
+    
+    const [trainee] = await db.select({ name: employees.name, department: employees.department })
+      .from(employees)
+      .where(eq(employees.id, plan.traineeId));
+    
+    res.json({
+      ...plan,
+      traineeName: trainee?.name || null,
+      traineeDepartment: trainee?.department || null,
+      trainers,
+      productionInfo,
+      stepQuizzes,
+      facilityModules,
+    });
+  } catch (error: any) {
+    console.error('Error fetching epoch training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign trainers to a training plan
+router.post('/epoch/training-plans/:id/trainers', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { trainerId, isPrimary = false, assignedBy } = req.body;
+    
+    const [trainer] = await db.insert(trainingPlanTrainers)
+      .values({
+        planId,
+        trainerId,
+        isPrimary,
+        assignedBy,
+      })
+      .returning();
+    
+    res.json(trainer);
+  } catch (error: any) {
+    console.error('Error assigning trainer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove trainer from training plan
+router.delete('/epoch/training-plans/:planId/trainers/:trainerId', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.planId);
+    const trainerId = parseInt(req.params.trainerId);
+    
+    await db.delete(trainingPlanTrainers)
+      .where(and(
+        eq(trainingPlanTrainers.planId, planId),
+        eq(trainingPlanTrainers.trainerId, trainerId)
+      ));
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error removing trainer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set production info for training plan (part #, department, production line)
+router.post('/epoch/training-plans/:id/production-info', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { partNumber, department, productionLine } = req.body;
+    
+    // Check if production info already exists
+    const [existing] = await db.select()
+      .from(trainingPlanProductionInfo)
+      .where(eq(trainingPlanProductionInfo.planId, planId));
+    
+    let result;
+    if (existing) {
+      [result] = await db.update(trainingPlanProductionInfo)
+        .set({ partNumber, department, productionLine, updatedAt: new Date() })
+        .where(eq(trainingPlanProductionInfo.planId, planId))
+        .returning();
+    } else {
+      [result] = await db.insert(trainingPlanProductionInfo)
+        .values({ planId, partNumber, department, productionLine })
+        .returning();
+    }
+    
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error setting production info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create step quizzes for a training plan (4 quizzes, one per step)
+router.post('/epoch/training-plans/:id/step-quizzes', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { quizzes } = req.body; // Array of { stepNumber, title, description, questions: [...] }
+    
+    const createdQuizzes = [];
+    
+    for (const quiz of quizzes) {
+      const [newQuiz] = await db.insert(trainingStepQuizzes)
+        .values({
+          planId,
+          stepNumber: quiz.stepNumber,
+          title: quiz.title,
+          description: quiz.description,
+          passingScore: quiz.passingScore || 80,
+          isAiGenerated: quiz.isAiGenerated || false,
+        })
+        .returning();
+      
+      // Add questions to the quiz
+      if (quiz.questions && quiz.questions.length > 0) {
+        const questions = await Promise.all(quiz.questions.map(async (q: any, idx: number) => {
+          const [question] = await db.insert(trainingStepQuizQuestions)
+            .values({
+              quizId: newQuiz.id,
+              question: q.question,
+              questionType: q.questionType || 'multiple_choice',
+              options: q.options,
+              correctAnswer: q.correctAnswer,
+              explanation: q.explanation,
+              sortOrder: idx,
+            })
+            .returning();
+          return question;
+        }));
+        
+        createdQuizzes.push({ ...newQuiz, questions });
+      } else {
+        createdQuizzes.push(newQuiz);
+      }
+    }
+    
+    res.json(createdQuizzes);
+  } catch (error: any) {
+    console.error('Error creating step quizzes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get step quiz with questions
+router.get('/epoch/step-quizzes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    const [quiz] = await db.select().from(trainingStepQuizzes).where(eq(trainingStepQuizzes.id, id));
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    
+    const questions = await db.select()
+      .from(trainingStepQuizQuestions)
+      .where(eq(trainingStepQuizQuestions.quizId, id))
+      .orderBy(trainingStepQuizQuestions.sortOrder);
+    
+    res.json({ ...quiz, questions });
+  } catch (error: any) {
+    console.error('Error fetching step quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Submit quiz attempt
+router.post('/epoch/step-quizzes/:id/attempt', async (req, res) => {
+  try {
+    const quizId = parseInt(req.params.id);
+    const { traineeId, planId, answers } = req.body;
+    
+    // Get quiz and questions
+    const [quiz] = await db.select().from(trainingStepQuizzes).where(eq(trainingStepQuizzes.id, quizId));
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    
+    const questions = await db.select()
+      .from(trainingStepQuizQuestions)
+      .where(eq(trainingStepQuizQuestions.quizId, quizId));
+    
+    // Calculate score
+    let correctCount = 0;
+    const gradedAnswers = answers.map((a: { questionId: number; answer: string }) => {
+      const question = questions.find(q => q.id === a.questionId);
+      const correct = question?.correctAnswer === a.answer;
+      if (correct) correctCount++;
+      return { ...a, correct };
+    });
+    
+    const score = Math.round((correctCount / questions.length) * 100);
+    const passed = score >= (quiz.passingScore || 80);
+    
+    // Count previous attempts
+    const previousAttempts = await db.select({ count: sql<number>`count(*)::int` })
+      .from(trainingStepQuizAttempts)
+      .where(and(
+        eq(trainingStepQuizAttempts.quizId, quizId),
+        eq(trainingStepQuizAttempts.traineeId, traineeId)
+      ));
+    
+    const attemptNumber = (previousAttempts[0]?.count || 0) + 1;
+    
+    // Save attempt
+    const [attempt] = await db.insert(trainingStepQuizAttempts)
+      .values({
+        quizId,
+        traineeId,
+        planId,
+        score,
+        passed,
+        answers: gradedAnswers,
+        attemptNumber,
+      })
+      .returning();
+    
+    // Update step progress if passed
+    if (passed) {
+      await db.update(trainingStepProgress)
+        .set({
+          quizPassed: true,
+          quizScore: score,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(trainingStepProgress.planId, planId),
+          eq(trainingStepProgress.traineeId, traineeId),
+          eq(trainingStepProgress.stepNumber, quiz.stepNumber)
+        ));
+      
+      // Also update training matrix with the score
+      await db.update(trainingMatrix)
+        .set({
+          lastScore: score,
+          status: 'COMPLETED',
+          lastCompleted: new Date(),
+        })
+        .where(and(
+          eq(trainingMatrix.employeeId, traineeId)
+        ));
+    }
+    
+    res.json({ attempt, score, passed, correctCount, total: questions.length });
+  } catch (error: any) {
+    console.error('Error submitting quiz attempt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add facility module to training step
+router.post('/epoch/training-plans/:id/facility-modules', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { stepNumber, moduleId, facilityTopicId, isRequired = true, createdBy } = req.body;
+    
+    const [module] = await db.insert(trainingStepFacilityModules)
+      .values({
+        planId,
+        stepNumber,
+        moduleId: moduleId || null,
+        facilityTopicId: facilityTopicId || null,
+        isRequired,
+        createdBy,
+      })
+      .returning();
+    
+    res.json(module);
+  } catch (error: any) {
+    console.error('Error adding facility module:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove facility module from training step
+router.delete('/epoch/facility-modules/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingStepFacilityModules).where(eq(trainingStepFacilityModules.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error removing facility module:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainee step progress
+router.get('/epoch/training-plans/:planId/progress/:traineeId', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.planId);
+    const traineeId = parseInt(req.params.traineeId);
+    
+    const progress = await db.select()
+      .from(trainingStepProgress)
+      .where(and(
+        eq(trainingStepProgress.planId, planId),
+        eq(trainingStepProgress.traineeId, traineeId)
+      ))
+      .orderBy(trainingStepProgress.stepNumber);
+    
+    // If no progress exists, create initial progress for all 4 steps
+    if (progress.length === 0) {
+      const initialProgress = [];
+      for (let step = 1; step <= 4; step++) {
+        const [p] = await db.insert(trainingStepProgress)
+          .values({
+            planId,
+            traineeId,
+            stepNumber: step,
+            status: step === 1 ? 'available' : 'locked',
+          })
+          .returning();
+        initialProgress.push(p);
+      }
+      return res.json(initialProgress);
+    }
+    
+    res.json(progress);
+  } catch (error: any) {
+    console.error('Error fetching step progress:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update step progress (trainer marks step complete)
+router.put('/epoch/step-progress/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status, trainedBy, trainerNotes, facilityModulesComplete } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (status) updateData.status = status;
+    if (trainedBy) updateData.trainedBy = trainedBy;
+    if (trainerNotes !== undefined) updateData.trainerNotes = trainerNotes;
+    if (facilityModulesComplete !== undefined) updateData.facilityModulesComplete = facilityModulesComplete;
+    
+    if (status === 'in_progress' && !updateData.startedAt) {
+      updateData.startedAt = new Date();
+    }
+    if (status === 'completed') {
+      updateData.completedAt = new Date();
+    }
+    
+    const [updated] = await db.update(trainingStepProgress)
+      .set(updateData)
+      .where(eq(trainingStepProgress.id, id))
+      .returning();
+    
+    // If step completed, unlock next step
+    if (status === 'completed' && updated.stepNumber < 4) {
+      await db.update(trainingStepProgress)
+        .set({ status: 'available', updatedAt: new Date() })
+        .where(and(
+          eq(trainingStepProgress.planId, updated.planId),
+          eq(trainingStepProgress.traineeId, updated.traineeId),
+          eq(trainingStepProgress.stepNumber, updated.stepNumber + 1)
+        ));
+    }
+    
+    // If all 4 steps complete, grant traveler authorization
+    if (status === 'completed' && updated.stepNumber === 4) {
+      // Get production info for this plan
+      const [productionInfo] = await db.select()
+        .from(trainingPlanProductionInfo)
+        .where(eq(trainingPlanProductionInfo.planId, updated.planId));
+      
+      if (productionInfo?.partNumber) {
+        // Grant traveler authorization
+        await db.insert(travelerAuthorizations)
+          .values({
+            employeeId: updated.traineeId,
+            planId: updated.planId,
+            partNumber: productionInfo.partNumber,
+            department: productionInfo.department,
+            productionLine: productionInfo.productionLine,
+            authorizedBy: trainedBy,
+          })
+          .onConflictDoNothing();
+        
+        // Update AI training plan status
+        await db.update(aiTrainingPlans)
+          .set({ status: 'completed', updatedAt: new Date() })
+          .where(eq(aiTrainingPlans.id, updated.planId));
+      }
+    }
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating step progress:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainer certifications (who is certified to train what)
+router.get('/epoch/trainer-certifications', async (req, res) => {
+  try {
+    const certifications = await db.select({
+      id: trainerTopicCertifications.id,
+      trainerId: trainerTopicCertifications.trainerId,
+      trainerName: employees.name,
+      department: trainerTopicCertifications.department,
+      topicId: trainerTopicCertifications.topicId,
+      topicTitle: trainingLibraryTopics.title,
+      moduleId: trainerTopicCertifications.moduleId,
+      moduleTitle: trainingModules.title,
+      certifiedAt: trainerTopicCertifications.certifiedAt,
+      expiresAt: trainerTopicCertifications.expiresAt,
+      isActive: trainerTopicCertifications.isActive,
+    }).from(trainerTopicCertifications)
+      .leftJoin(employees, eq(trainerTopicCertifications.trainerId, employees.id))
+      .leftJoin(trainingLibraryTopics, eq(trainerTopicCertifications.topicId, trainingLibraryTopics.id))
+      .leftJoin(trainingModules, eq(trainerTopicCertifications.moduleId, trainingModules.id))
+      .where(eq(trainerTopicCertifications.isActive, true))
+      .orderBy(employees.name);
+    
+    res.json(certifications);
+  } catch (error: any) {
+    console.error('Error fetching trainer certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add trainer certification
+router.post('/epoch/trainer-certifications', async (req, res) => {
+  try {
+    const { trainerId, topicId, moduleId, department, certifiedBy, expiresAt, notes } = req.body;
+    
+    const [cert] = await db.insert(trainerTopicCertifications)
+      .values({
+        trainerId,
+        topicId: topicId || null,
+        moduleId: moduleId || null,
+        department,
+        certifiedBy,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        notes,
+      })
+      .returning();
+    
+    res.json(cert);
+  } catch (error: any) {
+    console.error('Error adding trainer certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get traveler authorizations for an employee
+router.get('/epoch/traveler-authorizations/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    
+    const authorizations = await db.select({
+      id: travelerAuthorizations.id,
+      partNumber: travelerAuthorizations.partNumber,
+      department: travelerAuthorizations.department,
+      productionLine: travelerAuthorizations.productionLine,
+      authorizedAt: travelerAuthorizations.authorizedAt,
+      expiresAt: travelerAuthorizations.expiresAt,
+      isActive: travelerAuthorizations.isActive,
+      planId: travelerAuthorizations.planId,
+      planTitle: aiTrainingPlans.title,
+    }).from(travelerAuthorizations)
+      .leftJoin(aiTrainingPlans, eq(travelerAuthorizations.planId, aiTrainingPlans.id))
+      .where(and(
+        eq(travelerAuthorizations.employeeId, employeeId),
+        eq(travelerAuthorizations.isActive, true)
+      ))
+      .orderBy(desc(travelerAuthorizations.authorizedAt));
+    
+    res.json(authorizations);
+  } catch (error: any) {
+    console.error('Error fetching traveler authorizations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if employee is authorized for a part/line/department
+router.get('/epoch/check-authorization', async (req, res) => {
+  try {
+    const { employeeId, partNumber, productionLine, department } = req.query;
+    
+    if (!employeeId || !partNumber) {
+      return res.status(400).json({ error: 'employeeId and partNumber are required' });
+    }
+    
+    const conditions = [
+      eq(travelerAuthorizations.employeeId, parseInt(employeeId as string)),
+      eq(travelerAuthorizations.partNumber, partNumber as string),
+      eq(travelerAuthorizations.isActive, true),
+    ];
+    
+    if (productionLine) {
+      conditions.push(eq(travelerAuthorizations.productionLine, productionLine as string));
+    }
+    if (department) {
+      conditions.push(eq(travelerAuthorizations.department, department as string));
+    }
+    
+    const [authorization] = await db.select()
+      .from(travelerAuthorizations)
+      .where(and(...conditions));
+    
+    res.json({
+      authorized: !!authorization,
+      authorization: authorization || null,
+    });
+  } catch (error: any) {
+    console.error('Error checking authorization:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainee's active training assignments with quizzes
+router.get('/epoch/trainee-assignments/:traineeId', async (req, res) => {
+  try {
+    const traineeId = parseInt(req.params.traineeId);
+    
+    // Get all active plans for this trainee
+    const plans = await db.select({
+      id: aiTrainingPlans.id,
+      title: aiTrainingPlans.title,
+      description: aiTrainingPlans.description,
+      status: aiTrainingPlans.status,
+      createdAt: aiTrainingPlans.createdAt,
+    }).from(aiTrainingPlans)
+      .where(and(
+        eq(aiTrainingPlans.traineeId, traineeId),
+        inArray(aiTrainingPlans.status, ['draft', 'active'])
+      ))
+      .orderBy(desc(aiTrainingPlans.createdAt));
+    
+    // Get progress and quizzes for each plan
+    const enrichedPlans = await Promise.all(plans.map(async (plan) => {
+      const progress = await db.select()
+        .from(trainingStepProgress)
+        .where(and(
+          eq(trainingStepProgress.planId, plan.id),
+          eq(trainingStepProgress.traineeId, traineeId)
+        ))
+        .orderBy(trainingStepProgress.stepNumber);
+      
+      const stepQuizzes = await db.select()
+        .from(trainingStepQuizzes)
+        .where(eq(trainingStepQuizzes.planId, plan.id))
+        .orderBy(trainingStepQuizzes.stepNumber);
+      
+      // Get trainers
+      const trainers = await db.select({
+        trainerId: trainingPlanTrainers.trainerId,
+        trainerName: employees.name,
+        isPrimary: trainingPlanTrainers.isPrimary,
+      }).from(trainingPlanTrainers)
+        .leftJoin(employees, eq(trainingPlanTrainers.trainerId, employees.id))
+        .where(eq(trainingPlanTrainers.planId, plan.id));
+      
+      return {
+        ...plan,
+        progress,
+        stepQuizzes,
+        trainers,
+      };
+    }));
+    
+    res.json(enrichedPlans);
+  } catch (error: any) {
+    console.error('Error fetching trainee assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainee's training plans with step progress for portal
+router.get('/epoch/trainee-plans/:traineeId', async (req, res) => {
+  try {
+    const traineeId = parseInt(req.params.traineeId);
+    
+    // Get all plans for this trainee
+    const plans = await db.select({
+      id: aiTrainingPlans.id,
+      title: aiTrainingPlans.title,
+      description: aiTrainingPlans.description,
+      status: aiTrainingPlans.status,
+      createdAt: aiTrainingPlans.createdAt,
+      planStructure: aiTrainingPlans.planStructure,
+    }).from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.traineeId, traineeId));
+    
+    // Enrich each plan with trainers, production info, and step progress
+    const enrichedPlans = await Promise.all(plans.map(async (plan) => {
+      // Get trainers
+      const trainers = await db.select({
+        id: trainingPlanTrainers.id,
+        trainerId: trainingPlanTrainers.trainerId,
+        trainerName: employees.name,
+        isPrimary: trainingPlanTrainers.isPrimary,
+      }).from(trainingPlanTrainers)
+        .leftJoin(employees, eq(trainingPlanTrainers.trainerId, employees.id))
+        .where(eq(trainingPlanTrainers.planId, plan.id));
+      
+      // Get production info
+      const [productionInfo] = await db.select().from(trainingPlanProductionInfo)
+        .where(eq(trainingPlanProductionInfo.planId, plan.id));
+      
+      // Get step progress
+      const stepProgress = await db.select({
+        stepNumber: trainingStepProgress.stepNumber,
+        status: trainingStepProgress.status,
+        quizScore: trainingStepProgress.quizScore,
+        quizPassed: trainingStepProgress.quizPassed,
+      }).from(trainingStepProgress)
+        .where(and(
+          eq(trainingStepProgress.planId, plan.id),
+          eq(trainingStepProgress.traineeId, traineeId)
+        ))
+        .orderBy(trainingStepProgress.stepNumber);
+      
+      return {
+        ...plan,
+        trainers,
+        productionInfo,
+        stepProgress,
+      };
+    }));
+    
+    res.json(enrichedPlans);
+  } catch (error: any) {
+    console.error('Error fetching trainee plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get quiz for a specific step
+router.get('/epoch/plans/:planId/steps/:stepNumber/quiz', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.planId);
+    const stepNumber = parseInt(req.params.stepNumber);
+    
+    // Get the plan to verify trainee
+    const [plan] = await db.select().from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    // Verify step is available for taking the quiz
+    const [stepProgress] = await db.select().from(trainingStepProgress)
+      .where(and(
+        eq(trainingStepProgress.planId, planId),
+        eq(trainingStepProgress.traineeId, plan.traineeId),
+        eq(trainingStepProgress.stepNumber, stepNumber)
+      ));
+    
+    if (stepProgress && stepProgress.status === 'locked') {
+      return res.status(403).json({ error: 'This step is not yet available. Complete the previous step first.' });
+    }
+    
+    if (stepProgress && stepProgress.status === 'completed') {
+      return res.status(400).json({ error: 'This step quiz has already been completed.' });
+    }
+    
+    // Get the quiz for this step
+    const [quiz] = await db.select().from(trainingStepQuizzes)
+      .where(and(
+        eq(trainingStepQuizzes.planId, planId),
+        eq(trainingStepQuizzes.stepNumber, stepNumber)
+      ));
+    
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found for this step' });
+    }
+    
+    // Get questions WITHOUT correct answers (security - don't expose answers)
+    const questions = await db.select({
+      id: trainingStepQuizQuestions.id,
+      question: trainingStepQuizQuestions.question,
+      questionType: trainingStepQuizQuestions.questionType,
+      options: trainingStepQuizQuestions.options,
+    }).from(trainingStepQuizQuestions)
+      .where(eq(trainingStepQuizQuestions.quizId, quiz.id))
+      .orderBy(trainingStepQuizQuestions.sortOrder);
+    
+    res.json({
+      ...quiz,
+      questions: questions.map(q => ({
+        id: q.id,
+        question: q.question,
+        questionType: q.questionType,
+        options: q.options || [],
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error fetching step quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Submit quiz answers and get results
+router.post('/epoch/plans/:planId/steps/:stepNumber/quiz/submit', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.planId);
+    const stepNumber = parseInt(req.params.stepNumber);
+    const { answers } = req.body; // { questionId: selectedAnswer }
+    
+    // Get trainee from plan
+    const [plan] = await db.select().from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    // Verify step is available before allowing submission
+    let [existingProgress] = await db.select().from(trainingStepProgress)
+      .where(and(
+        eq(trainingStepProgress.planId, planId),
+        eq(trainingStepProgress.traineeId, plan.traineeId),
+        eq(trainingStepProgress.stepNumber, stepNumber)
+      ));
+    
+    // If step progress doesn't exist, create it (handle case where initialization failed)
+    if (!existingProgress) {
+      // Create all missing step progress rows for this plan/trainee
+      for (let s = 1; s <= 4; s++) {
+        const [existing] = await db.select().from(trainingStepProgress)
+          .where(and(
+            eq(trainingStepProgress.planId, planId),
+            eq(trainingStepProgress.traineeId, plan.traineeId),
+            eq(trainingStepProgress.stepNumber, s)
+          ));
+        
+        if (!existing) {
+          await db.insert(trainingStepProgress).values({
+            planId,
+            traineeId: plan.traineeId,
+            stepNumber: s,
+            status: s === 1 ? 'available' : 'locked',
+          });
+        }
+      }
+      
+      // Re-fetch the current step progress
+      [existingProgress] = await db.select().from(trainingStepProgress)
+        .where(and(
+          eq(trainingStepProgress.planId, planId),
+          eq(trainingStepProgress.traineeId, plan.traineeId),
+          eq(trainingStepProgress.stepNumber, stepNumber)
+        ));
+    }
+    
+    // Check step availability
+    if (existingProgress && existingProgress.status === 'locked') {
+      return res.status(403).json({ error: 'This step is not yet available. Complete the previous step first.' });
+    }
+    
+    if (existingProgress && existingProgress.status === 'completed') {
+      return res.status(400).json({ error: 'This step quiz has already been completed.' });
+    }
+    
+    // Get the quiz
+    const [quiz] = await db.select().from(trainingStepQuizzes)
+      .where(and(
+        eq(trainingStepQuizzes.planId, planId),
+        eq(trainingStepQuizzes.stepNumber, stepNumber)
+      ));
+    
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    
+    // Get all questions with correct answers
+    const questions = await db.select().from(trainingStepQuizQuestions)
+      .where(eq(trainingStepQuizQuestions.quizId, quiz.id));
+    
+    // Calculate score
+    let correctCount = 0;
+    const details = questions.map(q => {
+      const userAnswer = answers[q.id];
+      const isCorrect = userAnswer === q.correctAnswer;
+      if (isCorrect) correctCount++;
+      return {
+        questionId: q.id,
+        question: q.question,
+        userAnswer,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        isCorrect,
+      };
+    });
+    
+    const score = Math.round((correctCount / questions.length) * 100);
+    const passed = score >= (quiz.passingScore || 80);
+    
+    // Update step progress
+    await db.update(trainingStepProgress)
+      .set({
+        quizScore: score,
+        quizPassed: passed,
+        status: passed ? 'completed' : 'in_progress',
+        completedAt: passed ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingStepProgress.id, existingProgress.id));
+    
+    // If passed and not the last step, unlock the next step
+    if (passed && stepNumber < 4) {
+      // Check if next step progress exists
+      const [nextStep] = await db.select().from(trainingStepProgress)
+        .where(and(
+          eq(trainingStepProgress.planId, planId),
+          eq(trainingStepProgress.traineeId, plan.traineeId),
+          eq(trainingStepProgress.stepNumber, stepNumber + 1)
+        ));
+      
+      if (nextStep) {
+        await db.update(trainingStepProgress)
+          .set({ status: 'available', updatedAt: new Date() })
+          .where(eq(trainingStepProgress.id, nextStep.id));
+      } else {
+        // Create next step progress if missing
+        await db.insert(trainingStepProgress).values({
+          planId,
+          traineeId: plan.traineeId,
+          stepNumber: stepNumber + 1,
+          status: 'available',
+        });
+      }
+    }
+    
+    // If all 4 steps are completed, create traveler authorization
+    if (passed && stepNumber === 4) {
+      const [productionInfo] = await db.select().from(trainingPlanProductionInfo)
+        .where(eq(trainingPlanProductionInfo.planId, planId));
+      
+      if (productionInfo && productionInfo.partNumber) {
+        // Check if authorization already exists
+        const existingAuth = await db.select().from(travelerAuthorizations)
+          .where(and(
+            eq(travelerAuthorizations.employeeId, plan.traineeId),
+            eq(travelerAuthorizations.partNumber, productionInfo.partNumber)
+          ));
+        
+        if (existingAuth.length === 0) {
+          await db.insert(travelerAuthorizations).values({
+            employeeId: plan.traineeId,
+            partNumber: productionInfo.partNumber,
+            department: productionInfo.department,
+            productionLine: productionInfo.productionLine,
+            trainingPlanId: planId,
+            grantedBy: null,
+          });
+        }
+      }
+      
+      // Update plan status to completed
+      await db.update(aiTrainingPlans)
+        .set({ status: 'completed' })
+        .where(eq(aiTrainingPlans.id, planId));
+    }
+    
+    res.json({
+      score,
+      passed,
+      passingScore: quiz.passingScore || 80,
+      correctCount,
+      totalQuestions: questions.length,
+      details,
+    });
+  } catch (error: any) {
+    console.error('Error submitting quiz:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -476,14 +476,14 @@ export default function TrainerDashboard() {
         const module = trainingModules.find(m => m.id === session.facilityTopicId);
         if (module) {
           setActiveTopicContent({
-            topic: {
-              id: module.id,
-              title: module.title,
-              overview: module.description,
-              contentHtml: module.contentHtml || module.content,
-            },
+            id: module.id,
+            code: '',
+            title: module.title,
+            overview: module.description,
+            contentHtml: module.contentHtml || module.content || '',
             workInstructions: [],
             criticalPoints: [],
+            questions: [],
           });
         } else {
           const contentTopic = contentLibraryTopics.find(t => t.id === session.facilityTopicId);
@@ -509,34 +509,35 @@ export default function TrainerDashboard() {
               }));
               
               setActiveTopicContent({
-                topic: {
-                  id: contentTopic.id,
-                  title: data.title,
-                  overview: data.description || '',
-                  contentHtml: objectives.length > 0 
-                    ? `<ul>${objectives.map((o: string) => `<li>${o}</li>`).join('')}</ul>`
-                    : data.description || '',
-                },
+                id: contentTopic.id,
+                code: '',
+                title: data.title,
+                overview: data.description || '',
+                contentHtml: objectives.length > 0 
+                  ? `<ul>${objectives.map((o: string) => `<li>${o}</li>`).join('')}</ul>`
+                  : data.description || '',
                 workInstructions,
                 criticalPoints: (data.materials || [])
                   .filter((m: any) => m.safetyNotes)
                   .map((m: any) => ({
                     id: m.id,
+                    workInstructionId: 0,
                     label: 'Safety Note',
                     detail: m.safetyNotes,
                     severity: 'major',
                   })),
+                questions: [],
               });
             } else {
               setActiveTopicContent({
-                topic: {
-                  id: contentTopic.id,
-                  title: contentTopic.title,
-                  overview: contentTopic.description || '',
-                  contentHtml: contentTopic.objectives || contentTopic.description || '',
-                },
+                id: contentTopic.id,
+                code: '',
+                title: contentTopic.title,
+                overview: contentTopic.description || '',
+                contentHtml: contentTopic.objectives || contentTopic.description || '',
                 workInstructions: [],
                 criticalPoints: [],
+                questions: [],
               });
             }
           }
@@ -1012,6 +1013,7 @@ export default function TrainerDashboard() {
                   } catch (e) {}
                   
                   const trainee = employees.find(e => e.id === plan.traineeId);
+                  const hasSteps = planData?.steps && Array.isArray(planData.steps);
                   
                   return (
                     <Card key={plan.id} className="hover:shadow-md transition-shadow">
@@ -1020,9 +1022,9 @@ export default function TrainerDashboard() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <CardTitle className="text-lg">{plan.title}</CardTitle>
-                              <Badge variant="default">Active</Badge>
+                              <Badge variant="default" className="bg-green-600">4-Step Program</Badge>
                             </div>
-                            <CardDescription className="flex items-center gap-4">
+                            <CardDescription className="flex flex-wrap items-center gap-4">
                               <span className="flex items-center gap-1">
                                 <Users className="h-4 w-4" />
                                 {plan.traineeName || trainee?.name || 'Unknown trainee'}
@@ -1043,9 +1045,37 @@ export default function TrainerDashboard() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                        {planData?.days && (
+                        
+                        {hasSteps ? (
                           <div className="space-y-3">
-                            <h4 className="font-medium text-sm">4-Day Training Schedule:</h4>
+                            <h4 className="font-medium text-sm">4-Step Training Method:</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {planData.steps.map((step: any, idx: number) => {
+                                const stepInfo = stepDescriptions[idx];
+                                const StepIcon = stepInfo?.icon || CheckCircle;
+                                return (
+                                  <div key={step.stepNumber} className={`p-3 rounded-lg border-2 ${stepInfo?.bgClass.replace('bg-', 'border-').replace('500', '200')} bg-${stepInfo?.bgClass.replace('bg-', '').replace('500', '50')}`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className={`w-6 h-6 rounded-full ${stepInfo?.bgClass} text-white flex items-center justify-center text-xs font-bold`}>
+                                        {step.stepNumber}
+                                      </div>
+                                      <p className="font-medium text-sm">{step.stepTitle || stepInfo?.title}</p>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mb-2">{step.theme}</p>
+                                    {step.quizQuestions && (
+                                      <Badge variant="outline" className="text-xs">
+                                        <ClipboardCheck className="h-3 w-3 mr-1" />
+                                        {step.quizQuestions.length} Quiz Questions
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : planData?.days && (
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-sm">Training Schedule:</h4>
                             <div className="grid grid-cols-4 gap-2">
                               {planData.days.map((day: any) => (
                                 <div key={day.dayNumber} className="p-3 bg-muted rounded-lg">
@@ -1054,15 +1084,15 @@ export default function TrainerDashboard() {
                                     <Badge variant="outline" className="text-xs">{day.estimatedHours}h</Badge>
                                   </div>
                                   <p className="text-xs text-muted-foreground">{day.theme}</p>
-                                  {day.topics && (
-                                    <p className="text-xs mt-1">{day.topics.length} topic(s)</p>
-                                  )}
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
-                        <div className="flex gap-2 mt-4">
+                        
+                        <Separator className="my-4" />
+                        
+                        <div className="flex flex-wrap gap-2">
                           <Button 
                             size="sm" 
                             onClick={() => {
@@ -1072,6 +1102,16 @@ export default function TrainerDashboard() {
                           >
                             <Play className="h-4 w-4 mr-1" />
                             Start Training Session
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              toast({ title: 'View Step Details', description: 'Open trainee portal to view full step progress and quizzes' });
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Step Details
                           </Button>
                         </div>
                       </CardContent>

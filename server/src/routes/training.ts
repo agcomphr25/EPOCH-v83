@@ -4318,9 +4318,17 @@ router.post('/content-library/generate-topic', async (req, res) => {
   try {
     const { documentIds, categoryId, createdBy } = req.body;
 
-    // Fetch document contents
-    const docs = await db.select().from(trainingLibraryDocuments)
-      .where(inArray(trainingLibraryDocuments.id, documentIds));
+    // Parse integer values, handling empty strings
+    const categoryIdInt = categoryId && categoryId !== '' ? parseInt(String(categoryId), 10) : null;
+    const createdByInt = createdBy && createdBy !== '' ? parseInt(String(createdBy), 10) : null;
+
+    // Fetch document contents using pgPool
+    const docsResult = await pgPool.query(`
+      SELECT id, title, extracted_content as "extractedContent", summary
+      FROM training_library_documents
+      WHERE id = ANY($1)
+    `, [documentIds]);
+    const docs = docsResult.rows;
 
     const combinedContent = docs.map(d => 
       `Document: ${d.title}\n${d.extractedContent || d.summary || ''}`
@@ -4402,53 +4410,69 @@ Return JSON with this structure:
 
     const generated = JSON.parse(completion.choices[0]?.message?.content || '{}');
 
-    // Create the topic
-    const [topic] = await db.insert(trainingLibraryTopics).values({
-      title: generated.title,
-      description: generated.description,
-      objectives: JSON.stringify(generated.objectives),
-      prerequisites: generated.prerequisites,
-      estimatedDuration: generated.estimatedDuration,
-      difficultyLevel: generated.difficultyLevel,
-      categoryId,
-      createdBy,
-      isAiGenerated: true,
-    }).returning();
+    // Create the topic using pgPool
+    const topicResult = await pgPool.query(`
+      INSERT INTO training_library_topics 
+        (title, description, objectives, prerequisites, estimated_duration, difficulty_level, category_id, created_by, is_ai_generated, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING id, title, description, objectives, prerequisites, estimated_duration as "estimatedDuration", 
+                difficulty_level as "difficultyLevel", category_id as "categoryId", created_by as "createdBy", 
+                is_ai_generated as "isAiGenerated", created_at as "createdAt", updated_at as "updatedAt"
+    `, [
+      generated.title,
+      generated.description,
+      JSON.stringify(generated.objectives),
+      generated.prerequisites || null,
+      generated.estimatedDuration || 60,
+      generated.difficultyLevel || 'intermediate',
+      categoryIdInt,
+      createdByInt,
+      true
+    ]);
+    const topic = topicResult.rows[0];
 
     // Link documents to topic
     for (const docId of documentIds) {
-      await db.insert(topicDocumentLinks).values({
-        topicId: topic.id,
-        documentId: docId,
-      });
+      await pgPool.query(`
+        INSERT INTO topic_document_links (topic_id, document_id, created_at)
+        VALUES ($1, $2, NOW())
+      `, [topic.id, docId]);
     }
 
     // Create training materials for each step
     for (const material of generated.materials || []) {
-      await db.insert(trainingTopicMaterials).values({
-        topicId: topic.id,
-        stepNumber: material.stepNumber,
-        stepTitle: material.stepTitle,
-        trainerInstructions: material.trainerInstructions,
-        keyPoints: JSON.stringify(material.keyPoints),
-        demonstrations: material.demonstrations,
-        safetyNotes: material.safetyNotes,
-        estimatedTime: material.estimatedTime,
-      });
+      await pgPool.query(`
+        INSERT INTO training_topic_materials 
+          (topic_id, step_number, step_title, trainer_instructions, key_points, demonstrations, safety_notes, estimated_time, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      `, [
+        topic.id,
+        material.stepNumber,
+        material.stepTitle,
+        material.trainerInstructions,
+        JSON.stringify(material.keyPoints),
+        material.demonstrations || null,
+        material.safetyNotes || null,
+        material.estimatedTime || 15
+      ]);
     }
 
     // Create quiz questions
     for (const q of generated.quizQuestions || []) {
-      await db.insert(trainingTopicQuizQuestions).values({
-        topicId: topic.id,
-        question: q.question,
-        questionType: q.questionType,
-        options: JSON.stringify(q.options),
-        correctAnswer: q.correctAnswer,
-        explanation: q.explanation,
-        difficulty: q.difficulty,
-        stepNumber: q.stepNumber,
-      });
+      await pgPool.query(`
+        INSERT INTO training_topic_quiz_questions 
+          (topic_id, question, question_type, options, correct_answer, explanation, difficulty, step_number, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      `, [
+        topic.id,
+        q.question,
+        q.questionType || 'multiple_choice',
+        JSON.stringify(q.options),
+        q.correctAnswer,
+        q.explanation || null,
+        q.difficulty || 'medium',
+        q.stepNumber || 1
+      ]);
     }
 
     res.status(201).json({ topic, materials: generated.materials, quizQuestions: generated.quizQuestions });

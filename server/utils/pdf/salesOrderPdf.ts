@@ -984,6 +984,14 @@ export async function generateSalesOrderPDF(
   // Get terms content based on termsType (initial or warranty)
   const termsContent = getTermsContent(termsType);
   
+  // Use smaller font and tighter line spacing for warranty terms (more content)
+  const termsFontSize = termsType === 'warranty' ? 7 : 8;
+  const termsLineHeight = termsType === 'warranty' ? 10 : 13;
+  const termsEmptyLineHeight = termsType === 'warranty' ? 6 : 8;
+  
+  // Calculate max width for text wrapping (page width minus margins)
+  const maxTermsWidth = width - (margin * 2);
+  
   page2.drawText(termsContent.title, {
     x: margin,
     y: page2Y,
@@ -1010,17 +1018,22 @@ export async function generateSalesOrderPDF(
   for (const line of termsContent.lines) {
     // Skip empty lines but preserve spacing
     if (line === '') {
-      page2Y -= 8;
+      page2Y -= termsEmptyLineHeight;
       continue;
     }
-    page2.drawText(line, {
-      x: margin,
-      y: page2Y,
-      size: 8,
-      font: font,
-      color: rgb(0.15, 0.15, 0.15),
-    });
-    page2Y -= 13;
+    
+    // Use text wrapping for longer lines
+    const wrappedLines = wrapText(line, maxTermsWidth, termsFontSize, font);
+    for (const wrappedLine of wrappedLines) {
+      page2.drawText(wrappedLine, {
+        x: margin,
+        y: page2Y,
+        size: termsFontSize,
+        font: font,
+        color: rgb(0.15, 0.15, 0.15),
+      });
+      page2Y -= termsLineHeight;
+    }
   }
 
   // Customer Approval Section - only show if signature is required

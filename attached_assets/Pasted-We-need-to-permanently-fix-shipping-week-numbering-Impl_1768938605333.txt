@@ -1,0 +1,78 @@
+We need to permanently fix shipping week numbering. Implement the following EXACTLY.
+
+GOAL:
+Shipping weeks must be continuous operational weeks.
+Negative or “pre-week” weeks MUST be representable.
+Week numbers must NEVER be clamped.
+Week boundaries must be consistent everywhere.
+
+DO NOT change business rules:
+- Shipping week = Wednesday → Tuesday
+- Shipping operates with a 2-week offset from calendar
+
+CHANGES TO MAKE:
+
+1) REMOVE WEEK CLAMPING (CRITICAL)
+In shared/weekUtils.ts → getCompanyWeek():
+❌ REMOVE:
+return companyWeek > 0 ? companyWeek : 1;
+
+✅ REPLACE WITH:
+return companyWeek;
+
+Negative weeks are VALID and must exist.
+
+2) INTRODUCE OPERATIONAL YEAR
+Add a helper:
+getOperationalYear(date)
+
+Rule:
+- Operational year starts on the FIRST SHIPPING WEEK that contains Jan 15
+- Weeks before that belong to the PREVIOUS operational year
+
+Use operationalYear + companyWeek as the identity, not calendar year.
+
+3) FIX WEEK START / END CALCULATION
+Update getCompanyWeekStart / End to:
+- Accept (companyWeekNumber, operationalYear)
+- Never assume week 1 starts in January
+- Derive start date purely from:
+  operationalYearStartDate + (companyWeekNumber - 1) * 7
+
+4) FIX ASSIGNMENT LOGIC
+When grouping shipments:
+- Determine operationalYear from shippedDate
+- Compute companyWeek (can be negative relative to Jan 1)
+- Normalize into operationalYear + operationalWeekIndex
+
+DO NOT loop weeks 1–52.
+Compute the week directly from the date.
+
+5) UNIFY ALL UI WEEK LOGIC
+DELETE the Sunday–Saturday logic in ShippingTrackerWidget.tsx.
+ALL week ranges MUST use shared/weekUtils.ts.
+
+6) DISPLAY RULE (UI ONLY)
+In the UI:
+- Hide negative week numbers
+- Display:
+  “Shipping Week 4 (Operational)”
+  with the correct date range
+- Early January shipments MUST appear under the final weeks of the prior operational year
+
+7) VALIDATION
+Confirm:
+- 2026-01-13 appears in the SAME week as 2026-01-07
+- That week is NOT labeled Week 1
+- Week 1 of 2026 remains Jan 21–27
+- No shipment ever appears under a mismatched date range again
+
+DO NOT add migrations.
+DO NOT store week numbers in the DB.
+DO NOT change shipped_date semantics.
+
+Deliverables:
+- Updated shared/weekUtils.ts
+- Updated ShippingTracker.tsx
+- Updated ShippingTrackerWidget.tsx
+- A short verification log showing Jan 2026 behavior

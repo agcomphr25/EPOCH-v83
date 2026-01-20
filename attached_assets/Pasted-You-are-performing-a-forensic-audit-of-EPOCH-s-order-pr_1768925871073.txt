@@ -1,0 +1,73 @@
+You are performing a forensic audit of EPOCH’s order priority scoring.
+
+GOAL:
+Identify exactly why some orders now have priority_score = 50 instead of the expected default 9999, and determine when, where, and by whom (or what system process) this change occurred.
+
+TASKS (DO NOT SKIP STEPS):
+
+1. SOURCE OF TRUTH
+Locate the authoritative definition of the priority score:
+- Table name
+- Column name
+- Default value
+- Constraints
+- Any comments or enums
+Confirm whether any other table or computed logic can override it.
+
+2. WRITE PATH INVENTORY (CRITICAL)
+Find EVERY place in the codebase that can CREATE or UPDATE the priority score, including:
+- Order creation flows
+- Order edit/update flows
+- Department queue logic
+- Background jobs / cron / workers
+- Admin tools or bulk actions
+- Database migrations
+For each, include the exact file path and code snippet.
+
+3. AFFECTED ORDER TRACE
+Using these example orders (or closest equivalents if IDs differ):
+- EJ289
+- EL578
+- FA125
+For each order:
+- Show priority score history (or earliest observable value)
+- Timestamp of when the score became 50
+- User ID or system actor responsible
+- API route, job, or migration involved (if available)
+
+4. MIGRATION CHECK
+List all migrations in the last 30 days that touch:
+- orders
+- production queue
+- priority, urgency, scoring, or sorting
+Include before/after defaults or data coercions.
+
+5. SCORING / OVERRIDE LOGIC
+Search the codebase for any logic involving:
+priority, urgency, rush, expedite, VIP, due date, LOP, fill
+Identify any hardcoded numeric values (especially 50, 100, 0) and explain when they execute.
+
+6. QUEUE SORT VERIFICATION
+Show the exact query (SQL or ORM) used to sort the production/department queue.
+Confirm:
+- ORDER BY fields
+- Tie-breakers
+- NULL handling
+- Any recent changes
+
+7. TIMELINE CORRELATION
+For at least one affected order, provide a chronological timeline:
+- Order creation
+- Any edits
+- Department assignment
+- Priority score change
+- Appearance at front of queue
+
+OUTPUT FORMAT:
+- Clear section headers
+- Bullet points
+- Code snippets inline
+- Explicit conclusion stating the MOST LIKELY root cause
+- If uncertain, list ranked probabilities
+
+Do NOT suggest fixes yet. This is a diagnostic pass only.

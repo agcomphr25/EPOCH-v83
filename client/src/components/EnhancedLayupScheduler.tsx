@@ -21,9 +21,26 @@ import {
   Save,
   ArrowRight,
   History,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Separator } from '@/components/ui/separator';
+import useMoldSettings from '../hooks/useMoldSettings';
 import {
   DndContext,
   closestCenter,
@@ -210,6 +227,26 @@ export default function EnhancedLayupScheduler() {
   const [isScheduleSaved, setIsScheduleSaved] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
+  // Mold settings state
+  const [moldDialogOpen, setMoldDialogOpen] = useState(false);
+  const [newMold, setNewMold] = useState({
+    moldName: '',
+    instanceNumber: 1,
+    multiplier: 2,
+  });
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [bulkMoldCount, setBulkMoldCount] = useState(1);
+
+  // Use mold settings hook
+  const {
+    molds,
+    saveMold,
+    deleteMold,
+    toggleMoldStatus,
+    loading: moldsLoading,
+    refetch: refetchMolds,
+  } = useMoldSettings();
+
   // Get production queue data
   const { data: productionQueue = [], isLoading: queueLoading } = useQuery<
     ProductionOrder[]
@@ -352,6 +389,87 @@ export default function EnhancedLayupScheduler() {
     setSchedule(newSchedule);
   };
 
+  // Handle adding new mold
+  const handleAddMold = async () => {
+    if (!newMold.moldName.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a mold name',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      if (isBulkMode && bulkMoldCount > 1) {
+        // Create multiple molds
+        for (let i = 1; i <= bulkMoldCount; i++) {
+          const moldId = `${newMold.moldName}-${i}`;
+          await saveMold({
+            moldId,
+            modelName: newMold.moldName,
+            instanceNumber: i,
+            multiplier: newMold.multiplier,
+            isActive: true,
+            enabled: true,
+          });
+        }
+        toast({
+          title: 'Molds Created',
+          description: `Successfully created ${bulkMoldCount} molds`,
+        });
+      } else {
+        // Create single mold
+        const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
+        await saveMold({
+          moldId,
+          modelName: newMold.moldName,
+          instanceNumber: newMold.instanceNumber,
+          multiplier: newMold.multiplier,
+          isActive: true,
+          enabled: true,
+        });
+        toast({
+          title: 'Mold Created',
+          description: `Successfully created mold ${moldId}`,
+        });
+      }
+
+      // Reset form
+      setNewMold({
+        moldName: '',
+        instanceNumber: 1,
+        multiplier: 2,
+      });
+      setBulkMoldCount(1);
+      setIsBulkMode(false);
+      refetchMolds();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create mold',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteMold = async (moldId: string) => {
+    try {
+      await deleteMold(moldId);
+      toast({
+        title: 'Mold Deleted',
+        description: `Successfully deleted mold ${moldId}`,
+      });
+      refetchMolds();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete mold. It may be in use.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleSaveSchedule = () => {
     // Convert schedule to format expected by backend
     const scheduleEntries: ScheduleEntry[] = [];
@@ -476,17 +594,33 @@ export default function EnhancedLayupScheduler() {
         </Card>
       </div>
 
-      {/* Work Day Selection */}
+      {/* Settings Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            Work Day Configuration
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Configuration
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setMoldDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Mold Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Select work days:</span>
+            <span className="text-sm text-gray-600">Work days:</span>
             {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(
               (day, index) => (
                 <label key={day} className="flex items-center gap-2">
@@ -507,8 +641,213 @@ export default function EnhancedLayupScheduler() {
               )
             )}
           </div>
+          <div className="mt-3 text-sm text-gray-500">
+            Active molds: {molds.filter((m: any) => m.isActive !== false).length} | Total molds: {molds.length}
+          </div>
         </CardContent>
       </Card>
+
+      {/* Mold Settings Dialog */}
+      <Dialog open={moldDialogOpen} onOpenChange={setMoldDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Mold Configuration</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Add New Mold Form */}
+            <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+              <div className="flex items-center mb-3">
+                <Plus className="w-4 h-4 mr-2" />
+                <span className="font-medium">Add New Mold</span>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">
+                    Mold Name
+                  </label>
+                  <Input
+                    placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
+                    value={newMold.moldName}
+                    onChange={(e) =>
+                      setNewMold((prev) => ({
+                        ...prev,
+                        moldName: e.target.value,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter a descriptive name for this mold
+                  </p>
+                </div>
+
+                {/* Bulk Creation Option */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="bulk-mode"
+                      checked={isBulkMode}
+                      onCheckedChange={(checked) => setIsBulkMode(!!checked)}
+                    />
+                    <label
+                      htmlFor="bulk-mode"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Create multiple molds at once
+                    </label>
+                  </div>
+
+                  {isBulkMode && (
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">
+                        Number of Molds
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="14"
+                        value={bulkMoldCount}
+                        min={1}
+                        max={50}
+                        onChange={(e) => setBulkMoldCount(+e.target.value)}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Creates {bulkMoldCount} molds: {newMold.moldName}-1,{' '}
+                        {newMold.moldName}-2, ..., {newMold.moldName}-
+                        {bulkMoldCount}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {!isBulkMode && (
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">
+                        Instance Number
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="1"
+                        value={newMold.instanceNumber}
+                        min={1}
+                        onChange={(e) =>
+                          setNewMold((prev) => ({
+                            ...prev,
+                            instanceNumber: +e.target.value,
+                          }))
+                        }
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        For single molds with custom instance numbers
+                      </p>
+                    </div>
+                  )}
+                  <div className={isBulkMode ? 'col-span-2' : ''}>
+                    <label className="text-sm font-medium mb-1 block">
+                      Daily Capacity
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="2"
+                      value={newMold.multiplier}
+                      min={1}
+                      onChange={(e) =>
+                        setNewMold((prev) => ({
+                          ...prev,
+                          multiplier: +e.target.value,
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Units each mold can produce per day
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <Button
+                onClick={handleAddMold}
+                className="mt-3"
+                size="sm"
+                disabled={!newMold.moldName.trim()}
+              >
+                {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
+              </Button>
+            </div>
+
+            <Separator />
+
+            {/* Existing Molds */}
+            <div>
+              <h3 className="font-medium mb-3">Existing Molds ({molds.length})</h3>
+              {molds.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No molds configured yet. Use the form above to add your first mold.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {molds.map((mold: any) => (
+                    <div
+                      key={mold.moldId}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 dark:bg-gray-800"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <div className="font-medium">
+                            {mold.modelName} #{mold.instanceNumber}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            ID: {mold.moldId} | Capacity: {mold.multiplier} units/day
+                          </div>
+                        </div>
+                        <Badge variant={mold.isActive !== false ? 'default' : 'secondary'}>
+                          {mold.isActive !== false ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleMoldStatus(mold.moldId, mold.isActive === false)}
+                          className={mold.isActive !== false ? 'text-orange-600' : 'text-green-600'}
+                        >
+                          {mold.isActive !== false ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteMold(mold.moldId)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                <strong>How to Add Molds:</strong>
+              </p>
+              <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
+                <li>
+                  <strong>Mold Name:</strong> Enter your mold model (e.g., "Alpine Hunter", "Tactical")
+                </li>
+                <li>
+                  <strong>Instance Number:</strong> Use "1" for your first mold. If you get a second identical mold, use "2"
+                </li>
+                <li>
+                  <strong>Daily Capacity:</strong> How many units this mold can produce per day
+                </li>
+                <li>
+                  <strong>Bulk Mode:</strong> Create multiple numbered molds at once
+                </li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Weekly Schedule Grid */}
       <Card>

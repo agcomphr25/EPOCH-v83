@@ -11104,6 +11104,12 @@ export const dailyTrainingSessions = pgTable('daily_training_sessions', {
   signedAt: timestamp('signed_at'),
   competencyAttested: boolean('competency_attested').default(false),
   notes: text('notes'),
+  // S-O-A Coaching Feedback - saved when session is completed
+  soaStrength: text('soa_strength'),
+  soaOpportunity: text('soa_opportunity'),
+  soaAction: text('soa_action'),
+  // Flag to indicate if SOA feedback has been reviewed at start of next day
+  soaReviewedAt: timestamp('soa_reviewed_at'),
   status: text('status').default('active'), // active, completed
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -11228,6 +11234,7 @@ export const trainingLibraryTopics = pgTable('training_library_topics', {
   categoryId: integer('category_id').references(() => trainingContentCategories.id),
   createdBy: integer('created_by').references(() => employees.id),
   isAiGenerated: boolean('is_ai_generated').default(false),
+  isTrashed: boolean('is_trashed').default(false), // Soft delete - trashed topics are hidden
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -11247,10 +11254,11 @@ export const trainingTopicMaterials = pgTable('training_topic_materials', {
   stepNumber: integer('step_number').notNull(), // 1-4 for 4-step method
   stepTitle: text('step_title').notNull(), // e.g., "Trainer Does / Trainer Explains"
   trainerInstructions: text('trainer_instructions'), // What the trainer should do
+  traineeActivities: text('trainee_activities'), // What the trainee should do
   keyPoints: text('key_points'), // JSON array of key teaching points
-  demonstrations: text('demonstrations'), // Things to demonstrate
-  safetyNotes: text('safety_notes'),
-  estimatedTime: integer('estimated_time'), // minutes for this step
+  visualAids: text('visual_aids'), // Visual aids and demonstrations
+  estimatedDuration: integer('estimated_duration'), // minutes for this step
+  facilityModules: text('facility_modules'), // Linked facility training modules
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -11258,13 +11266,13 @@ export const trainingTopicMaterials = pgTable('training_topic_materials', {
 export const trainingTopicQuizQuestions = pgTable('training_topic_quiz_questions', {
   id: serial('id').primaryKey(),
   topicId: integer('topic_id').references(() => trainingLibraryTopics.id).notNull(),
+  stepNumber: integer('step_number'), // Which training step this relates to
   question: text('question').notNull(),
   questionType: text('question_type').default('multiple_choice'), // multiple_choice, true_false, short_answer
   options: text('options'), // JSON array for multiple choice
   correctAnswer: text('correct_answer').notNull(),
   explanation: text('explanation'), // Why this is the correct answer
-  difficulty: text('difficulty').default('medium'), // easy, medium, hard
-  stepNumber: integer('step_number'), // Which training step this relates to
+  points: integer('points').default(10), // Points for this question
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -11297,6 +11305,14 @@ export const aiTrainingPlans = pgTable('ai_training_plans', {
   createdBy: integer('created_by').references(() => employees.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  sourceDocumentIds: text('source_document_ids'), // JSON array of document IDs
+  objectives: text('objectives'), // JSON array of learning objectives
+  fourStepContent: text('four_step_content'), // JSON with 4-step methodology content
+  quizQuestions: text('quiz_questions'), // JSON array of quiz questions
+  partNumber: text('part_number'), // Associated part number
+  department: text('department'), // Department assignment
+  productionLine: text('production_line'), // P1/P2/P3
+  assignedTrainers: text('assigned_trainers'), // JSON array of trainer IDs
 });
 
 // Insert schemas for Content Library

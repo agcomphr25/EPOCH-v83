@@ -1,0 +1,142 @@
+AS9100 Employee Orientation Training
+Quality Management System for Aerospace & Defense
+
+What is AS9100?
+AS9100 is a quality management system for companies that design, develop, or provide products for the aviation, space, and defense industries.
+
+AG Composites, LLC dba AG Advanced Technologies ("AG"):
+
+Designs, develops, manufactures, and finishes composite components
+Assembles composite structures
+Machines metal and composite components
+All these processes fall under AG's Quality Management System (QMS).
+
+Quality Policy
+"AG Composites will continuously improve while producing quality products in a timely manner to meet customer requirements."
+
+This is posted on bulletin boards and on the information slide show.
+
+Quality Objectives (KPIs)
+Quality objectives are the company's goals. They are also called Key Performance Indicators (KPIs) and create a way to evaluate the company's performance.
+
+1
+Return Rate
+
+Goal: 3% or less for OEM and retail products based on manufacturer defect or error
+
+Measured monthly
+
+2
+Production Scrap
+
+Goal: 1% or less for nonconforming items
+
+Measured monthly
+
+3
+Retail Shipping Rate
+
+Goal: 90% on-time shipping
+
+Measured monthly
+
+4
+Continuous Improvement
+
+Through training, leader development, audits, reviews, and corrective actions
+
+Quality Objectives and Your Position
+How do the quality objectives relate to your current job?
+
+1. Customer Satisfaction
+
+Follow processes to prevent returns and defects
+
+2. Scrap/Nonconformities
+
+Minimize waste by following procedures correctly
+
+3. Shipping Deadlines
+
+Complete work on time to meet shipping goals
+
+4. Employee Performance
+
+Participate in training and development
+
+5. Continuous Improvement
+
+Share ideas to improve quality, efficiency, or customer satisfaction
+
+Documents
+There will be certain documents and forms required for your position.
+
+Where can you find documents for your job?
+
+Work Orders/Travelers
+Daily/Weekly Production Forms
+Maintenance Checklists
+Where can you find HR documents?
+
+Vacation Request
+Payroll Forms
+Quality and Your Job
+Quality is Everybody's Responsibility
+
+How do you contribute?
+
+Follow the processes you were trained to do
+
+If you identify a process being changed or done incorrectly, notify a manager immediately
+
+Only use approved materials
+
+If you identify expired materials, or different materials being used, notify a manager immediately
+
+Share improvement ideas
+
+If you have an idea to improve quality, efficiency, or customer satisfaction, share it with management or the quality team
+
+⚠️ Negative Actions and Effects
+✗
+Taking shortcuts → Creates nonconforming products
+✗
+Working in dirty, contaminated space → Introduces foreign objects or debris
+✗
+Speaking rudely to customers → Upsets customers, affects sales
+✗
+Using other employees' tools → Reduces efficiency
+✗
+Not maintaining your tools → Tools damage products, loss of money
+✗
+Forging documents → Makes materials untraceable, alters performance numbers
+✗
+Using expired materials → Creates nonconforming or unsafe products
+✗
+Incorrect storage of chemicals → Creates unsafe environment, potential damage to product
+Quality is Also "Safe & Clean"
+Safety Questions
+•
+Does your work create an unsafe environment or product?
+Slippery floors
+Hot surfaces
+Sharp edges
+•
+What can you do to keep the product safe for other employees and customers?
+Cleanliness Questions
+•
+Does your work create a dirty environment?
+Trash
+Dust
+Debris
+•
+What can you do to keep the product safe from FOD (Foreign Object Debris)?
+Final Checklist - Key Takeaways
+Understand the AS9100 Quality Management System and why AG Composites has the certification
+Know the quality policy and where it's located
+Understand the quality objectives (KPIs) and how they relate to your job
+Know where to find documents and forms needed for your job
+Understand how you contribute to the QMS
+Know what problems can happen if you don't follow the QMS
+Understand your role in making a safe product
+Know what FOD is and how it can affect the customer's product

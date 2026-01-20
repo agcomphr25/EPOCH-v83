@@ -34,10 +34,13 @@ import {
   Plus,
   ListTodo,
   AlertCircle,
+  AlertTriangle,
   Edit,
   Trash2,
   MoreVertical,
   Search,
+  FileText,
+  Shield,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -75,6 +78,10 @@ interface DailySession {
   trainerSignature: string | null;
   traineeSignature: string | null;
   competencyAttested: boolean;
+  soaStrength?: string | null;
+  soaOpportunity?: string | null;
+  soaAction?: string | null;
+  soaReviewedAt?: string | null;
 }
 
 interface TrainingModule {
@@ -196,6 +203,8 @@ export default function TrainerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTopicContent, setActiveTopicContent] = useState<TopicContent | null>(null);
   const [loadingTopicContent, setLoadingTopicContent] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedStep, setSelectedStep] = useState<string>('');
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
@@ -235,6 +244,11 @@ export default function TrainerDashboard() {
     queryKey: ['/api/training/content-library/training-plans'],
   });
 
+  // Yesterday's sessions with SOA feedback for morning review
+  const { data: yesterdayFeedback = [] } = useQuery<DailySession[]>({
+    queryKey: ['/api/training/daily-sessions/yesterday-feedback'],
+  });
+
   // Filter AI plans that are active (assigned and ready for training)
   const activePlans = aiTrainingPlans.filter(p => p.status === 'active');
 
@@ -251,11 +265,14 @@ export default function TrainerDashboard() {
 
   const startSessionMutation = useMutation({
     mutationFn: async () => {
+      const stepNum = selectedStep ? parseInt(selectedStep) : 1;
       return apiRequest('/api/training/daily-sessions', {
         method: 'POST',
         body: JSON.stringify({
           traineeId: parseInt(selectedTraineeId),
           trainerId: trainerId,
+          planId: selectedPlan?.id || null,
+          stepNumber: stepNum,
           facilityTopicId: selectedTopicId ? parseInt(selectedTopicId.replace('topic-', '').replace('module-', '')) : null,
           topicType: selectedTopicId?.startsWith('topic-') ? 'content-library' : 'module',
           planDayId: selectedDayId ? parseInt(selectedDayId) : null,
@@ -267,8 +284,10 @@ export default function TrainerDashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
       setStartSessionOpen(false);
       setActiveSessionId(data.id);
-      setCurrentStep(1);
-      toast({ title: 'Session Started', description: 'Begin with Step 1: Trainer Does / Explains' });
+      const stepNum = selectedStep ? parseInt(selectedStep) : 1;
+      setCurrentStep(stepNum);
+      const stepNames = ['', 'Trainer Does / Explains', 'Trainer Does / Trainee Explains', 'Trainee Does / Trainer Coaches', 'Trainee Does / Trainer Observes'];
+      toast({ title: 'Session Started', description: `Begin with Step ${stepNum}: ${stepNames[stepNum]}` });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -279,14 +298,20 @@ export default function TrainerDashboard() {
     mutationFn: async (sessionId: number) => {
       return apiRequest(`/api/training/daily-sessions/${sessionId}/complete`, {
         method: 'PUT',
+        body: JSON.stringify({
+          soaStrength: soaFeedback.strength || null,
+          soaOpportunity: soaFeedback.opportunity || null,
+          soaAction: soaFeedback.action || null,
+        }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions/yesterday-feedback'] });
       setActiveSessionId(null);
       setCurrentStep(1);
       setSoaFeedback({ strength: '', opportunity: '', action: '' });
-      toast({ title: 'Session Completed', description: 'Training session has been marked complete' });
+      toast({ title: 'Session Completed', description: 'Training session has been marked complete with SOA feedback' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -361,6 +386,21 @@ export default function TrainerDashboard() {
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
       toast({ title: 'Session Deleted', description: 'Training session has been deleted' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const markReviewedMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/daily-sessions/${id}/mark-reviewed`, {
+        method: 'PUT',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/daily-sessions/yesterday-feedback'] });
+      toast({ title: 'Marked as Reviewed', description: 'SOA feedback has been discussed' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -679,6 +719,80 @@ export default function TrainerDashboard() {
     </Card>
   );
 
+  // Yesterday's SOA feedback for morning review
+  const renderYesterdayFeedback = () => {
+    const unreviewedFeedback = yesterdayFeedback.filter(s => !s.soaReviewedAt);
+    
+    if (unreviewedFeedback.length === 0) return null;
+    
+    return (
+      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            Yesterday's Training Feedback - Review Before Starting
+          </CardTitle>
+          <CardDescription>
+            Discuss these S-O-A notes with trainees at the beginning of today's session
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {unreviewedFeedback.map((session) => (
+            <Card key={session.id} className="bg-white dark:bg-gray-900">
+              <CardContent className="py-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline">{getEmployeeName(session.traineeId)}</Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {getTopicTitle(session.facilityTopicId)}
+                      </span>
+                    </div>
+                    <div className="grid md:grid-cols-3 gap-4 mt-3">
+                      {session.soaStrength && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-green-700 dark:text-green-400">
+                            <Star className="h-3 w-3" /> Strength
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaStrength}</p>
+                        </div>
+                      )}
+                      {session.soaOpportunity && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                            <Lightbulb className="h-3 w-3" /> Opportunity
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaOpportunity}</p>
+                        </div>
+                      )}
+                      {session.soaAction && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-blue-700 dark:text-blue-400">
+                            <Target className="h-3 w-3" /> Action
+                          </div>
+                          <p className="text-sm text-muted-foreground">{session.soaAction}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => markReviewedMutation.mutate(session.id)}
+                    disabled={markReviewedMutation.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Discussed
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderActiveSession = () => {
     const session = activeSessions.find(s => s.id === activeSessionId);
     if (!session) return null;
@@ -889,6 +1003,9 @@ export default function TrainerDashboard() {
         </div>
       </div>
 
+      {/* Yesterday's SOA feedback for morning discussion */}
+      {renderYesterdayFeedback()}
+
       {activeSessionId ? (
         renderActiveSession()
       ) : (
@@ -1001,18 +1118,21 @@ export default function TrainerDashboard() {
               </Card>
             ) : (
               activePlans
-                .filter(plan => 
-                  searchTerm === '' || 
-                  plan.title.toLowerCase().includes(searchLower) ||
-                  (plan.traineeName && plan.traineeName.toLowerCase().includes(searchLower))
-                )
+                .filter(plan => {
+                  const traineeName = plan.traineeName || plan.trainee_name || '';
+                  return searchTerm === '' || 
+                    plan.title.toLowerCase().includes(searchLower) ||
+                    traineeName.toLowerCase().includes(searchLower);
+                })
                 .map((plan) => {
                   let planData: any = null;
                   try {
-                    planData = plan.planStructure ? JSON.parse(plan.planStructure) : null;
+                    const planStructure = plan.planStructure || plan.plan_structure;
+                    planData = planStructure ? JSON.parse(planStructure) : null;
                   } catch (e) {}
                   
-                  const trainee = employees.find(e => e.id === plan.traineeId);
+                  const traineeId = plan.traineeId || plan.trainee_id;
+                  const trainee = employees.find(e => e.id === traineeId);
                   const hasSteps = planData?.steps && Array.isArray(planData.steps);
                   
                   return (
@@ -1027,11 +1147,11 @@ export default function TrainerDashboard() {
                             <CardDescription className="flex flex-wrap items-center gap-4">
                               <span className="flex items-center gap-1">
                                 <Users className="h-4 w-4" />
-                                {plan.traineeName || trainee?.name || 'Unknown trainee'}
+                                {plan.traineeName || plan.trainee_name || trainee?.name || 'Unknown trainee'}
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-4 w-4" />
-                                {new Date(plan.createdAt).toLocaleDateString()}
+                                {new Date(plan.createdAt || plan.created_at).toLocaleDateString()}
                               </span>
                               {plan.totalTopics && (
                                 <span className="flex items-center gap-1">
@@ -1096,8 +1216,13 @@ export default function TrainerDashboard() {
                           <Button 
                             size="sm" 
                             onClick={() => {
-                              setSelectedTraineeId(plan.traineeId.toString());
-                              setStartSessionOpen(true);
+                              const traineeId = plan.traineeId || plan.trainee_id;
+                              if (traineeId) {
+                                setSelectedTraineeId(traineeId.toString());
+                                setSelectedPlan(plan);
+                                setSelectedStep('1');
+                                setStartSessionOpen(true);
+                              }
                             }}
                           >
                             <Play className="h-4 w-4 mr-1" />
@@ -1267,96 +1392,229 @@ export default function TrainerDashboard() {
         </Tabs>
       )}
 
-      <Dialog open={startSessionOpen} onOpenChange={setStartSessionOpen}>
-        <DialogContent>
+      <Dialog open={startSessionOpen} onOpenChange={(open) => {
+        setStartSessionOpen(open);
+        if (!open) {
+          setSelectedPlan(null);
+          setSelectedStep('');
+        }
+      }}>
+        <DialogContent className={selectedPlan ? "max-w-2xl" : ""}>
           <DialogHeader>
             <DialogTitle>Start Training Session</DialogTitle>
             <DialogDescription>
-              Select a trainee and training module to begin a new training session
+              {selectedPlan 
+                ? `Training: ${selectedPlan.title}`
+                : 'Select a trainee and training module to begin a new training session'
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Trainee <span className="text-destructive">*</span></Label>
-              <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select trainee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name} - {emp.department}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Training Material <span className="text-destructive">*</span></Label>
-              <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select training material" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contentLibraryTopics.length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
-                        Content Library Topics
+          
+          {selectedPlan ? (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4" />
+                  <span className="font-medium">Trainee:</span>
+                  <span>{selectedPlan.traineeName || selectedPlan.trainee_name || 'Unknown'}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{selectedPlan.description}</p>
+              </div>
+              
+              <div>
+                <Label>Select Training Step <span className="text-destructive">*</span></Label>
+                <Select value={selectedStep} onValueChange={setSelectedStep}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select step to train" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Step 1: Trainer Does / Trainer Explains</SelectItem>
+                    <SelectItem value="2">Step 2: Trainer Does / Trainee Explains</SelectItem>
+                    <SelectItem value="3">Step 3: Trainee Does / Trainer Coaches</SelectItem>
+                    <SelectItem value="4">Step 4: Trainee Does / Trainer Observes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedStep && (() => {
+                const planData = selectedPlan.planStructure || selectedPlan.plan_structure;
+                let stepContent = null;
+                let parsedPlan = null;
+                try {
+                  parsedPlan = planData ? JSON.parse(planData) : null;
+                  stepContent = parsedPlan?.steps?.find((s: any) => s.stepNumber === parseInt(selectedStep));
+                } catch (e) {}
+                
+                return stepContent ? (
+                  <div className="border rounded-lg p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-blue-600">Step {selectedStep}</Badge>
+                      <span className="font-medium">{stepContent.stepTitle}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{stepContent.theme}</p>
+                    
+                    {stepContent.objectives && stepContent.objectives.length > 0 && (
+                      <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Target className="h-4 w-4 text-blue-600" />
+                          Learning Objectives
+                        </p>
+                        <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                          {stepContent.objectives.map((obj: string, i: number) => (
+                            <li key={i}>{obj}</li>
+                          ))}
+                        </ul>
                       </div>
-                      {contentLibraryTopics.map((topic) => (
-                        <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
-                          {topic.title} {topic.isAiGenerated && '(AI)'}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                  {trainingModules.length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
-                        Training Modules
+                    )}
+                    
+                    {(stepContent.workInstructions || parsedPlan?.workInstructions) && (
+                      <div className="bg-amber-50 dark:bg-amber-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-amber-600" />
+                          Work Instructions
+                        </p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {stepContent.workInstructions || parsedPlan?.workInstructions}
+                        </p>
                       </div>
-                      {trainingModules.map((mod) => (
-                        <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
-                          {mod.title}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Select from Content Library topics (from documents) or Training Modules
-              </p>
+                    )}
+                    
+                    {(stepContent.criticalPoints || parsedPlan?.criticalPoints) && (
+                      <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          Critical Points
+                        </p>
+                        {Array.isArray(stepContent.criticalPoints || parsedPlan?.criticalPoints) ? (
+                          <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                            {(stepContent.criticalPoints || parsedPlan?.criticalPoints).map((point: string, i: number) => (
+                              <li key={i}>{point}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{stepContent.criticalPoints || parsedPlan?.criticalPoints}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions) && (
+                      <div className="bg-orange-50 dark:bg-orange-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-orange-600" />
+                          Safety Precautions
+                        </p>
+                        {Array.isArray(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions) ? (
+                          <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                            {(stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions).map((safety: string, i: number) => (
+                              <li key={i}>{safety}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{stepContent.safetyPrecautions || parsedPlan?.safetyPrecautions}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {stepContent.demonstrations && stepContent.demonstrations.length > 0 && (
+                      <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
+                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-green-600" />
+                          Demonstrations
+                        </p>
+                        <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
+                          {stepContent.demonstrations.map((demo: string, i: number) => (
+                            <li key={i}>{demo}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {stepContent.quizQuestions && stepContent.quizQuestions.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        <ClipboardCheck className="h-3 w-3 mr-1" />
+                        {stepContent.quizQuestions.length} Quiz Questions for this step
+                      </Badge>
+                    )}
+                  </div>
+                ) : null;
+              })()}
+              
+              <div>
+                <Label>Session Notes (Optional)</Label>
+                <Textarea
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  placeholder="Any notes for this session..."
+                />
+              </div>
             </div>
-            <div>
-              <Label>Training Day (Optional)</Label>
-              <Select value={selectedDayId} onValueChange={setSelectedDayId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select day" />
-                </SelectTrigger>
-                <SelectContent>
-                  {planDays.map((day: any) => (
-                    <SelectItem key={day.id} value={day.id.toString()}>
-                      Day {day.dayNumber}: {day.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label>Trainee <span className="text-destructive">*</span></Label>
+                <Select value={selectedTraineeId} onValueChange={setSelectedTraineeId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select trainee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name} - {emp.department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Training Material <span className="text-destructive">*</span></Label>
+                <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select training material" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contentLibraryTopics.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
+                          Content Library Topics
+                        </div>
+                        {contentLibraryTopics.map((topic) => (
+                          <SelectItem key={`topic-${topic.id}`} value={`topic-${topic.id}`}>
+                            {topic.title} {topic.isAiGenerated && '(AI)'}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {trainingModules.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
+                          Training Modules
+                        </div>
+                        {trainingModules.map((mod) => (
+                          <SelectItem key={`module-${mod.id}`} value={`module-${mod.id}`}>
+                            {mod.title}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  placeholder="Any notes for this session..."
+                />
+              </div>
             </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-                placeholder="Any notes for this session..."
-              />
-            </div>
-          </div>
+          )}
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setStartSessionOpen(false)}>Cancel</Button>
             <Button
               onClick={() => startSessionMutation.mutate()}
-              disabled={!selectedTraineeId || !selectedTopicId || startSessionMutation.isPending}
+              disabled={selectedPlan ? !selectedStep : (!selectedTraineeId || !selectedTopicId) || startSessionMutation.isPending}
             >
               <Play className="h-4 w-4 mr-2" />
               Start Session

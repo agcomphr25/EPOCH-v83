@@ -3623,6 +3623,68 @@ export default function TrainingModule() {
         </h1>
       </div>
 
+      {/* Training Material */}
+      <Card className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-blue-900 text-2xl">
+            <FileText className="h-7 w-7 text-blue-600" />
+            📖 Step 1: Review Training Material
+          </CardTitle>
+          <CardDescription className="text-blue-800 text-base">
+            Please read through all the information below before taking the quiz
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Dynamic content based on module */}
+          {moduleData.title.includes('Preservation') && (
+            <PreservationFODContent />
+          )}
+          {moduleData.title.includes('Chemical Handling') && (
+            <ChemicalHandlingContent />
+          )}
+          {moduleData.title.includes('Fire Safety') && <FireSafetyContent />}
+          {moduleData.title.includes('ITAR') && <ITARContent />}
+          {moduleData.title.includes('AS9100') && <AS9100Content />}
+          {moduleData.title.includes('Counterfeit') && (
+            <CounterfeitPreventionContent />
+          )}
+          {moduleData.title.includes('Ethics') && <EthicsContent />}
+          {moduleData.title.includes('Nonconforming') && (
+            <NonconformingItemsContent />
+          )}
+          {moduleData.title.includes('Shut Down') && (
+            <ShutDownProceduresContent />
+          )}
+
+          {/* Custom/AI-generated content */}
+          {moduleData.contentHtml && (
+            <div 
+              className="prose prose-blue max-w-none bg-white rounded-lg p-6"
+              dangerouslySetInnerHTML={{ __html: moduleData.contentHtml }}
+            />
+          )}
+
+          {/* Download PDF Option */}
+          {moduleData.pdfUrl && (
+            <div className="mt-6 pt-6 border-t-2 border-gray-200 text-center bg-white rounded-lg p-4">
+              <p className="text-gray-600 mb-3">
+                You can also download the original document:
+              </p>
+              <a
+                href={moduleData.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" data-testid="button-download-pdf">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Original Document
+                </Button>
+              </a>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quiz Section */}
       {!showResults && (
         <Card>

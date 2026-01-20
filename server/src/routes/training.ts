@@ -159,6 +159,9 @@ function convertContentToHtml(content: string): string {
   html = html.replace(/^(⭐|📋|🎯)\s*(.+)$/gm, 
     '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$1 $2</p></div>');
   
+  // Convert horizontal rules (--- or ___) to styled dividers
+  html = html.replace(/^[-_]{3,}$/gm, '<hr class="my-8 border-t-2 border-gray-200" />');
+  
   // Convert remaining newlines to paragraphs with proper styling
   const paragraphs = html.split(/\n\n+/);
   html = paragraphs.map(p => {

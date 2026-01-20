@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
+import { getTermsContent, type TermsType } from './pdfConfig';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,12 +138,14 @@ function wrapText(text: string, maxWidth: number, fontSize: number, font: any): 
 
 export async function generateSalesOrderPDF(
   orderData: OrderData,
-  includeSignatureBox: boolean = true
+  includeSignatureBox: boolean = true,
+  termsType: TermsType = 'initial'
 ): Promise<Buffer> {
   console.log('📄 [PDF] Starting sales order PDF generation...');
   console.log(`📄 [PDF] Order ID: ${orderData.orderId}`);
   console.log(`📄 [PDF] Environment: ${process.env.NODE_ENV}`);
   console.log(`📄 [PDF] Include signature box: ${includeSignatureBox}`);
+  console.log(`📄 [PDF] Terms type: ${termsType}`);
   console.log('📄 [PDF] Order Data Summary:', {
     modelPrice: orderData.modelPrice,
     shipping: orderData.shipping,
@@ -978,7 +981,10 @@ export async function generateSalesOrderPDF(
   page2Y = page2OrderBoxY - 25;
 
   // Terms and Conditions Section - positioned to avoid order box overlap
-  page2.drawText('Initial Terms and Conditions', {
+  // Get terms content based on termsType (initial or warranty)
+  const termsContent = getTermsContent(termsType);
+  
+  page2.drawText(termsContent.title, {
     x: margin,
     y: page2Y,
     size: 12,
@@ -986,30 +992,28 @@ export async function generateSalesOrderPDF(
   });
   
   page2Y -= 15;
-  page2.drawText('Please sign and return a copy of this form, or reply to the email that you are in agreement', {
-    x: margin,
-    y: page2Y,
-    size: 8,
-    font: font,
-    color: rgb(0.2, 0.2, 0.2),
-  });
+  
+  // Only show the subtitle for initial terms (signature request context)
+  if (termsType === 'initial') {
+    page2.drawText('Please sign and return a copy of this form, or reply to the email that you are in agreement', {
+      x: margin,
+      y: page2Y,
+      size: 8,
+      font: font,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    page2Y -= 20;
+  } else {
+    page2Y -= 5;
+  }
 
-  page2Y -= 20;
-  const terms = [
-    '1. Please review the specs indicated and make sure they match your intent.',
-    '2. Any changes to specs requested after 30 days from Order Date may result in additional',
-    '   charges.',
-    '3. Remington "clones" are not made by Remington and may not fit as exactly as Remington',
-    '   models do.',
-    '4. The Estimated Completion Date is an estimation based on our current capacity and the',
-    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date',
-    '5. Please sign and return a copy of this form, or reply to the email that you are in agreement',
-    '   with the specs of your order and these terms and conditions. We are not able to place any',
-    '   order into production without a confirmation.',
-  ];
-
-  for (const term of terms) {
-    page2.drawText(term, {
+  for (const line of termsContent.lines) {
+    // Skip empty lines but preserve spacing
+    if (line === '') {
+      page2Y -= 8;
+      continue;
+    }
+    page2.drawText(line, {
       x: margin,
       y: page2Y,
       size: 8,

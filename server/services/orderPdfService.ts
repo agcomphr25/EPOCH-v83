@@ -738,11 +738,12 @@ export async function generateOrderPdf(
     intent,
     paymentStatus,
     includeSignatureBox: config.includeSignatureBox,
+    termsType: config.termsType,
     storePdf: config.storePdf,
     embedSignature: config.embedSignature,
   });
 
-  let pdfBuffer = await generateSalesOrderPDF(pdfOrderData, config.includeSignatureBox);
+  let pdfBuffer = await generateSalesOrderPDF(pdfOrderData, config.includeSignatureBox, config.termsType);
 
   if (config.embedSignature && signatureData) {
     console.log(`✍️ [PDF-SERVICE] Embedding signature for ${orderId}`);

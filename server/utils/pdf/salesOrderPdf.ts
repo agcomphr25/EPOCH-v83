@@ -322,14 +322,14 @@ export async function generateSalesOrderPDF(
 
   page.drawText('CUSTOMER INFORMATION', {
     x: margin + 8,
-    y: customerBoxY + customerBoxHeight - 20,
+    y: customerBoxY + customerBoxHeight - 16,
     size: 12,
     font: boldFont,
   });
 
-  // SHIP TO
+  // SHIP TO - reduced top spacing from -45 to -35
   const shipToX = margin + 8;
-  let shipCurrentY = customerBoxY + customerBoxHeight - 45;
+  let shipCurrentY = customerBoxY + customerBoxHeight - 35;
 
   page.drawText('SHIP TO:', {
     x: shipToX,
@@ -884,9 +884,9 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  summaryLineY -= 25;
+  summaryLineY -= 35;
 
-  // Payment Status
+  // Payment Status - added more vertical spacing above
   const paymentStatus = orderData.paymentStatus || 'PENDING';
   const paymentColor = paymentStatus === 'PAID' ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
@@ -974,9 +974,10 @@ export async function generateSalesOrderPDF(
   });
 
   // Customer notes are now displayed on page 1 in the Features table
-  page2Y -= 20;
+  // Start Terms section below the order info box to avoid collision
+  page2Y = page2OrderBoxY - 25;
 
-  // Terms and Conditions Section
+  // Terms and Conditions Section - positioned to avoid order box overlap
   page2.drawText('Initial Terms and Conditions', {
     x: margin,
     y: page2Y,
@@ -990,7 +991,7 @@ export async function generateSalesOrderPDF(
     y: page2Y,
     size: 8,
     font: font,
-    color: rgb(0.3, 0.3, 0.3),
+    color: rgb(0.2, 0.2, 0.2),
   });
 
   page2Y -= 20;
@@ -1013,6 +1014,7 @@ export async function generateSalesOrderPDF(
       y: page2Y,
       size: 8,
       font: font,
+      color: rgb(0.15, 0.15, 0.15),
     });
     page2Y -= 13;
   }
@@ -1061,13 +1063,13 @@ export async function generateSalesOrderPDF(
     page2Y -= 50;
   }
 
-  // Footer
+  // Footer - darkened text for better readability
   page2.drawText('Thank you for your business!', {
     x: margin,
     y: page2Y,
     size: 10,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   page2Y -= 15;
@@ -1076,7 +1078,7 @@ export async function generateSalesOrderPDF(
     y: page2Y,
     size: 8,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   page2Y -= 12;
@@ -1085,7 +1087,7 @@ export async function generateSalesOrderPDF(
     y: page2Y,
     size: 8,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   try {

@@ -4,7 +4,7 @@ import { storage } from '../../storage';
 import { insertFollowupOrderSchema } from '../../schema';
 import { embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
-import { calculatePriorityScore } from '../../utils/priorityScore';
+// DEPRECATED: calculatePriorityScore removed - use computeEffectivePriority() from shared/utils
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
 import { sendOrderConfirmationNotification } from '../../utils/notifications';
 import { auditService } from '../services/auditService';
@@ -564,15 +564,14 @@ router.post('/', async (req, res) => {
     });
 
     // MANDATORY OUTCOME HANDLING: Every finalization must have a recorded email outcome
-    // Fail fast if we receive an unknown outcome
+    // Log error for unknown outcomes but treat as 'failed' - order creation still succeeded
     const validOutcomes = ['sent', 'skipped', 'failed'] as const;
     if (!validOutcomes.includes(emailResult.outcome)) {
-      console.error(`❌ [FINALIZE-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
-      return res.status(500).json({
-        success: false,
-        error: `Order finalization failed: Unknown email outcome "${emailResult.outcome}"`,
-        followupOrder,
-      });
+      const originalOutcome = emailResult.outcome;
+      console.error(`❌ [FINALIZE] Unknown email outcome for ${order.orderId}: ${originalOutcome} - treating as failed`);
+      // Treat unknown outcome as failed and continue to success response
+      emailResult.outcome = 'failed';
+      emailResult.error = `Unknown email outcome: ${originalOutcome}`;
     }
 
     if (emailResult.outcome === 'sent') {
@@ -1229,33 +1228,31 @@ router.post('/:id/sign', async (req, res) => {
     console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
     
     try {
-      // Get current order to access features for priority calculation
+      // Get current order to access features for readiness evaluation
       const currentOrder = await storage.getOrderById(followupOrder.orderId);
       
-      // Calculate priority score based on rush fees and urgency
-      const priorityScore = calculatePriorityScore(
-        currentOrder?.features,
-        currentOrder?.urgency,
-        currentOrder?.isManualUrgency
-      );
-      
-      console.log(`📊 Calculated priority score for order ${followupOrder.orderId}: ${priorityScore}`);
+      // UNIFIED PRIORITY MODEL: Do NOT persist calculated priority score
+      // Priority is computed at runtime by computeEffectivePriority()
+      // We only persist the urgency state and source
+      console.log(`📊 Order ${followupOrder.orderId}: Priority will be computed at runtime (not persisted)`);
       
       // Evaluate production readiness status
       const productionReadinessStatus = evaluateProductionReadiness(currentOrder);
       console.log(`📋 Production readiness status for order ${followupOrder.orderId}: ${productionReadinessStatus}`);
       
-      // Update the order status to FINALIZED, set current department, copy signature data, and set priority
+      // Update the order status to FINALIZED, set current department, copy signature data
+      // NOTE: Do NOT update priorityScore - it's computed at runtime
       await storage.updateFinalizedOrder(followupOrder.orderId, {
         status: 'FINALIZED',
         currentDepartment: 'P1 Production Queue',
         signatureData,
         signedAt: new Date(),
-        priorityScore,
+        // priorityScore: NOT SET - use computeEffectivePriority() for sorting
+        prioritySource: currentOrder?.isManualUrgency ? 'urgency' : 'default',
         productionReadinessStatus
       });
       
-      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority: ${priorityScore}, readiness: ${productionReadinessStatus})`);
+      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority computed at runtime, readiness: ${productionReadinessStatus})`);
       
       // Log audit event for customer signature
       try {
@@ -1774,15 +1771,20 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
         newFollowupOrderId: newFollowupOrder.id,
       });
     } else {
+      // Email failed - record the error but return success (email failure is a side-effect)
+      // The followup order was created successfully - only notification failed
       await storage.updateFollowupOrder(newFollowupOrder.id, {
         emailError: emailResult.error,
       });
 
-      res.status(500).json({
-        success: false,
-        message: 'Failed to send email.',
+      console.log(`⚠️ [SEND-UPDATED] Order updated successfully but email failed: ${emailResult.error}`);
+      res.json({
+        success: true,
+        message: 'Order updated successfully but email failed to send.',
         emailOutcome: 'failed',
-        error: emailResult.error,
+        emailSent: false,
+        emailError: emailResult.error,
+        newFollowupOrderId: newFollowupOrder.id,
       });
     }
   } catch (error) {

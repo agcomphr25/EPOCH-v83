@@ -3109,7 +3109,7 @@ export class DatabaseStorage implements IStorage {
         cancelReason: null,
         isVerified: false,
         urgency: null,
-        priorityScore: 50,
+        priorityScore: 9999, // DEPRECATED: Use computeEffectivePriority() for sorting
         isManualUrgency: false,
         createdAt: po.createdAt,
         updatedAt: po.updatedAt,
@@ -4255,9 +4255,9 @@ export class DatabaseStorage implements IStorage {
         updatedAt: po.updatedAt,
         assignedTechnician: null,
         urgency: null,
-        priorityScore: 50, // Default priority
+        priorityScore: 9999, // DEPRECATED: Use computeEffectivePriority() for sorting
         isManualUrgency: false,
-        priority: 50,
+        priority: 9999, // DEPRECATED
         };
       }) as any;
 
@@ -10681,7 +10681,7 @@ export class DatabaseStorage implements IStorage {
           notes: updated.notes,
           createdAt: updated.createdAt,
           updatedAt: updated.updatedAt,
-          priorityScore: updated.priorityScore || 50,
+          priorityScore: updated.priorityScore || 9999, // DEPRECATED: Use computeEffectivePriority()
           isProductionOrder: true,
           poId: updated.poId,
           poItemId: updated.poItemId,
@@ -14001,7 +14001,9 @@ export class DatabaseStorage implements IStorage {
       altShipToAddress: orderData.altShipToAddress,
       bomDefinitionId: orderData.bomDefinitionId,
       priorityLevel: orderData.priorityLevel || 'low',
-      priorityScore: orderData.priorityScore || 50,
+      // UNIFIED PRIORITY MODEL: Default to 9999, never persist calculated values
+      priorityScore: 9999, // DEPRECATED - use computeEffectivePriority() for sorting
+      prioritySource: orderData.prioritySource || 'default',
       isUrgent: orderData.isUrgent || false,
       rushTier: orderData.rushTier,
       isLinked: orderData.isLinked || false,

@@ -1,0 +1,120 @@
+index-Bzmj9gXQ.js:4108 React initialized: Object
+index-Bzmj9gXQ.js:4108 React hooks: Object
+index-Bzmj9gXQ.js:4105 App component is rendering...
+index-Bzmj9gXQ.js:4105 Environment: production
+index-Bzmj9gXQ.js:4105 Base URL: /
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Molds state changed: Array(0)
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Fetching molds from /api/molds...
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 45000ms, deployment: true)
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds/employee-settings (timeout: 45000ms, deployment: true)
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+enhanced-layup-scheduler:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 200
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Received molds data: Array(74)
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Data type: object Array? true
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Set molds state to: Array(74)
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Molds state changed: Array(74)
+api/molds/employee-settings:1  Failed to load resource: the server responded with a status of 404 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds/employee-settings: 404
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Mold not found"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds/employee-settings: Error: Mold not found
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 200
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds/employee-settings (timeout: 45000ms, deployment: true)
+api/molds/employee-settings:1  Failed to load resource: the server responded with a status of 404 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds/employee-settings: 404
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Mold not found"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds/employee-settings: Error: Mold not found
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Bzmj9gXQ.js:1394
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+api/molds:1  Failed to load resource: the server responded with a status of 400 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 400
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 Failed to save mold: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+api/molds:1  Failed to load resource: the server responded with a status of 400 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 400
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 Failed to save mold: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+api/molds:1  Failed to load resource: the server responded with a status of 400 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 400
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 Failed to save mold: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+api/molds:1  Failed to load resource: the server responded with a status of 400 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 400
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 Failed to save mold: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+api/molds:1  Failed to load resource: the server responded with a status of 400 ()
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 400
+index-Bzmj9gXQ.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:4108 Failed to save mold: Error: Invalid mold data
+    at Ye (index-Bzmj9gXQ.js:235:6173)
+    at async saveMold (index-Bzmj9gXQ.js:3703:43347)
+    at async $ (index-Bzmj9gXQ.js:3703:54862)
+console.error @ index-Bzmj9gXQ.js:4108
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Fetching molds from /api/molds...
+index-Bzmj9gXQ.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+index-Bzmj9gXQ.js:235 ✅ API Response from /api/molds: 200
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Received molds data: Array(74)
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Data type: object Array? true
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Set molds state to: Array(74)
+index-Bzmj9gXQ.js:3703 🔧 useMoldSettings: Molds state changed: Array(74)

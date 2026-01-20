@@ -1,0 +1,232 @@
+index-BDTbh1Aw.js:4108 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-BDTbh1Aw.js:4108 React hooks: {useState: ƒ, useEffect: ƒ}
+index-BDTbh1Aw.js:4105 App component is rendering...
+index-BDTbh1Aw.js:4105 Environment: production
+index-BDTbh1Aw.js:4105 Base URL: /
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Molds state changed: []
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Fetching molds from /api/molds...
+index-BDTbh1Aw.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+index-BDTbh1Aw.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 45000ms, deployment: true)
+index-BDTbh1Aw.js:235 🌐 API Request to /api/molds/employee-settings (timeout: 45000ms, deployment: true)
+index-BDTbh1Aw.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+enhanced-layup-scheduler:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-BDTbh1Aw.js:235 ✅ API Response from /api/molds: 200
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Received molds data: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Data type: object Array? true
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Set molds state to: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-BDTbh1Aw.js:3703 🔧 useMoldSettings: Molds state changed: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-BDTbh1Aw.js:235  GET https://agcompepoch.xyz/api/molds/employee-settings 404 (Not Found)
+Ye @ index-BDTbh1Aw.js:235
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:235 ✅ API Response from /api/molds/employee-settings: 404
+index-BDTbh1Aw.js:4108 API error raw body: {"error":"Mold not found"}
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:4108 💥 API Request failed for /api/molds/employee-settings: Error: Mold not found
+    at Ye (index-BDTbh1Aw.js:235:6173)
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:235 ✅ API Response from /api/molds: 200
+index-BDTbh1Aw.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-BDTbh1Aw.js:235 🌐 API Request to /api/molds/employee-settings (timeout: 45000ms, deployment: true)
+index-BDTbh1Aw.js:235  GET https://agcompepoch.xyz/api/molds/employee-settings 404 (Not Found)
+Ye @ index-BDTbh1Aw.js:235
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.then
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.catch
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:235 ✅ API Response from /api/molds/employee-settings: 404
+index-BDTbh1Aw.js:4108 API error raw body: {"error":"Mold not found"}
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.then
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.catch
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:4108 💥 API Request failed for /api/molds/employee-settings: Error: Mold not found
+    at Ye (index-BDTbh1Aw.js:235:6173)
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+queryFn @ index-BDTbh1Aw.js:3703
+o @ index-BDTbh1Aw.js:51
+p @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.then
+(anonymous) @ index-BDTbh1Aw.js:51
+Promise.catch
+p @ index-BDTbh1Aw.js:51
+start @ index-BDTbh1Aw.js:51
+fetch @ index-BDTbh1Aw.js:51
+d7 @ index-BDTbh1Aw.js:51
+onSubscribe @ index-BDTbh1Aw.js:51
+subscribe @ index-BDTbh1Aw.js:51
+(anonymous) @ index-BDTbh1Aw.js:51
+x$e @ index-BDTbh1Aw.js:38
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+(anonymous) @ index-BDTbh1Aw.js:40
+j @ index-BDTbh1Aw.js:25
+E @ index-BDTbh1Aw.js:25
+index-BDTbh1Aw.js:1394 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BDTbh1Aw.js:1394
+Pte @ index-BDTbh1Aw.js:40
+FO @ index-BDTbh1Aw.js:40
+Bwt @ index-BDTbh1Aw.js:40
+dk @ index-BDTbh1Aw.js:40
+k4e @ index-BDTbh1Aw.js:40
+bI @ index-BDTbh1Aw.js:38
+JD @ index-BDTbh1Aw.js:40
+Oy.flushSync @ index-BDTbh1Aw.js:40
+wQ @ index-BDTbh1Aw.js:235
+u @ index-BDTbh1Aw.js:1390
+(anonymous) @ index-BDTbh1Aw.js:235
+Zbt @ index-BDTbh1Aw.js:37
+ejt @ index-BDTbh1Aw.js:37
+tjt @ index-BDTbh1Aw.js:37
+e4e @ index-BDTbh1Aw.js:37
+t$e @ index-BDTbh1Aw.js:37
+(anonymous) @ index-BDTbh1Aw.js:37
+qve @ index-BDTbh1Aw.js:40
+Cze @ index-BDTbh1Aw.js:37
+Qie @ index-BDTbh1Aw.js:37
+gve @ index-BDTbh1Aw.js:37
+xjt @ index-BDTbh1Aw.js:37
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-BDTbh1Aw.js:235 🌐 API Request to /api/molds (timeout: 45000ms, deployment: true)
+index-BDTbh1Aw.js:235  POST https://agcompepoch.xyz/api/molds 400 (Bad Request)
+Ye @ index-BDTbh1Aw.js:235
+saveMold @ index-BDTbh1Aw.js:3703
+$ @ index-BDTbh1Aw.js:3703
+Zbt @ index-BDTbh1Aw.js:37
+ejt @ index-BDTbh1Aw.js:37
+tjt @ index-BDTbh1Aw.js:37
+e4e @ index-BDTbh1Aw.js:37
+t$e @ index-BDTbh1Aw.js:37
+(anonymous) @ index-BDTbh1Aw.js:37
+qve @ index-BDTbh1Aw.js:40
+Cze @ index-BDTbh1Aw.js:37
+Qie @ index-BDTbh1Aw.js:37
+gve @ index-BDTbh1Aw.js:37
+xjt @ index-BDTbh1Aw.js:37
+index-BDTbh1Aw.js:235 ✅ API Response from /api/molds: 400
+index-BDTbh1Aw.js:4108 API error raw body: {"error":"Invalid mold data"}
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+saveMold @ index-BDTbh1Aw.js:3703
+$ @ index-BDTbh1Aw.js:3703
+Zbt @ index-BDTbh1Aw.js:37
+ejt @ index-BDTbh1Aw.js:37
+tjt @ index-BDTbh1Aw.js:37
+e4e @ index-BDTbh1Aw.js:37
+t$e @ index-BDTbh1Aw.js:37
+(anonymous) @ index-BDTbh1Aw.js:37
+qve @ index-BDTbh1Aw.js:40
+Cze @ index-BDTbh1Aw.js:37
+Qie @ index-BDTbh1Aw.js:37
+gve @ index-BDTbh1Aw.js:37
+xjt @ index-BDTbh1Aw.js:37
+index-BDTbh1Aw.js:4108 💥 API Request failed for /api/molds: Error: Invalid mold data
+    at Ye (index-BDTbh1Aw.js:235:6173)
+    at async saveMold (index-BDTbh1Aw.js:3703:43352)
+    at async $ (index-BDTbh1Aw.js:3703:54707)
+console.error @ index-BDTbh1Aw.js:4108
+Ye @ index-BDTbh1Aw.js:235
+await in Ye
+saveMold @ index-BDTbh1Aw.js:3703
+$ @ index-BDTbh1Aw.js:3703
+Zbt @ index-BDTbh1Aw.js:37
+ejt @ index-BDTbh1Aw.js:37
+tjt @ index-BDTbh1Aw.js:37
+e4e @ index-BDTbh1Aw.js:37
+t$e @ index-BDTbh1Aw.js:37
+(anonymous) @ index-BDTbh1Aw.js:37
+qve @ index-BDTbh1Aw.js:40
+Cze @ index-BDTbh1Aw.js:37
+Qie @ index-BDTbh1Aw.js:37
+gve @ index-BDTbh1Aw.js:37
+xjt @ index-BDTbh1Aw.js:37

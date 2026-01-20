@@ -114,7 +114,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         
         // Extract material from stock model display name
         let material = null;
-        const displayName = stockModelDisplayMap.get(order.stockModel) || '';
+        const displayName = stockModelDisplayMap.get(order.stockModel || '') || '';
         if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
           material = 'Carbon Fiber';
         } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
@@ -402,7 +402,7 @@ router.post('/save', async (req: Request, res: Response) => {
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
       
       // Get existing schedule ONLY for the specific days being saved (to decrement PO item counts)
-      const existingRows = await pool.query<{ order_id: string }>(
+      const existingRows = await pool.query(
         `
         SELECT order_id 
         FROM layup_schedule 
@@ -570,7 +570,7 @@ router.post('/save', async (req: Request, res: Response) => {
         // Check which POs have all items fully scheduled
         const fullyScheduledPOs = [];
         for (const poNumber of poNumbersArray) {
-          const checkRows = await pool.query<{ total_items: string; completed_items: string }>(
+          const checkRows = await pool.query(
             `
             SELECT COUNT(*) as total_items,
                    COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
@@ -846,7 +846,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
     // Get all schedule entries for this date
-    const scheduleRows = await pool.query<{ order_id: string }>(
+    const scheduleRows = await pool.query(
       `
       SELECT DISTINCT order_id
       FROM layup_schedule
@@ -900,7 +900,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
         );
         
         for (const mapping of uniqueMappings) {
-          const productionOrderRows = await pool.query<{ order_id: string }>(
+          const productionOrderRows = await pool.query(
             `
             SELECT DISTINCT order_id
             FROM production_orders
@@ -1019,9 +1019,9 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     console.log(`Regular orders: ${regularOrderIds.length}, PO orders: ${poOrderIds.length}`);
     
     // Fetch regular order details
-    let regularOrders = [];
+    let regularOrders: any[] = [];
     if (regularOrderIds.length > 0) {
-      regularOrders = await pool.query(
+      const regularResult = await pool.query(
         `
         SELECT 
           ao.order_id,
@@ -1034,12 +1034,13 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [regularOrderIds]
       );
+      regularOrders = Array.from(regularResult);
     }
     
     // Fetch PO order details
-    let poOrders = [];
+    let poOrders: any[] = [];
     if (poOrderIds.length > 0) {
-      poOrders = await pool.query(
+      const poResult = await pool.query(
         `
         SELECT 
           po_orders.order_id,
@@ -1056,6 +1057,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [poOrderIds]
       );
+      poOrders = Array.from(poResult);
     }
     
     // Build unified schedule items with details

@@ -148,8 +148,14 @@ export const allOrders = pgTable('all_orders', {
   assignedTechnician: text('assigned_technician'),
   // Priority and Urgency Information
   urgency: text('urgency').default('low'), // 'critical', 'high', 'medium', 'low'
-  priorityScore: integer('priority_score').default(50), // Lower = higher priority
+  priorityScore: integer('priority_score').default(9999), // DEPRECATED: Use computeEffectivePriority() instead. Kept for backward compatibility.
   isManualUrgency: boolean('is_manual_urgency').default(false), // True if manually set by user
+  // NEW: Unified Priority Model Fields
+  manualPriorityOverride: integer('manual_priority_override'), // Admin-set priority (nullable, takes precedence when set)
+  manualPriorityReason: text('manual_priority_reason'), // Reason for manual override
+  manualPrioritySetBy: text('manual_priority_set_by'), // Who set the manual priority
+  manualPrioritySetAt: timestamp('manual_priority_set_at'), // When manual priority was set
+  prioritySource: text('priority_source').default('default'), // 'default' | 'urgency' | 'manual' | 'system'
   // Customer Signature Data
   signatureData: text('signature_data'), // Base64 signature image from customer
   signedAt: timestamp('signed_at'), // When customer signed the order
@@ -186,7 +192,7 @@ export const orders = pgTable('orders', {
     .notNull(),
   currentDepartmentId: integer('current_department_id').references(() => orderDepartmentTypes.id),
   isOnSchedule: boolean('is_on_schedule').default(true),
-  priorityScore: integer('priority_score').default(50),
+  priorityScore: integer('priority_score').default(9999), // DEPRECATED: Use computeEffectivePriority()
   rushTier: text('rush_tier'),
   poId: text('po_id'),
   dueDate: timestamp('due_date'),
@@ -1596,7 +1602,7 @@ export const insertOrderSchema = createInsertSchema(orders)
     currentDepartment: z.string().default('Layup'), // Legacy field
     currentDepartmentId: z.number().optional().nullable(), // New FK field
     isOnSchedule: z.boolean().default(true),
-    priorityScore: z.number().default(50),
+    priorityScore: z.number().default(9999), // DEPRECATED: Use computeEffectivePriority()
     rushTier: z.string().optional().nullable(),
     poId: z.string().optional().nullable(),
     dueDate: z.coerce.date().optional().nullable(),
@@ -2919,7 +2925,7 @@ export const insertProductionQueueSchema = createInsertSchema(productionQueue)
     orderId: z.string().min(1, 'Order ID is required'),
     orderDate: z.coerce.date(),
     dueDate: z.coerce.date(),
-    priorityScore: z.number().min(1, 'Priority score must be positive'),
+    priorityScore: z.number().min(1, 'Priority score must be positive').default(9999), // DEPRECATED
     department: z.string().default('Layup'),
     status: z.string().default('FINALIZED'),
     customer: z.string().min(1, 'Customer is required'),
@@ -10416,7 +10422,7 @@ export const ordersUnified = pgTable('orders_unified', {
   quantity: integer('quantity'),
   date: timestamp('date'),
   isOnSchedule: boolean('is_on_schedule').default(true),
-  priorityScore: integer('priority_score').default(50),
+  priorityScore: integer('priority_score').default(9999), // DEPRECATED: Use computeEffectivePriority()
   rushTier: text('rush_tier'),
   poId: integer('po_id'),
   itemId: text('item_id'),

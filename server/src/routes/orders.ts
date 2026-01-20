@@ -886,22 +886,13 @@ router.post('/finalized', async (req: Request, res: Response) => {
           // Email was skipped due to deduplication - reason must be provided
           console.log(`⏭️ Signature email skipped for order ${order.orderId} (reason: ${emailResult.reason || 'unknown'})`);
         } else {
-          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
-          // Order is created but marked as requiring manual intervention
+          // Email failed - record the failure but DO NOT abort finalization
+          // Order is successfully created; email is a side-effect
           await storage.updateFollowupOrder(followupOrder.id, {
             emailError: emailResult.error,
           });
           console.error(`❌ Failed to send signature email for order ${order.orderId}: ${emailResult.error}`);
-          
-          // Return HTTP 500 to indicate finalization failure
-          return res.status(500).json({
-            success: false,
-            error: `Order created but email failed: ${emailResult.error}`,
-            order, // Return order data so it can be tracked
-            emailOutcome: 'failed',
-            emailError: emailResult.error,
-            message: 'Order finalization failed due to email delivery failure. Please resend the confirmation email manually.',
-          });
+          // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       } else {
         // Order without stock - send thank you email (no signature required)
@@ -959,16 +950,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             message: `Failed thank you email for ${order.orderId}: ${thankYouResult.error}`,
             sentAt: new Date(),
           });
-          
-          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
-          return res.status(500).json({
-            success: false,
-            error: `Order created but thank you email failed: ${thankYouResult.error}`,
-            order, // Return order data so it can be tracked
-            emailOutcome: 'failed',
-            emailError: thankYouResult.error,
-            message: 'Order finalization failed due to email delivery failure.',
-          });
+          // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       }
     } catch (sendError: any) {
@@ -1004,15 +986,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         }
       }
       
-      // FAIL-FAST: Return HTTP 500 for any exception in email flow
-      return res.status(500).json({
-        success: false,
-        error: `Order created but email preparation failed: ${errorMessage}`,
-        order, // Return order data so it can be tracked
-        emailOutcome: 'failed',
-        emailError: errorMessage,
-        message: 'Order finalization failed due to email error. Please resend the confirmation email manually.',
-      });
+      // Email flow failed - but order was created successfully
+      // Continue to success response with emailOutcome='failed' for frontend to display warning
     }
     
     // Log audit event for order creation
@@ -3276,29 +3251,23 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Order ${orderId} not found` });
     }
 
-    // Calculate priority score based on urgency level
-    // Lower score = higher priority. Urgent/critical gets lowest score to move to top
-    const priorityScores = {
-      critical: 1,     // Highest priority - moves to very top
-      high: 1,         // Also highest - Urgent orders
-      medium: 5000,    // Medium priority
-      low: 9999,       // Lowest priority
-    };
+    // UNIFIED PRIORITY MODEL: Only persist urgency state, not calculated priority
+    // Priority is computed at runtime by computeEffectivePriority()
+    const user = (req as any).user;
+    const username = user?.username || user?.email || 'unknown';
 
-    const priorityScore = priorityScores[urgency as keyof typeof priorityScores];
-
-    // Update the order with new urgency and priority score
     await db
       .update(allOrders)
       .set({
         urgency: urgency,
-        priorityScore: priorityScore,
         isManualUrgency: true, // Mark as manually set
+        prioritySource: 'urgency', // Track that priority comes from urgency setting
+        // NOTE: priorityScore is NOT updated - use computeEffectivePriority() for sorting
         updatedAt: new Date(),
       })
       .where(eq(allOrders.orderId, orderId));
 
-    console.log(`✅ Order ${orderId} updated: urgency=${urgency}, priorityScore=${priorityScore}`);
+    console.log(`✅ Order ${orderId} updated: urgency=${urgency}, prioritySource=urgency (priority computed at runtime)`);
 
     // Fetch updated order to return
     const updatedOrder = await storage.getOrderById(orderId);
@@ -3316,6 +3285,65 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Admin Panel - Set manual priority override for an order
+// UNIFIED PRIORITY MODEL: This is the ONLY way to manually reprioritize orders
+router.put(
+  '/:orderId/priority-override',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const { priority, reason } = req.body;
+      const user = (req as any).user;
+      const username = user?.username || user?.email || 'unknown';
+
+      // Validate priority (1-9999, where lower = higher priority)
+      if (priority !== null && priority !== undefined) {
+        if (typeof priority !== 'number' || priority < 1 || priority > 9999) {
+          return res.status(400).json({ 
+            error: 'Priority must be a number between 1 (highest) and 9999 (lowest), or null to clear' 
+          });
+        }
+      }
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+
+      // Update the order with manual priority override
+      await db
+        .update(allOrders)
+        .set({
+          manualPriorityOverride: priority || null,
+          manualPriorityReason: reason || null,
+          manualPrioritySetBy: priority ? username : null,
+          manualPrioritySetAt: priority ? new Date() : null,
+          prioritySource: priority ? 'manual' : 'default',
+          updatedAt: new Date(),
+        })
+        .where(eq(allOrders.orderId, orderId));
+
+      console.log(`🎯 Order ${orderId}: Manual priority ${priority ? `set to ${priority}` : 'cleared'} by ${username}`);
+
+      const updatedOrder = await storage.getOrderById(orderId);
+      res.json({
+        success: true,
+        order: updatedOrder,
+        message: priority 
+          ? `Order ${orderId} manual priority set to ${priority}` 
+          : `Order ${orderId} manual priority cleared`,
+      });
+    } catch (error) {
+      console.error(`❌ PUT /${req.params.orderId}/priority-override error:`, error);
+      res.status(500).json({ 
+        error: 'Failed to update order priority',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
 
 // Admin Panel - Get audit logs for a specific order
 router.get(

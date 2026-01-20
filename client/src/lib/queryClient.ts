@@ -183,7 +183,7 @@ export const getQueryFn: <T>(options: {
       (window.location.hostname.includes('.replit.app') ||
         window.location.hostname.includes('.repl.co') ||
         window.location.hostname.includes('agcompepoch.xyz'));
-    const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
+    const timeoutDuration = isDeployment ? 45000 : 30000; // 45 seconds for deployment (handle cold starts), 30 for dev
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {

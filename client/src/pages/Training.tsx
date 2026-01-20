@@ -34,7 +34,7 @@ interface QuizQuestion {
   correctAnswer: number;
 }
 
-// Convert plain text content to formatted HTML preserving important points
+// Convert plain text content to formatted HTML with professional styling matching built-in modules
 function convertContentToHtml(content: string): string {
   if (!content) return '';
   
@@ -43,48 +43,60 @@ function convertContentToHtml(content: string): string {
   // Escape HTML entities first
   html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   
-  // Convert headers (## Header or ### Header)
-  html = html.replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold text-blue-900 mt-4 mb-2">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 class="text-xl font-bold text-blue-900 mt-6 mb-3">$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold text-blue-900 mt-6 mb-3">$1</h1>');
+  // Convert headers with professional styling
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<div class="text-center border-b-2 border-blue-200 pb-6 mb-8"><h1 class="text-3xl font-bold text-blue-900 mb-2">$1</h1></div>');
   
   // Convert bold text (**text** or __text__)
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong class="font-semibold">$1</strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong class="font-semibold text-gray-900">$1</strong>');
   
   // Convert italic text (*text* or _text_)
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
   
   // Convert bullet points (-, *, •) at start of lines
-  html = html.replace(/^[-*•]\s+(.+)$/gm, '<li class="ml-4 mb-1">$1</li>');
+  html = html.replace(/^[-*•]\s+(.+)$/gm, '<li class="text-lg">$1</li>');
   
   // Convert numbered lists (1. 2. 3. etc)
-  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 mb-1 list-decimal">$1</li>');
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="text-lg list-decimal-marker">$1</li>');
   
-  // Wrap consecutive <li> elements in <ul>
+  // Wrap consecutive <li> elements in styled lists
   html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, (match) => {
-    if (match.includes('list-decimal')) {
-      return '<ol class="list-decimal list-inside space-y-1 my-3">' + match + '</ol>';
+    if (match.includes('list-decimal-marker')) {
+      return '<ol class="list-decimal list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ol>';
     }
-    return '<ul class="list-disc list-inside space-y-1 my-3">' + match + '</ul>';
+    return '<ul class="list-disc list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ul>';
   });
   
-  // Convert important points with emoji markers
-  html = html.replace(/^(📌|⚠️|✅|❌|💡|🔑|⭐|📋|🎯)\s*(.+)$/gm, 
-    '<div class="flex items-start gap-2 my-2 p-2 bg-blue-50 rounded"><span class="text-lg">$1</span><span>$2</span></div>');
+  // Convert important callouts with professional colored boxes
+  html = html.replace(/^📌\s*(.+)$/gm, 
+    '<div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-blue-900">$1</p></div>');
+  html = html.replace(/^⚠️\s*(.+)$/gm, 
+    '<div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-yellow-900">$1</p></div>');
+  html = html.replace(/^✅\s*(.+)$/gm, 
+    '<div class="bg-green-50 border-l-4 border-green-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-green-900">$1</p></div>');
+  html = html.replace(/^❌\s*(.+)$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-red-900">$1</p></div>');
+  html = html.replace(/^💡\s*(.+)$/gm, 
+    '<div class="bg-purple-50 border-l-4 border-purple-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-purple-900">$1</p></div>');
+  html = html.replace(/^🔑\s*(.+)$/gm, 
+    '<div class="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-orange-900">$1</p></div>');
+  html = html.replace(/^(⭐|📋|🎯)\s*(.+)$/gm, 
+    '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$2</p></div>');
   
-  // Convert remaining newlines to paragraphs
+  // Convert remaining newlines to paragraphs with proper styling
   const paragraphs = html.split(/\n\n+/);
   html = paragraphs.map(p => {
     // Don't wrap if already wrapped in HTML tags
     if (p.trim().startsWith('<')) return p;
     // Convert single newlines to <br> within paragraphs
     const withBreaks = p.replace(/\n/g, '<br/>');
-    return `<p class="mb-3">${withBreaks}</p>`;
+    return `<p class="text-lg leading-relaxed mb-4">${withBreaks}</p>`;
   }).join('\n');
   
-  return `<div class="training-content prose prose-blue max-w-none">${html}</div>`;
+  return `<div class="bg-white rounded-lg p-8 shadow-sm space-y-6 text-gray-800">${html}</div>`;
 }
 
 const CATEGORIES = [

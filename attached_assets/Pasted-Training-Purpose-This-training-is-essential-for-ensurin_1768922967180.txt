@@ -1,0 +1,110 @@
+Training Purpose
+This training is essential for ensuring employees understand the critical role of travelers in AS9100 manufacturing environments. Travelers:
+Serve as the official manufacturing record for a product.
+Control how parts are built, inspected, documented, and accepted.
+🔴 IMPORTANT POINTS:
+No traveler = no authorized work.
+Travelers ensure processes are performed correctly and traceably.
+---
+1️⃣ What a Traveler Is
+#### Definition A traveler is an authorized, controlled document that accompanies a part or batch through every production step. It defines:
+Required process steps.
+The order of operations.
+Inspection and verification points.
+Documentation and signatures required.
+Material and traceability requirements.
+#### What the Traveler Is NOT
+A suggestion.
+A memory aid.
+Optional paperwork.
+Something you “fill out later.”
+🔴 IMPORTANT POINTS:
+The traveler is the process.
+Work must follow the traveler exactly.
+If it’s not on the traveler, it’s not authorized.
+The traveler always overrides memory or habit.
+---
+2️⃣ Why Travelers Are Required by AS9100
+#### AS9100 Expectations AS9100 requires organizations to:
+Plan and control production.
+Ensure repeatability of processes.
+Provide objective evidence of conformity.
+Maintain full traceability.
+#### Why Auditors Care Auditors use travelers to verify:
+Correct processes were followed.
+Required inspections occurred.
+Materials were approved and traceable.
+Work was performed by authorized personnel.
+Records were completed in real-time.
+🔴 IMPORTANT POINTS:
+Auditors trust travelers, not verbal explanations.
+Missing traveler steps = nonconformance.
+Incomplete travelers = failed control.
+Travelers are legal quality records.
+---
+3️⃣ What the Traveler Controls
+#### Process Control The traveler specifies:
+Each operation.
+Required tools or equipment.
+Process parameters.
+Sequence of steps.
+#### Quality Control The traveler defines:
+Inspection points.
+Hold points.
+Required measurements.
+Acceptance criteria.
+The traveler also captures:
+Material lot numbers.
+Batch numbers.
+Expiration dates.
+Serial or job numbers.
+🔴 IMPORTANT POINTS:
+Sequence matters.
+Skipping ahead is prohibited.
+Traceability must be recorded exactly.
+Inspection steps are mandatory.
+---
+4️⃣ Using the Traveler Correctly
+#### Before Starting Work
+Verify the correct traveler.
+Confirm revision and job number.
+Review all upcoming steps.
+Ensure required materials and tools are available.
+#### During Work
+Perform steps in order.
+Record data as work is performed.
+Stop if instructions are unclear.
+Do not proceed past hold points.
+#### After Completing a Step
+Verify work meets requirements.
+Sign or authenticate only after completion.
+Do not pre-sign or back-date.
+🔴 IMPORTANT POINTS:
+Read before doing.
+Record in real-time.
+Never work ahead of the traveler.
+Never sign before work is complete.
+---
+5️⃣ Signatures, Initials & Accountability
+#### What a Signature Means A signature or digital sign-off indicates:
+You performed the work.
+You followed the traveler.
+The work meets requirements.
+The recorded information is accurate.
+#### Signature Rules
+Only sign for your own work.
+Shared logins are prohibited.
+Signing is a legal attestation.
+🔴 IMPORTANT POINTS:
+A signature is a legal commitment.
+Never sign for someone else.
+Never allow someone else to sign for you.
+Signatures create accountability.
+---
+✅ Training Completion Requirements
+To complete this Facility Standard:
+✔ All sections reviewed.
+✔ Scenario-based quiz passed with 100%.
+✔ Employee acknowledgment signed.
+✔ Trainer or system sign-off recorded.
+⚠️ Traveler training is required before any production, inspection, or material handling activity.

@@ -47,7 +47,8 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
 
   // Use reasonable timeout for deployments (allow for database latency with large datasets)
   // Increased dev timeout to 120s to handle scheduling of 894 orders (takes ~60-90s)
-  const timeoutDuration = isDeployment ? 15000 : 120000; // 15 seconds for deployment, 120 for dev
+  // Increased deployment timeout to 45s to handle cold starts and large inventory queries (766+ items)
+  const timeoutDuration = isDeployment ? 45000 : 120000; // 45 seconds for deployment, 120 for dev
 
   console.log(
     `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`
@@ -181,7 +182,7 @@ export const getQueryFn: <T>(options: {
       (window.location.hostname.includes('.replit.app') ||
         window.location.hostname.includes('.repl.co') ||
         window.location.hostname.includes('agcompepoch.xyz'));
-    const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
+    const timeoutDuration = isDeployment ? 45000 : 30000; // 45 seconds for deployment (handle cold starts), 30 for dev
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {

@@ -1057,10 +1057,24 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     formData.usageUnit,
   ]);
 
-  const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
+  const { data: allItems = [], isLoading, isError, error } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
+
+  React.useEffect(() => {
+    if (isError && error) {
+      console.error('Inventory items fetch error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('401') || errorMessage.includes('No session') || errorMessage.includes('authentication')) {
+        toast.error('Please log in to view inventory items');
+      } else if (errorMessage.includes('timeout')) {
+        toast.error('Request timed out. Please refresh the page to try again.');
+      } else {
+        toast.error(`Failed to load inventory items: ${errorMessage}`);
+      }
+    }
+  }, [isError, error]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: vendorsResponse } = useQuery<{ data: any[] }>({

@@ -284,6 +284,7 @@ interface IntentConfig {
   includeSignatureBox: boolean;
   storePdf: boolean;
   embedSignature: boolean;
+  termsType: 'initial' | 'warranty';
 }
 
 const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
@@ -294,6 +295,7 @@ const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
     includeSignatureBox: true,
     storePdf: true,
     embedSignature: false,
+    termsType: 'initial',
   },
   [PdfIntent.RESEND_EMAIL]: {
     dataSource: 'snapshot',
@@ -302,6 +304,7 @@ const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
     includeSignatureBox: true,
     storePdf: true,
     embedSignature: false,
+    termsType: 'initial',
   },
   [PdfIntent.CUSTOMER_VIEW]: {
     dataSource: 'live',
@@ -310,6 +313,7 @@ const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
     includeSignatureBox: false,
     storePdf: false,
     embedSignature: false,
+    termsType: 'initial',
   },
   [PdfIntent.SHIPPING_PRINT]: {
     dataSource: 'live',
@@ -318,6 +322,7 @@ const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
     includeSignatureBox: false,
     storePdf: false,
     embedSignature: false,
+    termsType: 'warranty',
   },
   [PdfIntent.SIGNED_ARCHIVE]: {
     dataSource: 'snapshot',
@@ -326,6 +331,7 @@ const INTENT_CONFIGS: Record<PdfIntent, IntentConfig> = {
     includeSignatureBox: true,
     storePdf: true,
     embedSignature: true,
+    termsType: 'initial',
   },
 };
 

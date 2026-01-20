@@ -392,6 +392,149 @@ router.post('/modules/:id/regenerate-html', async (req, res) => {
   }
 });
 
+// Generate AI quiz questions for a training module
+router.post('/modules/:id/generate-quiz', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to generate quiz from' });
+    }
+    
+    // Use OpenAI to generate quiz questions
+    const OpenAI = (await import('openai')).default;
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    const openai = new OpenAI({ 
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
+    });
+    
+    const systemPrompt = `You are an expert training content developer. Generate 5-8 multiple choice quiz questions based on the training content provided. 
+
+Each question should:
+- Test understanding of key concepts
+- Have 4 answer options (A, B, C, D)
+- Have exactly one correct answer
+- Include a brief explanation of why the correct answer is right
+
+Return a JSON array with this structure:
+[
+  {
+    "questionText": "The question",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswerIndex": 0,
+    "explanation": "Why this is correct"
+  }
+]
+
+Focus on the most important points, safety requirements, and critical procedures from the training content.`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Generate quiz questions for this training module:\n\nTitle: ${module.title}\n\nContent:\n${module.content}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'Failed to generate quiz questions' });
+    }
+    
+    console.log('AI Quiz Response:', content.substring(0, 500));
+    
+    const parsed = JSON.parse(content);
+    // Handle various response formats
+    let questions = parsed.questions || parsed.quiz || parsed.quiz_questions || parsed;
+    
+    // If it's still an object with a nested array, try to find it
+    if (!Array.isArray(questions) && typeof questions === 'object') {
+      const keys = Object.keys(questions);
+      for (const key of keys) {
+        if (Array.isArray(questions[key])) {
+          questions = questions[key];
+          break;
+        }
+      }
+    }
+    
+    if (!Array.isArray(questions) || questions.length === 0) {
+      console.error('Failed to parse quiz questions. Parsed:', JSON.stringify(parsed).substring(0, 500));
+      return res.status(500).json({ error: 'No quiz questions generated', debug: parsed });
+    }
+    
+    // Save questions to database using fetch-after-insert pattern for Neon HTTP driver
+    const savedQuestions = [];
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      
+      // Insert question
+      await db
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: q.questionText,
+          questionType: 'multiple_choice',
+          correctAnswer: q.options[q.correctAnswerIndex],
+          explanation: q.explanation,
+          sortOrder: i,
+        });
+      
+      // Fetch the inserted question
+      const insertedQuestions = await db
+        .select()
+        .from(trainingQuestions)
+        .where(and(
+          eq(trainingQuestions.moduleId, moduleId),
+          eq(trainingQuestions.sortOrder, i)
+        ))
+        .orderBy(desc(trainingQuestions.id))
+        .limit(1);
+      
+      const newQuestion = insertedQuestions[0];
+      if (!newQuestion) {
+        console.error('Failed to fetch inserted question');
+        continue;
+      }
+      
+      // Insert options
+      for (let j = 0; j < q.options.length; j++) {
+        await db
+          .insert(trainingQuestionOptions)
+          .values({
+            questionId: newQuestion.id,
+            optionText: q.options[j],
+            isCorrect: j === q.correctAnswerIndex,
+            sortOrder: j,
+          });
+      }
+      
+      savedQuestions.push({ ...newQuestion, options: q.options });
+    }
+    
+    res.json({ success: true, questionsGenerated: savedQuestions.length, questions: savedQuestions });
+  } catch (error: any) {
+    console.error('Error generating quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete training module
 router.delete('/modules/:id', async (req, res) => {
   try {

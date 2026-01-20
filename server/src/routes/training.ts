@@ -392,6 +392,183 @@ router.post('/modules/:id/regenerate-html', async (req, res) => {
   }
 });
 
+// AI-powered: Transform raw content into professional training material with quiz
+router.post('/modules/:id/ai-transform', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to transform' });
+    }
+    
+    // Use OpenAI to transform content
+    const OpenAI = (await import('openai')).default;
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    const openai = new OpenAI({ 
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
+    });
+    
+    const systemPrompt = `You are an expert training content developer. Transform the raw content into a professional, easy-to-follow training module.
+
+Create structured HTML training content with:
+1. A clear title section with the training name
+2. A "Training Purpose" section explaining why this training matters
+3. Numbered sections (use emoji numbers like 1️⃣, 2️⃣) for each major topic
+4. Important points highlighted with 🔴 IMPORTANT POINTS callouts
+5. Clear bullet points for lists
+6. Safety or critical items marked with ⚠️
+7. Success criteria or best practices marked with ✅
+8. A completion requirements section at the end
+
+Also generate 6-8 quiz questions that test understanding of the key concepts.
+
+Return JSON with this structure:
+{
+  "title": "Training Title",
+  "description": "Brief 1-2 sentence description",
+  "formattedContent": "The full formatted training content as plain text with markdown-style formatting",
+  "quizQuestions": [
+    {
+      "questionText": "The question",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this is correct"
+    }
+  ]
+}
+
+Make the content professional, clear, and easy to understand for manufacturing employees.`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Transform this raw content into professional training material:\n\n${module.content}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'Failed to transform content' });
+    }
+    
+    const parsed = JSON.parse(content);
+    
+    // Convert the formatted content to HTML
+    const contentHtml = convertContentToHtml(parsed.formattedContent || parsed.content || module.content);
+    
+    // Update the module with new content
+    await db
+      .update(trainingModules)
+      .set({ 
+        title: parsed.title || module.title,
+        description: parsed.description || module.description,
+        content: parsed.formattedContent || parsed.content || module.content,
+        contentHtml,
+        updatedAt: new Date() 
+      })
+      .where(eq(trainingModules.id, moduleId));
+    
+    // Delete existing questions for this module (handle Neon driver null returns)
+    try {
+      const existingQuestions = await db
+        .select({ id: trainingQuestions.id })
+        .from(trainingQuestions)
+        .where(eq(trainingQuestions.moduleId, moduleId));
+      
+      if (existingQuestions && Array.isArray(existingQuestions) && existingQuestions.length > 0) {
+        for (const q of existingQuestions) {
+          try {
+            await db.delete(trainingQuestionOptions).where(eq(trainingQuestionOptions.questionId, q.id));
+          } catch (e) { /* ignore if no options */ }
+        }
+      }
+      await db.delete(trainingQuestions).where(eq(trainingQuestions.moduleId, moduleId));
+    } catch (e) {
+      console.log('No existing questions to delete or error:', e);
+    }
+    
+    // Save new quiz questions
+    const questions = parsed.quizQuestions || parsed.questions || [];
+    const savedQuestions = [];
+    
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      
+      await db
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: q.questionText,
+          questionType: 'multiple_choice',
+          correctAnswer: q.options[q.correctAnswerIndex],
+          explanation: q.explanation,
+          sortOrder: i,
+        });
+      
+      // Fetch the inserted question
+      const insertedQuestions = await db
+        .select()
+        .from(trainingQuestions)
+        .where(and(
+          eq(trainingQuestions.moduleId, moduleId),
+          eq(trainingQuestions.sortOrder, i)
+        ))
+        .orderBy(desc(trainingQuestions.id))
+        .limit(1);
+      
+      const newQuestion = insertedQuestions[0];
+      if (!newQuestion) continue;
+      
+      // Insert options
+      for (let j = 0; j < q.options.length; j++) {
+        await db
+          .insert(trainingQuestionOptions)
+          .values({
+            questionId: newQuestion.id,
+            optionText: q.options[j],
+            isCorrect: j === q.correctAnswerIndex,
+            sortOrder: j,
+          });
+      }
+      
+      savedQuestions.push({ ...newQuestion, options: q.options });
+    }
+    
+    // Fetch updated module
+    const [updatedModule] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    res.json({ 
+      success: true, 
+      module: updatedModule,
+      questionsGenerated: savedQuestions.length,
+      questions: savedQuestions
+    });
+  } catch (error: any) {
+    console.error('Error transforming content:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate AI quiz questions for a training module
 router.post('/modules/:id/generate-quiz', async (req, res) => {
   try {

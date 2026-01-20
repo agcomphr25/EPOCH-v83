@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { GraduationCap, Clock, FileText, Award, Plus, Trash2, HelpCircle, BookOpen } from 'lucide-react';
+import { GraduationCap, Clock, FileText, Award, Plus, Trash2, HelpCircle, BookOpen, Sparkles, Loader2 } from 'lucide-react';
 
 interface QuizQuestion {
   question: string;
@@ -182,6 +182,30 @@ export default function Training() {
     },
   });
   
+  const [transformingModuleId, setTransformingModuleId] = useState<number | null>(null);
+  
+  const aiTransformMutation = useMutation({
+    mutationFn: async (moduleId: number) => {
+      setTransformingModuleId(moduleId);
+      const response = await apiRequest(`/api/training/modules/${moduleId}/ai-transform`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/modules'] });
+      setTransformingModuleId(null);
+      toast({ 
+        title: 'AI Transform Complete', 
+        description: `Content formatted and ${data.questionsGenerated || 0} quiz questions generated.` 
+      });
+    },
+    onError: (error: any) => {
+      setTransformingModuleId(null);
+      toast({ title: 'Transform Error', description: error.message, variant: 'destructive' });
+    },
+  });
+  
   const addQuestion = () => {
     if (!newQuestion.question.trim()) {
       toast({ title: 'Error', description: 'Please enter a question', variant: 'destructive' });
@@ -265,14 +289,35 @@ export default function Training() {
                     <span>Passing Score: {module.passingScore || 80}%</span>
                   </div>
 
-                  <Link href={`/training/${module.id}`}>
+                  <div className="flex gap-2">
                     <Button
-                      className="w-full"
-                      data-testid={`button-start-training-${module.id}`}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => aiTransformMutation.mutate(module.id)}
+                      disabled={transformingModuleId === module.id}
                     >
-                      Start Training
+                      {transformingModuleId === module.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Transforming...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-1" />
+                          AI Transform
+                        </>
+                      )}
                     </Button>
-                  </Link>
+                    <Link href={`/training/${module.id}`} className="flex-1">
+                      <Button
+                        className="w-full"
+                        data-testid={`button-start-training-${module.id}`}
+                      >
+                        Start Training
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </CardContent>
             </Card>

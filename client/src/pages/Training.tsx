@@ -189,6 +189,7 @@ export default function Training() {
       setTransformingModuleId(moduleId);
       const response = await apiRequest(`/api/training/modules/${moduleId}/ai-transform`, {
         method: 'POST',
+        timeout: 120000, // 2 minutes for AI operations
       });
       return response;
     },

@@ -88,7 +88,7 @@ import {
   insertTrainerTopicCertificationSchema,
   insertTravelerAuthorizationSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, gte, lt, or, isNotNull } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,
@@ -96,6 +96,84 @@ import {
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Convert plain text content to formatted HTML with professional styling
+function convertContentToHtml(content: string): string {
+  if (!content) return '';
+  
+  let html = content;
+  
+  // Escape HTML entities first
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  
+  // Convert headers with professional styling
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<div class="text-center border-b-2 border-blue-200 pb-6 mb-8"><h1 class="text-3xl font-bold text-blue-900 mb-2">$1</h1></div>');
+  
+  // Convert numbered section headers (1️⃣, 2️⃣, etc.)
+  html = html.replace(/^([0-9]️⃣|1️⃣0️⃣)\s*(.+)$/gm, 
+    '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1 $2</h2>');
+  
+  // Convert bold text (**text** or __text__)
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+  
+  // Convert italic text (*text* or _text_)
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+  
+  // Convert bullet points (-, *, •) at start of lines
+  html = html.replace(/^[-*•]\s+(.+)$/gm, '<li class="text-lg">$1</li>');
+  
+  // Convert numbered lists (1. 2. 3. etc)
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="text-lg list-decimal-marker">$1</li>');
+  
+  // Wrap consecutive <li> elements in styled lists
+  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, (match) => {
+    if (match.includes('list-decimal-marker')) {
+      return '<ol class="list-decimal list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ol>';
+    }
+    return '<ul class="list-disc list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ul>';
+  });
+  
+  // Convert red important points section header
+  html = html.replace(/^🔴\s*IMPORTANT POINTS$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><h3 class="text-lg font-bold text-red-900">🔴 IMPORTANT POINTS</h3></div>');
+  
+  // Convert important callouts with professional colored boxes
+  html = html.replace(/^📌\s*(.+)$/gm, 
+    '<div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-blue-900">📌 $1</p></div>');
+  html = html.replace(/^⚠️\s*(.+)$/gm, 
+    '<div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-yellow-900">⚠️ $1</p></div>');
+  html = html.replace(/^✅\s*(.+)$/gm, 
+    '<div class="bg-green-50 border-l-4 border-green-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-green-900">✅ $1</p></div>');
+  html = html.replace(/^❌\s*(.+)$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-red-900">❌ $1</p></div>');
+  html = html.replace(/^💡\s*(.+)$/gm, 
+    '<div class="bg-purple-50 border-l-4 border-purple-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-purple-900">💡 $1</p></div>');
+  html = html.replace(/^🔑\s*(.+)$/gm, 
+    '<div class="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-orange-900">🔑 $1</p></div>');
+  html = html.replace(/^🔒\s*(.+)$/gm, 
+    '<div class="bg-gray-100 border-l-4 border-gray-600 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-gray-900">🔒 $1</p></div>');
+  html = html.replace(/^(⭐|📋|🎯)\s*(.+)$/gm, 
+    '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$1 $2</p></div>');
+  
+  // Convert horizontal rules (--- or ___) to styled dividers
+  html = html.replace(/^[-_]{3,}$/gm, '<hr class="my-8 border-t-2 border-gray-200" />');
+  
+  // Convert remaining newlines to paragraphs with proper styling
+  const paragraphs = html.split(/\n\n+/);
+  html = paragraphs.map(p => {
+    // Don't wrap if already wrapped in HTML tags
+    if (p.trim().startsWith('<')) return p;
+    // Convert single newlines to <br> within paragraphs
+    const withBreaks = p.replace(/\n/g, '<br/>');
+    return `<p class="text-lg leading-relaxed mb-4">${withBreaks}</p>`;
+  }).join('\n');
+  
+  return `<div class="bg-white rounded-lg p-8 shadow-sm space-y-6 text-gray-800">${html}</div>`;
+}
 
 // Helper function to grant P2 certification capability to employee
 async function grantP2CertificationCapability(
@@ -205,20 +283,31 @@ router.get('/modules/:id', async (req, res) => {
       return res.status(404).json({ error: 'Training module not found' });
     }
 
-    const questions = await db
-      .select()
-      .from(trainingQuestions)
-      .where(eq(trainingQuestions.moduleId, moduleId))
-      .orderBy(trainingQuestions.sortOrder);
+    let questions: any[] = [];
+    try {
+      const questionsResult = await db
+        .select()
+        .from(trainingQuestions)
+        .where(eq(trainingQuestions.moduleId, moduleId))
+        .orderBy(trainingQuestions.sortOrder);
+      questions = questionsResult || [];
+    } catch (e) {
+      questions = [];
+    }
 
     const questionsWithOptions = await Promise.all(
       questions.map(async (question) => {
-        const options = await db
-          .select()
-          .from(trainingQuestionOptions)
-          .where(eq(trainingQuestionOptions.questionId, question.id))
-          .orderBy(trainingQuestionOptions.sortOrder);
-
+        let options: any[] = [];
+        try {
+          const optionsResult = await db
+            .select()
+            .from(trainingQuestionOptions)
+            .where(eq(trainingQuestionOptions.questionId, question.id))
+            .orderBy(trainingQuestionOptions.sortOrder);
+          options = optionsResult || [];
+        } catch (e) {
+          options = [];
+        }
         return { ...question, options };
       })
     );
@@ -266,6 +355,367 @@ router.patch('/modules/:id', async (req, res) => {
     res.json(updatedModule);
   } catch (error: any) {
     console.error('Error updating training module:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Regenerate contentHtml for a training module from its content field
+router.post('/modules/:id/regenerate-html', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to convert' });
+    }
+    
+    // Regenerate contentHtml using the converter
+    const newContentHtml = convertContentToHtml(module.content);
+    
+    // Update the module
+    const [updatedModule] = await db
+      .update(trainingModules)
+      .set({ contentHtml: newContentHtml, updatedAt: new Date() })
+      .where(eq(trainingModules.id, moduleId))
+      .returning();
+    
+    res.json(updatedModule);
+  } catch (error: any) {
+    console.error('Error regenerating content HTML:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// AI-powered: Transform raw content into professional training material with quiz
+router.post('/modules/:id/ai-transform', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to transform' });
+    }
+    
+    // Use OpenAI to transform content
+    const OpenAI = (await import('openai')).default;
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    const openai = new OpenAI({ 
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
+    });
+    
+    const systemPrompt = `You are an expert training content developer. Your job is to REFORMAT and RESTRUCTURE the provided raw content into a professional, easy-to-follow training module.
+
+CRITICAL RULES:
+- DO NOT create new content or replace the original material
+- PRESERVE all the specific information, examples, and details from the original content
+- Only reorganize and format the existing content more professionally
+- Keep the original topic focus - if it's about "Travelers", keep it about travelers specifically
+
+Restructure the content with:
+1. A clear title that matches the original topic
+2. A "Training Purpose" section (1-2 sentences based on the original content's goal)
+3. Numbered sections (use emoji numbers like 1️⃣, 2️⃣) organizing the original content by topic
+4. Important points from the original highlighted with 🔴 IMPORTANT POINTS callouts
+5. Original bullet points formatted cleanly
+6. Safety or critical items from the original marked with ⚠️
+7. Best practices from the original marked with ✅
+
+Also generate 6-8 quiz questions that test understanding of the SPECIFIC concepts in the original content.
+
+Return JSON with this structure:
+{
+  "title": "Original Topic Title (improved if needed)",
+  "description": "Brief 1-2 sentence description based on original content",
+  "formattedContent": "The reformatted training content preserving ALL original information",
+  "quizQuestions": [
+    {
+      "questionText": "Question about specific content from the original",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this is correct based on the training"
+    }
+  ]
+}
+
+Remember: Reformat the EXISTING content, do not replace it with generic material.`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Transform this raw content into professional training material:\n\n${module.content}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'Failed to transform content' });
+    }
+    
+    const parsed = JSON.parse(content);
+    
+    // Convert the formatted content to HTML
+    const contentHtml = convertContentToHtml(parsed.formattedContent || parsed.content || module.content);
+    
+    // Update the module with new content
+    await db
+      .update(trainingModules)
+      .set({ 
+        title: parsed.title || module.title,
+        description: parsed.description || module.description,
+        content: parsed.formattedContent || parsed.content || module.content,
+        contentHtml,
+        updatedAt: new Date() 
+      })
+      .where(eq(trainingModules.id, moduleId));
+    
+    // Delete existing questions for this module (handle Neon driver null returns)
+    try {
+      const existingQuestions = await db
+        .select({ id: trainingQuestions.id })
+        .from(trainingQuestions)
+        .where(eq(trainingQuestions.moduleId, moduleId));
+      
+      if (existingQuestions && Array.isArray(existingQuestions) && existingQuestions.length > 0) {
+        for (const q of existingQuestions) {
+          try {
+            await db.delete(trainingQuestionOptions).where(eq(trainingQuestionOptions.questionId, q.id));
+          } catch (e) { /* ignore if no options */ }
+        }
+      }
+      await db.delete(trainingQuestions).where(eq(trainingQuestions.moduleId, moduleId));
+    } catch (e) {
+      console.log('No existing questions to delete or error:', e);
+    }
+    
+    // Save new quiz questions
+    const questions = parsed.quizQuestions || parsed.questions || [];
+    const savedQuestions = [];
+    
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      
+      await db
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: q.questionText,
+          questionType: 'multiple_choice',
+          correctAnswer: q.options[q.correctAnswerIndex],
+          explanation: q.explanation,
+          sortOrder: i,
+        });
+      
+      // Fetch the inserted question
+      const insertedQuestions = await db
+        .select()
+        .from(trainingQuestions)
+        .where(and(
+          eq(trainingQuestions.moduleId, moduleId),
+          eq(trainingQuestions.sortOrder, i)
+        ))
+        .orderBy(desc(trainingQuestions.id))
+        .limit(1);
+      
+      const newQuestion = insertedQuestions[0];
+      if (!newQuestion) continue;
+      
+      // Insert options
+      for (let j = 0; j < q.options.length; j++) {
+        await db
+          .insert(trainingQuestionOptions)
+          .values({
+            questionId: newQuestion.id,
+            optionText: q.options[j],
+            isCorrect: j === q.correctAnswerIndex,
+            sortOrder: j,
+          });
+      }
+      
+      savedQuestions.push({ ...newQuestion, options: q.options });
+    }
+    
+    // Fetch updated module
+    const [updatedModule] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    res.json({ 
+      success: true, 
+      module: updatedModule,
+      questionsGenerated: savedQuestions.length,
+      questions: savedQuestions
+    });
+  } catch (error: any) {
+    console.error('Error transforming content:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate AI quiz questions for a training module
+router.post('/modules/:id/generate-quiz', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to generate quiz from' });
+    }
+    
+    // Use OpenAI to generate quiz questions
+    const OpenAI = (await import('openai')).default;
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    const openai = new OpenAI({ 
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
+    });
+    
+    const systemPrompt = `You are an expert training content developer. Generate 5-8 multiple choice quiz questions based on the training content provided. 
+
+Each question should:
+- Test understanding of key concepts
+- Have 4 answer options (A, B, C, D)
+- Have exactly one correct answer
+- Include a brief explanation of why the correct answer is right
+
+Return a JSON array with this structure:
+[
+  {
+    "questionText": "The question",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswerIndex": 0,
+    "explanation": "Why this is correct"
+  }
+]
+
+Focus on the most important points, safety requirements, and critical procedures from the training content.`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Generate quiz questions for this training module:\n\nTitle: ${module.title}\n\nContent:\n${module.content}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'Failed to generate quiz questions' });
+    }
+    
+    console.log('AI Quiz Response:', content.substring(0, 500));
+    
+    const parsed = JSON.parse(content);
+    // Handle various response formats
+    let questions = parsed.questions || parsed.quiz || parsed.quiz_questions || parsed;
+    
+    // If it's still an object with a nested array, try to find it
+    if (!Array.isArray(questions) && typeof questions === 'object') {
+      const keys = Object.keys(questions);
+      for (const key of keys) {
+        if (Array.isArray(questions[key])) {
+          questions = questions[key];
+          break;
+        }
+      }
+    }
+    
+    if (!Array.isArray(questions) || questions.length === 0) {
+      console.error('Failed to parse quiz questions. Parsed:', JSON.stringify(parsed).substring(0, 500));
+      return res.status(500).json({ error: 'No quiz questions generated', debug: parsed });
+    }
+    
+    // Save questions to database using fetch-after-insert pattern for Neon HTTP driver
+    const savedQuestions = [];
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      
+      // Insert question
+      await db
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: q.questionText,
+          questionType: 'multiple_choice',
+          correctAnswer: q.options[q.correctAnswerIndex],
+          explanation: q.explanation,
+          sortOrder: i,
+        });
+      
+      // Fetch the inserted question
+      const insertedQuestions = await db
+        .select()
+        .from(trainingQuestions)
+        .where(and(
+          eq(trainingQuestions.moduleId, moduleId),
+          eq(trainingQuestions.sortOrder, i)
+        ))
+        .orderBy(desc(trainingQuestions.id))
+        .limit(1);
+      
+      const newQuestion = insertedQuestions[0];
+      if (!newQuestion) {
+        console.error('Failed to fetch inserted question');
+        continue;
+      }
+      
+      // Insert options
+      for (let j = 0; j < q.options.length; j++) {
+        await db
+          .insert(trainingQuestionOptions)
+          .values({
+            questionId: newQuestion.id,
+            optionText: q.options[j],
+            isCorrect: j === q.correctAnswerIndex,
+            sortOrder: j,
+          });
+      }
+      
+      savedQuestions.push({ ...newQuestion, options: q.options });
+    }
+    
+    res.json({ success: true, questionsGenerated: savedQuestions.length, questions: savedQuestions });
+  } catch (error: any) {
+    console.error('Error generating quiz:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3414,17 +3864,13 @@ router.get('/daily-sessions', async (req, res) => {
 // Start a new daily training session
 router.post('/daily-sessions', async (req, res) => {
   try {
-    const { traineeId, trainerId, facilityTopicId, planDayId, notes } = req.body;
-    const [session] = await db.insert(dailyTrainingSessions).values({
-      traineeId,
-      trainerId,
-      facilityTopicId,
-      planDayId,
-      sessionDate: new Date(),
-      notes,
-      status: 'active',
-    }).returning();
-    res.status(201).json(session);
+    const { traineeId, trainerId, facilityTopicId, planDayId, planId, stepNumber, notes } = req.body;
+    const result = await pgPool.query(`
+      INSERT INTO daily_training_sessions (trainee_id, trainer_id, facility_topic_id, plan_day_id, plan_id, step_number, notes, status, started_at, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'in_progress', NOW(), NOW(), NOW())
+      RETURNING *
+    `, [traineeId, trainerId, facilityTopicId || null, planDayId || null, planId || null, stepNumber || 1, notes || null]);
+    res.status(201).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error starting daily session:', error);
     res.status(500).json({ error: error.message });
@@ -3521,14 +3967,23 @@ router.put('/daily-sessions/:id/sign', async (req, res) => {
   }
 });
 
-// Complete session
+// Complete session with SOA feedback
 router.put('/daily-sessions/:id/complete', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [updated] = await db.update(dailyTrainingSessions)
-      .set({ status: 'completed' })
-      .where(eq(dailyTrainingSessions.id, id))
-      .returning();
+    const { soaStrength, soaOpportunity, soaAction } = req.body;
+    
+    await db.update(dailyTrainingSessions)
+      .set({ 
+        status: 'completed',
+        soaStrength: soaStrength || null,
+        soaOpportunity: soaOpportunity || null,
+        soaAction: soaAction || null,
+      })
+      .where(eq(dailyTrainingSessions.id, id));
+    
+    // Fetch after update for Neon driver compatibility
+    const [updated] = await db.select().from(dailyTrainingSessions).where(eq(dailyTrainingSessions.id, id));
     
     if (!updated) {
       return res.status(404).json({ error: 'Session not found' });
@@ -3536,6 +3991,65 @@ router.put('/daily-sessions/:id/complete', async (req, res) => {
     res.json(updated);
   } catch (error: any) {
     console.error('Error completing session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get yesterday's completed sessions with SOA feedback (for morning review)
+router.get('/daily-sessions/yesterday-feedback', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Get trainer ID from session if available
+    const trainerId = (req as any).session?.user?.employeeId;
+    
+    const conditions = [
+      eq(dailyTrainingSessions.status, 'completed'),
+      gte(dailyTrainingSessions.sessionDate, yesterday),
+      lt(dailyTrainingSessions.sessionDate, today),
+      or(
+        isNotNull(dailyTrainingSessions.soaStrength),
+        isNotNull(dailyTrainingSessions.soaOpportunity),
+        isNotNull(dailyTrainingSessions.soaAction)
+      )
+    ];
+    
+    // Scope to current trainer if logged in
+    if (trainerId) {
+      conditions.push(eq(dailyTrainingSessions.trainerId, trainerId));
+    }
+    
+    const sessions = await db.select()
+      .from(dailyTrainingSessions)
+      .where(and(...conditions));
+    
+    res.json(sessions);
+  } catch (error: any) {
+    console.error('Error fetching yesterday feedback:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark SOA feedback as reviewed
+router.put('/daily-sessions/:id/mark-reviewed', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    await db.update(dailyTrainingSessions)
+      .set({ soaReviewedAt: new Date() })
+      .where(eq(dailyTrainingSessions.id, id));
+    
+    const [updated] = await db.select().from(dailyTrainingSessions).where(eq(dailyTrainingSessions.id, id));
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error marking session reviewed:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -4485,22 +4999,78 @@ Return JSON with this structure:
 
 // --- TOPICS ---
 
-// Get all topics with materials count
+// Get all topics with materials count (excluding trashed unless ?includeTrash=true)
 router.get('/content-library/topics', async (req, res) => {
   try {
+    const includeTrash = req.query.includeTrash === 'true';
+    const onlyTrash = req.query.onlyTrash === 'true';
+    
+    let whereClause = '';
+    if (onlyTrash) {
+      whereClause = 'WHERE t.is_trashed = true';
+    } else if (!includeTrash) {
+      whereClause = 'WHERE t.is_trashed = false OR t.is_trashed IS NULL';
+    }
+    
     const result = await pgPool.query(`
       SELECT t.id, t.title, t.description, t.objectives, 
              t.estimated_duration as "estimatedDuration", t.difficulty_level as "difficultyLevel",
              t.category_id as "categoryId", t.is_ai_generated as "isAiGenerated",
+             t.is_trashed as "isTrashed",
              t.created_at as "createdAt", c.name as "categoryName", c.color as "categoryColor"
       FROM training_library_topics t
       LEFT JOIN training_content_categories c ON t.category_id = c.id
+      ${whereClause}
       ORDER BY t.created_at DESC
     `);
 
     res.json(result.rows);
   } catch (error: any) {
     console.error('Error fetching topics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trash or restore a topic (soft delete)
+router.patch('/content-library/topics/:id/trash', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { trashed } = req.body; // true to trash, false to restore
+    
+    const { rawSql } = await import('../../db');
+    await rawSql`UPDATE training_library_topics SET is_trashed = ${trashed === true}, updated_at = NOW() WHERE id = ${id}`;
+    
+    const result = await rawSql`SELECT * FROM training_library_topics WHERE id = ${id}`;
+    const rows = Array.isArray(result) ? result : [];
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+    
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating topic trash status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk trash topics
+router.post('/content-library/topics/bulk-trash', async (req, res) => {
+  try {
+    const { ids, trashed } = req.body; // array of topic IDs
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    
+    const { rawSql } = await import('../../db');
+    const idList = ids.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
+    
+    await rawSql(`UPDATE training_library_topics SET is_trashed = $1, updated_at = NOW() WHERE id = ANY($2)`, [trashed === true, idList]);
+    
+    res.json({ success: true, count: idList.length });
+  } catch (error: any) {
+    console.error('Error bulk trashing topics:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -4531,6 +5101,124 @@ router.get('/content-library/topics/:id', async (req, res) => {
     res.json({ ...topic, materials, quizQuestions, linkedDocuments: linkedDocs });
   } catch (error: any) {
     console.error('Error fetching topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create topic manually
+router.post('/content-library/topics', async (req, res) => {
+  try {
+    const { title, description, objectives, prerequisites, estimatedDuration, difficultyLevel, categoryId, createdBy } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const parseIntOrUndefined = (val: any): number | undefined => {
+      if (val === null || val === undefined || val === '') return undefined;
+      const parsed = parseInt(String(val), 10);
+      return isNaN(parsed) ? undefined : parsed;
+    };
+
+    const insertData: any = {
+      title,
+      isAiGenerated: false,
+    };
+    
+    if (description) insertData.description = description;
+    if (objectives) insertData.objectives = typeof objectives === 'string' ? objectives : JSON.stringify(objectives);
+    if (prerequisites) insertData.prerequisites = prerequisites;
+    if (difficultyLevel) insertData.difficultyLevel = difficultyLevel;
+    
+    const parsedDuration = parseIntOrUndefined(estimatedDuration);
+    if (parsedDuration !== undefined) insertData.estimatedDuration = parsedDuration;
+    
+    const parsedCategoryId = parseIntOrUndefined(categoryId);
+    if (parsedCategoryId !== undefined) insertData.categoryId = parsedCategoryId;
+    
+    const parsedCreatedBy = parseIntOrUndefined(createdBy);
+    if (parsedCreatedBy !== undefined) insertData.createdBy = parsedCreatedBy;
+
+    // Insert the topic
+    await db.insert(trainingLibraryTopics).values(insertData);
+    
+    // Fetch the newly created topic (Neon driver has issues with .returning())
+    const { rawSql } = await import('../../db');
+    const result = await rawSql`SELECT * FROM training_library_topics WHERE title = ${insertData.title} ORDER BY id DESC LIMIT 1`;
+    const rows = Array.isArray(result) ? result : [];
+    const topic = rows[0] || insertData;
+
+    res.status(201).json(topic);
+  } catch (error: any) {
+    console.error('Error creating topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update topic
+router.put('/content-library/topics/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, description, objectives, prerequisites, estimatedDuration, difficultyLevel, categoryId } = req.body;
+
+    // Build dynamic update query based on provided fields
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+    
+    if (title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      params.push(title || null);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(description || null);
+    }
+    if (objectives !== undefined) {
+      updates.push(`objectives = $${paramIndex++}`);
+      params.push(objectives ? (typeof objectives === 'string' ? objectives : JSON.stringify(objectives)) : null);
+    }
+    if (prerequisites !== undefined) {
+      updates.push(`prerequisites = $${paramIndex++}`);
+      params.push(prerequisites || null);
+    }
+    if (estimatedDuration !== undefined && estimatedDuration !== null && estimatedDuration !== '') {
+      const parsed = parseInt(String(estimatedDuration), 10);
+      if (!isNaN(parsed)) {
+        updates.push(`estimated_duration = $${paramIndex++}`);
+        params.push(parsed);
+      }
+    }
+    if (difficultyLevel !== undefined) {
+      updates.push(`difficulty_level = $${paramIndex++}`);
+      params.push(difficultyLevel || null);
+    }
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
+      const parsed = parseInt(String(categoryId), 10);
+      if (!isNaN(parsed)) {
+        updates.push(`category_id = $${paramIndex++}`);
+        params.push(parsed);
+      }
+    }
+    
+    updates.push('updated_at = NOW()');
+    params.push(id);
+
+    // Perform the update without RETURNING (Neon driver has issues with it)
+    const { rawSql } = await import('../../db');
+    await rawSql(`UPDATE training_library_topics SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
+    
+    // Fetch the updated topic separately
+    const fetchResult = await rawSql`SELECT * FROM training_library_topics WHERE id = ${id}`;
+    const rows = Array.isArray(fetchResult) ? fetchResult : [];
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating topic:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -4609,12 +5297,47 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
   try {
     const { traineeId, topicIds, trainerId, trainerIds, partNumber, department, productionLine, createdBy } = req.body;
 
+    // Parse and validate inputs
+    const parsedTraineeId = parseInt(traineeId);
+    const parsedCreatedBy = createdBy ? parseInt(createdBy) : null;
+    const parsedTopicIds = Array.isArray(topicIds) ? topicIds.map((id: any) => parseInt(id)) : [];
+    
+    if (isNaN(parsedTraineeId) || parsedTopicIds.length === 0) {
+      return res.status(400).json({ error: 'Valid traineeId and topicIds are required' });
+    }
+
     // Fetch topics
     const topics = await db.select().from(trainingLibraryTopics)
-      .where(inArray(trainingLibraryTopics.id, topicIds));
+      .where(inArray(trainingLibraryTopics.id, parsedTopicIds));
 
     // Get trainee info
-    const [trainee] = await db.select().from(employees).where(eq(employees.id, traineeId));
+    const [trainee] = await db.select().from(employees).where(eq(employees.id, parsedTraineeId));
+
+    // Fetch topic content including materials
+    const topicMaterials = await pgPool.query(`
+      SELECT tm.*, t.title as topic_title, t.description as topic_description
+      FROM training_topic_materials tm
+      JOIN training_library_topics t ON tm.topic_id = t.id
+      WHERE tm.topic_id = ANY($1)
+    `, [parsedTopicIds]);
+
+    // Build comprehensive content context
+    const topicContentDetails = topics.map(t => {
+      const materials = topicMaterials.rows.filter(m => m.topic_id === t.id);
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        duration: t.estimatedDuration,
+        prerequisites: t.prerequisites,
+        materials: materials.map(m => ({
+          trainerActivities: m.trainer_activities,
+          traineeActivities: m.trainee_activities,
+          visualAids: m.visual_aids,
+          facilityModules: m.facility_modules
+        }))
+      };
+    });
 
     const client = getOpenAIClient();
     const completion = await client.chat.completions.create({
@@ -4622,28 +5345,43 @@ router.post('/content-library/generate-training-plan', async (req, res) => {
       messages: [
         { 
           role: 'system', 
-          content: `You are organizing training topics into an optimal 4-step training plan using the "Train the Trainer" 4-step method.
-Each step builds on the previous and should have appropriate content.
-Consider prerequisites and build skills progressively.
+          content: `You are creating a comprehensive 4-step training plan using the "Train the Trainer" method.
+Generate DETAILED training content that trainers need during each session.
 
 The 4 steps are:
-1. Trainer Does / Trainer Explains - Introduction and demonstration
-2. Trainer Does / Trainee Explains - Verify comprehension
-3. Trainee Does / Trainer Coaches - Hands-on with guidance
-4. Trainee Does / Trainer Observes - Independent execution
+1. Trainer Does / Trainer Explains - Trainer demonstrates while explaining the process
+2. Trainer Does / Trainee Explains - Trainer performs, trainee describes what's happening
+3. Trainee Does / Trainer Coaches - Trainee practices with active coaching
+4. Trainee Does / Trainer Observes - Trainee performs independently, trainer observes
+
+For EACH step, you MUST include:
+- workInstructions: Detailed step-by-step instructions from the source documents
+- criticalPoints: Array of critical points the trainer MUST emphasize (quality, precision, timing)
+- safetyPrecautions: Array of safety warnings and PPE requirements
+- demonstrations: Array of specific things to demonstrate during this step
+- objectives: What the trainee should learn in this step
+- quizQuestions: 4-5 comprehension questions for this step
 
 Return JSON with:
 {
-  "title": "Training Plan for [Area]",
-  "description": "Overview of this training program",
+  "title": "Training Plan for [specific task/part]",
+  "description": "Comprehensive overview of this training program",
+  "workInstructions": "Overall work instructions extracted from documents",
+  "criticalPoints": ["Critical point 1", "Critical point 2", ...],
+  "safetyPrecautions": ["Safety precaution 1", "Safety precaution 2", ...],
   "steps": [
     {
       "stepNumber": 1,
       "stepTitle": "Trainer Does / Trainer Explains",
-      "theme": "Step theme/focus",
-      "objectives": ["what trainee will learn"],
-      "topicIds": [list of topic IDs for this step],
+      "theme": "Introduction and Demonstration",
+      "objectives": ["Objective 1", "Objective 2"],
+      "workInstructions": "Step-specific detailed work instructions for this phase",
+      "criticalPoints": ["Critical point specific to this step"],
+      "safetyPrecautions": ["Safety items for this step"],
+      "demonstrations": ["What to demonstrate during this step"],
+      "trainerTalkingPoints": ["Key points trainer should cover"],
       "estimatedHours": 2,
+      "topicIds": [topic IDs for this step],
       "quizQuestions": [
         {
           "question": "Question about this step",
@@ -4653,13 +5391,33 @@ Return JSON with:
         }
       ]
     },
-    ...repeat for steps 2-4
+    ...repeat for steps 2-4 with appropriate content
   ]
-}`
+}
+
+IMPORTANT: Extract actual work instructions, safety info, and critical points from the provided document content. Do NOT use generic placeholders.`
         },
         { 
           role: 'user', 
-          content: `Create a 4-step training plan for ${trainee?.name || 'trainee'}${partNumber ? ` for Part #${partNumber}` : ''}${department ? ` in ${department}` : ''}${productionLine ? ` on ${productionLine}` : ''} using these topics:\n\n${topics.map(t => `ID: ${t.id}, Title: ${t.title}, Duration: ${t.estimatedDuration}min, Prerequisites: ${t.prerequisites || 'None'}`).join('\n')}\n\nGenerate 4-5 quiz questions for each step to test comprehension.`
+          content: `Create a comprehensive 4-step training plan for ${trainee?.name || 'trainee'}${partNumber ? ` for Part #${partNumber}` : ''}${department ? ` in ${department}` : ''}${productionLine ? ` on ${productionLine}` : ''}.
+
+TOPIC CONTENT TO USE:
+${topicContentDetails.map(t => `
+=== Topic: ${t.title} (ID: ${t.id}) ===
+Duration: ${t.duration}min
+Prerequisites: ${t.prerequisites || 'None'}
+Content: ${t.content || 'No content available'}
+${t.materials.length > 0 ? `Materials: ${JSON.stringify(t.materials)}` : ''}
+`).join('\n')}
+
+Based on this content, generate:
+1. Detailed work instructions extracted from the documents
+2. Critical points and quality checkpoints the trainer must emphasize
+3. Safety precautions and PPE requirements
+4. Specific demonstrations for each step
+5. 4-5 quiz questions per step to verify understanding
+
+Make the content specific to the actual training task, not generic.`
         }
       ],
       response_format: { type: 'json_object' },
@@ -4668,83 +5426,84 @@ Return JSON with:
 
     const plan = JSON.parse(completion.choices[0]?.message?.content || '{}');
 
-    // Create the training plan
-    const [savedPlan] = await db.insert(aiTrainingPlans).values({
-      traineeId,
-      title: plan.title || `Training Plan for ${trainee?.name || 'Trainee'}`,
-      description: plan.description,
-      planStructure: JSON.stringify(plan),
-      totalTopics: topicIds.length,
-      status: 'active',
-      createdBy,
-    }).returning();
-
-    // Save trainer assignments
-    const allTrainerIds = trainerIds || (trainerId ? [trainerId] : []);
-    for (let i = 0; i < allTrainerIds.length; i++) {
-      await db.insert(trainingPlanTrainers).values({
-        planId: savedPlan.id,
-        trainerId: allTrainerIds[i],
-        isPrimary: i === 0, // First trainer is primary
-        assignedBy: createdBy,
-      });
+    // Create the training plan using pgPool for reliability
+    const planResult = await pgPool.query(`
+      INSERT INTO ai_training_plans 
+        (trainee_id, title, description, plan_structure, total_topics, status, created_by, part_number, department, production_line, assigned_trainers, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING *
+    `, [
+      parsedTraineeId,
+      plan.title || `Training Plan for ${trainee?.name || 'Trainee'}`,
+      plan.description || null,
+      JSON.stringify(plan),
+      parsedTopicIds.length,
+      'active',
+      parsedCreatedBy,
+      partNumber || null,
+      department || null,
+      productionLine || null,
+      JSON.stringify(trainerIds || (trainerId ? [trainerId] : [])),
+    ]);
+    const savedPlan = planResult.rows[0];
+    
+    if (!savedPlan) {
+      throw new Error('Failed to create training plan');
     }
 
-    // Save production info if provided
+    // Save trainer assignments (trainers also stored in main table for quick access)
+    const allTrainerIds = (trainerIds || (trainerId ? [trainerId] : [])).map((id: any) => parseInt(id));
+    for (let i = 0; i < allTrainerIds.length; i++) {
+      if (!isNaN(allTrainerIds[i])) {
+        await pgPool.query(`
+          INSERT INTO training_plan_trainers (plan_id, trainer_id, is_primary, assigned_by, created_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `, [savedPlan.id, allTrainerIds[i], i === 0, parsedCreatedBy]);
+      }
+    }
+
+    // Save production info if provided (also stored in main table)
     if (partNumber || department || productionLine) {
-      await db.insert(trainingPlanProductionInfo).values({
-        planId: savedPlan.id,
-        partNumber,
-        department,
-        productionLine,
-      });
+      await pgPool.query(`
+        INSERT INTO training_plan_production_info (plan_id, part_number, department, production_line, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+      `, [savedPlan.id, partNumber || null, department || null, productionLine || null]);
     }
 
     // Create step quizzes and questions
     for (const step of plan.steps || []) {
-      const [quiz] = await db.insert(trainingStepQuizzes).values({
-        planId: savedPlan.id,
-        stepNumber: step.stepNumber,
-        title: `Step ${step.stepNumber} Quiz: ${step.stepTitle}`,
-        description: step.theme,
-        passingScore: 80,
-        isAiGenerated: true,
-      }).returning();
+      const quizResult = await pgPool.query(`
+        INSERT INTO training_step_quizzes (plan_id, step_number, title, description, passing_score, is_ai_generated, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        RETURNING *
+      `, [savedPlan.id, step.stepNumber, `Step ${step.stepNumber} Quiz: ${step.stepTitle}`, step.theme, 80, true]);
+      const quiz = quizResult.rows[0];
 
       // Add quiz questions
       for (let i = 0; i < (step.quizQuestions || []).length; i++) {
         const q = step.quizQuestions[i];
-        await db.insert(trainingStepQuizQuestions).values({
-          quizId: quiz.id,
-          question: q.question,
-          questionType: 'multiple_choice',
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          sortOrder: i,
-        });
+        await pgPool.query(`
+          INSERT INTO training_step_quiz_questions (quiz_id, question, question_type, options, correct_answer, explanation, sort_order, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `, [quiz.id, q.question, 'multiple_choice', JSON.stringify(q.options), q.correctAnswer, q.explanation, i]);
       }
 
       // Create topic assignments for this step
+      const primaryTrainerId = allTrainerIds[0] || null;
       for (const topicId of step.topicIds || []) {
-        await db.insert(traineeTopicAssignments).values({
-          traineeId,
-          topicId,
-          trainerId: allTrainerIds[0] || trainerId,
-          dayNumber: step.stepNumber,
-          createdBy,
-        });
+        await pgPool.query(`
+          INSERT INTO trainee_topic_assignments (trainee_id, topic_id, trainer_id, current_step, status, part_number, department, production_line, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+        `, [parsedTraineeId, topicId, primaryTrainerId, step.stepNumber, 'pending', partNumber || null, department || null, productionLine || null]);
       }
     }
 
     // Create initial step progress for the trainee
     for (let stepNum = 1; stepNum <= 4; stepNum++) {
-      await db.insert(trainingStepProgress).values({
-        planId: savedPlan.id,
-        traineeId,
-        stepNumber: stepNum,
-        status: stepNum === 1 ? 'available' : 'locked',
-      });
+      await pgPool.query(`
+        INSERT INTO training_step_progress (plan_id, trainee_id, step_number, status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+      `, [savedPlan.id, parsedTraineeId, stepNum, stepNum === 1 ? 'available' : 'locked']);
     }
 
     res.status(201).json({ plan: savedPlan, structure: plan });
@@ -4788,8 +5547,11 @@ router.get('/content-library/training-plans', async (req, res) => {
              p.objectives, p.four_step_content as "fourStepContent", p.quiz_questions as "quizQuestions",
              p.part_number as "partNumber", p.department, p.production_line as "productionLine",
              p.assigned_trainers as "assignedTrainers", p.status, 
-             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt"
+             p.created_by as "createdBy", p.created_at as "createdAt", p.updated_at as "updatedAt",
+             p.trainee_id as "traineeId", p.plan_structure as "planStructure",
+             e.name as "traineeName"
       FROM ai_training_plans p
+      LEFT JOIN employees e ON p.trainee_id = e.id
       ORDER BY p.created_at DESC
     `);
 
@@ -4804,24 +5566,29 @@ router.get('/content-library/training-plans', async (req, res) => {
 router.get('/content-library/training-plans/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [plan] = await db.select().from(aiTrainingPlans).where(eq(aiTrainingPlans.id, id));
-    if (!plan) {
+    
+    const planResult = await pgPool.query(`
+      SELECT p.*, e.name as trainee_name
+      FROM ai_training_plans p
+      LEFT JOIN employees e ON p.trainee_id = e.id
+      WHERE p.id = $1
+    `, [id]);
+    
+    if (planResult.rows.length === 0) {
       return res.status(404).json({ error: 'Training plan not found' });
     }
+    const plan = planResult.rows[0];
 
-    const assignments = await db.select({
-      id: traineeTopicAssignments.id,
-      topicId: traineeTopicAssignments.topicId,
-      dayNumber: traineeTopicAssignments.dayNumber,
-      status: traineeTopicAssignments.status,
-      topicTitle: trainingLibraryTopics.title,
-      topicDuration: trainingLibraryTopics.estimatedDuration,
-    }).from(traineeTopicAssignments)
-      .leftJoin(trainingLibraryTopics, eq(traineeTopicAssignments.topicId, trainingLibraryTopics.id))
-      .where(eq(traineeTopicAssignments.traineeId, plan.traineeId))
-      .orderBy(traineeTopicAssignments.dayNumber);
+    const assignmentsResult = await pgPool.query(`
+      SELECT a.id, a.topic_id as "topicId", a.current_step as "currentStep", a.status,
+             t.title as "topicTitle", t.estimated_duration as "topicDuration"
+      FROM trainee_topic_assignments a
+      LEFT JOIN training_library_topics t ON a.topic_id = t.id
+      WHERE a.trainee_id = $1
+      ORDER BY a.id
+    `, [plan.trainee_id]);
 
-    res.json({ ...plan, assignments });
+    res.json({ ...plan, assignments: assignmentsResult.rows });
   } catch (error: any) {
     console.error('Error fetching training plan:', error);
     res.status(500).json({ error: error.message });
@@ -4832,22 +5599,65 @@ router.get('/content-library/training-plans/:id', async (req, res) => {
 router.put('/content-library/training-plans/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { title, description, status } = req.body;
+    const { title, description, status, planStructure, quizQuestions, fourStepContent, objectives } = req.body;
     
-    const updateData: any = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (status !== undefined) updateData.status = status;
+    // Build dynamic update query
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
     
-    const [updated] = await db.update(aiTrainingPlans)
-      .set(updateData)
-      .where(eq(aiTrainingPlans.id, id))
-      .returning();
+    if (title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      values.push(title);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      values.push(description);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(status);
+    }
+    if (planStructure !== undefined) {
+      updates.push(`plan_structure = $${paramIndex++}`);
+      values.push(planStructure);
+    }
+    if (quizQuestions !== undefined) {
+      updates.push(`quiz_questions = $${paramIndex++}`);
+      values.push(quizQuestions);
+    }
+    if (fourStepContent !== undefined) {
+      updates.push(`four_step_content = $${paramIndex++}`);
+      values.push(fourStepContent);
+    }
+    if (objectives !== undefined) {
+      updates.push(`objectives = $${paramIndex++}`);
+      values.push(objectives);
+    }
     
-    if (!updated) {
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+    
+    // Use update without RETURNING due to Neon driver issues, then fetch
+    await pgPool.query(`
+      UPDATE ai_training_plans 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+    `, values);
+    
+    // Fetch the updated record
+    const fetchResult = await pgPool.query(`
+      SELECT * FROM ai_training_plans WHERE id = $1
+    `, [id]);
+    
+    if (fetchResult.rows.length === 0) {
       return res.status(404).json({ error: 'Training plan not found' });
     }
-    res.json(updated);
+    res.json(fetchResult.rows[0]);
   } catch (error: any) {
     console.error('Error updating training plan:', error);
     res.status(500).json({ error: error.message });

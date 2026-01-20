@@ -15,6 +15,9 @@ const sql = neon(process.env.DATABASE_URL);
 
 export const db = drizzle({ client: sql, schema });
 
+// Export raw SQL function for cases where Drizzle query builder has issues
+export const rawSql = sql;
+
 // Test database connection with timeout
 export async function testDatabaseConnection() {
   try {

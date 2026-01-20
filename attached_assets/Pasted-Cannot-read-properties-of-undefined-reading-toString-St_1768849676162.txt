@@ -1,0 +1,15 @@
+Cannot read properties of undefined (reading 'toString')
+
+Stack trace:
+TypeError: Cannot read properties of undefined (reading 'toString')
+    at onClick (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/TrainerDashboard.tsx:1738:57)
+    at HTMLUnknownElement.callCallback2 (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:3674:22)
+    at Object.invokeGuardedCallbackDev (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:3699:24)
+    at invokeGuardedCallback (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:3733:39)
+    at invokeGuardedCallbackAndCatchFirstError (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:3736:33)
+    at executeDispatch (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:7014:11)
+    at processDispatchQueueItemsInOrder (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:7034:15)
+    at processDispatchQueue (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:7043:13)
+    at dispatchEventsForPlugins (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:7051:11)
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=ab6c7ac3:7174:20
+Reload Application

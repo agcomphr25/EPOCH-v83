@@ -33,6 +33,7 @@ async function throwIfResNotOk(res: Response) {
 
 interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: any;
+  timeout?: number; // Custom timeout in milliseconds
 }
 
 export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
@@ -46,9 +47,9 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     window.location.hostname.includes('agcompepoch.xyz');
 
   // Use reasonable timeout for deployments (allow for database latency with large datasets)
-  // Increased dev timeout to 120s to handle scheduling of 894 orders (takes ~60-90s)
-  // Increased deployment timeout to 45s to handle cold starts and large inventory queries (766+ items)
-  const timeoutDuration = isDeployment ? 45000 : 120000; // 45 seconds for deployment, 120 for dev
+  // Allow custom timeout override for slow operations like AI generation
+  const defaultTimeout = isDeployment ? 15000 : 120000;
+  const timeoutDuration = options.timeout ?? defaultTimeout;
 
   console.log(
     `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`

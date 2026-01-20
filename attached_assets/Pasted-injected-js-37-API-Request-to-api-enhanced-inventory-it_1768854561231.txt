@@ -1,0 +1,3191 @@
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3334 injected.js:37
+(anonymous) @ VM3618 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3334 injected.js:37
+(anonymous) @ VM3618 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM3352 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM3352 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM3352 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+(anonymous) @ VM3358 queryClient.ts:118
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:118
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2256
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/enhanced/inventory/items 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/enhanced/inventory/items 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2245
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2260
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 500
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch inventory items"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/enhanced/inventory/items: Error: Failed to fetch inventory items
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+(anonymous) @ VM3358 queryClient.ts:118
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:118
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2256
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2256
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/enhanced/inventory/items 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/enhanced/inventory/items 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2245
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3334 injected.js:214
+apiRequest @ VM3358 queryClient.ts:63
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:63
+queryFn @ InventoryItemsCard.tsx:2260
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 500
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch inventory items"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/enhanced/inventory/items: Error: Failed to fetch inventory items
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2245
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:68
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3334 injected.js:37
+console.error @ VM3343 main.tsx:25
+(anonymous) @ VM3334 injected.js:37
+apiRequest @ VM3358 queryClient.ts:92
+await in apiRequest
+queryFn @ VM3670 InventoryItemsCard.tsx:2260
+fetchFn @ VM3348 @tanstack_react-query.js:879
+run @ VM3348 @tanstack_react-query.js:507
+(anonymous) @ VM3348 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3348 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3348 @tanstack_react-query.js:511
+start @ VM3348 @tanstack_react-query.js:550
+fetch @ VM3348 @tanstack_react-query.js:918
+executeFetch_fn @ VM3348 @tanstack_react-query.js:2280
+onSubscribe @ VM3348 @tanstack_react-query.js:1976
+subscribe @ VM3348 @tanstack_react-query.js:24
+(anonymous) @ VM3348 @tanstack_react-query.js:3147
+subscribeToStore @ VM3352 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3352 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3352 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3352 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3352 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3352 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3352 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3352 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3352 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3352 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3352 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3352 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3352 chunk-NFC5BX5N.js:18627
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM3334 injected.js:214
+ping @ VM3340 client:736
+waitForSuccessfulPing @ VM3340 client:749
+(anonymous) @ VM3340 client:561
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ injected.js:214
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/inventory/enhanced-mrp 502 (Bad Gateway)
+(anonymous) @ VM3340 client:562
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/inventory/enhanced-mrp 502 (Bad Gateway)
+(anonymous) @ client:562
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+db09c50e6e999668.js:2 Unrecognized feature: 'ambient-light-sensor'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'battery'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'layout-animations'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'legacy-image-formats'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'navigation-override'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'oversized-images'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'publickey-credentials'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'speaker-selection'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'unoptimized-images'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'unsized-media'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'pointer-lock'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+workspace_iframe.html?initialPath=%2Finventory%2Fenhanced-mrp&id=%3Ar7m2%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM3902 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM3902 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM3902 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+(anonymous) @ VM3908 queryClient.ts:118
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+(anonymous) @ VM3908 queryClient.ts:118
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 200
+chunk-NFC5BX5N.js?v=ab6c7ac3:18625 [Violation] 'click' handler took 305ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+ac9ba3e8ec8cc75b.js:2 [Violation] Added non-passive event listener to a scroll-blocking 'wheel' event. Consider marking event handler as 'passive' to make the page more responsive. See https://www.chromestatus.com/feature/5745543795965952
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+(anonymous) @ 2d8e593630aa4a58.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM3902 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM3902 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM3902 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+chunk-NFC5BX5N.js?v=ab6c7ac3:18625 [Violation] 'click' handler took 726ms
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+(anonymous) @ VM3908 queryClient.ts:118
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/items-groups-map 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch items-groups map"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/items-groups-map: Error: Failed to fetch items-groups map
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2260
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/inventory/groups 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/vendors 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+(anonymous) @ VM3908 queryClient.ts:118
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 ✅ API Response from /api/inventory/groups: 500
+injected.js:37 API error raw body: {"error":"Failed to fetch item groups"}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+injected.js:37 💥 API Request failed for /api/inventory/groups: Error: Failed to fetch item groups
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+queryFn @ VM4213 InventoryItemsCard.tsx:2256
+fetchFn @ VM3898 @tanstack_react-query.js:879
+run @ VM3898 @tanstack_react-query.js:507
+(anonymous) @ VM3898 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM3898 @tanstack_react-query.js:528
+Promise.catch
+run @ VM3898 @tanstack_react-query.js:511
+start @ VM3898 @tanstack_react-query.js:550
+fetch @ VM3898 @tanstack_react-query.js:918
+executeFetch_fn @ VM3898 @tanstack_react-query.js:2280
+onSubscribe @ VM3898 @tanstack_react-query.js:1976
+subscribe @ VM3898 @tanstack_react-query.js:24
+(anonymous) @ VM3898 @tanstack_react-query.js:3147
+subscribeToStore @ VM3902 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:18627
+[Violation] 'input' handler took 192ms
+injected.js:37 🌐 API Request to /api/training/content-library/training-plans/1 (timeout: 120000ms, deployment: false)
+injected.js:214  DELETE https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/training-plans/1 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+apiRequest @ VM3908 queryClient.ts:63
+mutationFn @ VM4048 TrainingContentLibrary.tsx:308
+fn @ VM3898 @tanstack_react-query.js:1234
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+execute @ VM3898 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM3898 @tanstack_react-query.js:2692
+(anonymous) @ VM3898 @tanstack_react-query.js:3415
+onClick @ VM4048 TrainingContentLibrary.tsx:2974
+handleEvent @ VM4138 chunk-5Q5YC75F.js:4
+callCallback2 @ VM3902 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM3902 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM3902 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM3902 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM3902 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM3902 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM3902 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM3902 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM3902 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM3902 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM3902 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM3902 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM3902 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM3902 chunk-NFC5BX5N.js:5449
+injected.js:37 ✅ API Response from /api/training/content-library/training-plans/1: 500
+injected.js:37 API error raw body: {"error":"update or delete on table \"ai_training_plans\" violates foreign key constraint \"daily_training_sessions_plan_id_fkey\" on table \"daily_training_sessions\""}
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:68
+await in apiRequest
+mutationFn @ VM4048 TrainingContentLibrary.tsx:308
+fn @ VM3898 @tanstack_react-query.js:1234
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+execute @ VM3898 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM3898 @tanstack_react-query.js:2692
+(anonymous) @ VM3898 @tanstack_react-query.js:3415
+onClick @ VM4048 TrainingContentLibrary.tsx:2974
+handleEvent @ VM4138 chunk-5Q5YC75F.js:4
+callCallback2 @ VM3902 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM3902 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM3902 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM3902 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM3902 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM3902 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM3902 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM3902 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM3902 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM3902 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM3902 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM3902 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM3902 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM3902 chunk-NFC5BX5N.js:5449
+injected.js:37 💥 API Request failed for /api/training/content-library/training-plans/1: Error: update or delete on table "ai_training_plans" violates foreign key constraint "daily_training_sessions_plan_id_fkey" on table "daily_training_sessions"
+    at apiRequest (queryClient.ts:80:13)
+(anonymous) @ VM3884 injected.js:37
+console.error @ VM3893 main.tsx:25
+(anonymous) @ VM3884 injected.js:37
+apiRequest @ VM3908 queryClient.ts:92
+await in apiRequest
+mutationFn @ VM4048 TrainingContentLibrary.tsx:308
+fn @ VM3898 @tanstack_react-query.js:1234
+run @ VM3898 @tanstack_react-query.js:507
+start @ VM3898 @tanstack_react-query.js:550
+execute @ VM3898 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM3898 @tanstack_react-query.js:2692
+(anonymous) @ VM3898 @tanstack_react-query.js:3415
+onClick @ VM4048 TrainingContentLibrary.tsx:2974
+handleEvent @ VM4138 chunk-5Q5YC75F.js:4
+callCallback2 @ VM3902 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM3902 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM3902 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM3902 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM3902 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM3902 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM3902 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM3902 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM3902 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM3902 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM3902 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM3902 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM3902 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM3902 chunk-NFC5BX5N.js:5449
+ac9ba3e8ec8cc75b.js:2 [Violation] Added non-passive event listener to a scroll-blocking 'wheel' event. Consider marking event handler as 'passive' to make the page more responsive. See https://www.chromestatus.com/feature/5745543795965952
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+(anonymous) @ ac9ba3e8ec8cc75b.js:2
+(anonymous) @ 2d8e593630aa4a58.js:2
+uV @ ed1e693c96a75807.js:2
+iH @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19432
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM3902 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18718
+workLoop @ VM3902 chunk-NFC5BX5N.js:197
+flushWork @ VM3902 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM3902 chunk-NFC5BX5N.js:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM3902 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM3902 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM3902 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19432
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM3902 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18718
+workLoop @ VM3902 chunk-NFC5BX5N.js:197
+flushWork @ VM3902 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM3902 chunk-NFC5BX5N.js:384
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics/1 500 (Internal Server Error)
+apply @ VM3884 injected.js:214
+handleViewTopic @ VM4048 TrainingContentLibrary.tsx:336
+onClick @ VM4048 TrainingContentLibrary.tsx:1520
+callCallback2 @ VM3902 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM3902 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM3902 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM3902 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM3902 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM3902 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM3902 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM3902 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM3902 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM3902 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM3902 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM3902 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM3902 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM3902 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM3902 chunk-NFC5BX5N.js:5449
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM3902 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM3902 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM3902 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM3902 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19432
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM3902 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18718
+workLoop @ VM3902 chunk-NFC5BX5N.js:197
+flushWork @ VM3902 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM3902 chunk-NFC5BX5N.js:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM3884 injected.js:37
+(anonymous) @ VM4148 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM3902 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM3902 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM3902 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM3902 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM3902 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM3902 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19416
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM3902 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM3902 chunk-NFC5BX5N.js:19432
+commitRoot @ VM3902 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM3902 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM3902 chunk-NFC5BX5N.js:18718
+workLoop @ VM3902 chunk-NFC5BX5N.js:197
+flushWork @ VM3902 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM3902 chunk-NFC5BX5N.js:384
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM3884 injected.js:214
+ping @ VM3890 client:736
+waitForSuccessfulPing @ VM3890 client:749
+(anonymous) @ VM3890 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM3890 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM4435 injected.js:214
+ping @ VM4438 client:736
+waitForSuccessfulPing @ VM4438 client:749
+(anonymous) @ VM4438 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM4438 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM4983 injected.js:214
+ping @ VM4984 client:736
+waitForSuccessfulPing @ VM4984 client:749
+(anonymous) @ VM4984 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM4984 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM5532 injected.js:214
+ping @ VM5533 client:736
+waitForSuccessfulPing @ VM5533 client:749
+(anonymous) @ VM5533 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM5533 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 [vite] server connection lost. Polling for restart...
+OrderEntry.tsx:70  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/PaymentManager.tsx net::ERR_ABORTED 502 (Bad Gateway)
+OrderEntry.tsx:71  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/OrderAttachments.tsx net::ERR_ABORTED 502 (Bad Gateway)
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM6080 injected.js:214
+ping @ VM6084 client:736
+waitForSuccessfulPing @ VM6084 client:749
+(anonymous) @ VM6084 client:561
+OrderEntry.tsx:72  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/CustomerCreditIndicator.tsx net::ERR_ABORTED 502 (Bad Gateway)
+OrderEntry.tsx:73  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/OrderRefundsSection.tsx net::ERR_ABORTED 502 (Bad Gateway)
+OrderEntry.tsx:76  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/hooks/useFeatureValidation.ts net::ERR_ABORTED 502 (Bad Gateway)
+OrderEntry.tsx:77  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/hooks/useSmartSort.ts net::ERR_ABORTED 502 (Bad Gateway)
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM6084 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM6570 injected.js:214
+ping @ VM6576 client:736
+waitForSuccessfulPing @ VM6576 client:749
+(anonymous) @ VM6576 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM6576 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM7118 injected.js:214
+ping @ VM7124 client:736
+waitForSuccessfulPing @ VM7124 client:749
+(anonymous) @ VM7124 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM7124 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM7666 injected.js:214
+ping @ VM7671 client:736
+waitForSuccessfulPing @ VM7671 client:749
+(anonymous) @ VM7671 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM7671 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM8214 injected.js:214
+ping @ VM8220 client:736
+waitForSuccessfulPing @ VM8220 client:749
+(anonymous) @ VM8220 client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM8220 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 [vite] server connection lost. Polling for restart...
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/App.tsx?v=a2VfNm21aAafZqT7cZB-P:28  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/auth/RouteGuard.tsx net::ERR_ABORTED 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/App.tsx?v=a2VfNm21aAafZqT7cZB-P:29  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/Dashboard.tsx net::ERR_ABORTED 502 (Bad Gateway)
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM8762 injected.js:214
+ping @ VM8765 client:736
+waitForSuccessfulPing @ VM8765 client:749
+(anonymous) @ VM8765 client:561
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/App.tsx?v=a2VfNm21aAafZqT7cZB-P:30  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/OrderManagement.tsx net::ERR_ABORTED 502 (Bad Gateway)
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/App.tsx?v=a2VfNm21aAafZqT7cZB-P:31  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/OrdersManagementPage.tsx net::ERR_ABORTED 502 (Bad Gateway)
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ VM8765 client:562
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center:108  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ training-control-center:108
+setTimeout
+(anonymous) @ training-control-center:107
+training-control-center:108  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/training-control-center 502 (Bad Gateway)
+(anonymous) @ training-control-center:108
+setTimeout
+(anonymous) @ training-control-center:107
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+client:552 [Violation] 'close' handler took 610383ms
+7eea1cbd48382d74.js:2 [Violation] 'close' handler took 610383ms
+07223b0f51219b99.js:2 [Violation] 'close' handler took 160ms
+ed1e693c96a75807.js:2 [Violation] 'close' handler took 837ms
+stallwart.build.js:1 stallwart: failed ping 1
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSXBlKzV5d1lTQmdqRWk3ckxCaUlGYzNCdlkyc3dBRHJPQVFva1pESmpNekV4TWpVdE9USm1aQzAwWVdObUxUazNZVFV0WVdGbE9UUTBNREU0TldZeUVnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJaEJoWjJOdmJYQm9jaTB3TVMweE9TMHhLZ2hoWjJOdmJYQm9ja0pSQ2hoeVpYQnNhWFF0Y21Wd2JDMWliRzlqYTNNdGMzQnZZMnNTRm5KbGNHeHBkQzF5WlhCc0xXMWxkR0V0YzNCdlkyc2FIWEpsY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxYTndiMk5yU2djSTNwcnJGQkFCVUFCeURBb0daWGx1ZDNockVBSWdBSGdBVWlVSUFSQ0FnSUNBUUJrQUFBQUFBQUFnUUNFQUFBQUFBQUFnUUNpQWdJQ0FnQWd3QWpnQVlBQnFEd2plbXVzVUVnaGhaMk52YlhCb2NvSUJBaW9BZ2dFQ01nQ2FBUW9LQ0RBdU1DNHlPVE13b0FFQr7EO8k2Yk3BxZWnqluBPhfZhr22GGTzUr7qElX_xsefKK3gHsI038ZOoadWImv6VLsBPFvg0Cwa-yiRQKcF_gU.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+n @ cf344694e1e36523.js:2
+s @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+connect @ 803eec1bacc00e5f.js:2
+handleClose @ 803eec1bacc00e5f.js:2
+n @ 803eec1bacc00e5f.js:2
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'battery'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'layout-animations'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'legacy-image-formats'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'navigation-override'.
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Araki%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics/5 500 (Internal Server Error)
+apply @ injected.js:214
+handleViewTopic @ TrainingContentLibrary.tsx:389
+onClick @ TrainingContentLibrary.tsx:836
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/topics/1 500 (Internal Server Error)
+apply @ injected.js:214
+handleViewTopic @ TrainingContentLibrary.tsx:389
+onClick @ TrainingContentLibrary.tsx:836
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+ac9ba3e8ec8cc75b.js:2 [Violation] 'requestAnimationFrame' handler took 179ms
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/training/content-library/generate-topic (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/content-library/generate-topic: 201
+injected.js:37 [vite] hot updated: /src/components/KickbackTracking.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=tvFamYGaUXoaIEWsmmCMr
+injected.js:37 [vite] hot updated: /src/pages/OrdersList.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostCenterManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostAccountingPage.tsx
+injected.js:37 [vite] hot updated: /src/pages/ManageGroups.tsx
+injected.js:37 [vite] hot updated: /src/pages/VendorManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/PDFTemplateManager.tsx
+injected.js:37 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+injected.js:37 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+injected.js:37 [vite] hot updated: /src/components/QCManager.tsx
+injected.js:37 [vite] hot updated: /src/components/MaintenanceManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackReportModal.tsx
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/training/content-library/generate-training-plan (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/content-library/generate-training-plan 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ TrainingContentLibrary.tsx:266
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:1126
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 ✅ API Response from /api/training/content-library/generate-training-plan: 500
+injected.js:37 API error raw body: {"error":"column t.content does not exist"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:266
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:1126
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 💥 API Request failed for /api/training/content-library/generate-training-plan: Error: column t.content does not exist
+    at apiRequest (queryClient.ts:135:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ TrainingContentLibrary.tsx:266
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+onClick @ TrainingContentLibrary.tsx:1126
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449

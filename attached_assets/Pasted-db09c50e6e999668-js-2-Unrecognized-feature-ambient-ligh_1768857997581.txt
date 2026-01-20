@@ -1,0 +1,647 @@
+db09c50e6e999668.js:2 Unrecognized feature: 'ambient-light-sensor'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'battery'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'layout-animations'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'legacy-image-formats'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'navigation-override'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'oversized-images'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'publickey-credentials'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'speaker-selection'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'unoptimized-images'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'unsized-media'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Unrecognized feature: 'pointer-lock'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+db09c50e6e999668.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 7599154bd2118454.js:2
+r @ 7599154bd2118454.js:2
+s @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ 7599154bd2118454.js:2
+(anonymous) @ db09c50e6e999668.js:2
+navigateTo @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ db09c50e6e999668.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 0c2be5d589ef3034.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ ac9ba3e8ec8cc75b.js:2
+stallwart.build.js:1 stallwart: failed ping 1
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSXBlKzV5d1lTQmdqRWk3ckxCaUlGYzNCdlkyc3dBRHJPQVFva1pESmpNekV4TWpVdE9USm1aQzAwWVdObUxUazNZVFV0WVdGbE9UUTBNREU0TldZeUVnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJaEJoWjJOdmJYQm9jaTB3TVMweE9TMHhLZ2hoWjJOdmJYQm9ja0pSQ2hoeVpYQnNhWFF0Y21Wd2JDMWliRzlqYTNNdGMzQnZZMnNTRm5KbGNHeHBkQzF5WlhCc0xXMWxkR0V0YzNCdlkyc2FIWEpsY0d4cGRDMXRZWEpuWVhKcGJtVXRZbXh2WTJ0ekxYTndiMk5yU2djSTNwcnJGQkFCVUFCeURBb0daWGx1ZDNockVBSWdBSGdBVWlVSUFSQ0FnSUNBUUJrQUFBQUFBQUFnUUNFQUFBQUFBQUFnUUNpQWdJQ0FnQWd3QWpnQVlBQnFEd2plbXVzVUVnaGhaMk52YlhCb2NvSUJBaW9BZ2dFQ01nQ2FBUW9LQ0RBdU1DNHlPVE13b0FFQr7EO8k2Yk3BxZWnqluBPhfZhr22GGTzUr7qElX_xsefKK3gHsI038ZOoadWImv6VLsBPFvg0Cwa-yiRQKcF_gU.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2
+(anonymous) @ 7599154bd2118454.js:2
+n @ cf344694e1e36523.js:2
+s @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+(anonymous) @ cf344694e1e36523.js:2
+connect @ 803eec1bacc00e5f.js:2
+handleClose @ 803eec1bacc00e5f.js:2
+n @ 803eec1bacc00e5f.js:2
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: [object Object]
+injected.js:37 React hooks: [object Object]
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🌐 API Request to /api/training/content-library/topics/5 (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/content-library/topics/5: 200
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 🌐 API Request to /api/training/content-library/topics/2 (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/content-library/topics/2: 200
+injected.js:37 🌐 API Request to /api/training/content-library/topics/1 (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/content-library/topics/1: 200
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 🌐 API Request to /api/training/modules (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/training/modules: 500
+injected.js:37 API error raw body: {"error":"duplicate key value violates unique constraint \"training_modules_pkey\""}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/training/modules: Error: duplicate key value violates unique constraint "training_modules_pkey"
+    at apiRequest (d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/lib/queryClient.ts:80:13)
+    at async Object.mutationFn (d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/Training.tsx:58:14)
+(anonymous) @ injected.js:37
+injected.js:37 [vite] hot updated: /src/pages/TrainingContentLibrary.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=uVDsTM_hOK2MSIQHH12NT
+injected.js:37 [vite] server connection lost. Polling for restart...
+ac9ba3e8ec8cc75b.js:2 [Violation] 'setTimeout' handler took 235ms

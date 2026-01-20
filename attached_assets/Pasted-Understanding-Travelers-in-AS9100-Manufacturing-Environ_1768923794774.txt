@@ -1,0 +1,255 @@
+Understanding Travelers in AS9100 Manufacturing Environments
+📖 Step 1: Review Training Material
+Please read through all the information below before taking the quiz
+AS9100 Employee Orientation Training
+Quality Management System for Aerospace & Defense
+
+What is AS9100?
+AS9100 is a quality management system for companies that design, develop, or provide products for the aviation, space, and defense industries.
+
+AG Composites, LLC dba AG Advanced Technologies ("AG"):
+
+Designs, develops, manufactures, and finishes composite components
+Assembles composite structures
+Machines metal and composite components
+All these processes fall under AG's Quality Management System (QMS).
+
+Quality Policy
+"AG Composites will continuously improve while producing quality products in a timely manner to meet customer requirements."
+
+This is posted on bulletin boards and on the information slide show.
+
+Quality Objectives (KPIs)
+Quality objectives are the company's goals. They are also called Key Performance Indicators (KPIs) and create a way to evaluate the company's performance.
+
+1
+Return Rate
+
+Goal: 3% or less for OEM and retail products based on manufacturer defect or error
+
+Measured monthly
+
+2
+Production Scrap
+
+Goal: 1% or less for nonconforming items
+
+Measured monthly
+
+3
+Retail Shipping Rate
+
+Goal: 90% on-time shipping
+
+Measured monthly
+
+4
+Continuous Improvement
+
+Through training, leader development, audits, reviews, and corrective actions
+
+Quality Objectives and Your Position
+How do the quality objectives relate to your current job?
+
+1. Customer Satisfaction
+
+Follow processes to prevent returns and defects
+
+2. Scrap/Nonconformities
+
+Minimize waste by following procedures correctly
+
+3. Shipping Deadlines
+
+Complete work on time to meet shipping goals
+
+4. Employee Performance
+
+Participate in training and development
+
+5. Continuous Improvement
+
+Share ideas to improve quality, efficiency, or customer satisfaction
+
+Documents
+There will be certain documents and forms required for your position.
+
+Where can you find documents for your job?
+
+Work Orders/Travelers
+Daily/Weekly Production Forms
+Maintenance Checklists
+Where can you find HR documents?
+
+Vacation Request
+Payroll Forms
+Quality and Your Job
+Quality is Everybody's Responsibility
+
+How do you contribute?
+
+Follow the processes you were trained to do
+
+If you identify a process being changed or done incorrectly, notify a manager immediately
+
+Only use approved materials
+
+If you identify expired materials, or different materials being used, notify a manager immediately
+
+Share improvement ideas
+
+If you have an idea to improve quality, efficiency, or customer satisfaction, share it with management or the quality team
+
+⚠️ Negative Actions and Effects
+✗
+Taking shortcuts → Creates nonconforming products
+✗
+Working in dirty, contaminated space → Introduces foreign objects or debris
+✗
+Speaking rudely to customers → Upsets customers, affects sales
+✗
+Using other employees' tools → Reduces efficiency
+✗
+Not maintaining your tools → Tools damage products, loss of money
+✗
+Forging documents → Makes materials untraceable, alters performance numbers
+✗
+Using expired materials → Creates nonconforming or unsafe products
+✗
+Incorrect storage of chemicals → Creates unsafe environment, potential damage to product
+Quality is Also "Safe & Clean"
+Safety Questions
+•
+Does your work create an unsafe environment or product?
+Slippery floors
+Hot surfaces
+Sharp edges
+•
+What can you do to keep the product safe for other employees and customers?
+Cleanliness Questions
+•
+Does your work create a dirty environment?
+Trash
+Dust
+Debris
+•
+What can you do to keep the product safe from FOD (Foreign Object Debris)?
+Final Checklist - Key Takeaways
+Understand the AS9100 Quality Management System and why AG Composites has the certification
+Know the quality policy and where it's located
+Understand the quality objectives (KPIs) and how they relate to your job
+Know where to find documents and forms needed for your job
+Understand how you contribute to the QMS
+Know what problems can happen if you don't follow the QMS
+Understand your role in making a safe product
+Know what FOD is and how it can affect the customer's product
+Training Purpose
+This training is essential for ensuring employees understand the critical role of travelers in AS9100 manufacturing environments. Travelers:
+Serve as the official manufacturing record for a product.
+Control how parts are built, inspected, documented, and accepted.
+🔴 IMPORTANT POINTS:
+No traveler = no authorized work.
+Travelers ensure processes are performed correctly and traceably.
+---
+1️⃣ What a Traveler Is
+#### Definition A traveler is an authorized, controlled document that accompanies a part or batch through every production step. It defines:
+Required process steps.
+The order of operations.
+Inspection and verification points.
+Documentation and signatures required.
+Material and traceability requirements.
+#### What the Traveler Is NOT:
+A suggestion.
+A memory aid.
+Optional paperwork.
+Something you "fill out later."
+🔴 IMPORTANT POINTS:
+The traveler is the process.
+Work must follow the traveler exactly.
+If it is not on the traveler, it is not authorized.
+The traveler always overrides memory or habit.
+---
+2️⃣ Why Travelers Are Required by AS9100
+#### AS9100 Expectations AS9100 requires organizations to:
+Plan and control production.
+Ensure repeatability of processes.
+Provide objective evidence of conformity.
+Maintain full traceability.
+#### Why Auditors Care Auditors use travelers to verify:
+Correct processes were followed.
+Required inspections occurred.
+Materials were approved and traceable.
+Work was performed by authorized personnel.
+Records were completed in real-time.
+🔴 IMPORTANT POINTS:
+Auditors trust travelers, not verbal explanations.
+Missing traveler steps = nonconformance.
+Incomplete travelers = failed control.
+Travelers are legal quality records.
+---
+3️⃣ What the Traveler Controls
+#### Process Control The traveler specifies:
+Each operation.
+Required tools or equipment.
+Process parameters.
+Sequence of steps.
+#### Quality Control The traveler defines:
+Inspection points.
+Hold points.
+Required measurements.
+Acceptance criteria.
+The traveler also captures:
+Material lot numbers.
+Batch numbers.
+Expiration dates.
+Serial or job numbers.
+🔴 IMPORTANT POINTS:
+Sequence matters.
+Skipping ahead is prohibited.
+Traceability must be recorded exactly.
+Inspection steps are mandatory.
+---
+4️⃣ Using the Traveler Correctly
+#### Before Starting Work
+Verify the correct traveler.
+Confirm revision and job number.
+Review all upcoming steps.
+Ensure required materials and tools are available.
+#### During Work
+Perform steps in order.
+Record data as work is performed.
+Stop if instructions are unclear.
+Do not proceed past hold points.
+#### After Completing a Step
+Verify work meets requirements.
+Sign or authenticate only after completion.
+Do not pre-sign or back-date.
+🔴 IMPORTANT POINTS:
+Read before doing.
+Record in real-time.
+Never work ahead of the traveler.
+Never sign before work is complete.
+---
+5️⃣ Signatures, Initials & Accountability
+#### What a Signature Means A signature or digital sign-off indicates:
+You performed the work.
+You followed the traveler.
+The work meets requirements.
+The recorded information is accurate.
+#### Signature Rules
+Only sign for your own work.
+Shared logins are prohibited.
+Signing is a legal attestation.
+🔴 IMPORTANT POINTS:
+A signature is a legal commitment.
+Never sign for someone else.
+Never allow someone else to sign for you.
+Signatures create accountability.
+---
+✅ Training Completion Requirements
+To complete this Facility Standard:
+✔ All sections reviewed.
+✔ Scenario-based quiz passed with 100%.
+✔ Employee acknowledgment signed.
+✔ Trainer or system sign-off recorded.
+⚠️ Traveler training is required before any production, inspection, or material handling activity.

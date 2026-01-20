@@ -3621,7 +3621,6 @@ export default function TrainingModule() {
         <h1 className="text-3xl font-bold mb-2" data-testid="text-module-title">
           {moduleData.title}
         </h1>
-        <p className="text-gray-600">{moduleData.description}</p>
       </div>
 
       {/* Training Material */}
@@ -3655,6 +3654,14 @@ export default function TrainingModule() {
           )}
           {moduleData.title.includes('Shut Down') && (
             <ShutDownProceduresContent />
+          )}
+
+          {/* Custom/AI-generated content */}
+          {moduleData.contentHtml && (
+            <div 
+              className="prose prose-blue max-w-none bg-white rounded-lg p-6"
+              dangerouslySetInnerHTML={{ __html: moduleData.contentHtml }}
+            />
           )}
 
           {/* Download PDF Option */}

@@ -34,12 +34,21 @@ router.get('/:moldId', async (req: Request, res: Response) => {
 // Create new mold
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const result = insertMoldSchema.parse(req.body);
-    const mold = await storage.createMold(result);
+    console.log('Mold creation request body:', JSON.stringify(req.body, null, 2));
+    const result = insertMoldSchema.safeParse(req.body);
+    if (!result.success) {
+      console.error('Mold validation errors:', JSON.stringify(result.error.issues, null, 2));
+      res.status(400).json({ 
+        error: 'Invalid mold data',
+        details: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')
+      });
+      return;
+    }
+    const mold = await storage.createMold(result.data);
     res.json(mold);
   } catch (error) {
     console.error('Mold creation error:', error);
-    res.status(400).json({ error: 'Invalid mold data' });
+    res.status(400).json({ error: 'Failed to create mold' });
   }
 });
 

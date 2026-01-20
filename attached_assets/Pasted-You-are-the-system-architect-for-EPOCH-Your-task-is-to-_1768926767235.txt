@@ -1,0 +1,72 @@
+You are the system architect for EPOCH. Your task is to DESIGN and IMPLEMENT a unified, future-proof order priority model that:
+
+GOALS (ALL REQUIRED):
+11. Default behavior: “normal” orders always sort to the bottom of queues unless explicitly elevated
+2. Manual reprioritization by admins must remain possible at any time
+3. Automatic reprioritization based on changing conditions (due date, urgency, overdue status) must remain possible
+4. No derived/calculated priority values should be silently persisted
+5. The system must be auditable and deterministic
+
+CURRENT PROBLEMS TO FIX:
+- priority_score defaults to 50 in schema and storage
+- Multiple competing priority systems exist
+- Calculated values (50, 30, 10, etc.) are being stored as authoritative state
+- Orders jump the queue unexpectedly
+
+REQUIRED ARCHITECTURE:
+
+1. DATA MODEL (PERSISTED)
+Define and use ONLY the following persisted fields for priority:
+- urgency (enum: low, medium, high, critical)
+- manual_priority_override (integer, nullable)
+- manual_priority_reason (text, nullable)
+- due_date (date)
+- priority_source (enum: default | urgency | manual | system)
+
+Do NOT persist any calculated priority score.
+
+2. EFFECTIVE PRIORITY (COMPUTED ONLY)
+Create a single function `computeEffectivePriority(order)` that:
+- Always prefers manual_priority_override when present
+- Elevates priority for urgency and overdue conditions
+- Uses due date pressure as a secondary factor
+- Returns 9999 for all default/normal orders
+- NEVER writes its result to the database
+
+3. QUEUE INTEGRATION
+Modify all production / department queues to:
+- Sort by computeEffectivePriority(order) ASC
+- Use due_date and created_at only as tie-breakers
+- Never read priority_score directly
+
+4. MANUAL REPRIORITIZATION
+Ensure admins can:
+- Set manual_priority_override and reason
+- Clear the override
+- See who changed it and when
+
+5. MIGRATION PLAN
+Provide a safe migration that:
+- Stops writing priority_score everywhere
+- Preserves manual overrides
+- Normalizes existing data without changing intent
+- Prevents future accidental persistence of derived values
+
+6. SAFETY GUARDRAILS
+Add:
+- Centralized priority computation (no duplicates)
+- Optional DB constraint or lint rule preventing writes to priority_score
+- Inline comments explaining the priority contract
+
+OUTPUT REQUIREMENTS:
+- Clear section headers
+- Schema diffs (before/after)
+- TypeScript function for computeEffectivePriority
+- Updated queue sort example
+- Migration steps (no destructive actions)
+- Explicit confirmation that reprioritization is still fully supported
+
+IMPORTANT:
+This is a correctness-first architecture pass. Do not optimize prematurely.
+Do not introduce new numeric “defaults” like 50.
+Do not leave multiple priority systems in place.

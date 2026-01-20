@@ -3251,29 +3251,23 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Order ${orderId} not found` });
     }
 
-    // Calculate priority score based on urgency level
-    // Lower score = higher priority. Urgent/critical gets lowest score to move to top
-    const priorityScores = {
-      critical: 1,     // Highest priority - moves to very top
-      high: 1,         // Also highest - Urgent orders
-      medium: 5000,    // Medium priority
-      low: 9999,       // Lowest priority
-    };
+    // UNIFIED PRIORITY MODEL: Only persist urgency state, not calculated priority
+    // Priority is computed at runtime by computeEffectivePriority()
+    const user = (req as any).user;
+    const username = user?.username || user?.email || 'unknown';
 
-    const priorityScore = priorityScores[urgency as keyof typeof priorityScores];
-
-    // Update the order with new urgency and priority score
     await db
       .update(allOrders)
       .set({
         urgency: urgency,
-        priorityScore: priorityScore,
         isManualUrgency: true, // Mark as manually set
+        prioritySource: 'urgency', // Track that priority comes from urgency setting
+        // NOTE: priorityScore is NOT updated - use computeEffectivePriority() for sorting
         updatedAt: new Date(),
       })
       .where(eq(allOrders.orderId, orderId));
 
-    console.log(`✅ Order ${orderId} updated: urgency=${urgency}, priorityScore=${priorityScore}`);
+    console.log(`✅ Order ${orderId} updated: urgency=${urgency}, prioritySource=urgency (priority computed at runtime)`);
 
     // Fetch updated order to return
     const updatedOrder = await storage.getOrderById(orderId);
@@ -3291,6 +3285,65 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Admin Panel - Set manual priority override for an order
+// UNIFIED PRIORITY MODEL: This is the ONLY way to manually reprioritize orders
+router.put(
+  '/:orderId/priority-override',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const { priority, reason } = req.body;
+      const user = (req as any).user;
+      const username = user?.username || user?.email || 'unknown';
+
+      // Validate priority (1-9999, where lower = higher priority)
+      if (priority !== null && priority !== undefined) {
+        if (typeof priority !== 'number' || priority < 1 || priority > 9999) {
+          return res.status(400).json({ 
+            error: 'Priority must be a number between 1 (highest) and 9999 (lowest), or null to clear' 
+          });
+        }
+      }
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+
+      // Update the order with manual priority override
+      await db
+        .update(allOrders)
+        .set({
+          manualPriorityOverride: priority || null,
+          manualPriorityReason: reason || null,
+          manualPrioritySetBy: priority ? username : null,
+          manualPrioritySetAt: priority ? new Date() : null,
+          prioritySource: priority ? 'manual' : 'default',
+          updatedAt: new Date(),
+        })
+        .where(eq(allOrders.orderId, orderId));
+
+      console.log(`🎯 Order ${orderId}: Manual priority ${priority ? `set to ${priority}` : 'cleared'} by ${username}`);
+
+      const updatedOrder = await storage.getOrderById(orderId);
+      res.json({
+        success: true,
+        order: updatedOrder,
+        message: priority 
+          ? `Order ${orderId} manual priority set to ${priority}` 
+          : `Order ${orderId} manual priority cleared`,
+      });
+    } catch (error) {
+      console.error(`❌ PUT /${req.params.orderId}/priority-override error:`, error);
+      res.status(500).json({ 
+        error: 'Failed to update order priority',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
 
 // Admin Panel - Get audit logs for a specific order
 router.get(

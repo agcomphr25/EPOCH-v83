@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { storage } from '../../storage';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+import { computeEffectivePriority, getEffectivePriorityScore, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
 
 const router = Router();
 
@@ -109,7 +110,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
       '🏭 AUTO-POPULATE: Starting production queue auto-population...'
     );
 
-    // Get all finalized orders with stock models (excluding "None" and "no stock" variants)
+    // UNIFIED PRIORITY MODEL: Include all priority fields for computeEffectivePriority()
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
@@ -121,6 +122,10 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.status,
         o.features,
         o.created_at as createdAt,
+        o.urgency,
+        o.is_manual_urgency as isManualUrgency,
+        o.manual_priority_override as manualPriorityOverride,
+        o.priority_source as prioritySource,
         CASE 
           WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' OR LOWER(o.model_id) = 'no stock' OR LOWER(o.model_id) = 'no_stock' THEN false
           ELSE true
@@ -154,35 +159,27 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
           (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        // Calculate priority score based on due date urgency
-        let priorityScore = 1000; // Base priority
-
-        // Due date urgency (higher score = higher priority)
-        if (daysToDue < 0)
-          priorityScore += 500; // Overdue orders get highest priority
-        else if (daysToDue <= 7)
-          priorityScore += 300; // Due within a week
-        else if (daysToDue <= 14)
-          priorityScore += 200; // Due within 2 weeks
-        else if (daysToDue <= 30) priorityScore += 100; // Due within a month
-
-        // Entry order tiebreaker (earlier entries get higher priority for same due dates)
-        const entryOrderBonus = Math.max(0, 1000 - index); // First order gets 1000, second gets 999, etc.
-        priorityScore += entryOrderBonus;
+        // UNIFIED PRIORITY MODEL: Use computeEffectivePriority() for runtime calculation
+        const priorityResult = computeEffectivePriority({
+          dueDate: order.dueDate,
+          urgency: order.urgency,
+          isManualUrgency: order.isManualUrgency,
+          manualPriorityOverride: order.manualPriorityOverride,
+        });
 
         return {
           ...order,
-          priorityScore,
+          priorityScore: priorityResult.score, // COMPUTED, not persisted
+          prioritySource: priorityResult.source,
+          priorityReason: priorityResult.reason,
           daysToDue,
           queuePosition: index + 1,
         };
       }
     );
 
-    // Sort by priority score (highest first)
-    ordersWithPriority.sort(
-      (a: any, b: any) => b.priorityScore - a.priorityScore
-    );
+    // UNIFIED PRIORITY MODEL: Sort using shared compareOrderPriority comparator
+    ordersWithPriority.sort(compareOrderPriority);
 
     // Update orders to P1 Production Queue department with priority scores
     const updatedOrders = [];
@@ -345,6 +342,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     await autoMoveInvalidStockModelOrders(storage);
 
     // Schema-safe query: avoid referencing columns that may not exist in all environments
+    // UNIFIED PRIORITY MODEL: Include all priority-related fields for computeEffectivePriority()
     const queueQuery = `
       SELECT 
         o.order_id as orderId,
@@ -357,9 +355,10 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.status,
         o.customer_id as customerId,
         o.features,
-        COALESCE(o.priority_score, 9999) as priorityScore,
         o.urgency,
         o.is_manual_urgency as isManualUrgency,
+        o.manual_priority_override,
+        o.priority_source as prioritySource,
         'ready' as productionReadinessStatus,
         0 as queuePosition,
         o.created_at as createdAt,
@@ -377,9 +376,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
       
       ORDER BY 
-        priorityScore ASC,
-        dueDate ASC,
-        createdAt ASC
+        o.due_date ASC,
+        o.created_at ASC
     `;
 
     const queueResult = await pool.query(queueQuery);
@@ -416,6 +414,14 @@ router.get('/prioritized', async (req: Request, res: Response) => {
                      : 'normal';
       }
 
+      // UNIFIED PRIORITY MODEL: Compute priority at runtime, never read from DB
+      const priorityResult = computeEffectivePriority({
+        dueDate: order.duedate,
+        urgency: order.urgency,
+        isManualUrgency: order.ismanualurgency,
+        manualPriorityOverride: order.manual_priority_override,
+      });
+
       return {
         orderId: order.orderid,
         fbOrderNumber: order.fbordernumber,
@@ -428,14 +434,24 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         customerId: order.customerid,
         customerName: order.customername,
         features: order.features,
-        priorityScore: order.priorityscore || 1000 - index,
+        priorityScore: priorityResult.score, // COMPUTED, not from DB
+        prioritySource: priorityResult.source,
+        priorityReason: priorityResult.reason,
         urgency: order.urgency,
         isManualUrgency: order.ismanualurgency,
-        queuePosition: index + 1,
+        queuePosition: index + 1, // Will be re-assigned after sorting
         daysToDue,
         isOverdue: daysToDue < 0,
         urgencyLevel,
       };
+    });
+
+    // UNIFIED PRIORITY MODEL: Sort using shared compareOrderPriority comparator
+    enhancedQueue.sort(compareOrderPriority);
+
+    // Re-assign queue positions after sorting
+    enhancedQueue.forEach((order: any, idx: number) => {
+      order.queuePosition = idx + 1;
     });
 
     console.log(
@@ -557,7 +573,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
       ? poItemsResult
       : poItemsResult.rows || [];
 
-    // Calculate priority metrics for each PO item
+    // UNIFIED PRIORITY MODEL: Use computeEffectivePriority() for runtime calculation
     const now = new Date();
     const enhancedPOItems = poItems.map((item: any) => {
       const dueDate = new Date(item.dueDate || item.createdAt);
@@ -565,21 +581,19 @@ router.get('/po-items', async (req: Request, res: Response) => {
         (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      // Calculate priority score based on due date urgency
-      let priorityScore = 1000; // Base priority
-
-      // Due date urgency (higher score = higher priority)
-      if (daysToDue < 0)
-        priorityScore += 500; // Overdue orders get highest priority
-      else if (daysToDue <= 7)
-        priorityScore += 300; // Due within a week
-      else if (daysToDue <= 14)
-        priorityScore += 200; // Due within 2 weeks
-      else if (daysToDue <= 30) priorityScore += 100; // Due within a month
+      // Use centralized priority calculation
+      const priorityResult = computeEffectivePriority({
+        dueDate: item.dueDate,
+        urgency: item.urgency,
+        isManualUrgency: item.isManualUrgency,
+        manualPriorityOverride: item.manualPriorityOverride,
+      });
 
       return {
         ...item,
-        priorityScore,
+        priorityScore: priorityResult.score, // COMPUTED, not persisted
+        prioritySource: priorityResult.source,
+        priorityReason: priorityResult.reason,
         daysToDue,
         isOverdue: daysToDue < 0,
         urgencyLevel:

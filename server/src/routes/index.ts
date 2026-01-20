@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { softAuth, authenticateToken, sessionAwareAuth } from '../../middleware/auth';
+import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -4219,13 +4220,13 @@ export function registerRoutes(app: Express): Server {
             continue;
           }
 
-          // Calculate priority score based on due date urgency
-          const dueDate = new Date(po.expectedDelivery || po.poDate);
-          const today = new Date();
-          const daysUntilDue = Math.ceil(
-            (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
+          // UNIFIED PRIORITY MODEL: Use computeEffectivePriority() for runtime calculation
+          const priorityResult = computeEffectivePriority({
+            dueDate: po.expectedDelivery || po.poDate,
+            urgency: null,
+            isManualUrgency: false,
+            manualPriorityOverride: null,
+          });
 
           p1LayupOrders.push({
             id: `p1-${po.id}-${item.id}`,
@@ -4237,7 +4238,9 @@ export function registerRoutes(app: Express): Server {
             status: 'PENDING',
             department: 'Layup',
             currentDepartment: 'Layup',
-            priorityScore: priorityScore,
+            priorityScore: priorityResult.score, // COMPUTED, not persisted
+            prioritySource: priorityResult.source,
+            priorityReason: priorityResult.reason,
             dueDate: po.expectedDelivery,
             source: 'production_order' as const,
             poId: po.id,

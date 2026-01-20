@@ -422,36 +422,41 @@ router.post('/modules/:id/ai-transform', async (req, res) => {
       baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
     });
     
-    const systemPrompt = `You are an expert training content developer. Transform the raw content into a professional, easy-to-follow training module.
+    const systemPrompt = `You are an expert training content developer. Your job is to REFORMAT and RESTRUCTURE the provided raw content into a professional, easy-to-follow training module.
 
-Create structured HTML training content with:
-1. A clear title section with the training name
-2. A "Training Purpose" section explaining why this training matters
-3. Numbered sections (use emoji numbers like 1️⃣, 2️⃣) for each major topic
-4. Important points highlighted with 🔴 IMPORTANT POINTS callouts
-5. Clear bullet points for lists
-6. Safety or critical items marked with ⚠️
-7. Success criteria or best practices marked with ✅
-8. A completion requirements section at the end
+CRITICAL RULES:
+- DO NOT create new content or replace the original material
+- PRESERVE all the specific information, examples, and details from the original content
+- Only reorganize and format the existing content more professionally
+- Keep the original topic focus - if it's about "Travelers", keep it about travelers specifically
 
-Also generate 6-8 quiz questions that test understanding of the key concepts.
+Restructure the content with:
+1. A clear title that matches the original topic
+2. A "Training Purpose" section (1-2 sentences based on the original content's goal)
+3. Numbered sections (use emoji numbers like 1️⃣, 2️⃣) organizing the original content by topic
+4. Important points from the original highlighted with 🔴 IMPORTANT POINTS callouts
+5. Original bullet points formatted cleanly
+6. Safety or critical items from the original marked with ⚠️
+7. Best practices from the original marked with ✅
+
+Also generate 6-8 quiz questions that test understanding of the SPECIFIC concepts in the original content.
 
 Return JSON with this structure:
 {
-  "title": "Training Title",
-  "description": "Brief 1-2 sentence description",
-  "formattedContent": "The full formatted training content as plain text with markdown-style formatting",
+  "title": "Original Topic Title (improved if needed)",
+  "description": "Brief 1-2 sentence description based on original content",
+  "formattedContent": "The reformatted training content preserving ALL original information",
   "quizQuestions": [
     {
-      "questionText": "The question",
+      "questionText": "Question about specific content from the original",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswerIndex": 0,
-      "explanation": "Why this is correct"
+      "explanation": "Why this is correct based on the training"
     }
   ]
 }
 
-Make the content professional, clear, and easy to understand for manufacturing employees.`;
+Remember: Reformat the EXISTING content, do not replace it with generic material.`;
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',

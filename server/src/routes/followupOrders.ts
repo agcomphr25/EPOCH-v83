@@ -564,15 +564,14 @@ router.post('/', async (req, res) => {
     });
 
     // MANDATORY OUTCOME HANDLING: Every finalization must have a recorded email outcome
-    // Fail fast if we receive an unknown outcome
+    // Log error for unknown outcomes but treat as 'failed' - order creation still succeeded
     const validOutcomes = ['sent', 'skipped', 'failed'] as const;
     if (!validOutcomes.includes(emailResult.outcome)) {
-      console.error(`❌ [FINALIZE-FAIL] Unknown email outcome for ${order.orderId}: ${emailResult.outcome}`);
-      return res.status(500).json({
-        success: false,
-        error: `Order finalization failed: Unknown email outcome "${emailResult.outcome}"`,
-        followupOrder,
-      });
+      const originalOutcome = emailResult.outcome;
+      console.error(`❌ [FINALIZE] Unknown email outcome for ${order.orderId}: ${originalOutcome} - treating as failed`);
+      // Treat unknown outcome as failed and continue to success response
+      emailResult.outcome = 'failed';
+      emailResult.error = `Unknown email outcome: ${originalOutcome}`;
     }
 
     if (emailResult.outcome === 'sent') {
@@ -1774,15 +1773,20 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
         newFollowupOrderId: newFollowupOrder.id,
       });
     } else {
+      // Email failed - record the error but return success (email failure is a side-effect)
+      // The followup order was created successfully - only notification failed
       await storage.updateFollowupOrder(newFollowupOrder.id, {
         emailError: emailResult.error,
       });
 
-      res.status(500).json({
-        success: false,
-        message: 'Failed to send email.',
+      console.log(`⚠️ [SEND-UPDATED] Order updated successfully but email failed: ${emailResult.error}`);
+      res.json({
+        success: true,
+        message: 'Order updated successfully but email failed to send.',
         emailOutcome: 'failed',
-        error: emailResult.error,
+        emailSent: false,
+        emailError: emailResult.error,
+        newFollowupOrderId: newFollowupOrder.id,
       });
     }
   } catch (error) {

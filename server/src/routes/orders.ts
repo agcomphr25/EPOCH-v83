@@ -886,22 +886,13 @@ router.post('/finalized', async (req: Request, res: Response) => {
           // Email was skipped due to deduplication - reason must be provided
           console.log(`⏭️ Signature email skipped for order ${order.orderId} (reason: ${emailResult.reason || 'unknown'})`);
         } else {
-          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
-          // Order is created but marked as requiring manual intervention
+          // Email failed - record the failure but DO NOT abort finalization
+          // Order is successfully created; email is a side-effect
           await storage.updateFollowupOrder(followupOrder.id, {
             emailError: emailResult.error,
           });
           console.error(`❌ Failed to send signature email for order ${order.orderId}: ${emailResult.error}`);
-          
-          // Return HTTP 500 to indicate finalization failure
-          return res.status(500).json({
-            success: false,
-            error: `Order created but email failed: ${emailResult.error}`,
-            order, // Return order data so it can be tracked
-            emailOutcome: 'failed',
-            emailError: emailResult.error,
-            message: 'Order finalization failed due to email delivery failure. Please resend the confirmation email manually.',
-          });
+          // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       } else {
         // Order without stock - send thank you email (no signature required)
@@ -959,16 +950,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             message: `Failed thank you email for ${order.orderId}: ${thankYouResult.error}`,
             sentAt: new Date(),
           });
-          
-          // FAIL-FAST: Email failed - abort finalization and return HTTP 500
-          return res.status(500).json({
-            success: false,
-            error: `Order created but thank you email failed: ${thankYouResult.error}`,
-            order, // Return order data so it can be tracked
-            emailOutcome: 'failed',
-            emailError: thankYouResult.error,
-            message: 'Order finalization failed due to email delivery failure.',
-          });
+          // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       }
     } catch (sendError: any) {
@@ -1004,15 +986,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         }
       }
       
-      // FAIL-FAST: Return HTTP 500 for any exception in email flow
-      return res.status(500).json({
-        success: false,
-        error: `Order created but email preparation failed: ${errorMessage}`,
-        order, // Return order data so it can be tracked
-        emailOutcome: 'failed',
-        emailError: errorMessage,
-        message: 'Order finalization failed due to email error. Please resend the confirmation email manually.',
-      });
+      // Email flow failed - but order was created successfully
+      // Continue to success response with emailOutcome='failed' for frontend to display warning
     }
     
     // Log audit event for order creation

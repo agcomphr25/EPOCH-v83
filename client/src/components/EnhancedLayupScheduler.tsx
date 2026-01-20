@@ -408,8 +408,9 @@ export default function EnhancedLayupScheduler() {
           await saveMold({
             moldId,
             modelName: newMold.moldName,
-            instanceNumber: i,
-            multiplier: newMold.multiplier,
+            stockModels: [],
+            instanceNumber: Number(i),
+            multiplier: Number(newMold.multiplier),
             isActive: true,
             enabled: true,
           });
@@ -424,8 +425,9 @@ export default function EnhancedLayupScheduler() {
         await saveMold({
           moldId,
           modelName: newMold.moldName,
-          instanceNumber: newMold.instanceNumber,
-          multiplier: newMold.multiplier,
+          stockModels: [],
+          instanceNumber: Number(newMold.instanceNumber),
+          multiplier: Number(newMold.multiplier),
           isActive: true,
           enabled: true,
         });

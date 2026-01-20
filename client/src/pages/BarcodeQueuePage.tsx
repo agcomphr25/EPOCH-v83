@@ -32,6 +32,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Scan,
   ArrowLeft,
   ArrowRight,
@@ -951,103 +957,115 @@ export default function BarcodeQueuePage() {
                                     </Badge>
                                   </div>
 
-                                  {/* Bottom Metal and LOP/Fill Badges */}
-                                  <div className="flex gap-2 flex-wrap">
-                                    {(() => {
-                                      const bottomMetal = order.features?.bottom_metal;
-                                      const showBottomMetal =
-                                        bottomMetal &&
-                                        typeof bottomMetal === 'string' &&
-                                        bottomMetal.toLowerCase().includes('adl');
-                                      if (showBottomMetal) {
-                                        return (
-                                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold text-xs">
-                                            {bottomMetal.replace(/_/g, ' ').toUpperCase()}
-                                          </Badge>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                    {(() => {
-                                      const lop = order.features?.length_of_pull;
-                                      const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
-                                      const lopMatch = hasLopAdjustment ? lop.match(/lop_adj_([\d.]+)/) : null;
-                                      const lopValue = lopMatch ? lopMatch[1] : null;
-                                      
-                                      const fill = order.features?.fill;
-                                      const hasFill = fill && fill !== 'no_fill' && fill !== 'none';
-                                      
-                                      if (hasLopAdjustment || hasFill) {
-                                        return (
-                                          <div className="flex gap-1">
-                                            {hasLopAdjustment && (
-                                              <Badge className="bg-green-100 text-green-800 border-green-200 font-semibold text-xs">
-                                                LOP {lopValue}
-                                              </Badge>
-                                            )}
-                                            {hasFill && (
-                                              <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
-                                                Fill
-                                              </Badge>
-                                            )}
+                                  {/* Collapsible Details */}
+                                  <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="details" className="border-none">
+                                      <AccordionTrigger className="py-1 text-xs text-gray-500 hover:no-underline">
+                                        Details
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pb-0">
+                                        <div className="space-y-2">
+                                          {/* Bottom Metal and LOP/Fill Badges */}
+                                          <div className="flex gap-2 flex-wrap">
+                                            {(() => {
+                                              const bottomMetal = order.features?.bottom_metal;
+                                              const showBottomMetal =
+                                                bottomMetal &&
+                                                typeof bottomMetal === 'string' &&
+                                                bottomMetal.toLowerCase().includes('adl');
+                                              if (showBottomMetal) {
+                                                return (
+                                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold text-xs">
+                                                    {bottomMetal.replace(/_/g, ' ').toUpperCase()}
+                                                  </Badge>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
+                                            {(() => {
+                                              const lop = order.features?.length_of_pull;
+                                              const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
+                                              const lopMatch = hasLopAdjustment ? lop.match(/lop_adj_([\d.]+)/) : null;
+                                              const lopValue = lopMatch ? lopMatch[1] : null;
+                                              
+                                              const fill = order.features?.fill;
+                                              const hasFill = fill && fill !== 'no_fill' && fill !== 'none';
+                                              
+                                              if (hasLopAdjustment || hasFill) {
+                                                return (
+                                                  <div className="flex gap-1">
+                                                    {hasLopAdjustment && (
+                                                      <Badge className="bg-green-100 text-green-800 border-green-200 font-semibold text-xs">
+                                                        LOP {lopValue}
+                                                      </Badge>
+                                                    )}
+                                                    {hasFill && (
+                                                      <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
+                                                        Fill
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
                                           </div>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
 
-                                  {order.customerPO && (
-                                    <div className="text-xs text-gray-600">
-                                      PO: {order.customerPO}
-                                    </div>
-                                  )}
+                                          {order.customerPO && (
+                                            <div className="text-xs text-gray-600">
+                                              PO: {order.customerPO}
+                                            </div>
+                                          )}
 
-                                  {order.fbOrderNumber && (
-                                    <div className="text-xs text-gray-600">
-                                      FB: {order.fbOrderNumber}
-                                    </div>
-                                  )}
+                                          {order.fbOrderNumber && (
+                                            <div className="text-xs text-gray-600">
+                                              FB: {order.fbOrderNumber}
+                                            </div>
+                                          )}
 
-                                  {/* Action Buttons */}
-                                  <div className="flex gap-1 pt-2">
-                                    <Link
-                                      href={`/order-entry?draft=${order.orderId}`}
-                                    >
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-6 w-6 p-0"
-                                        title="View/Edit Order"
-                                      >
-                                        <Edit className="h-3 w-3" />
-                                      </Button>
-                                    </Link>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 ml-1"
-                                      title="View Sales Order"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSalesOrderView(order.orderId);
-                                      }}
-                                    >
-                                      <FileText className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleKickbackClick(order.orderId);
-                                      }}
-                                      title="Report Kickback"
-                                      className="h-6 w-6 p-0 ml-1"
-                                    >
-                                      <TrendingDown className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                          {/* Action Buttons */}
+                                          <div className="flex gap-1 pt-2">
+                                            <Link
+                                              href={`/order-entry?draft=${order.orderId}`}
+                                            >
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 w-6 p-0"
+                                                title="View/Edit Order"
+                                              >
+                                                <Edit className="h-3 w-3" />
+                                              </Button>
+                                            </Link>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-6 w-6 p-0 ml-1"
+                                              title="View Sales Order"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSalesOrderView(order.orderId);
+                                              }}
+                                            >
+                                              <FileText className="w-3 h-3" />
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleKickbackClick(order.orderId);
+                                              }}
+                                              title="Report Kickback"
+                                              className="h-6 w-6 p-0 ml-1"
+                                            >
+                                              <TrendingDown className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
+                                  </Accordion>
                                 </div>
                               </div>
                             </div>

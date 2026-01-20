@@ -133,7 +133,9 @@ export function getOperationalWeekEnd(
   operationalYear: number
 ): Date {
   const weekStart = getOperationalWeekStart(operationalWeekNumber, operationalYear);
-  return addDays(weekStart, 6);
+  const weekEnd = addDays(weekStart, 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  return weekEnd;
 }
 
 /**

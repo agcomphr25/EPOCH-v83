@@ -1785,8 +1785,8 @@ export default function ProductionQueueManager() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setSelectedWeekOffset(Math.max(0, selectedWeekOffset - 1))}
-                  disabled={selectedWeekOffset === 0}
+                  onClick={() => setSelectedWeekOffset(Math.max(-1, selectedWeekOffset - 1))}
+                  disabled={selectedWeekOffset === -1}
                   data-testid="button-prev-week"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1807,7 +1807,7 @@ export default function ProductionQueueManager() {
                     })()}
                   </p>
                   <p className="text-xs text-blue-600 mt-1">
-                    {selectedWeekOffset === 0 ? 'Next week' : selectedWeekOffset === 1 ? 'Week after next' : `${selectedWeekOffset + 1} weeks ahead`}
+                    {selectedWeekOffset === -1 ? 'This week' : selectedWeekOffset === 0 ? 'Next week' : selectedWeekOffset === 1 ? 'Week after next' : `${selectedWeekOffset + 1} weeks ahead`}
                   </p>
                 </div>
                 <Button

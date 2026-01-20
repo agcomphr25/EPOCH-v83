@@ -5492,11 +5492,20 @@ export default function LayupScheduler() {
                       addDays(currentDate, -7),
                       { weekStartsOn: 1 }
                     );
-                    setCurrentDate(prevWeekStart);
+                    // Only allow navigation back to current week, not past it
+                    const todayWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+                    if (prevWeekStart >= todayWeekStart) {
+                      setCurrentDate(prevWeekStart);
+                    }
                   } else {
                     setCurrentDate((prev) => addDays(prev, -1));
                   }
                 }}
+                disabled={
+                  viewType === 'week' &&
+                  startOfWeek(currentDate, { weekStartsOn: 1 }).getTime() <=
+                    startOfWeek(new Date(), { weekStartsOn: 1 }).getTime()
+                }
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>

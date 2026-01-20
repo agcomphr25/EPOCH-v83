@@ -97,6 +97,81 @@ import {
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Convert plain text content to formatted HTML with professional styling
+function convertContentToHtml(content: string): string {
+  if (!content) return '';
+  
+  let html = content;
+  
+  // Escape HTML entities first
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  
+  // Convert headers with professional styling
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<div class="text-center border-b-2 border-blue-200 pb-6 mb-8"><h1 class="text-3xl font-bold text-blue-900 mb-2">$1</h1></div>');
+  
+  // Convert numbered section headers (1️⃣, 2️⃣, etc.)
+  html = html.replace(/^([0-9]️⃣|1️⃣0️⃣)\s*(.+)$/gm, 
+    '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1 $2</h2>');
+  
+  // Convert bold text (**text** or __text__)
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+  
+  // Convert italic text (*text* or _text_)
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+  
+  // Convert bullet points (-, *, •) at start of lines
+  html = html.replace(/^[-*•]\s+(.+)$/gm, '<li class="text-lg">$1</li>');
+  
+  // Convert numbered lists (1. 2. 3. etc)
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="text-lg list-decimal-marker">$1</li>');
+  
+  // Wrap consecutive <li> elements in styled lists
+  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, (match) => {
+    if (match.includes('list-decimal-marker')) {
+      return '<ol class="list-decimal list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ol>';
+    }
+    return '<ul class="list-disc list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ul>';
+  });
+  
+  // Convert red important points section header
+  html = html.replace(/^🔴\s*IMPORTANT POINTS$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><h3 class="text-lg font-bold text-red-900">🔴 IMPORTANT POINTS</h3></div>');
+  
+  // Convert important callouts with professional colored boxes
+  html = html.replace(/^📌\s*(.+)$/gm, 
+    '<div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-blue-900">📌 $1</p></div>');
+  html = html.replace(/^⚠️\s*(.+)$/gm, 
+    '<div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-yellow-900">⚠️ $1</p></div>');
+  html = html.replace(/^✅\s*(.+)$/gm, 
+    '<div class="bg-green-50 border-l-4 border-green-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-green-900">✅ $1</p></div>');
+  html = html.replace(/^❌\s*(.+)$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-red-900">❌ $1</p></div>');
+  html = html.replace(/^💡\s*(.+)$/gm, 
+    '<div class="bg-purple-50 border-l-4 border-purple-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-purple-900">💡 $1</p></div>');
+  html = html.replace(/^🔑\s*(.+)$/gm, 
+    '<div class="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-orange-900">🔑 $1</p></div>');
+  html = html.replace(/^🔒\s*(.+)$/gm, 
+    '<div class="bg-gray-100 border-l-4 border-gray-600 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-gray-900">🔒 $1</p></div>');
+  html = html.replace(/^(⭐|📋|🎯)\s*(.+)$/gm, 
+    '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$1 $2</p></div>');
+  
+  // Convert remaining newlines to paragraphs with proper styling
+  const paragraphs = html.split(/\n\n+/);
+  html = paragraphs.map(p => {
+    // Don't wrap if already wrapped in HTML tags
+    if (p.trim().startsWith('<')) return p;
+    // Convert single newlines to <br> within paragraphs
+    const withBreaks = p.replace(/\n/g, '<br/>');
+    return `<p class="text-lg leading-relaxed mb-4">${withBreaks}</p>`;
+  }).join('\n');
+  
+  return `<div class="bg-white rounded-lg p-8 shadow-sm space-y-6 text-gray-800">${html}</div>`;
+}
+
 // Helper function to grant P2 certification capability to employee
 async function grantP2CertificationCapability(
   employeeId: number,
@@ -277,6 +352,42 @@ router.patch('/modules/:id', async (req, res) => {
     res.json(updatedModule);
   } catch (error: any) {
     console.error('Error updating training module:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Regenerate contentHtml for a training module from its content field
+router.post('/modules/:id/regenerate-html', async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Get the module
+    const [module] = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Training module not found' });
+    }
+    
+    if (!module.content) {
+      return res.status(400).json({ error: 'Module has no content to convert' });
+    }
+    
+    // Regenerate contentHtml using the converter
+    const newContentHtml = convertContentToHtml(module.content);
+    
+    // Update the module
+    const [updatedModule] = await db
+      .update(trainingModules)
+      .set({ contentHtml: newContentHtml, updatedAt: new Date() })
+      .where(eq(trainingModules.id, moduleId))
+      .returning();
+    
+    res.json(updatedModule);
+  } catch (error: any) {
+    console.error('Error regenerating content HTML:', error);
     res.status(500).json({ error: error.message });
   }
 });

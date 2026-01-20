@@ -70,21 +70,31 @@ function convertContentToHtml(content: string): string {
     return '<ul class="list-disc list-inside space-y-2 ml-4 text-lg my-4">' + match + '</ul>';
   });
   
+  // Convert numbered section headers (1️⃣, 2️⃣, etc.)
+  html = html.replace(/^([0-9]️⃣|1️⃣0️⃣)\s*(.+)$/gm, 
+    '<h2 class="text-2xl font-bold text-blue-900 border-b-2 border-blue-200 pb-2 mt-8 mb-4">$1 $2</h2>');
+  
+  // Convert red important points section
+  html = html.replace(/^🔴\s*IMPORTANT POINTS$/gm, 
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><h3 class="text-lg font-bold text-red-900 mb-2">🔴 IMPORTANT POINTS</h3>');
+  
   // Convert important callouts with professional colored boxes
   html = html.replace(/^📌\s*(.+)$/gm, 
-    '<div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-blue-900">$1</p></div>');
+    '<div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-blue-900">📌 $1</p></div>');
   html = html.replace(/^⚠️\s*(.+)$/gm, 
-    '<div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-yellow-900">$1</p></div>');
+    '<div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-yellow-900">⚠️ $1</p></div>');
   html = html.replace(/^✅\s*(.+)$/gm, 
-    '<div class="bg-green-50 border-l-4 border-green-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-green-900">$1</p></div>');
+    '<div class="bg-green-50 border-l-4 border-green-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-green-900">✅ $1</p></div>');
   html = html.replace(/^❌\s*(.+)$/gm, 
-    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-red-900">$1</p></div>');
+    '<div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-red-900">❌ $1</p></div>');
   html = html.replace(/^💡\s*(.+)$/gm, 
-    '<div class="bg-purple-50 border-l-4 border-purple-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-purple-900">$1</p></div>');
+    '<div class="bg-purple-50 border-l-4 border-purple-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-purple-900">💡 $1</p></div>');
   html = html.replace(/^🔑\s*(.+)$/gm, 
-    '<div class="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-orange-900">$1</p></div>');
+    '<div class="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-orange-900">🔑 $1</p></div>');
+  html = html.replace(/^🔒\s*(.+)$/gm, 
+    '<div class="bg-gray-100 border-l-4 border-gray-600 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-gray-900">🔒 $1</p></div>');
   html = html.replace(/^(⭐|📋|🎯)\s*(.+)$/gm, 
-    '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$2</p></div>');
+    '<div class="bg-indigo-50 border-l-4 border-indigo-500 p-5 rounded-r-lg my-4"><p class="text-lg font-semibold text-indigo-900">$1 $2</p></div>');
   
   // Convert remaining newlines to paragraphs with proper styling
   const paragraphs = html.split(/\n\n+/);

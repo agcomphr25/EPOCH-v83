@@ -48,11 +48,15 @@ export async function testDatabaseConnection() {
 
 // Export a pool wrapper for compatibility with existing code that uses pool.query(sql, params) pattern
 // Now uses real pg Pool for proper PostgreSQL operations
+// Returns an array-like object with rows as base, plus rowCount for UPDATE/INSERT operations
 export const pool = {
   query: async (queryString: string, params?: any[]) => {
     // Use real pg Pool for proper UPDATE/INSERT support
     const result = await pgPool.query(queryString, params || []);
-    return result;
+    // Create an array from rows and attach rowCount for backward compatibility
+    const rows = [...result.rows] as any[];
+    (rows as any).rowCount = result.rowCount;
+    return rows;
   },
   end: () => pgPool.end(),
 };

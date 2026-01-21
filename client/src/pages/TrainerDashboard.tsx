@@ -284,7 +284,14 @@ export default function TrainerDashboard() {
   });
 
   const { data: mySessions = [], isLoading } = useQuery<DailySession[]>({
-    queryKey: ['/api/training/daily-sessions'],
+    queryKey: ['/api/training/daily-sessions', trainerId],
+    queryFn: async () => {
+      if (!trainerId) return [];
+      const res = await fetch(`/api/training/daily-sessions?trainerId=${trainerId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!trainerId,
   });
 
   const { data: trainerCertifications = [] } = useQuery<any[]>({
@@ -333,7 +340,12 @@ export default function TrainerDashboard() {
 
   const searchLower = searchTerm.toLowerCase();
   
-  const pendingAssignments = trainingAssignments.filter(
+  // Filter assignments to only show those assigned to the current trainer
+  const myAssignments = trainingAssignments.filter(
+    (a) => a.trainerId === trainerId || a.assignedBy === trainerId
+  );
+  
+  const pendingAssignments = myAssignments.filter(
     (a) => (a.status === 'PENDING' || a.status === 'IN_PROGRESS' || a.status === 'OVERDUE') &&
     (searchTerm === '' || 
       a.employeeName?.toLowerCase().includes(searchLower) ||

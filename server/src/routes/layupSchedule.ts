@@ -70,33 +70,47 @@ router.patch('/molds/:id', async (req: Request, res: Response) => {
     
     console.log(`🔧 Updating mold id=${id} with:`, { enabled, multiplier, isActive, stockModels: newStockModels });
     
-    const updateData: any = { updatedAt: new Date() };
+    // Build dynamic UPDATE query using raw SQL (Drizzle .returning() doesn't work with this DB)
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const params: any[] = [];
+    let paramIndex = 1;
     
     if (typeof enabled === 'boolean') {
-      updateData.enabled = enabled;
+      setClauses.push(`enabled = $${paramIndex++}`);
+      params.push(enabled);
     }
     if (typeof isActive === 'boolean') {
-      updateData.isActive = isActive;
+      setClauses.push(`is_active = $${paramIndex++}`);
+      params.push(isActive);
     }
     if (typeof multiplier === 'number' && multiplier > 0) {
-      updateData.multiplier = multiplier;
+      setClauses.push(`multiplier = $${paramIndex++}`);
+      params.push(multiplier);
     }
     if (Array.isArray(newStockModels)) {
-      updateData.stockModels = newStockModels;
+      setClauses.push(`stock_models = $${paramIndex++}`);
+      params.push(newStockModels);
     }
     
-    const result = await db.update(molds)
-      .set(updateData)
-      .where(eq(molds.id, parseInt(id)))
-      .returning();
+    params.push(parseInt(id));
     
-    if (result.length === 0) {
-      console.log(`❌ Mold id=${id} not found`);
+    const updateQuery = `
+      UPDATE molds 
+      SET ${setClauses.join(', ')} 
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+    
+    const result = await pool.query(updateQuery, params);
+    const rows = result?.rows || result || [];
+    
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.log(`❌ Mold id=${id} not found or update failed`);
       return res.status(404).json({ success: false, error: 'Mold not found' });
     }
     
-    console.log(`✅ Updated mold ${id}:`, updateData);
-    res.json({ success: true, mold: result[0] });
+    console.log(`✅ Updated mold ${id}:`, rows[0]);
+    res.json({ success: true, mold: rows[0] });
   } catch (error: any) {
     console.error('Error updating mold:', error);
     res.status(500).json({ success: false, error: error.message });

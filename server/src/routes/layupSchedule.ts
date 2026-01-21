@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 
-import { db, pool } from '../../db';
+import { db, pool, rawSql } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
@@ -52,12 +52,12 @@ router.post('/generate', async (req: Request, res: Response) => {
     console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
     // Fetch molds with their capacities using raw SQL to properly parse PostgreSQL arrays
-    // Drizzle/Neon HTTP driver has issues with array parsing, so we use raw query
-    const moldQueryResult = await pool.query(`
+    // Use rawSql tagged template function for proper array handling
+    const moldQueryResult = await rawSql`
       SELECT id, mold_id, model_name, stock_models, instance_number, enabled, multiplier, is_active
       FROM molds
       WHERE enabled = true AND is_active = true
-    `);
+    `;
     
     // Parse the results - handle both array format (from pool.query) and Neon result format
     const rawMolds = Array.isArray(moldQueryResult) ? moldQueryResult : (moldQueryResult.rows || []);

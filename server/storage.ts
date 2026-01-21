@@ -2996,8 +2996,33 @@ export class DatabaseStorage implements IStorage {
     })) as any;
     
     // Also query production_orders table for P1 PO items
+    // Note: Select only columns that exist in database (excludes departmentHistory which is in schema but not DB)
     const productionOrdersResults = await db
-      .select()
+      .select({
+        id: productionOrders.id,
+        orderId: productionOrders.orderId,
+        poId: productionOrders.poId,
+        poItemId: productionOrders.poItemId,
+        customerId: productionOrders.customerId,
+        customerName: productionOrders.customerName,
+        poNumber: productionOrders.poNumber,
+        itemType: productionOrders.itemType,
+        itemId: productionOrders.itemId,
+        itemName: productionOrders.itemName,
+        specifications: productionOrders.specifications,
+        orderDate: productionOrders.orderDate,
+        dueDate: productionOrders.dueDate,
+        productionStatus: productionOrders.productionStatus,
+        laidUpAt: productionOrders.laidUpAt,
+        shippedAt: productionOrders.shippedAt,
+        notes: productionOrders.notes,
+        createdAt: productionOrders.createdAt,
+        updatedAt: productionOrders.updatedAt,
+        priorityScore: productionOrders.priorityScore,
+        currentPipelineConfig: productionOrders.currentPipelineConfig,
+        hasP1Priority: productionOrders.hasP1Priority,
+        currentDepartment: productionOrders.currentDepartment,
+      })
       .from(productionOrders)
       .where(ne(productionOrders.productionStatus, 'CANCELLED'))
       .orderBy(desc(productionOrders.updatedAt));

@@ -116,6 +116,7 @@ import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
 import historicalDataRoutes from './historicalData';
+import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -426,6 +427,9 @@ export function registerRoutes(app: Express): Server {
 
   // Follow-up orders routes
   app.use('/api/followup-orders', followupOrdersRoutes);
+
+  // Fillable PDF Templates routes
+  app.use('/api/pdf-templates', fillablePdfTemplatesRoutes);
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);

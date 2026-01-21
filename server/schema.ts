@@ -11580,3 +11580,107 @@ export type TrainerTopicCertification = typeof trainerTopicCertifications.$infer
 export type InsertTrainerTopicCertification = z.infer<typeof insertTrainerTopicCertificationSchema>;
 export type TravelerAuthorization = typeof travelerAuthorizations.$inferSelect;
 export type InsertTravelerAuthorization = z.infer<typeof insertTravelerAuthorizationSchema>;
+
+// ============================================================================
+// FILLABLE PDF TEMPLATES - Customer fill-and-sign workflow
+// ============================================================================
+
+// Field definition for fillable PDF forms
+export interface FillableFieldDef {
+  name: string;           // Field identifier
+  label: string;          // Display label for form
+  type: 'text' | 'number' | 'date' | 'email' | 'phone' | 'textarea' | 'checkbox' | 'select';
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  options?: string[];     // For select type
+  // PDF placement (for coordinate-based fallback when no AcroForm fields)
+  pdfFieldName?: string;  // AcroForm field name if present
+  x?: number;             // X coordinate for text placement
+  y?: number;             // Y coordinate for text placement
+  page?: number;          // Page number (0-indexed)
+  fontSize?: number;
+  maxLength?: number;
+}
+
+// Fillable PDF Templates - Template library for customer fill-and-sign
+export const fillablePdfTemplates = pgTable('fillable_pdf_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  version: integer('version').notNull().default(1),
+  templatePdfPath: text('template_pdf_path').notNull(),
+  fieldDefsJson: jsonb('field_defs_json').$type<FillableFieldDef[]>().notNull().default([]),
+  requiresSignature: boolean('requires_signature').notNull().default(true),
+  signaturePlacement: jsonb('signature_placement').$type<{
+    x: number;
+    y: number;
+    page: number;
+    width: number;
+    height: number;
+  }>(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by'),
+}, (table) => ({
+  nameIdx: index('fillable_pdf_templates_name_idx').on(table.name),
+  activeIdx: index('fillable_pdf_templates_active_idx').on(table.isActive),
+}));
+
+// Fillable PDF Instances - Individual customer fill-and-sign sessions
+export const fillablePdfInstances = pgTable('fillable_pdf_instances', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateId: uuid('template_id').references(() => fillablePdfTemplates.id).notNull(),
+  // Optional link to order or other entity
+  entityType: text('entity_type'), // 'order', 'customer', 'standalone'
+  entityId: text('entity_id'),
+  // Public signature link pattern (matches followup_orders)
+  publicSignatureId: text('public_signature_id').unique().notNull(),
+  signatureToken: text('signature_token').notNull(), // Server-only secret
+  // Customer info
+  recipientEmail: text('recipient_email'),
+  recipientName: text('recipient_name'),
+  // Status tracking
+  status: text('status').notNull().default('draft'), // draft, sent, viewed, signed, expired
+  // Form values and signature
+  valuesJson: jsonb('values_json').$type<Record<string, any>>().default({}),
+  signatureData: text('signature_data'), // Base64 signature image
+  signedAt: timestamp('signed_at'),
+  signedByIp: text('signed_by_ip'),
+  // PDF paths
+  pdfPath: text('pdf_path'), // Generated PDF with values (before signature)
+  signedPdfPath: text('signed_pdf_path'), // Final flattened signed PDF
+  // Environment for cross-env safety
+  environment: text('environment').notNull().default('dev'), // 'dev' | 'prod'
+  // Timestamps
+  sentAt: timestamp('sent_at'),
+  viewedAt: timestamp('viewed_at'),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('fillable_pdf_instances_template_id_idx').on(table.templateId),
+  publicSigIdIdx: index('fillable_pdf_instances_public_sig_id_idx').on(table.publicSignatureId),
+  statusIdx: index('fillable_pdf_instances_status_idx').on(table.status),
+  entityIdx: index('fillable_pdf_instances_entity_idx').on(table.entityType, table.entityId),
+}));
+
+// Insert schemas for Fillable PDF system
+export const insertFillablePdfTemplateSchema = createInsertSchema(fillablePdfTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFillablePdfInstanceSchema = createInsertSchema(fillablePdfInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for Fillable PDF system
+export type FillablePdfTemplate = typeof fillablePdfTemplates.$inferSelect;
+export type InsertFillablePdfTemplate = z.infer<typeof insertFillablePdfTemplateSchema>;
+export type FillablePdfInstance = typeof fillablePdfInstances.$inferSelect;
+export type InsertFillablePdfInstance = z.infer<typeof insertFillablePdfInstanceSchema>;

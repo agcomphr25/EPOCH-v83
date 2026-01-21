@@ -218,7 +218,7 @@ export default function DARLENEBTestDashboard() {
             </Card>
           </Link>
 
-            <Link href="/customer-management">
+            <Link href="/customers">
             <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200 ${isDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
               <CardContent className="p-4 text-center">
                 <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />

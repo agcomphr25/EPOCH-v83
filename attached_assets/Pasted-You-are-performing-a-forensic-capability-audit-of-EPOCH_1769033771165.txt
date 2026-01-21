@@ -1,0 +1,137 @@
+You are performing a forensic capability audit of EPOCH’s existing PDF generation and digital signature system.
+
+Do NOT change any code. Do NOT implement anything.
+Your job is to document exactly what already exists, so it can be safely extended with fillable PDF templates.
+
+1️⃣ PDF ENTRY POINTS
+
+List every backend route, service, helper, or job that:
+
+Generates a PDF
+
+Sends a PDF
+
+Regenerates a PDF
+
+For each, provide:
+
+File path
+
+Function / route name
+
+Trigger (UI action, automation, background job)
+
+Entity type (order, followup_order, shipping, etc.)
+
+PdfIntent value (if used)
+
+Supports digital signature? (yes/no)
+
+Supports regeneration? (yes/no)
+
+2️⃣ PDF GENERATION PIPELINE
+
+Trace the end-to-end PDF lifecycle, including:
+
+Library used (pdf-lib, puppeteer, react-pdf, etc.)
+
+Where HTML or layout is generated (if applicable)
+
+Where data values are injected
+
+Where flattening occurs
+
+Where the final file is written (path + naming pattern)
+
+3️⃣ DIGITAL SIGNATURE ARCHITECTURE
+
+Document all signature mechanisms, including:
+
+Capture method (canvas/freehand, checkbox, typed name)
+
+Data format stored (base64 image, vector path, hash, etc.)
+
+Where signatures are inserted into the PDF
+
+When PDFs are flattened and locked
+
+How “signed vs unsigned” is enforced
+
+4️⃣ PUBLIC SIGNATURE LINKS
+
+Document how public signing works:
+
+How signature URLs are generated
+
+Identifier used (publicSignatureId, token, etc.)
+
+Expiration behavior
+
+How entity and user context is inferred
+
+5️⃣ DATA BINDING MODEL
+
+Explain where PDF data comes from:
+
+Is there a centralized PDF context builder?
+
+Are values passed inline per route?
+
+Are helpers reused?
+
+Is there any JSON or structured object representing a document?
+
+6️⃣ REGENERATION & VERSIONING RULES
+
+Document:
+
+What triggers PDF regeneration
+
+Whether regenerated PDFs overwrite or create new records
+
+How signed PDFs are protected from regeneration
+
+Whether template/layout changes affect historical documents
+
+7️⃣ STORAGE & ARCHIVAL
+
+Describe:
+
+Storage location (local, S3, etc.)
+
+Directory structure
+
+Naming conventions
+
+Difference between draft vs signed archives
+
+8️⃣ UI TOUCHPOINTS (HIGH-LEVEL ONLY)
+
+List:
+
+Pages where PDFs are generated
+
+Pages where signing occurs
+
+Any preview or viewer components
+
+9️⃣ HARD CONSTRAINTS
+
+Explicitly list anything that must not change without breaking production.
+
+📦 FINAL OUTPUT FORMAT
+
+Return ONLY:
+
+A concise capability map
+
+A textual sequence diagram of the PDF + signature flow
+
+A list of reusable primitives
+
+A list of hard constraints
+
+A short summary of safe extension points for adding fillable PDF templates
+
+Do not speculate. Do not propose solutions yet.
+Accuracy > completeness.

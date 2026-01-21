@@ -237,11 +237,11 @@ async function hydrateAndValidateSession(
       [sessionToken]
     );
 
-    if (!sessionResult || sessionResult.rows.length === 0) {
+    if (!sessionResult || sessionResult.length === 0) {
       return { valid: false, error: 'Session not found' };
     }
 
-    const session = sessionResult.rows[0];
+    const session = sessionResult[0];
 
     if (session.user_id !== userId) {
       return { valid: false, error: 'Session user mismatch' };
@@ -257,11 +257,11 @@ async function hydrateAndValidateSession(
       [userId]
     );
 
-    if (!userResult || userResult.rows.length === 0) {
+    if (!userResult || userResult.length === 0) {
       return { valid: false, error: 'User not found' };
     }
 
-    const user = userResult.rows[0];
+    const user = userResult[0];
 
     if (!user.is_active) {
       return { valid: false, error: 'User account is inactive' };
@@ -341,7 +341,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       [employeeCode]
     );
 
-    if (!employeeResult || employeeResult.rows.length === 0) {
+    if (!employeeResult || employeeResult.length === 0) {
       logBadgeLoginAttempt({
         employeeId: null,
         employeeCode,
@@ -354,7 +354,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid employee code' });
     }
 
-    const employee = employeeResult.rows[0];
+    const employee = employeeResult[0];
     employeeId = employee.id;
 
     // Check if employee is active
@@ -382,8 +382,8 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     // Use linked user account if available, otherwise deny access
     let sessionUser: { id: number; username: string; role: string };
     
-    if (linkedUserResult && linkedUserResult.rows.length > 0) {
-      const linkedUser = linkedUserResult.rows[0];
+    if (linkedUserResult && linkedUserResult.length > 0) {
+      const linkedUser = linkedUserResult[0];
       sessionUser = {
         id: linkedUser.id,
         username: linkedUser.username,
@@ -419,8 +419,8 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     // Determine redirect URL based on badge action
     redirectUrl = '/dashboard'; // Default
 
-    if (badgeActionResult && badgeActionResult.rows.length > 0) {
-      const badgeAction = badgeActionResult.rows[0];
+    if (badgeActionResult && badgeActionResult.length > 0) {
+      const badgeAction = badgeActionResult[0];
       const actionType = badgeAction.actionType;
       const actionConfig = badgeAction.actionConfig;
 
@@ -689,11 +689,11 @@ router.get('/validate', async (req, res) => {
       [sessionToken]
     );
 
-    if (!result || result.rows.length === 0) {
+    if (!result || result.length === 0) {
       return res.status(401).json({ valid: false });
     }
 
-    const session = result.rows[0];
+    const session = result[0];
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
@@ -712,8 +712,8 @@ router.get('/validate', async (req, res) => {
 
     let user: any;
 
-    if (dbUserResult && dbUserResult.rows.length > 0) {
-      user = dbUserResult.rows[0];
+    if (dbUserResult && dbUserResult.length > 0) {
+      user = dbUserResult[0];
     } else {
       // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
@@ -762,11 +762,11 @@ router.get('/session', async (req, res) => {
       [sessionToken]
     );
 
-    if (!result || result.rows.length === 0) {
+    if (!result || result.length === 0) {
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    const session = result.rows[0];
+    const session = result[0];
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
@@ -785,8 +785,8 @@ router.get('/session', async (req, res) => {
 
     let user: any;
 
-    if (dbUserResult && dbUserResult.rows.length > 0) {
-      user = dbUserResult.rows[0];
+    if (dbUserResult && dbUserResult.length > 0) {
+      user = dbUserResult[0];
     } else {
       // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);

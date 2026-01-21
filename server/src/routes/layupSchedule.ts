@@ -35,45 +35,7 @@ router.get('/molds', async (req: Request, res: Response) => {
   }
 });
 
-// Update a mold's settings (enabled, multiplier, isActive)
-router.patch('/molds/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { enabled, multiplier, isActive, stockModels: newStockModels } = req.body;
-    
-    const updateData: any = { updatedAt: new Date() };
-    
-    if (typeof enabled === 'boolean') {
-      updateData.enabled = enabled;
-    }
-    if (typeof isActive === 'boolean') {
-      updateData.isActive = isActive;
-    }
-    if (typeof multiplier === 'number' && multiplier > 0) {
-      updateData.multiplier = multiplier;
-    }
-    if (Array.isArray(newStockModels)) {
-      updateData.stockModels = newStockModels;
-    }
-    
-    const result = await db.update(molds)
-      .set(updateData)
-      .where(eq(molds.id, parseInt(id)))
-      .returning();
-    
-    if (result.length === 0) {
-      return res.status(404).json({ success: false, error: 'Mold not found' });
-    }
-    
-    console.log(`✅ Updated mold ${id}:`, updateData);
-    res.json({ success: true, mold: result[0] });
-  } catch (error: any) {
-    console.error('Error updating mold:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Bulk enable/disable molds by model name
+// Bulk enable/disable molds by model name (MUST come before /molds/:id)
 router.patch('/molds/bulk/by-model', async (req: Request, res: Response) => {
   try {
     const { modelName, enabled, isActive, multiplier } = req.body;
@@ -96,6 +58,47 @@ router.patch('/molds/bulk/by-model', async (req: Request, res: Response) => {
     res.json({ success: true, updatedCount: result.length, molds: result });
   } catch (error: any) {
     console.error('Error bulk updating molds:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update a mold's settings (enabled, multiplier, isActive)
+router.patch('/molds/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled, multiplier, isActive, stockModels: newStockModels } = req.body;
+    
+    console.log(`🔧 Updating mold id=${id} with:`, { enabled, multiplier, isActive, stockModels: newStockModels });
+    
+    const updateData: any = { updatedAt: new Date() };
+    
+    if (typeof enabled === 'boolean') {
+      updateData.enabled = enabled;
+    }
+    if (typeof isActive === 'boolean') {
+      updateData.isActive = isActive;
+    }
+    if (typeof multiplier === 'number' && multiplier > 0) {
+      updateData.multiplier = multiplier;
+    }
+    if (Array.isArray(newStockModels)) {
+      updateData.stockModels = newStockModels;
+    }
+    
+    const result = await db.update(molds)
+      .set(updateData)
+      .where(eq(molds.id, parseInt(id)))
+      .returning();
+    
+    if (result.length === 0) {
+      console.log(`❌ Mold id=${id} not found`);
+      return res.status(404).json({ success: false, error: 'Mold not found' });
+    }
+    
+    console.log(`✅ Updated mold ${id}:`, updateData);
+    res.json({ success: true, mold: result[0] });
+  } catch (error: any) {
+    console.error('Error updating mold:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -712,7 +715,7 @@ router.post('/save', async (req: Request, res: Response) => {
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
       
       // Get existing schedule ONLY for the specific days being saved (to decrement PO item counts)
-      const existingRows = await pool.query(
+      const existingResult = await pool.query(
         `
         SELECT order_id 
         FROM layup_schedule 
@@ -721,9 +724,12 @@ router.post('/save', async (req: Request, res: Response) => {
         [layupDays]
       );
       
+      // Handle Neon driver null result - ensure we have an array
+      const existingRows = existingResult?.rows || existingResult || [];
+      
       // Decrement PO item counts for items being removed
       const existingPOCounts = new Map<string, number>();
-      for (const row of existingRows) {
+      for (const row of (Array.isArray(existingRows) ? existingRows : [])) {
         const orderId = row.order_id;
         if (orderId.startsWith('PO-')) {
           const parts = orderId.split('-');

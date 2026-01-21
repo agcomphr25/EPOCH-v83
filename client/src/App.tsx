@@ -186,6 +186,7 @@ import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
 import FillAndSignPage from './pages/FillAndSignPage';
 import FillablePdfTemplatesAdmin from './pages/FillablePdfTemplatesAdmin';
+import VisualFieldEditor from './pages/VisualFieldEditor';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
@@ -415,6 +416,7 @@ function App() {
                   {/* PDF Template Routes */}
                   <Route path="/pdf-templates" component={PDFTemplateManager} />
                   <Route path="/fillable-pdf-templates" component={FillablePdfTemplatesAdmin} />
+                  <Route path="/fillable-pdf-templates/:id/editor" component={VisualFieldEditor} />
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />

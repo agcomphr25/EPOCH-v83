@@ -120,6 +120,40 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/pdf-templates/:id
+ * Get single template by ID (admin)
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Skip if id looks like a route segment
+    if (id === 'instances') {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    const { db } = await import('../../db');
+    const { fillablePdfTemplates } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    
+    const [template] = await db
+      .select()
+      .from(fillablePdfTemplates)
+      .where(eq(fillablePdfTemplates.id, id))
+      .limit(1);
+    
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    res.json(template);
+  } catch (error) {
+    console.error('[API] Error fetching template:', error);
+    res.status(500).json({ error: 'Failed to fetch template' });
+  }
+});
+
+/**
  * POST /api/pdf-templates
  * Upload PDF and create template (admin)
  */

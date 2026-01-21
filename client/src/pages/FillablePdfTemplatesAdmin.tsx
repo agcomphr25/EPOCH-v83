@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Upload, FileText, Send, Eye, Trash2, Edit } from 'lucide-react';
+import { Plus, Upload, FileText, Send, Eye, Trash2, Edit, PenLine } from 'lucide-react';
 
 interface FieldDef {
   name: string;
@@ -335,7 +336,13 @@ export default function FillablePdfTemplatesAdmin() {
                   <span>{template.version}</span>
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex gap-2 flex-wrap">
+                <Link href={`/fillable-pdf-templates/${template.id}/editor`}>
+                  <Button variant="outline" size="sm">
+                    <PenLine className="w-4 h-4 mr-1" />
+                    Edit Fields
+                  </Button>
+                </Link>
                 <Button
                   variant="outline"
                   size="sm"

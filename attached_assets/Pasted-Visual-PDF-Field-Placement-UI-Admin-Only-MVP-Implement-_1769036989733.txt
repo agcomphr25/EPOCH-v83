@@ -1,0 +1,124 @@
+Visual PDF Field Placement UI (Admin-Only, MVP)
+
+Implement Phase 1A: Visual PDF Field Placement UI for the existing Fillable PDF Templates system.
+
+Do NOT modify existing PDF generation, signature logic, or customer fill flows.
+This task ONLY replaces manual JSON coordinate entry with a visual editor that produces the same fieldDefsJson.
+
+Goal
+
+Allow admins to visually place, move, and resize fields directly on top of a rendered PDF.
+The output must remain compatible with the existing backend and pdf-lib injection pipeline.
+
+Functional Requirements
+1️⃣ PDF Rendering
+
+Use pdfjs-dist to render the uploaded template PDF
+
+Render one page at a time (pagination is acceptable)
+
+Each page must have:
+
+A fixed container
+
+A known rendered width & height
+
+2️⃣ Field Overlay System
+
+Overlay fields using absolutely positioned divs
+
+Supported field types:
+
+text
+
+email
+
+date
+
+checkbox
+
+select
+
+signature (visual placeholder only)
+
+Each field overlay must support:
+
+Dragging
+
+Resizing
+
+Selection / focus
+
+Deletion
+
+3️⃣ Field Metadata Panel
+
+When a field is selected, show an editor panel with:
+
+Field key (string, required)
+
+Field type (readonly after creation)
+
+Required (boolean)
+
+Page number
+
+Numeric fine-tuning:
+
+X
+
+Y
+
+Width
+
+Height
+
+4️⃣ Coordinate Normalization (Critical)
+
+Store all field positions as normalized values:
+
+normalizedX = x / pageWidth
+normalizedY = y / pageHeight
+normalizedWidth = width / pageWidth
+normalizedHeight = height / pageHeight
+
+
+Persist ONLY normalized values in fieldDefsJson.
+
+5️⃣ Persistence
+
+Load existing fieldDefsJson when opening the editor
+
+Saving updates the template record ONLY
+
+Do NOT create or modify template instances here
+
+Non-Goals (Do NOT Implement)
+
+PDF editing or annotation
+
+Styling controls (fonts, colors)
+
+Snapping, grids, rotation
+
+Customer-side changes
+
+Any change to pdf-lib generation code
+
+Deliverables
+
+Admin route: /fillable-pdf-templates/:id/editor
+
+Reusable React components:
+
+PdfCanvas
+
+FieldOverlay
+
+FieldInspectorPanel
+
+Updated fieldDefsJson stored in normalized form
+
+Short summary of files added/changed
+
+Accuracy and stability are more important than polish.

@@ -7349,8 +7349,11 @@ export function registerRoutes(app: Express): Server {
       
       console.log('📊 Query returned', allOrders?.length || 0, 'orders with department history');
       
+      // Ensure allOrders is always an array (handle edge case where query returns undefined or non-array)
+      const ordersArray = Array.isArray(allOrders) ? allOrders : [];
+      
       // Filter to only include orders that were progressed OUT of Finish QC in the date range
-      const filteredOrders = allOrders.filter((order: any) => {
+      const filteredOrders = ordersArray.filter((order: any) => {
         if (!order.department_history || !Array.isArray(order.department_history)) {
           return false;
         }

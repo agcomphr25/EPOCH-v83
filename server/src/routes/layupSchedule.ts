@@ -35,6 +35,71 @@ router.get('/molds', async (req: Request, res: Response) => {
   }
 });
 
+// Update a mold's settings (enabled, multiplier, isActive)
+router.patch('/molds/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled, multiplier, isActive, stockModels: newStockModels } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    
+    if (typeof enabled === 'boolean') {
+      updateData.enabled = enabled;
+    }
+    if (typeof isActive === 'boolean') {
+      updateData.isActive = isActive;
+    }
+    if (typeof multiplier === 'number' && multiplier > 0) {
+      updateData.multiplier = multiplier;
+    }
+    if (Array.isArray(newStockModels)) {
+      updateData.stockModels = newStockModels;
+    }
+    
+    const result = await db.update(molds)
+      .set(updateData)
+      .where(eq(molds.id, parseInt(id)))
+      .returning();
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Mold not found' });
+    }
+    
+    console.log(`✅ Updated mold ${id}:`, updateData);
+    res.json({ success: true, mold: result[0] });
+  } catch (error: any) {
+    console.error('Error updating mold:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Bulk enable/disable molds by model name
+router.patch('/molds/bulk/by-model', async (req: Request, res: Response) => {
+  try {
+    const { modelName, enabled, isActive, multiplier } = req.body;
+    
+    if (!modelName) {
+      return res.status(400).json({ success: false, error: 'modelName is required' });
+    }
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (typeof enabled === 'boolean') updateData.enabled = enabled;
+    if (typeof isActive === 'boolean') updateData.isActive = isActive;
+    if (typeof multiplier === 'number' && multiplier > 0) updateData.multiplier = multiplier;
+    
+    const result = await db.update(molds)
+      .set(updateData)
+      .where(eq(molds.modelName, modelName))
+      .returning();
+    
+    console.log(`✅ Bulk updated ${result.length} molds for model ${modelName}:`, updateData);
+    res.json({ success: true, updatedCount: result.length, molds: result });
+  } catch (error: any) {
+    console.error('Error bulk updating molds:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Update a mold's stock_models
 router.patch('/molds/:moldId/stock-models', async (req: Request, res: Response) => {
   try {

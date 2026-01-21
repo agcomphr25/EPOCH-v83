@@ -6863,7 +6863,7 @@ export const poProducts = pgTable('po_products', {
   linkedOrderId: text('linked_order_id'),
   status: text('status').default('pending'),
   priorityNote: text('priority_note'),
-  otherOptions: text('other_options').array(),
+  barcode: text('barcode'),
 });
 
 // PO Product Selections table for tracking selection batches

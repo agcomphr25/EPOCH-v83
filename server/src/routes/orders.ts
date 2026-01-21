@@ -1433,8 +1433,8 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
       
       try {
         // Use UPPER() for case-insensitive matching
-        const productionOrderResult = await pool.query`
-          SELECT 
+        const productionOrderResult = await pool.query(
+          `SELECT 
             order_id,
             customer_id,
             customer_name,
@@ -1448,9 +1448,10 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
             created_at,
             updated_at
           FROM production_orders
-          WHERE UPPER(order_id) = ${upperOrderId}
-          LIMIT 1
-        `;
+          WHERE UPPER(order_id) = $1
+          LIMIT 1`,
+          [upperOrderId]
+        );
         
         console.log(`🔍 Production order query result:`, productionOrderResult);
         

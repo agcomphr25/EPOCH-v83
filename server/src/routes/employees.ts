@@ -12,7 +12,6 @@ import {
 import {
   insertEmployeeSchema,
   insertCertificationSchema,
-  insertEmployeeCertificationSchema,
   insertEvaluationSchema,
   insertEmployeeDocumentSchema,
   insertTimeClockEntrySchema,
@@ -26,14 +25,13 @@ const router = Router();
 // Helper function to generate next employee code
 async function generateNextEmployeeCode(): Promise<string> {
   try {
-    const result = await pool.query`
-      SELECT employee_code as "employeeCode"
-      FROM employees
-      WHERE employee_code ~ '^EMP[0-9]+$'
-      ORDER BY 
-        CAST(SUBSTRING(employee_code FROM 4) AS INTEGER) DESC
-      LIMIT 1
-    `;
+    const result = await pool.query(
+      `SELECT employee_code as "employeeCode"
+       FROM employees
+       WHERE employee_code ~ '^EMP[0-9]+$'
+       ORDER BY CAST(SUBSTRING(employee_code FROM 4) AS INTEGER) DESC
+       LIMIT 1`
+    );
 
     // pool.query with tagged templates returns array directly
     if (!result || result.length === 0) {
@@ -252,8 +250,8 @@ router.post('/evaluations', async (req: Request, res: Response) => {
     }
 
     // Create evaluation
-    const result = await pool.query`
-      INSERT INTO evaluations (
+    const result = await pool.query(
+      `INSERT INTO evaluations (
         employee_id,
         evaluation_type,
         evaluation_period_start,
@@ -266,37 +264,31 @@ router.post('/evaluations', async (req: Request, res: Response) => {
         reviewed_at,
         created_at,
         updated_at
-      ) VALUES (
-        ${employeeId},
-        ${evaluationType},
-        ${periodStart.toISOString()},
-        ${periodEnd.toISOString()},
-        ${strengths || ''},
-        ${areasForImprovement || ''},
-        ${goals || ''},
-        ${evaluatedBy || 'system'},
-        ${status || 'COMPLETED'},
-        ${now.toISOString()},
-        NOW(),
-        NOW()
-      )
-      RETURNING id
-    `;
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+      RETURNING id`,
+      [
+        employeeId,
+        evaluationType,
+        periodStart.toISOString(),
+        periodEnd.toISOString(),
+        strengths || '',
+        areasForImprovement || '',
+        goals || '',
+        evaluatedBy || 'system',
+        status || 'COMPLETED',
+        now.toISOString()
+      ]
+    );
 
     const evaluationId = result[0]?.id;
 
     // Link certifications to evaluation if provided
     if (certificationIds && certificationIds.length > 0) {
       for (const certId of certificationIds) {
-        await pool.query`
-          INSERT INTO evaluation_certifications (
-            evaluation_id,
-            certification_id
-          ) VALUES (
-            ${evaluationId},
-            ${certId}
-          )
-        `;
+        await pool.query(
+          `INSERT INTO evaluation_certifications (evaluation_id, certification_id) VALUES ($1, $2)`,
+          [evaluationId, certId]
+        );
       }
     }
 
@@ -425,8 +417,8 @@ router.delete(
 // Get all employee certifications (MUST be before /:id to avoid route collision)
 router.get('/certifications', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query`
-      SELECT 
+    const result = await pool.query(
+      `SELECT 
         ec.id,
         ec.employee_id as "employeeId",
         ec.certification_id as "certificationId",
@@ -439,8 +431,8 @@ router.get('/certifications', async (req: Request, res: Response) => {
       FROM employee_certifications ec
       JOIN employees e ON ec.employee_id = e.id
       JOIN certifications c ON ec.certification_id = c.id
-      ORDER BY e.name, c.name
-    `;
+      ORDER BY e.name, c.name`
+    );
     res.json(result);
   } catch (error) {
     console.error('Get employee certifications error:', error);
@@ -458,53 +450,35 @@ router.post('/certifications', async (req: Request, res: Response) => {
     }
 
     // Check if certification already exists
-    const existing = await pool.query`
-      SELECT id FROM employee_certifications 
-      WHERE employee_id = ${employeeId} 
-      AND certification_id = ${certificationId}
-    `;
+    const existing = await pool.query(
+      `SELECT id FROM employee_certifications WHERE employee_id = $1 AND certification_id = $2`,
+      [employeeId, certificationId]
+    );
 
     if (existing.length > 0) {
       // Update existing
-      await pool.query`
-        UPDATE employee_certifications 
-        SET date_obtained = ${dateObtained || null},
-            expiry_date = ${expiryDate || null},
-            notes = ${notes || null},
-            is_active = ${!!dateObtained},
-            updated_at = NOW()
-        WHERE employee_id = ${employeeId} 
-        AND certification_id = ${certificationId}
-      `;
+      await pool.query(
+        `UPDATE employee_certifications 
+         SET date_obtained = $1, expiry_date = $2, notes = $3, is_active = $4, updated_at = NOW()
+         WHERE employee_id = $5 AND certification_id = $6`,
+        [dateObtained || null, expiryDate || null, notes || null, !!dateObtained, employeeId, certificationId]
+      );
       
-      const updated = await pool.query`
-        SELECT * FROM employee_certifications 
-        WHERE employee_id = ${employeeId} 
-        AND certification_id = ${certificationId}
-      `;
+      const updated = await pool.query(
+        `SELECT * FROM employee_certifications WHERE employee_id = $1 AND certification_id = $2`,
+        [employeeId, certificationId]
+      );
       
       return res.json(updated[0]);
     }
 
     // Create new
-    const result = await pool.query`
-      INSERT INTO employee_certifications (
-        employee_id, 
-        certification_id, 
-        date_obtained,
-        expiry_date,
-        notes,
-        is_active
-      ) VALUES (
-        ${employeeId}, 
-        ${certificationId}, 
-        ${dateObtained || null},
-        ${expiryDate || null},
-        ${notes || null},
-        ${!!dateObtained}
-      )
-      RETURNING *
-    `;
+    const result = await pool.query(
+      `INSERT INTO employee_certifications (employee_id, certification_id, date_obtained, expiry_date, notes, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [employeeId, certificationId, dateObtained || null, expiryDate || null, notes || null, !!dateObtained]
+    );
 
     res.json(result[0]);
   } catch (error) {
@@ -519,19 +493,23 @@ router.patch('/certifications/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { dateObtained, expiryDate, notes, isActive } = req.body;
 
-    await pool.query`
-      UPDATE employee_certifications 
-      SET date_obtained = ${dateObtained !== undefined ? dateObtained : null},
-          expiry_date = ${expiryDate !== undefined ? expiryDate : null},
-          notes = ${notes !== undefined ? notes : null},
-          is_active = ${isActive !== undefined ? isActive : !!dateObtained},
-          updated_at = NOW()
-      WHERE id = ${id}
-    `;
+    await pool.query(
+      `UPDATE employee_certifications 
+       SET date_obtained = $1, expiry_date = $2, notes = $3, is_active = $4, updated_at = NOW()
+       WHERE id = $5`,
+      [
+        dateObtained !== undefined ? dateObtained : null,
+        expiryDate !== undefined ? expiryDate : null,
+        notes !== undefined ? notes : null,
+        isActive !== undefined ? isActive : !!dateObtained,
+        id
+      ]
+    );
 
-    const updated = await pool.query`
-      SELECT * FROM employee_certifications WHERE id = ${id}
-    `;
+    const updated = await pool.query(
+      `SELECT * FROM employee_certifications WHERE id = $1`,
+      [id]
+    );
 
     if (updated.length === 0) {
       return res.status(404).json({ error: 'Certification not found' });
@@ -549,9 +527,10 @@ router.delete('/certifications/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    await pool.query`
-      DELETE FROM employee_certifications WHERE id = ${id}
-    `;
+    await pool.query(
+      `DELETE FROM employee_certifications WHERE id = $1`,
+      [id]
+    );
 
     res.json({ success: true });
   } catch (error) {
@@ -563,13 +542,12 @@ router.delete('/certifications/:id', async (req: Request, res: Response) => {
 // Get Finish Technicians (MUST be before /:id to avoid route collision)
 router.get('/finish-technicians', async (req: Request, res: Response) => {
   try {
-    const finishTechnicians = await pool.query`
-      SELECT id, name, employee_code as "employeeCode"
-      FROM employees
-      WHERE is_finish_technician = true 
-        AND is_active = true
-      ORDER BY name
-    `;
+    const finishTechnicians = await pool.query(
+      `SELECT id, name, employee_code as "employeeCode"
+       FROM employees
+       WHERE is_finish_technician = true AND is_active = true
+       ORDER BY name`
+    );
     res.json(finishTechnicians || []);
   } catch (error) {
     console.error('Get Finish technicians error:', error);
@@ -797,9 +775,10 @@ router.get('/:id/certifications', async (req: Request, res: Response) => {
     // Check if the parameter is a numeric ID or employee code
     if (isNaN(Number(idParam))) {
       // It's an employee code, look up the numeric ID
-      const result = await pool.query`
-        SELECT id FROM employees WHERE employee_code = ${idParam}
-      `;
+      const result = await pool.query(
+        `SELECT id FROM employees WHERE employee_code = $1`,
+        [idParam]
+      );
       
       if (!result || result.length === 0) {
         return res.status(404).json({ error: 'Employee not found' });
@@ -1027,8 +1006,8 @@ router.post(
 
         // Get all employees and certifications for mapping
         const [employees, certifications] = await Promise.all([
-          pool.query`SELECT id, name FROM employees WHERE is_active = true`,
-          pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+          pool.query(`SELECT id, name FROM employees WHERE is_active = true`),
+          pool.query(`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`)
         ]);
 
         // Create mapping helpers
@@ -1073,21 +1052,17 @@ router.post(
               continue;
             }
 
-            const existingCert = await pool.query`
-              SELECT id FROM employee_certifications 
-              WHERE employee_id = ${employeeId} 
-              AND certification_id = ${certificationId}
-            `;
+            const existingCert = await pool.query(
+              `SELECT id FROM employee_certifications WHERE employee_id = $1 AND certification_id = $2`,
+              [employeeId, certificationId]
+            );
 
             if (existingCert.length > 0) {
-              await pool.query`
-                UPDATE employee_certifications 
-                SET date_obtained = ${entry.lastCompleted},
-                    is_active = true,
-                    updated_at = NOW()
-                WHERE employee_id = ${employeeId} 
-                AND certification_id = ${certificationId}
-              `;
+              await pool.query(
+                `UPDATE employee_certifications SET date_obtained = $1, is_active = true, updated_at = NOW()
+                 WHERE employee_id = $2 AND certification_id = $3`,
+                [entry.lastCompleted, employeeId, certificationId]
+              );
               importResults.details.push({
                 employee: entry.employeeName,
                 certification: entry.trainingName,
@@ -1095,19 +1070,11 @@ router.post(
                 date: entry.lastCompleted
               });
             } else {
-              await pool.query`
-                INSERT INTO employee_certifications (
-                  employee_id, 
-                  certification_id, 
-                  date_obtained, 
-                  is_active
-                ) VALUES (
-                  ${employeeId}, 
-                  ${certificationId}, 
-                  ${entry.lastCompleted}, 
-                  true
-                )
-              `;
+              await pool.query(
+                `INSERT INTO employee_certifications (employee_id, certification_id, date_obtained, is_active)
+                 VALUES ($1, $2, $3, true)`,
+                [employeeId, certificationId, entry.lastCompleted]
+              );
               importResults.details.push({
                 employee: entry.employeeName,
                 certification: entry.trainingName,
@@ -1181,8 +1148,8 @@ router.post(
 
       // Get all employees and certifications for mapping
       const [employees, certifications] = await Promise.all([
-        pool.query`SELECT id, name FROM employees WHERE is_active = true`,
-        pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+        pool.query(`SELECT id, name FROM employees WHERE is_active = true`),
+        pool.query(`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`)
       ]);
 
       // Create mapping helpers
@@ -1254,22 +1221,18 @@ router.post(
           }
 
           // Check if certification already exists
-          const existingCert = await pool.query`
-            SELECT id FROM employee_certifications 
-            WHERE employee_id = ${employeeId} 
-            AND certification_id = ${certificationId}
-          `;
+          const existingCert = await pool.query(
+            `SELECT id FROM employee_certifications WHERE employee_id = $1 AND certification_id = $2`,
+            [employeeId, certificationId]
+          );
 
           if (existingCert.length > 0) {
             // Update existing certification
-            await pool.query`
-              UPDATE employee_certifications 
-              SET date_obtained = ${dateObtained},
-                  is_active = true,
-                  updated_at = NOW()
-              WHERE employee_id = ${employeeId} 
-              AND certification_id = ${certificationId}
-            `;
+            await pool.query(
+              `UPDATE employee_certifications SET date_obtained = $1, is_active = true, updated_at = NOW()
+               WHERE employee_id = $2 AND certification_id = $3`,
+              [dateObtained, employeeId, certificationId]
+            );
             importResults.details.push({
               employee: employeeName,
               certification: certName,
@@ -1278,19 +1241,11 @@ router.post(
             });
           } else {
             // Insert new certification
-            await pool.query`
-              INSERT INTO employee_certifications (
-                employee_id, 
-                certification_id, 
-                date_obtained, 
-                is_active
-              ) VALUES (
-                ${employeeId}, 
-                ${certificationId}, 
-                ${dateObtained}, 
-                true
-              )
-            `;
+            await pool.query(
+              `INSERT INTO employee_certifications (employee_id, certification_id, date_obtained, is_active)
+               VALUES ($1, $2, $3, true)`,
+              [employeeId, certificationId, dateObtained]
+            );
             importResults.details.push({
               employee: employeeName,
               certification: certName,

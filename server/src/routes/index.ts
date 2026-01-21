@@ -7328,6 +7328,9 @@ export function registerRoutes(app: Express): Server {
       
       console.log('📊 Found', finishTechnicians?.length || 0, 'active Finish QC technicians from employees table');
       
+      // Ensure finishTechnicians is always an array
+      const techniciansArray = Array.isArray(finishTechnicians) ? finishTechnicians : [];
+      
       // Query orders that have department_history with a Finish QC exit
       // Note: Neon serverless returns array directly, not { rows: [...] }
       const allOrders = await pool.query(
@@ -7375,7 +7378,7 @@ export function registerRoutes(app: Express): Server {
       // Initialize grouped object with all Finish QC technicians (even with zero orders for this week)
       const grouped: Record<string, any[]> = {};
       
-      for (const tech of finishTechnicians) {
+      for (const tech of techniciansArray) {
         grouped[tech.name] = [];
       }
       

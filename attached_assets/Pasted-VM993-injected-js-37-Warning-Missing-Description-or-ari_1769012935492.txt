@@ -1,0 +1,1007 @@
+VM993 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM993 injected.js:37
+(anonymous) @ VM1276 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM1010 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM1010 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM1010 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM1010 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM1010 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM1010 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM1010 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19416
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM1010 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM1010 chunk-NFC5BX5N.js:18627
+VM993 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM993 injected.js:37
+(anonymous) @ VM1276 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM1010 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM1010 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM1010 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM1010 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM1010 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM1010 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19416
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM1010 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM1010 chunk-NFC5BX5N.js:18627
+[Violation] Forced reflow while executing JavaScript took 53ms
+VM993 injected.js:37 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+VM993 injected.js:37 ✅ API Response from /api/layup-schedule/generate: 200
+VM993 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM993 injected.js:37
+(anonymous) @ VM1276 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM1010 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM1010 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM1010 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM1010 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM1010 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM1010 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM1010 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19416
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM1010 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19432
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM1010 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18718
+workLoop @ VM1010 chunk-NFC5BX5N.js:197
+flushWork @ VM1010 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM1010 chunk-NFC5BX5N.js:384
+VM993 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM993 injected.js:37
+(anonymous) @ VM1276 chunk-R3KBKBJQ.js:342
+commitHookEffectListMount @ VM1010 chunk-NFC5BX5N.js:16915
+invokePassiveEffectMountInDEV @ VM1010 chunk-NFC5BX5N.js:18324
+invokeEffectsInDev @ VM1010 chunk-NFC5BX5N.js:19701
+commitDoubleInvokeEffectsInDEV @ VM1010 chunk-NFC5BX5N.js:19686
+flushPassiveEffectsImpl @ VM1010 chunk-NFC5BX5N.js:19503
+flushPassiveEffects @ VM1010 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19416
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM1010 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM1010 chunk-NFC5BX5N.js:19432
+commitRoot @ VM1010 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM1010 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM1010 chunk-NFC5BX5N.js:18718
+workLoop @ VM1010 chunk-NFC5BX5N.js:197
+flushWork @ VM1010 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM1010 chunk-NFC5BX5N.js:384
+VM993 injected.js:37 📊 Generating barcode: LAYUP20260125
+VM993 injected.js:37 ✅ Barcode generated successfully
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+iframe_form_detection.js:23 [Violation] 'requestAnimationFrame' handler took 51ms
+iframe_form_detection.js:23 [Violation] 'requestAnimationFrame' handler took 58ms
+VM993 injected.js:37 [vite] server connection lost. Polling for restart...
+VM993 injected.js:214  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ VM993 injected.js:214
+ping @ VM1000 client:736
+waitForSuccessfulPing @ VM1000 client:749
+(anonymous) @ VM1000 client:561
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ d350e48b-5bf3-4feb-8…ols/injected.js:214
+ping @ d350e48b-5bf3-4feb-8…ev/@vite/client:736
+waitForSuccessfulPing @ d350e48b-5bf3-4feb-8…ev/@vite/client:749
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:561
+VM1000 client:562  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/production-queue 502 (Bad Gateway)
+(anonymous) @ VM1000 client:562
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/production-queue 502 (Bad Gateway)
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:562
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+3aac005dab5c1b13.js:2 Unrecognized feature: 'ambient-light-sensor'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'battery'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'layout-animations'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'legacy-image-formats'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'navigation-override'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'oversized-images'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'publickey-credentials'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'speaker-selection'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'unoptimized-images'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'unsized-media'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Unrecognized feature: 'pointer-lock'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+3aac005dab5c1b13.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+navigateTo @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 3aac005dab5c1b13.js:2
+(anonymous) @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+onClick @ 610ada605a17aca7.js:2
+(anonymous) @ 11ba7bb2b392543e.js:2
+eA @ ed1e693c96a75807.js:2
+e$ @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+rt @ ed1e693c96a75807.js:2
+rr @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iL @ ed1e693c96a75807.js:2
+eO @ ed1e693c96a75807.js:2
+rs @ ed1e693c96a75807.js:2
+nA @ ed1e693c96a75807.js:2
+nU @ ed1e693c96a75807.js:2
+a @ b4e994bfbe53d8da.js:2
+workspace_iframe.html?initialPath=%2Fdepartment-queue%2Fproduction-queue&id=%3Ara9%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🔍 Fetching production queue...
+injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:214  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/api/production-queue/attention 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 ✅ API Response from /api/production-queue/attention: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch orders needing attention","details":"Cannot read properties of null (reading 'map')"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:135:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:37 🔍 Production queue result: 93 orders
+injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:214  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/api/production-queue/attention 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 ✅ API Response from /api/production-queue/attention: 500
+injected.js:37 API error raw body: {"success":false,"error":"Failed to fetch orders needing attention","details":"Cannot read properties of null (reading 'map')"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:135:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:199
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:528
+Promise.catch
+run @ @tanstack_react-query.js?v=ab6c7ac3:511
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+onSubscribe @ @tanstack_react-query.js?v=ab6c7ac3:1976
+subscribe @ @tanstack_react-query.js?v=ab6c7ac3:24
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=ab6c7ac3:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:19328
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+chunk-NFC5BX5N.js?v=ab6c7ac3:18625 [Violation] 'setTimeout' handler took 160ms
+[Violation] Forced reflow while executing JavaScript took 31ms
+iframe_form_detection.js:23 [Violation] 'setTimeout' handler took 50ms
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/layup-schedule/generate: 200
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=ab6c7ac3:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19432
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=ab6c7ac3:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18718
+workLoop @ chunk-NFC5BX5N.js?v=ab6c7ac3:197
+flushWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=ab6c7ac3:384
+injected.js:37 📊 Generating barcode: LAYUP20260125
+injected.js:37 ✅ Barcode generated successfully

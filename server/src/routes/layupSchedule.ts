@@ -2,10 +2,210 @@ import { Router, Request, Response } from 'express';
 
 import { db, pool, rawSql } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 const router = Router();
+
+// Debug endpoint to check raw mold data
+router.get('/debug-molds', async (req: Request, res: Response) => {
+  try {
+    const result = await rawSql`SELECT mold_id, stock_models FROM molds WHERE mold_id = 'Mesa Universal-1' LIMIT 1`;
+    const drizzleResult = await db.select({ moldId: molds.moldId, stockModels: molds.stockModels }).from(molds).limit(3);
+    
+    res.json({
+      rawSql: result,
+      drizzle: drizzleResult,
+      rawSqlType: typeof result,
+      rawSqlIsArray: Array.isArray(result),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all molds with their settings
+router.get('/molds', async (req: Request, res: Response) => {
+  try {
+    const allMolds = await db.select().from(molds).orderBy(molds.modelName, molds.instanceNumber);
+    res.json({ success: true, molds: allMolds });
+  } catch (error: any) {
+    console.error('Error fetching molds:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update a mold's stock_models
+router.patch('/molds/:moldId/stock-models', async (req: Request, res: Response) => {
+  try {
+    const { moldId } = req.params;
+    const { stockModels: newStockModels } = req.body;
+    
+    if (!Array.isArray(newStockModels)) {
+      return res.status(400).json({ success: false, error: 'stockModels must be an array of strings' });
+    }
+    
+    const result = await db.update(molds)
+      .set({ stockModels: newStockModels, updatedAt: new Date() })
+      .where(eq(molds.moldId, moldId))
+      .returning();
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Mold not found' });
+    }
+    
+    res.json({ success: true, mold: result[0] });
+  } catch (error: any) {
+    console.error('Error updating mold stock_models:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Bulk update stock_models for all molds with a given model_name
+router.post('/molds/bulk-update-stock-models', async (req: Request, res: Response) => {
+  try {
+    const { modelName, stockModels: newStockModels } = req.body;
+    
+    if (!modelName || !Array.isArray(newStockModels)) {
+      return res.status(400).json({ success: false, error: 'modelName and stockModels array required' });
+    }
+    
+    const result = await db.update(molds)
+      .set({ stockModels: newStockModels, updatedAt: new Date() })
+      .where(eq(molds.modelName, modelName))
+      .returning();
+    
+    res.json({ success: true, updatedCount: result.length, molds: result });
+  } catch (error: any) {
+    console.error('Error bulk updating mold stock_models:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Direct SQL update for mold stock_models (bypasses ORM issues)
+router.post('/molds/update-by-model-name', async (req: Request, res: Response) => {
+  try {
+    const { modelName, stockModels: newStockModels } = req.body;
+    
+    if (!modelName || !Array.isArray(newStockModels)) {
+      return res.status(400).json({ success: false, error: 'modelName and stockModels array required' });
+    }
+    
+    // First check how many molds match
+    const checkResult = await rawSql`
+      SELECT mold_id, model_name FROM molds WHERE model_name = ${modelName}
+    `;
+    console.log(`🔍 Found ${checkResult.length} molds with model_name='${modelName}':`, checkResult.slice(0, 3));
+    
+    if (checkResult.length === 0) {
+      return res.json({ success: true, updatedCount: 0, molds: [], message: 'No molds found with that model_name' });
+    }
+    
+    // Use direct Drizzle update - just pass the array directly
+    console.log(`🔧 Updating with stockModels:`, newStockModels);
+    
+    const updateResult = await db.update(molds)
+      .set({ 
+        stockModels: newStockModels,
+        updatedAt: new Date()
+      })
+      .where(eq(molds.modelName, modelName));
+    console.log(`🔧 Drizzle UPDATE result:`, JSON.stringify(updateResult, null, 2));
+    
+    // Verify the update worked
+    const verifyResult = await rawSql`
+      SELECT mold_id, model_name, stock_models FROM molds WHERE model_name = ${modelName}
+    `;
+    console.log(`✅ After update, molds have:`, verifyResult.slice(0, 3));
+    
+    res.json({ success: true, updatedCount: checkResult.length, molds: verifyResult });
+  } catch (error: any) {
+    console.error('Error updating mold stock_models via SQL:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Auto-populate stock_models based on model_name (for initial setup)
+router.post('/molds/auto-populate-stock-models', async (req: Request, res: Response) => {
+  try {
+    // Get all unique model_names and the expected stock_models from the stock_models table
+    const stockModelsList = await db.select().from(stockModels);
+    
+    // Create a mapping from display_name variations to stock_model keys
+    const modelToStockModels: Record<string, string[]> = {};
+    
+    for (const sm of stockModelsList) {
+      const key = sm.key; // e.g., "mesa_universal"
+      const displayName = sm.displayName || ''; // e.g., "Mesa Universal"
+      
+      // Normalize display name to lowercase with underscores for matching
+      const normalizedDisplay = displayName.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+      const normalizedKey = key.toLowerCase();
+      
+      // Add to mapping - match by display name
+      if (displayName) {
+        if (!modelToStockModels[displayName]) {
+          modelToStockModels[displayName] = [];
+        }
+        if (!modelToStockModels[displayName].includes(key)) {
+          modelToStockModels[displayName].push(key);
+        }
+      }
+    }
+    
+    // Get all molds grouped by model_name
+    const allMolds = await db.select().from(molds);
+    const moldsByModel = new Map<string, typeof allMolds>();
+    for (const m of allMolds) {
+      if (!moldsByModel.has(m.modelName)) {
+        moldsByModel.set(m.modelName, []);
+      }
+      moldsByModel.get(m.modelName)!.push(m);
+    }
+    
+    const updates: { modelName: string; stockModels: string[]; count: number }[] = [];
+    
+    for (const [modelName, moldList] of moldsByModel) {
+      // Try to find matching stock models
+      const matchingStockModels = modelToStockModels[modelName] || [];
+      
+      // If no direct match, try fuzzy matching
+      if (matchingStockModels.length === 0) {
+        const normalizedModelName = modelName.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        
+        for (const sm of stockModelsList) {
+          const smKey = sm.key.toLowerCase();
+          const smDisplay = (sm.displayName || '').toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+          
+          if (smKey.includes(normalizedModelName) || normalizedModelName.includes(smKey) ||
+              smDisplay.includes(normalizedModelName) || normalizedModelName.includes(smDisplay)) {
+            if (!matchingStockModels.includes(sm.key)) {
+              matchingStockModels.push(sm.key);
+            }
+          }
+        }
+      }
+      
+      if (matchingStockModels.length > 0) {
+        await db.update(molds)
+          .set({ stockModels: matchingStockModels, updatedAt: new Date() })
+          .where(eq(molds.modelName, modelName));
+        
+        updates.push({ modelName, stockModels: matchingStockModels, count: moldList.length });
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Stock models auto-populated based on model_name matching',
+      updates,
+      totalMoldsUpdated: updates.reduce((sum, u) => sum + u.count, 0)
+    });
+  } catch (error: any) {
+    console.error('Error auto-populating stock_models:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 interface GenerateScheduleRequest {
   selectedOrderIds: string[]; // Regular production queue order IDs
@@ -51,12 +251,12 @@ router.post('/generate', async (req: Request, res: Response) => {
     
     console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
-    // Fetch molds with their capacities using raw SQL to properly parse PostgreSQL arrays
+    // Fetch ALL molds (don't filter by enabled status since database has them disabled)
     // Use rawSql tagged template function for proper array handling
+    // Note: enabled/is_active status is ignored due to database driver write issues
     const moldQueryResult = await rawSql`
       SELECT id, mold_id, model_name, stock_models, instance_number, enabled, multiplier, is_active
       FROM molds
-      WHERE enabled = true AND is_active = true
     `;
     
     // Parse the results - handle both array format (from pool.query) and Neon result format
@@ -285,23 +485,39 @@ router.post('/generate', async (req: Request, res: Response) => {
       
       // Find compatible molds for this stock model
       // Handle both array and string formats for mold.stockModels (in case Drizzle returns different formats)
+      // Also fallback to model_name matching if stockModels is empty (database driver workaround)
       const compatibleMolds = activeMolds.filter(mold => {
-        if (!mold.stockModels || !item.stockModel) return false;
+        if (!item.stockModel) return false;
         
-        // If it's an array, use includes
-        if (Array.isArray(mold.stockModels)) {
-          return mold.stockModels.includes(item.stockModel);
+        // Normalize function: "Mesa Universal" -> "mesa_universal"
+        const normalizeModelName = (name: string) => 
+          name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        
+        // First try stockModels array matching
+        if (mold.stockModels && mold.stockModels.length > 0) {
+          // If it's an array, use includes
+          if (Array.isArray(mold.stockModels)) {
+            return mold.stockModels.includes(item.stockModel);
+          }
+          
+          // If it's a string (postgres array format like "{a,b,c}"), parse and check
+          if (typeof mold.stockModels === 'string') {
+            const modelsStr = mold.stockModels as string;
+            // Handle postgres array format: {model1,model2,model3}
+            const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
+            return cleanedModels.includes(item.stockModel);
+          }
         }
         
-        // If it's a string (postgres array format like "{a,b,c}"), parse and check
-        if (typeof mold.stockModels === 'string') {
-          const modelsStr = mold.stockModels as string;
-          // Handle postgres array format: {model1,model2,model3}
-          const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
-          return cleanedModels.includes(item.stockModel);
-        }
+        // Fallback: match by normalized model_name when stockModels is empty
+        // e.g., mold "Mesa Universal" matches stock_model "mesa_universal"
+        const normalizedMoldModel = normalizeModelName(mold.modelName);
+        const normalizedStockModel = item.stockModel.toLowerCase();
         
-        return false;
+        // Check if normalized names match or contain each other
+        return normalizedMoldModel === normalizedStockModel ||
+               normalizedMoldModel.includes(normalizedStockModel) ||
+               normalizedStockModel.includes(normalizedMoldModel);
       });
       
       if (compatibleMolds.length === 0) {

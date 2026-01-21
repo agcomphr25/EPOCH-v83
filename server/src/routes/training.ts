@@ -2590,16 +2590,44 @@ router.post('/programs/:programId/assignments', async (req, res) => {
       insertValues.trainerId = Number(trainerId);
     }
 
-    const [assignment] = await db.insert(trainingAssignments).values(insertValues).returning();
+    // Insert assignment - Neon HTTP driver may not return rows properly with .returning()
+    const result = await db.insert(trainingAssignments).values(insertValues).returning();
+    
+    // Handle case where returning() doesn't work properly with Neon HTTP driver
+    let assignment;
+    if (result && result.length > 0) {
+      assignment = result[0];
+    } else {
+      // Fallback: fetch the most recently created assignment for this program/employee
+      const [fetched] = await db
+        .select()
+        .from(trainingAssignments)
+        .where(and(
+          eq(trainingAssignments.programId, programId),
+          eq(trainingAssignments.employeeId, Number(employeeId))
+        ))
+        .orderBy(desc(trainingAssignments.id))
+        .limit(1);
+      assignment = fetched;
+    }
+
+    if (!assignment) {
+      return res.status(500).json({ error: 'Failed to create assignment - could not retrieve created record' });
+    }
 
     // Create a session for this assignment
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    await db.insert(trainingBuilderSessions).values({
-      sessionId,
-      assignmentId: assignment.id,
-      employeeId: assignment.employeeId,
-      programId: assignment.programId,
-    });
+    try {
+      await db.insert(trainingBuilderSessions).values({
+        sessionId,
+        assignmentId: assignment.id,
+        employeeId: assignment.employeeId,
+        programId: assignment.programId,
+      });
+    } catch (sessionError) {
+      console.error('Error creating training session:', sessionError);
+      // Continue - assignment was created even if session failed
+    }
 
     res.status(201).json(assignment);
   } catch (error: any) {

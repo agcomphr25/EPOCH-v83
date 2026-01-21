@@ -2758,30 +2758,46 @@ router.get('/trainer-assignments/:trainerId', async (req, res) => {
       return res.json([]);
     }
 
-    // Get trainee and program details
+    // Get trainee and program details - wrap in try-catch for Neon driver issues
     const traineeIds = Array.from(new Set(assignments.map(a => a.employeeId)));
     const programIds = Array.from(new Set(assignments.map(a => a.programId)));
 
-    const trainees = traineeIds.length > 0
-      ? await db.select().from(employees).where(inArray(employees.id, traineeIds))
-      : [];
-    const programs = programIds.length > 0
-      ? await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds))
-      : [];
+    let trainees: any[] = [];
+    let programs: any[] = [];
+    let allTasks: any[] = [];
 
-    const traineeMap = new Map(trainees.map(t => [t.id, t]));
-    const programMap = new Map(programs.map(p => [p.id, p]));
+    try {
+      if (traineeIds.length > 0) {
+        trainees = await db.select().from(employees).where(inArray(employees.id, traineeIds)) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching trainees:', e);
+    }
 
-    // Get tasks for each program
-    const allTasks = programIds.length > 0
-      ? await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder)
-      : [];
+    try {
+      if (programIds.length > 0) {
+        programs = await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds)) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching programs:', e);
+    }
 
-    const tasksByProgram = allTasks.reduce((acc, task) => {
+    try {
+      if (programIds.length > 0) {
+        allTasks = await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching tasks:', e);
+    }
+
+    const traineeMap = new Map((trainees || []).map(t => [t.id, t]));
+    const programMap = new Map((programs || []).map(p => [p.id, p]));
+
+    const tasksByProgram = (allTasks || []).reduce((acc: Record<number, any[]>, task: any) => {
       if (!acc[task.programId]) acc[task.programId] = [];
       acc[task.programId].push(task);
       return acc;
-    }, {} as Record<number, typeof allTasks>);
+    }, {} as Record<number, any[]>);
 
     const enrichedAssignments = assignments.map(a => ({
       ...a,

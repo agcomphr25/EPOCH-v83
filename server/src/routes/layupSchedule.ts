@@ -62,6 +62,16 @@ router.post('/generate', async (req: Request, res: Response) => {
     // Parse the results - handle both array format (from pool.query) and Neon result format
     const rawMolds = Array.isArray(moldQueryResult) ? moldQueryResult : (moldQueryResult.rows || []);
     
+    // Debug: Log raw data to see what format stock_models is in
+    if (rawMolds.length > 0) {
+      console.log('🔍 RAW MOLD DATA (first 3):', rawMolds.slice(0, 3).map((m: any) => ({
+        mold_id: m.mold_id,
+        stock_models: m.stock_models,
+        stock_models_type: typeof m.stock_models,
+        stock_models_raw: JSON.stringify(m.stock_models),
+      })));
+    }
+    
     // Parse stock_models from PostgreSQL array format "{a,b,c}" to JavaScript array
     const activeMolds = rawMolds.map((m: any) => ({
       id: m.id,

@@ -59,4 +59,6 @@ export const pool = {
     return rows;
   },
   end: () => pgPool.end(),
+  // Get a dedicated client for transactions (must use same client for BEGIN/UPDATE/COMMIT)
+  connect: () => pgPool.connect(),
 };

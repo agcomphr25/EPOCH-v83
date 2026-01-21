@@ -703,7 +703,8 @@ export default function TicketsPage() {
               Loading ticket...
             </div>
           ) : selectedTicket ? (
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1">
               <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -930,51 +931,61 @@ export default function TicketsPage() {
                 </div>
               </div>
 
-              <ScrollArea className="flex-1 p-6">
+              <div className="p-6 bg-white dark:bg-gray-800">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" />
-                  Activity
+                  Notes & Activity
                 </h3>
                 <div className="space-y-4">
-                  {ticketActivity.map(activity => (
-                    <div key={activity.id} className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                        <User className="h-4 w-4 text-gray-500" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {getUserName(activity.createdBy)}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-                          </span>
+                  {ticketActivity.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No notes yet. Add a note below.</p>
+                  ) : (
+                    ticketActivity.map(activity => (
+                      <div key={activity.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                          <User className="h-4 w-4 text-gray-500" />
                         </div>
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {activity.message}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {getUserName(activity.createdBy)}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                            {activity.message}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
+              </div>
               </ScrollArea>
 
-              <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+              <div className="p-4 bg-gray-100 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <Label className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                  <Plus className="h-3 w-3" />
+                  Add Note
+                </Label>
                 <div className="flex gap-2">
                   <Textarea
-                    placeholder="Add a comment..."
+                    placeholder="Type your note here..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     rows={2}
-                    className="resize-none"
+                    className="resize-none bg-white dark:bg-gray-800"
                     data-testid="input-new-comment"
                   />
                   <Button
                     onClick={() => newComment && addCommentMutation.mutate({ ticketId: selectedTicket.id, message: newComment })}
                     disabled={!newComment || addCommentMutation.isPending}
                     data-testid="button-add-comment"
+                    className="self-end"
                   >
-                    Send
+                    {addCommentMutation.isPending ? 'Saving...' : 'Add Note'}
                   </Button>
                 </div>
               </div>

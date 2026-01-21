@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, RefreshCw, Search, Filter } from 'lucide-react';
+import { Settings, RefreshCw, Search, Filter, Plus, X, Save, Pencil } from 'lucide-react';
 
 interface Mold {
   id: number;
@@ -44,19 +44,55 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterModel, setFilterModel] = useState('all');
+  const [editingMold, setEditingMold] = useState<number | null>(null);
+  const [editValues, setEditValues] = useState<{ enabled: boolean; multiplier: number; stockModels: string[] }>({ enabled: false, multiplier: 1, stockModels: [] });
+  const [newStockModel, setNewStockModel] = useState('');
 
   const { data: moldsData, isLoading, refetch } = useQuery<{ success: boolean; molds: Mold[] }>({
     queryKey: ['/api/layup-schedule/molds'],
     enabled: open,
   });
 
-  const molds = moldsData?.molds || [];
+  const updateMoldMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Mold> }) => {
+      return apiRequest(`/api/layup-schedule/molds/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/molds'] });
+      toast({ title: 'Mold updated', description: 'Mold settings have been saved.' });
+      setEditingMold(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
 
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ modelName, data }: { modelName: string; data: Partial<Mold> }) => {
+      return apiRequest('/api/layup-schedule/molds/bulk/by-model', {
+        method: 'PATCH',
+        body: JSON.stringify({ modelName, ...data }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/molds'] });
+      toast({ title: 'Molds updated', description: `All ${variables.modelName} molds have been updated.` });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const molds = moldsData?.molds || [];
   const uniqueModelNames = Array.from(new Set(molds.map(m => m.modelName))).sort();
 
   const filteredMolds = molds.filter(mold => {
     const matchesSearch = mold.moldId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mold.modelName.toLowerCase().includes(searchTerm.toLowerCase());
+      mold.modelName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (mold.stockModels || []).some(sm => sm.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesFilter = filterModel === 'all' || mold.modelName === filterModel;
     return matchesSearch && matchesFilter;
   });
@@ -72,16 +108,70 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   const enabledCount = molds.filter(m => m.enabled && m.isActive).length;
   const totalCount = molds.length;
 
+  const startEditing = (mold: Mold) => {
+    setEditingMold(mold.id);
+    setEditValues({
+      enabled: mold.enabled,
+      multiplier: mold.multiplier,
+      stockModels: mold.stockModels || [],
+    });
+    setNewStockModel('');
+  };
+
+  const cancelEditing = () => {
+    setEditingMold(null);
+    setEditValues({ enabled: false, multiplier: 1, stockModels: [] });
+    setNewStockModel('');
+  };
+
+  const saveEditing = () => {
+    if (editingMold === null) return;
+    updateMoldMutation.mutate({
+      id: editingMold,
+      data: {
+        enabled: editValues.enabled,
+        isActive: editValues.enabled,
+        multiplier: editValues.multiplier,
+        stockModels: editValues.stockModels,
+      },
+    });
+  };
+
+  const addStockModel = () => {
+    if (newStockModel.trim() && !editValues.stockModels.includes(newStockModel.trim())) {
+      setEditValues(prev => ({
+        ...prev,
+        stockModels: [...prev.stockModels, newStockModel.trim()],
+      }));
+      setNewStockModel('');
+    }
+  };
+
+  const removeStockModel = (sm: string) => {
+    setEditValues(prev => ({
+      ...prev,
+      stockModels: prev.stockModels.filter(s => s !== sm),
+    }));
+  };
+
+  const enableAllForModel = (modelName: string) => {
+    bulkUpdateMutation.mutate({ modelName, data: { enabled: true, isActive: true } });
+  };
+
+  const disableAllForModel = (modelName: string) => {
+    bulkUpdateMutation.mutate({ modelName, data: { enabled: false, isActive: false } });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
             Mold Settings
           </DialogTitle>
           <DialogDescription>
-            View and manage mold configurations for layup scheduling. Molds are matched to orders by their model name.
+            Configure which molds can process which stock models. Click the pencil icon to edit a mold's settings.
           </DialogDescription>
         </DialogHeader>
 
@@ -89,7 +179,7 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
           <div className="flex items-center gap-2 flex-1">
             <Search className="w-4 h-4 text-gray-400" />
             <Input
-              placeholder="Search molds..."
+              placeholder="Search molds or stock models..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-xs"
@@ -141,52 +231,146 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
                         {modelMolds.length} mold{modelMolds.length !== 1 ? 's' : ''}
                       </Badge>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      Matches: <code className="bg-gray-200 px-1 rounded text-xs">
-                        {modelName.toLowerCase().replace(/\s+/g, '_')}
-                      </code>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 mr-2">
+                        Auto-matches: <code className="bg-gray-200 px-1 rounded text-xs">
+                          {modelName.toLowerCase().replace(/\s+/g, '_')}
+                        </code>
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => enableAllForModel(modelName)}
+                        disabled={bulkUpdateMutation.isPending}
+                      >
+                        Enable All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => disableAllForModel(modelName)}
+                        disabled={bulkUpdateMutation.isPending}
+                      >
+                        Disable All
+                      </Button>
                     </div>
                   </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[180px]">Mold ID</TableHead>
-                        <TableHead className="w-[80px]">Instance</TableHead>
+                        <TableHead className="w-[160px]">Mold ID</TableHead>
+                        <TableHead className="w-[70px]">Instance</TableHead>
                         <TableHead className="w-[100px]">Capacity</TableHead>
-                        <TableHead>Stock Models</TableHead>
-                        <TableHead className="w-[100px]">Status</TableHead>
+                        <TableHead>Stock Models (can process)</TableHead>
+                        <TableHead className="w-[90px]">Enabled</TableHead>
+                        <TableHead className="w-[80px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {modelMolds.sort((a, b) => a.instanceNumber - b.instanceNumber).map(mold => (
-                        <TableRow key={mold.id}>
+                        <TableRow key={mold.id} className={editingMold === mold.id ? 'bg-blue-50' : ''}>
                           <TableCell className="font-medium">{mold.moldId}</TableCell>
                           <TableCell>{mold.instanceNumber}</TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{mold.multiplier}x</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {mold.stockModels && mold.stockModels.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {mold.stockModels.map((sm, i) => (
-                                  <Badge key={i} variant="outline" className="text-xs">
-                                    {sm}
-                                  </Badge>
-                                ))}
-                              </div>
+                            {editingMold === mold.id ? (
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editValues.multiplier}
+                                onChange={(e) => setEditValues(prev => ({ ...prev, multiplier: parseInt(e.target.value) || 1 }))}
+                                className="w-16 h-8"
+                              />
                             ) : (
-                              <span className="text-gray-400 text-sm italic">
-                                Uses model name matching
-                              </span>
+                              <Badge variant="secondary">{mold.multiplier}x</Badge>
                             )}
                           </TableCell>
                           <TableCell>
-                            {mold.enabled && mold.isActive ? (
-                              <Badge className="bg-green-100 text-green-800">Active</Badge>
+                            {editingMold === mold.id ? (
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap gap-1">
+                                  {editValues.stockModels.map((sm, i) => (
+                                    <Badge key={i} variant="outline" className="text-xs flex items-center gap-1">
+                                      {sm}
+                                      <X
+                                        className="w-3 h-3 cursor-pointer hover:text-red-500"
+                                        onClick={() => removeStockModel(sm)}
+                                      />
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <div className="flex gap-1">
+                                  <Input
+                                    placeholder="Add stock model..."
+                                    value={newStockModel}
+                                    onChange={(e) => setNewStockModel(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addStockModel())}
+                                    className="h-8 text-xs"
+                                  />
+                                  <Button size="sm" variant="outline" onClick={addStockModel} className="h-8">
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
                             ) : (
-                              <Badge variant="secondary" className="bg-gray-100 text-gray-600">
-                                Inactive
-                              </Badge>
+                              mold.stockModels && mold.stockModels.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {mold.stockModels.map((sm, i) => (
+                                    <Badge key={i} variant="outline" className="text-xs">
+                                      {sm}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-sm italic">
+                                  Uses model name matching
+                                </span>
+                              )
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingMold === mold.id ? (
+                              <Switch
+                                checked={editValues.enabled}
+                                onCheckedChange={(checked) => setEditValues(prev => ({ ...prev, enabled: checked }))}
+                              />
+                            ) : (
+                              mold.enabled && mold.isActive ? (
+                                <Badge className="bg-green-100 text-green-800">Yes</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-gray-100 text-gray-600">No</Badge>
+                              )
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingMold === mold.id ? (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={saveEditing}
+                                  disabled={updateMoldMutation.isPending}
+                                  className="h-8 px-2"
+                                >
+                                  <Save className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={cancelEditing}
+                                  className="h-8 px-2"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditing(mold)}
+                                className="h-8 px-2"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
                             )}
                           </TableCell>
                         </TableRow>
@@ -206,8 +390,8 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
 
         <div className="border-t pt-4 mt-4">
           <p className="text-sm text-gray-500">
-            Molds are automatically matched to orders based on their model name. 
-            For example, a "Mesa Universal" mold will match orders with stock model "mesa_universal".
+            <strong>Tip:</strong> To make a mold process a stock model like "cf_adj_alp_hunter", 
+            click the pencil icon on that mold and add "cf_adj_alp_hunter" to its stock models list.
           </p>
         </div>
       </DialogContent>

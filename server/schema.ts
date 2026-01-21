@@ -1114,11 +1114,12 @@ export const trainingProgramTasks = pgTable('training_program_tasks', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Training Assignments - Assign programs to employees
+// Training Assignments - Assign programs to employees (trainees) with optional trainer
 export const trainingAssignments = pgTable('training_assignments', {
   id: serial('id').primaryKey(),
   programId: integer('program_id').references(() => trainingPrograms.id).notNull(),
-  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(), // Trainee
+  trainerId: integer('trainer_id').references(() => employees.id), // Assigned trainer
   assignedBy: integer('assigned_by'),
   startDate: timestamp('start_date').defaultNow(),
   dueDate: timestamp('due_date'),

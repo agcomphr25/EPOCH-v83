@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   GraduationCap,
   Lock,
@@ -24,6 +25,9 @@ import {
   Target,
   ChevronRight,
   AlertCircle,
+  BookOpen,
+  FileText,
+  Users,
 } from 'lucide-react';
 
 interface TrainingPlan {
@@ -69,6 +73,35 @@ interface QuizResults {
   }[];
 }
 
+interface ProgramAssignment {
+  id: number;
+  programId: number;
+  employeeId: number;
+  trainerId: number | null;
+  status: string;
+  startDate: string | null;
+  dueDate: string | null;
+  program: {
+    id: number;
+    title: string;
+    description: string | null;
+    department: string;
+    role: string;
+  } | null;
+  trainer: {
+    id: number;
+    name: string | null;
+  } | null;
+  tasks: {
+    id: number;
+    title: string;
+    description: string | null;
+    sortOrder: number;
+    estimatedMinutes: number | null;
+    dayNumber: number;
+  }[];
+}
+
 const stepDescriptions = [
   { step: 1, title: "Trainer Does / Trainer Explains", icon: Eye, bgClass: "bg-blue-500", description: "Watch the trainer demonstrate while explaining the process" },
   { step: 2, title: "Trainer Does / Trainee Explains", icon: MessageCircle, bgClass: "bg-teal-500", description: "Explain back what the trainer is doing to verify understanding" },
@@ -93,6 +126,17 @@ export default function TraineeTrainingPortal() {
 
   const { data: trainingPlans = [], isLoading } = useQuery<TrainingPlan[]>({
     queryKey: ['/api/training/epoch/trainee-plans', traineeId],
+    enabled: !!traineeId,
+  });
+
+  // Get program-based assignments
+  const { data: programAssignments = [], isLoading: programsLoading } = useQuery<ProgramAssignment[]>({
+    queryKey: ['/api/training/my-training', traineeId],
+    queryFn: async () => {
+      const res = await fetch(`/api/training/my-training/${traineeId}`);
+      if (!res.ok) throw new Error('Failed to fetch program assignments');
+      return res.json();
+    },
     enabled: !!traineeId,
   });
 
@@ -168,7 +212,7 @@ export default function TraineeTrainingPortal() {
     return (completedSteps / 4) * 100;
   };
 
-  if (isLoading) {
+  if (isLoading || programsLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center h-64">
@@ -178,32 +222,170 @@ export default function TraineeTrainingPortal() {
     );
   }
 
+  // Group program tasks by day
+  const getTasksByDay = (assignment: ProgramAssignment) => {
+    const byDay: Record<number, typeof assignment.tasks> = {};
+    assignment.tasks.forEach(task => {
+      const day = task.dayNumber || 1;
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(task);
+    });
+    return byDay;
+  };
+
+  // Get today's tasks (day 1 for new assignments, calculated for ongoing)
+  const getTodayDay = (assignment: ProgramAssignment) => {
+    if (!assignment.startDate) return 1;
+    const start = new Date(assignment.startDate);
+    const today = new Date();
+    const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays + 1);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <GraduationCap className="h-8 w-8 text-primary" />
-          My Training Programs
+          My Training
         </h1>
         <p className="text-muted-foreground mt-2">
-          Complete your 4-step training programs and pass the quizzes to earn certifications
+          Complete your assigned training programs and quizzes
         </p>
       </div>
 
-      {trainingPlans.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <GraduationCap className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No Training Programs Assigned</h3>
-              <p className="text-muted-foreground">
-                Your training programs will appear here when assigned by a trainer
-              </p>
+      <Tabs defaultValue="programs" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="programs" className="gap-2">
+            <BookOpen className="h-4 w-4" />
+            Training Programs
+            {programAssignments.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{programAssignments.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="4step" className="gap-2">
+            <Target className="h-4 w-4" />
+            4-Step Training
+            {trainingPlans.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{trainingPlans.length}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Program-Based Training */}
+        <TabsContent value="programs" className="space-y-4">
+          {programsLoading ? (
+            <div className="text-center py-8">Loading programs...</div>
+          ) : programAssignments.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="text-center">
+                  <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">No Training Programs Assigned</h3>
+                  <p className="text-muted-foreground">
+                    Your training programs will appear here when assigned by a trainer
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {programAssignments.map((assignment) => {
+                const tasksByDay = getTasksByDay(assignment);
+                const todayDay = getTodayDay(assignment);
+                const days = Object.keys(tasksByDay).map(Number).sort((a, b) => a - b);
+
+                return (
+                  <Card key={assignment.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            {assignment.program?.title || 'Training Program'}
+                            <Badge variant={assignment.status === 'completed' ? 'default' : 'secondary'}>
+                              {assignment.status}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription>{assignment.program?.description}</CardDescription>
+                        </div>
+                        {assignment.trainer && (
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            Trainer: {assignment.trainer.name}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Daily Tasks & Quizzes
+                      </h4>
+                      <div className="space-y-4">
+                        {days.map((day) => (
+                          <div 
+                            key={day} 
+                            className={`p-4 rounded-lg border ${day === todayDay ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-medium flex items-center gap-2">
+                                Day {day}
+                                {day === todayDay && (
+                                  <Badge variant="default" className="bg-primary">Today</Badge>
+                                )}
+                              </h5>
+                              <span className="text-sm text-muted-foreground">
+                                {tasksByDay[day].length} tasks
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {tasksByDay[day].map((task) => (
+                                <div key={task.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                                  <div className="flex items-center gap-2">
+                                    {task.title.toLowerCase().includes('quiz') ? (
+                                      <ClipboardCheck className="h-4 w-4 text-orange-500" />
+                                    ) : (
+                                      <FileText className="h-4 w-4 text-blue-500" />
+                                    )}
+                                    <span className="text-sm">{task.title}</span>
+                                  </div>
+                                  {task.estimatedMinutes && (
+                                    <span className="text-xs text-muted-foreground">
+                                      ~{task.estimatedMinutes} min
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
+          )}
+        </TabsContent>
+
+        {/* 4-Step Training */}
+        <TabsContent value="4step" className="space-y-6">
+          {isLoading ? (
+            <div className="text-center py-8">Loading training plans...</div>
+          ) : trainingPlans.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="text-center">
+                  <Target className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">No 4-Step Training Assigned</h3>
+                  <p className="text-muted-foreground">
+                    4-step certification training will appear here when assigned
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
           {trainingPlans.map((plan) => {
             const overallProgress = calculateOverallProgress(plan);
             
@@ -341,8 +523,10 @@ export default function TraineeTrainingPortal() {
               </Card>
             );
           })}
-        </div>
-      )}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={quizDialogOpen} onOpenChange={setQuizDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

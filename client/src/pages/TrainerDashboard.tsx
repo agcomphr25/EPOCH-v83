@@ -180,6 +180,36 @@ interface SessionUser {
   name?: string;
 }
 
+interface ProgramTraineeAssignment {
+  id: number;
+  programId: number;
+  employeeId: number;
+  trainerId: number | null;
+  status: string;
+  startDate: string | null;
+  dueDate: string | null;
+  trainee: {
+    id: number;
+    name: string | null;
+    department: string | null;
+  } | null;
+  program: {
+    id: number;
+    title: string;
+    description: string | null;
+    department: string;
+    role: string;
+  } | null;
+  tasks: {
+    id: number;
+    title: string;
+    description: string | null;
+    sortOrder: number;
+    estimatedMinutes: number | null;
+    dayNumber: number;
+  }[];
+}
+
 export default function TrainerDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('assignments');
@@ -242,6 +272,18 @@ export default function TrainerDashboard() {
 
   const { data: aiTrainingPlans = [] } = useQuery<AiTrainingPlan[]>({
     queryKey: ['/api/training/content-library/training-plans'],
+  });
+
+  // Program-based trainer assignments
+  const { data: myTrainees = [], isLoading: myTraineesLoading } = useQuery<ProgramTraineeAssignment[]>({
+    queryKey: ['/api/training/trainer-assignments', trainerId],
+    queryFn: async () => {
+      if (!trainerId) return [];
+      const res = await fetch(`/api/training/trainer-assignments/${trainerId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!trainerId,
   });
 
   // Yesterday's sessions with SOA feedback for morning review
@@ -1031,6 +1073,10 @@ export default function TrainerDashboard() {
               <Award className="h-4 w-4" />
               Certifications
             </TabsTrigger>
+            <TabsTrigger value="my-trainees" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              My Trainees ({myTrainees.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="assignments" className="space-y-4">
@@ -1388,6 +1434,88 @@ export default function TrainerDashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* My Trainees - Program-based assignments */}
+          <TabsContent value="my-trainees" className="space-y-4">
+            {myTraineesLoading ? (
+              <div className="text-center py-8">Loading your trainees...</div>
+            ) : myTrainees.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Trainees Assigned</h3>
+                  <p className="text-muted-foreground">Training programs where you are the assigned trainer will appear here</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {myTrainees.map((assignment) => (
+                  <Card key={assignment.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <GraduationCap className="h-5 w-5 text-primary" />
+                            {assignment.trainee?.name || `Trainee #${assignment.employeeId}`}
+                            <Badge variant={assignment.status === 'completed' ? 'default' : 'secondary'}>
+                              {assignment.status}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription>
+                            {assignment.program?.title || 'Training Program'}
+                          </CardDescription>
+                        </div>
+                        <div className="text-right text-sm text-muted-foreground">
+                          {assignment.trainee?.department && (
+                            <Badge variant="outline">{assignment.trainee.department}</Badge>
+                          )}
+                          {assignment.startDate && (
+                            <p className="mt-1">Started: {new Date(assignment.startDate).toLocaleDateString()}</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Program description */}
+                        {assignment.program?.description && (
+                          <p className="text-sm text-muted-foreground">
+                            {assignment.program.description}
+                          </p>
+                        )}
+                        
+                        {/* Tasks/Materials for trainer */}
+                        <div>
+                          <h4 className="font-medium mb-2 flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Training Materials ({assignment.tasks.length} tasks)
+                          </h4>
+                          <div className="grid gap-2">
+                            {assignment.tasks.slice(0, 5).map((task) => (
+                              <div key={task.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                                <span>{task.title}</span>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">Day {task.dayNumber || 1}</Badge>
+                                  {task.estimatedMinutes && (
+                                    <span className="text-xs text-muted-foreground">~{task.estimatedMinutes}m</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {assignment.tasks.length > 5 && (
+                              <p className="text-sm text-muted-foreground text-center">
+                                +{assignment.tasks.length - 5} more tasks
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       )}

@@ -2510,6 +2510,221 @@ router.post('/assignments', async (req, res) => {
   }
 });
 
+// Get assignments for a specific program (with trainee and trainer details)
+router.get('/programs/:programId/assignments', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.programId);
+    const assignments = await db
+      .select({
+        id: trainingAssignments.id,
+        programId: trainingAssignments.programId,
+        employeeId: trainingAssignments.employeeId,
+        trainerId: trainingAssignments.trainerId,
+        status: trainingAssignments.status,
+        startDate: trainingAssignments.startDate,
+        dueDate: trainingAssignments.dueDate,
+        notes: trainingAssignments.notes,
+        createdAt: trainingAssignments.createdAt,
+      })
+      .from(trainingAssignments)
+      .where(eq(trainingAssignments.programId, programId))
+      .orderBy(desc(trainingAssignments.createdAt));
+
+    // Get employee details for each assignment
+    const employeeIds = Array.from(new Set(assignments.flatMap(a => [a.employeeId, a.trainerId].filter(Boolean))));
+    const employeeList = employeeIds.length > 0 
+      ? await db.select().from(employees).where(inArray(employees.id, employeeIds as number[]))
+      : [];
+    const employeeMap = new Map(employeeList.map(e => [e.id, e]));
+
+    const enrichedAssignments = assignments.map(a => ({
+      ...a,
+      trainee: employeeMap.get(a.employeeId) || null,
+      trainer: a.trainerId ? employeeMap.get(a.trainerId) || null : null,
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching program assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create assignment for a program
+router.post('/programs/:programId/assignments', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.programId);
+    const { employeeId, trainerId, startDate, dueDate, notes } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'Trainee (employeeId) is required' });
+    }
+
+    const [assignment] = await db.insert(trainingAssignments).values({
+      programId,
+      employeeId,
+      trainerId: trainerId || null,
+      startDate: startDate ? new Date(startDate) : new Date(),
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes || null,
+      status: 'pending',
+    }).returning();
+
+    // Create a session for this assignment
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    await db.insert(trainingBuilderSessions).values({
+      sessionId,
+      assignmentId: assignment.id,
+      employeeId: assignment.employeeId,
+      programId: assignment.programId,
+    });
+
+    res.status(201).json(assignment);
+  } catch (error: any) {
+    console.error('Error creating program assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update assignment (change trainer, status, etc.)
+router.patch('/assignments/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { trainerId, status, dueDate, notes } = req.body;
+
+    const updateData: any = { updatedAt: new Date() };
+    if (trainerId !== undefined) updateData.trainerId = trainerId || null;
+    if (status) updateData.status = status;
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (notes !== undefined) updateData.notes = notes;
+    if (status === 'completed') updateData.completedAt = new Date();
+
+    const [updated] = await db
+      .update(trainingAssignments)
+      .set(updateData)
+      .where(eq(trainingAssignments.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete assignment
+router.delete('/assignments/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingAssignments).where(eq(trainingAssignments.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainee's assigned programs (for trainee dashboard)
+router.get('/my-training/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    const assignments = await db
+      .select()
+      .from(trainingAssignments)
+      .where(eq(trainingAssignments.employeeId, employeeId))
+      .orderBy(desc(trainingAssignments.createdAt));
+
+    // Get program details and trainer info
+    const programIds = Array.from(new Set(assignments.map(a => a.programId)));
+    const trainerIds = Array.from(new Set(assignments.map(a => a.trainerId).filter(Boolean)));
+
+    const programs = programIds.length > 0
+      ? await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds))
+      : [];
+    const trainers = trainerIds.length > 0
+      ? await db.select().from(employees).where(inArray(employees.id, trainerIds as number[]))
+      : [];
+
+    const programMap = new Map(programs.map(p => [p.id, p]));
+    const trainerMap = new Map(trainers.map(t => [t.id, t]));
+
+    // Get tasks for each program
+    const allTasks = programIds.length > 0
+      ? await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder)
+      : [];
+
+    const tasksByProgram = allTasks.reduce((acc, task) => {
+      if (!acc[task.programId]) acc[task.programId] = [];
+      acc[task.programId].push(task);
+      return acc;
+    }, {} as Record<number, typeof allTasks>);
+
+    const enrichedAssignments = assignments.map(a => ({
+      ...a,
+      program: programMap.get(a.programId) || null,
+      trainer: a.trainerId ? trainerMap.get(a.trainerId) || null : null,
+      tasks: tasksByProgram[a.programId] || [],
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching trainee assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainer's assigned trainees (for trainer dashboard)
+router.get('/trainer-assignments/:trainerId', async (req, res) => {
+  try {
+    const trainerId = parseInt(req.params.trainerId);
+    const assignments = await db
+      .select()
+      .from(trainingAssignments)
+      .where(eq(trainingAssignments.trainerId, trainerId))
+      .orderBy(desc(trainingAssignments.createdAt));
+
+    // Get trainee and program details
+    const traineeIds = Array.from(new Set(assignments.map(a => a.employeeId)));
+    const programIds = Array.from(new Set(assignments.map(a => a.programId)));
+
+    const trainees = traineeIds.length > 0
+      ? await db.select().from(employees).where(inArray(employees.id, traineeIds))
+      : [];
+    const programs = programIds.length > 0
+      ? await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds))
+      : [];
+
+    const traineeMap = new Map(trainees.map(t => [t.id, t]));
+    const programMap = new Map(programs.map(p => [p.id, p]));
+
+    // Get tasks for each program
+    const allTasks = programIds.length > 0
+      ? await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder)
+      : [];
+
+    const tasksByProgram = allTasks.reduce((acc, task) => {
+      if (!acc[task.programId]) acc[task.programId] = [];
+      acc[task.programId].push(task);
+      return acc;
+    }, {} as Record<number, typeof allTasks>);
+
+    const enrichedAssignments = assignments.map(a => ({
+      ...a,
+      trainee: traineeMap.get(a.employeeId) || null,
+      program: programMap.get(a.programId) || null,
+      tasks: tasksByProgram[a.programId] || [],
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching trainer assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================================================
 // TRAINING SESSIONS
 // ============================================================================

@@ -1,8 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { 
   Plus, 
   FileText, 
@@ -11,10 +18,13 @@ import {
   Users, 
   Clock,
   ArrowLeft,
-  Building2
+  Building2,
+  UserPlus,
+  GraduationCap,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { queryClient } from '@/lib/queryClient';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import { trainingBuilderApi, QUERY_KEYS, TrainingProgram } from '../lib/api';
 import {
   AlertDialog,
@@ -28,12 +38,50 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface Employee {
+  id: number;
+  name: string | null;
+  department: string | null;
+  jobTitle: string | null;
+}
+
+interface Assignment {
+  id: number;
+  programId: number;
+  employeeId: number;
+  trainerId: number | null;
+  status: string;
+  startDate: string | null;
+  dueDate: string | null;
+  trainee: Employee | null;
+  trainer: Employee | null;
+}
+
 export default function ProgramsPage() {
   const { toast } = useToast();
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState<TrainingProgram | null>(null);
+  const [selectedTrainee, setSelectedTrainee] = useState<string>('');
+  const [selectedTrainer, setSelectedTrainer] = useState<string>('');
 
   const { data: programs = [], isLoading } = useQuery<TrainingProgram[]>({
     queryKey: QUERY_KEYS.programs,
     queryFn: trainingBuilderApi.getPrograms,
+  });
+
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: assignments = [], refetch: refetchAssignments, isLoading: assignmentsLoading } = useQuery<Assignment[]>({
+    queryKey: ['/api/training/programs', selectedProgram?.id, 'assignments'],
+    queryFn: async () => {
+      if (!selectedProgram?.id) return [];
+      const res = await fetch(`/api/training/programs/${selectedProgram.id}/assignments`);
+      if (!res.ok) throw new Error('Failed to fetch assignments');
+      return res.json();
+    },
+    enabled: !!selectedProgram?.id && assignDialogOpen,
   });
 
   const deleteMutation = useMutation({
@@ -47,8 +95,57 @@ export default function ProgramsPage() {
     },
   });
 
+  const assignMutation = useMutation({
+    mutationFn: async (data: { programId: number; employeeId: number; trainerId?: number }) => {
+      return apiRequest(`/api/training/programs/${data.programId}/assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ employeeId: data.employeeId, trainerId: data.trainerId }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      refetchAssignments();
+      setSelectedTrainee('');
+      setSelectedTrainer('');
+      toast({ title: 'Assignment created successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to create assignment', description: String(error), variant: 'destructive' });
+    },
+  });
+
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/assignments/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      refetchAssignments();
+      toast({ title: 'Assignment removed' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to remove assignment', description: String(error), variant: 'destructive' });
+    },
+  });
+
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  const handleOpenAssignDialog = (program: TrainingProgram) => {
+    setSelectedProgram(program);
+    setAssignDialogOpen(true);
+  };
+
+  const handleAssign = () => {
+    if (!selectedProgram || !selectedTrainee) {
+      toast({ title: 'Please select a trainee', variant: 'destructive' });
+      return;
+    }
+    assignMutation.mutate({
+      programId: selectedProgram.id,
+      employeeId: parseInt(selectedTrainee),
+      trainerId: selectedTrainer ? parseInt(selectedTrainer) : undefined,
+    });
   };
 
   return (
@@ -173,19 +270,139 @@ export default function ProgramsPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-3 pt-3 border-t">
-                  <Link href={`/training/programs/${program.id}`}>
+                <div className="mt-3 pt-3 border-t flex gap-2">
+                  <Link href={`/training/programs/${program.id}`} className="flex-1">
                     <Button variant="outline" className="w-full">
                       <Edit className="h-4 w-4 mr-2" />
-                      Edit Program
+                      Edit
                     </Button>
                   </Link>
+                  <Button 
+                    variant="default" 
+                    className="flex-1"
+                    onClick={() => handleOpenAssignDialog(program)}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Assign
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Assignment Dialog */}
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5" />
+              Assign Trainees & Trainers
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProgram?.title} - Assign employees to this training program
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Add new assignment */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Trainee (Required)</Label>
+                <Select value={selectedTrainee} onValueChange={setSelectedTrainee}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select trainee..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name || `Employee #${emp.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Trainer (Optional)</Label>
+                <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select trainer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No trainer assigned</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name || `Employee #${emp.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button onClick={handleAssign} disabled={!selectedTrainee || assignMutation.isPending}>
+              <Plus className="h-4 w-4 mr-2" />
+              {assignMutation.isPending ? 'Assigning...' : 'Add Assignment'}
+            </Button>
+
+            <Separator />
+
+            {/* Current assignments */}
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Current Assignments</Label>
+              <ScrollArea className="h-[200px] border rounded-lg">
+                {assignmentsLoading ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    Loading assignments...
+                  </div>
+                ) : assignments.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No trainees assigned yet
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {assignments.map((assignment) => (
+                      <div key={assignment.id} className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <div className="font-medium flex items-center gap-2">
+                              <Users className="h-4 w-4 text-blue-500" />
+                              {assignment.trainee?.name || `Employee #${assignment.employeeId}`}
+                              <Badge variant={assignment.status === 'completed' ? 'default' : 'secondary'}>
+                                {assignment.status}
+                              </Badge>
+                            </div>
+                            {assignment.trainer && (
+                              <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                <GraduationCap className="h-3 w-3" />
+                                Trainer: {assignment.trainer.name || `Employee #${assignment.trainerId}`}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

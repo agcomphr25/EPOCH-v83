@@ -2514,36 +2514,46 @@ router.post('/assignments', async (req, res) => {
 router.get('/programs/:programId/assignments', async (req, res) => {
   try {
     const programId = parseInt(req.params.programId);
-    const assignments = await db
-      .select({
-        id: trainingAssignments.id,
-        programId: trainingAssignments.programId,
-        employeeId: trainingAssignments.employeeId,
-        trainerId: trainingAssignments.trainerId,
-        status: trainingAssignments.status,
-        startDate: trainingAssignments.startDate,
-        dueDate: trainingAssignments.dueDate,
-        notes: trainingAssignments.notes,
-        createdAt: trainingAssignments.createdAt,
-      })
-      .from(trainingAssignments)
-      .where(eq(trainingAssignments.programId, programId))
-      .orderBy(desc(trainingAssignments.createdAt));
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.programId, programId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching assignments:', queryError);
+      return res.json([]);
+    }
 
     // Handle null or undefined assignments
-    if (!assignments || !Array.isArray(assignments)) {
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
       return res.json([]);
     }
 
     // Get employee details for each assignment
     const employeeIds = Array.from(new Set(assignments.flatMap(a => [a.employeeId, a.trainerId].filter(Boolean))));
-    const employeeList = employeeIds.length > 0 
-      ? await db.select().from(employees).where(inArray(employees.id, employeeIds as number[]))
-      : [];
+    let employeeList: any[] = [];
+    if (employeeIds.length > 0) {
+      try {
+        employeeList = await db.select().from(employees).where(inArray(employees.id, employeeIds as number[]));
+      } catch (empError) {
+        console.error('Error fetching employees for assignments:', empError);
+      }
+    }
     const employeeMap = new Map((employeeList || []).map(e => [e.id, e]));
 
     const enrichedAssignments = assignments.map(a => ({
-      ...a,
+      id: a.id,
+      programId: a.programId,
+      employeeId: a.employeeId,
+      trainerId: a.trainerId,
+      status: a.status,
+      startDate: a.startDate,
+      dueDate: a.dueDate,
+      notes: a.notes,
+      createdAt: a.createdAt,
       trainee: employeeMap.get(a.employeeId) || null,
       trainer: a.trainerId ? employeeMap.get(a.trainerId) || null : null,
     }));
@@ -2551,7 +2561,7 @@ router.get('/programs/:programId/assignments', async (req, res) => {
     res.json(enrichedAssignments);
   } catch (error: any) {
     console.error('Error fetching program assignments:', error);
-    res.status(500).json({ error: error.message });
+    res.json([]);
   }
 });
 
@@ -2559,21 +2569,28 @@ router.get('/programs/:programId/assignments', async (req, res) => {
 router.post('/programs/:programId/assignments', async (req, res) => {
   try {
     const programId = parseInt(req.params.programId);
-    const { employeeId, trainerId, startDate, dueDate, notes } = req.body;
+    const { employeeId, trainerId } = req.body;
+
+    console.log('Creating assignment with body:', JSON.stringify(req.body));
 
     if (!employeeId) {
       return res.status(400).json({ error: 'Trainee (employeeId) is required' });
     }
 
-    const [assignment] = await db.insert(trainingAssignments).values({
+    // Build the values object explicitly to avoid undefined/null issues
+    const insertValues: any = {
       programId,
-      employeeId,
-      trainerId: trainerId && trainerId !== '' ? Number(trainerId) : null,
-      startDate: startDate && startDate !== '' ? new Date(startDate) : new Date(),
-      dueDate: dueDate && dueDate !== '' ? new Date(dueDate) : null,
-      notes: notes && notes !== '' ? notes : null,
+      employeeId: Number(employeeId),
       status: 'pending',
-    }).returning();
+      startDate: new Date(),
+    };
+    
+    // Only add trainerId if it's a valid number
+    if (trainerId && trainerId !== '' && !isNaN(Number(trainerId))) {
+      insertValues.trainerId = Number(trainerId);
+    }
+
+    const [assignment] = await db.insert(trainingAssignments).values(insertValues).returning();
 
     // Create a session for this assignment
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;

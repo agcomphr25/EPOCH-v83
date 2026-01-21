@@ -571,15 +571,36 @@ router.post('/generate', async (req: Request, res: Response) => {
       const compatibleMolds = activeMolds.filter(mold => {
         if (!item.stockModel) return false;
         
+        // Model name alias mappings for stock models with non-standard naming
+        const modelAliases: Record<string, string[]> = {
+          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor'],
+          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine'],
+        };
+        
         // Normalize function: "Mesa Universal" -> "mesa_universal"
         const normalizeModelName = (name: string) => 
           name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        
+        // Check if stock model matches any alias
+        const getCanonicalName = (stockModel: string): string => {
+          const normalized = stockModel.toLowerCase();
+          for (const [canonical, aliases] of Object.entries(modelAliases)) {
+            if (aliases.includes(normalized) || normalized === canonical) {
+              return canonical;
+            }
+          }
+          return normalized;
+        };
+        
+        const canonicalStockModel = getCanonicalName(item.stockModel);
         
         // First try stockModels array matching
         if (mold.stockModels && mold.stockModels.length > 0) {
           // If it's an array, use includes
           if (Array.isArray(mold.stockModels)) {
-            return mold.stockModels.includes(item.stockModel);
+            // Check both original and canonical names
+            return mold.stockModels.includes(item.stockModel) || 
+                   mold.stockModels.some(m => getCanonicalName(m) === canonicalStockModel);
           }
           
           // If it's a string (postgres array format like "{a,b,c}"), parse and check
@@ -587,7 +608,8 @@ router.post('/generate', async (req: Request, res: Response) => {
             const modelsStr = mold.stockModels as string;
             // Handle postgres array format: {model1,model2,model3}
             const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
-            return cleanedModels.includes(item.stockModel);
+            return cleanedModels.includes(item.stockModel) ||
+                   cleanedModels.some(m => getCanonicalName(m) === canonicalStockModel);
           }
         }
         
@@ -596,10 +618,13 @@ router.post('/generate', async (req: Request, res: Response) => {
         const normalizedMoldModel = normalizeModelName(mold.modelName);
         const normalizedStockModel = item.stockModel.toLowerCase();
         
-        // Check if normalized names match or contain each other
+        // Check if normalized names match, including aliases
         return normalizedMoldModel === normalizedStockModel ||
+               normalizedMoldModel === canonicalStockModel ||
                normalizedMoldModel.includes(normalizedStockModel) ||
-               normalizedStockModel.includes(normalizedMoldModel);
+               normalizedStockModel.includes(normalizedMoldModel) ||
+               normalizedMoldModel.includes(canonicalStockModel) ||
+               canonicalStockModel.includes(normalizedMoldModel);
       });
       
       if (compatibleMolds.length === 0) {

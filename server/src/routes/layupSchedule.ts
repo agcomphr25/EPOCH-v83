@@ -334,15 +334,11 @@ router.post('/generate', async (req: Request, res: Response) => {
     console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
     // Fetch ALL molds (don't filter by enabled status since database has them disabled)
-    // Use rawSql tagged template function for proper array handling
-    // Note: enabled/is_active status is ignored due to database driver write issues
-    const moldQueryResult = await rawSql`
+    // Use pool.query for proper PostgreSQL array handling (rawSql/Neon driver returns empty arrays)
+    const rawMolds = await pool.query(`
       SELECT id, mold_id, model_name, stock_models, instance_number, enabled, multiplier, is_active
       FROM molds
-    `;
-    
-    // Parse the results - handle both array format (from pool.query) and Neon result format
-    const rawMolds = Array.isArray(moldQueryResult) ? moldQueryResult : (moldQueryResult.rows || []);
+    `);
     
     // Debug: Log raw data to see what format stock_models is in
     if (rawMolds.length > 0) {
@@ -573,8 +569,8 @@ router.post('/generate', async (req: Request, res: Response) => {
         
         // Model name alias mappings for stock models with non-standard naming
         const modelAliases: Record<string, string[]> = {
-          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor'],
-          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine'],
+          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor', 'cf_adj_armor', 'cf_adj_gladius'],
+          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine', 'cf_adj_alp_hunter', 'cf_adj_alpine_hunter', 'cf_adj_alpine'],
         };
         
         // Normalize function: "Mesa Universal" -> "mesa_universal"

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
+import { getTermsContent, type TermsType } from './pdfConfig';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,12 +138,14 @@ function wrapText(text: string, maxWidth: number, fontSize: number, font: any): 
 
 export async function generateSalesOrderPDF(
   orderData: OrderData,
-  includeSignatureBox: boolean = true
+  includeSignatureBox: boolean = true,
+  termsType: TermsType = 'initial'
 ): Promise<Buffer> {
   console.log('📄 [PDF] Starting sales order PDF generation...');
   console.log(`📄 [PDF] Order ID: ${orderData.orderId}`);
   console.log(`📄 [PDF] Environment: ${process.env.NODE_ENV}`);
   console.log(`📄 [PDF] Include signature box: ${includeSignatureBox}`);
+  console.log(`📄 [PDF] Terms type: ${termsType}`);
   console.log('📄 [PDF] Order Data Summary:', {
     modelPrice: orderData.modelPrice,
     shipping: orderData.shipping,
@@ -322,14 +325,14 @@ export async function generateSalesOrderPDF(
 
   page.drawText('CUSTOMER INFORMATION', {
     x: margin + 8,
-    y: customerBoxY + customerBoxHeight - 20,
+    y: customerBoxY + customerBoxHeight - 16,
     size: 12,
     font: boldFont,
   });
 
-  // SHIP TO
+  // SHIP TO - reduced top spacing from -45 to -35
   const shipToX = margin + 8;
-  let shipCurrentY = customerBoxY + customerBoxHeight - 45;
+  let shipCurrentY = customerBoxY + customerBoxHeight - 35;
 
   page.drawText('SHIP TO:', {
     x: shipToX,
@@ -884,9 +887,9 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  summaryLineY -= 25;
+  summaryLineY -= 35;
 
-  // Payment Status
+  // Payment Status - added more vertical spacing above
   const paymentStatus = orderData.paymentStatus || 'PENDING';
   const paymentColor = paymentStatus === 'PAID' ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
@@ -974,10 +977,22 @@ export async function generateSalesOrderPDF(
   });
 
   // Customer notes are now displayed on page 1 in the Features table
-  page2Y -= 20;
+  // Start Terms section below the order info box to avoid collision
+  page2Y = page2OrderBoxY - 25;
 
-  // Terms and Conditions Section
-  page2.drawText('Initial Terms and Conditions', {
+  // Terms and Conditions Section - positioned to avoid order box overlap
+  // Get terms content based on termsType (initial or warranty)
+  const termsContent = getTermsContent(termsType);
+  
+  // Use smaller font and tighter line spacing for warranty terms (more content)
+  const termsFontSize = termsType === 'warranty' ? 7 : 8;
+  const termsLineHeight = termsType === 'warranty' ? 10 : 13;
+  const termsEmptyLineHeight = termsType === 'warranty' ? 6 : 8;
+  
+  // Calculate max width for text wrapping (page width minus margins)
+  const maxTermsWidth = width - (margin * 2);
+  
+  page2.drawText(termsContent.title, {
     x: margin,
     y: page2Y,
     size: 12,
@@ -985,36 +1000,40 @@ export async function generateSalesOrderPDF(
   });
   
   page2Y -= 15;
-  page2.drawText('Please sign and return a copy of this form, or reply to the email that you are in agreement', {
-    x: margin,
-    y: page2Y,
-    size: 8,
-    font: font,
-    color: rgb(0.3, 0.3, 0.3),
-  });
-
-  page2Y -= 20;
-  const terms = [
-    '1. Please review the specs indicated and make sure they match your intent.',
-    '2. Any changes to specs requested after 30 days from Order Date may result in additional',
-    '   charges.',
-    '3. Remington "clones" are not made by Remington and may not fit as exactly as Remington',
-    '   models do.',
-    '4. The Estimated Completion Date is an estimation based on our current capacity and the',
-    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date',
-    '5. Please sign and return a copy of this form, or reply to the email that you are in agreement',
-    '   with the specs of your order and these terms and conditions. We are not able to place any',
-    '   order into production without a confirmation.',
-  ];
-
-  for (const term of terms) {
-    page2.drawText(term, {
+  
+  // Only show the subtitle for initial terms (signature request context)
+  if (termsType === 'initial') {
+    page2.drawText('Please sign and return a copy of this form, or reply to the email that you are in agreement', {
       x: margin,
       y: page2Y,
       size: 8,
       font: font,
+      color: rgb(0.2, 0.2, 0.2),
     });
-    page2Y -= 13;
+    page2Y -= 20;
+  } else {
+    page2Y -= 5;
+  }
+
+  for (const line of termsContent.lines) {
+    // Skip empty lines but preserve spacing
+    if (line === '') {
+      page2Y -= termsEmptyLineHeight;
+      continue;
+    }
+    
+    // Use text wrapping for longer lines
+    const wrappedLines = wrapText(line, maxTermsWidth, termsFontSize, font);
+    for (const wrappedLine of wrappedLines) {
+      page2.drawText(wrappedLine, {
+        x: margin,
+        y: page2Y,
+        size: termsFontSize,
+        font: font,
+        color: rgb(0.15, 0.15, 0.15),
+      });
+      page2Y -= termsLineHeight;
+    }
   }
 
   // Customer Approval Section - only show if signature is required
@@ -1061,13 +1080,13 @@ export async function generateSalesOrderPDF(
     page2Y -= 50;
   }
 
-  // Footer
+  // Footer - darkened text for better readability
   page2.drawText('Thank you for your business!', {
     x: margin,
     y: page2Y,
     size: 10,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   page2Y -= 15;
@@ -1076,7 +1095,7 @@ export async function generateSalesOrderPDF(
     y: page2Y,
     size: 8,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   page2Y -= 12;
@@ -1085,7 +1104,7 @@ export async function generateSalesOrderPDF(
     y: page2Y,
     size: 8,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   try {

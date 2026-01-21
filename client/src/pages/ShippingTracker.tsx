@@ -48,9 +48,11 @@ import {
   Phone,
 } from 'lucide-react';
 import {
-  getCurrentCompanyWeek,
-  formatWeekRange,
-  isDateInCompanyWeek,
+  getCurrentOperationalWeek,
+  formatOperationalWeekRange,
+  getShippingWeekInfo,
+  getOperationalWeekStart,
+  getOperationalWeekEnd,
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
@@ -111,11 +113,10 @@ interface NotificationHistoryResponse {
 }
 
 export default function ShippingTracker() {
-  const currentYear = new Date().getFullYear();
-  const currentWeek = getCurrentCompanyWeek();
+  const { week: currentWeek, year: currentOpYear } = getCurrentOperationalWeek();
   const { toast } = useToast();
 
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number>(currentOpYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
@@ -253,11 +254,11 @@ export default function ShippingTracker() {
     return trackingGroups.get(trackingNumber) || [];
   };
 
-  // Calculate weekly stats
+  // Calculate weekly stats using operational weeks
   const weeklyStats: WeeklyStats[] = [];
 
   if (orders) {
-    // Group fulfilled orders by company week
+    // Group fulfilled orders by operational week (direct computation, no loop)
     const weekMap = new Map<
       string,
       { stocksShipped: number; orders: string[] }
@@ -268,23 +269,18 @@ export default function ShippingTracker() {
       .forEach((order) => {
         // Use shippedDate as the fulfillment date (fallback to updatedAt for older records)
         const fulfillmentDate = new Date(order.shippedDate || order.updatedAt);
-        const year = fulfillmentDate.getFullYear();
+        
+        // Directly compute operational week and year (no looping)
+        const weekInfo = getShippingWeekInfo(fulfillmentDate);
+        const key = `${weekInfo.operationalYear}-W${weekInfo.operationalWeek}`;
 
-        // Find which company week this order was fulfilled in
-        for (let week = 1; week <= 52; week++) {
-          if (isDateInCompanyWeek(fulfillmentDate, week, year)) {
-            const key = `${year}-W${week}`;
-
-            if (!weekMap.has(key)) {
-              weekMap.set(key, { stocksShipped: 0, orders: [] });
-            }
-
-            const stats = weekMap.get(key)!;
-            stats.stocksShipped += 1;
-            stats.orders.push(order.orderId);
-            break;
-          }
+        if (!weekMap.has(key)) {
+          weekMap.set(key, { stocksShipped: 0, orders: [] });
         }
+
+        const stats = weekMap.get(key)!;
+        stats.stocksShipped += 1;
+        stats.orders.push(order.orderId);
       });
 
     // Convert to array and sort by week descending
@@ -309,8 +305,8 @@ export default function ShippingTracker() {
     (s) => s.week === selectedWeek && s.year === selectedYear
   ) || { week: selectedWeek, year: selectedYear, stocksShipped: 0, orders: [] };
 
-  // Generate year options (current year and 2 previous years)
-  const yearOptions = [currentYear, currentYear - 1, currentYear - 2];
+  // Generate year options (current operational year and 2 previous years)
+  const yearOptions = [currentOpYear, currentOpYear - 1, currentOpYear - 2];
 
   // Generate week options (1-52)
   const weekOptions = Array.from({ length: 52 }, (_, i) => i + 1);
@@ -343,7 +339,7 @@ export default function ShippingTracker() {
                 Week {currentWeek}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {formatWeekRange(currentWeek, currentYear)}
+                {formatOperationalWeekRange(currentWeek, currentOpYear)}
               </div>
             </div>
             <div className="bg-white rounded-lg p-4 border border-blue-100">
@@ -352,7 +348,7 @@ export default function ShippingTracker() {
               </div>
               <div className="text-2xl font-bold text-green-600">
                 {weeklyStats.find(
-                  (s) => s.week === currentWeek && s.year === currentYear
+                  (s) => s.week === currentWeek && s.year === currentOpYear
                 )?.stocksShipped || 0}
               </div>
             </div>
@@ -417,7 +413,7 @@ export default function ShippingTracker() {
               </Select>
             </div>
             <div className="text-sm text-gray-600">
-              {formatWeekRange(selectedWeek, selectedYear)}
+              {formatOperationalWeekRange(selectedWeek, selectedYear)}
             </div>
           </div>
 
@@ -719,7 +715,7 @@ export default function ShippingTracker() {
                     <TableRow
                       key={`${stat.year}-W${stat.week}`}
                       className={
-                        stat.week === currentWeek && stat.year === currentYear
+                        stat.week === currentWeek && stat.year === currentOpYear
                           ? 'bg-blue-50'
                           : ''
                       }
@@ -727,14 +723,14 @@ export default function ShippingTracker() {
                       <TableCell className="font-medium">
                         Week {stat.week}, {stat.year}
                         {stat.week === currentWeek &&
-                          stat.year === currentYear && (
+                          stat.year === currentOpYear && (
                             <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
                               Current
                             </span>
                           )}
                       </TableCell>
                       <TableCell>
-                        {formatWeekRange(stat.week, stat.year)}
+                        {formatOperationalWeekRange(stat.week, stat.year)}
                       </TableCell>
                       <TableCell>
                         <span className="text-lg font-semibold text-blue-600">

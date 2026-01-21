@@ -939,8 +939,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     console.log(`📄 [Route] Using centralized PDF service for: ${orderId}`);
     
-    // Generate PDF using the customer view intent (live data without signature)
-    const result = await generateOrderPdf(orderId, PdfIntent.CUSTOMER_VIEW);
+    // Generate PDF using shipping print intent (live data, internal notes, warranty terms)
+    const result = await generateOrderPdf(orderId, PdfIntent.SHIPPING_PRINT);
     
     if (!result || !result.buffer) {
       console.error(`❌ [Route] PDF generation failed for ${orderId} - no buffer returned`);

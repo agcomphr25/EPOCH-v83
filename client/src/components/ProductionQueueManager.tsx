@@ -58,10 +58,12 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarCheck,
+  Settings,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
 import { LayupSchedulePreview } from './LayupSchedulePreview';
 import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
+import { MoldSettings } from './MoldSettings';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -154,6 +156,9 @@ export default function ProductionQueueManager() {
   
   // State for schedule history dialog
   const [scheduleHistoryOpen, setScheduleHistoryOpen] = useState(false);
+  
+  // State for mold settings dialog
+  const [moldSettingsOpen, setMoldSettingsOpen] = useState(false);
 
   // Fetch prioritized production queue
   const {
@@ -869,6 +874,15 @@ export default function ProductionQueueManager() {
           >
             <Calendar className="w-4 h-4" />
             View Schedule History
+          </Button>
+          <Button
+            onClick={() => setMoldSettingsOpen(true)}
+            variant="outline"
+            className="flex items-center gap-2"
+            data-testid="button-mold-settings"
+          >
+            <Settings className="w-4 h-4" />
+            Mold Settings
           </Button>
           <Button
             onClick={() => autoPopulateMutation.mutate()}
@@ -1909,6 +1923,12 @@ export default function ProductionQueueManager() {
       <ScheduleHistoryDialog
         open={scheduleHistoryOpen}
         onClose={() => setScheduleHistoryOpen(false)}
+      />
+
+      {/* Mold Settings Dialog */}
+      <MoldSettings
+        open={moldSettingsOpen}
+        onOpenChange={setMoldSettingsOpen}
       />
     </div>
   );

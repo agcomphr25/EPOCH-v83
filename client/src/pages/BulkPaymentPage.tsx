@@ -1,6 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { CreditCard, DollarSign, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { CreditCard, DollarSign, FileText, CheckCircle, AlertCircle, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,6 +76,7 @@ interface CreditCardData {
 export default function BulkPaymentPage() {
   const { toast } = useToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [customerComboOpen, setCustomerComboOpen] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState<Map<string, { amount: number; total: number }>>(new Map());
   const [paymentType, setPaymentType] = useState<string>('');
   const [confirmationNumber, setConfirmationNumber] = useState<string>('');
@@ -403,22 +418,57 @@ export default function BulkPaymentPage() {
         <CardContent>
           <div className="space-y-2">
             <Label htmlFor="customer-select">Select Customer</Label>
-            <Select value={selectedCustomerId} onValueChange={handleCustomerChange}>
-              <SelectTrigger id="customer-select" data-testid="select-customer">
-                <SelectValue placeholder="Choose a customer..." />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer: any) => (
-                  <SelectItem
-                    key={customer.id}
-                    value={customer.id}
-                    data-testid={`customer-${customer.id}`}
-                  >
-                    {customer.name || customer.company || `Customer ${customer.id}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={customerComboOpen}
+                  className="w-full justify-between font-normal"
+                  id="customer-select"
+                  data-testid="select-customer"
+                >
+                  {selectedCustomerId
+                    ? customers.find((c: any) => c.id === selectedCustomerId)?.name ||
+                      customers.find((c: any) => c.id === selectedCustomerId)?.company ||
+                      "Choose a customer..."
+                    : "Choose a customer..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Type to search customers..." />
+                  <CommandList>
+                    <CommandEmpty>No customer found.</CommandEmpty>
+                    <CommandGroup>
+                      {customers.map((customer: any) => {
+                        const displayName = customer.name || customer.company || `Customer ${customer.id}`;
+                        return (
+                          <CommandItem
+                            key={customer.id}
+                            value={displayName}
+                            onSelect={() => {
+                              handleCustomerChange(customer.id);
+                              setCustomerComboOpen(false);
+                            }}
+                            data-testid={`customer-${customer.id}`}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedCustomerId === customer.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {displayName}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </CardContent>
       </Card>

@@ -3,6 +3,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Truck } from 'lucide-react';
 import { Link } from 'wouter';
 import type { AllOrder } from '@shared/schema';
+import {
+  getCurrentOperationalWeek,
+  getOperationalWeekStart,
+  getOperationalWeekEnd,
+} from '@shared/weekUtils';
 
 export default function ShippingTrackerWidget() {
   const { data: orders, isLoading } = useQuery<AllOrder[]>({
@@ -10,23 +15,12 @@ export default function ShippingTrackerWidget() {
     staleTime: 30000, // Refresh every 30 seconds
   });
 
-  // Get current week's start and end dates
-  const getCurrentWeekRange = () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - dayOfWeek); // Start from Sunday
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Saturday
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    return { startOfWeek, endOfWeek };
-  };
+  // Get current operational week's start and end dates (Wednesday-Tuesday)
+  const { week: currentWeek, year: currentOpYear } = getCurrentOperationalWeek();
+  const startOfWeek = getOperationalWeekStart(currentWeek, currentOpYear);
+  const endOfWeek = getOperationalWeekEnd(currentWeek, currentOpYear);
 
   // Filter for orders shipped this week
-  const { startOfWeek, endOfWeek } = getCurrentWeekRange();
   const shippedThisWeek = (orders ?? []).filter((order) => {
     if (!order.shippedDate) return false;
     const shippedDate = new Date(order.shippedDate);

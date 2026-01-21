@@ -3919,7 +3919,6 @@ export const purchaseOrders = pgTable('purchase_orders', {
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
-  attachments: jsonb('attachments').$type<P1POAttachment[]>().default(sql`'[]'::jsonb`), // PDF attachments for PO copies
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6837,7 +6836,6 @@ export const poProducts = pgTable('po_products', {
   id: serial('id').primaryKey(),
   customerName: text('customer_name').notNull(),
   productName: text('product_name').notNull(),
-  customerProductNumber: text('customer_product_number'),
   material: text('material'),
   handedness: text('handedness'),
   stockModel: text('stock_model'),
@@ -6865,7 +6863,7 @@ export const poProducts = pgTable('po_products', {
   linkedOrderId: text('linked_order_id'),
   status: text('status').default('pending'),
   priorityNote: text('priority_note'),
-  otherOptions: text('other_options').array(),
+  barcode: text('barcode'),
 });
 
 // PO Product Selections table for tracking selection batches

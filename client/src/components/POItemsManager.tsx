@@ -179,7 +179,7 @@ export default function POItemsManager({
   };
 
   const getTotalValue = () => {
-    return poItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    return poItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
   };
 
   const getProductTypeForItem = (item: POItem) => {

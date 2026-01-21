@@ -569,10 +569,10 @@ export default function POManager() {
     queryFn: fetchPOs,
   });
 
-  // Fetch customers who have had past purchase orders
+  // Fetch all customers for dropdown
   const { data: customers = [] } = useQuery({
-    queryKey: ['/api/customers/with-pos'],
-    queryFn: () => apiRequest('/api/customers/with-pos'),
+    queryKey: ['/api/customers'],
+    queryFn: () => apiRequest('/api/customers'),
   });
 
   // Fetch stock models for order entry
@@ -655,7 +655,7 @@ export default function POManager() {
       });
       setSelectedCustomer(newCustomer);
       // Refresh customers list
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/with-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setShowCreateCustomer(false);
       // Reset new customer form
       setNewCustomerData({

@@ -1,0 +1,66 @@
+Implement alternate Terms & Conditions on page 2 of the Sales Order PDF when generated from the Shipping Queue, using the existing PdfIntent system.
+
+Requirements:
+
+1) USE PdfIntent AS THE SWITCH
+Leverage the existing PdfIntent + IntentConfig architecture.
+Add a new field to IntentConfig:
+  termsType: 'initial' | 'warranty'
+
+Configure intents as follows:
+- PdfIntent.SIGNATURE_EMAIL → termsType: 'initial'
+- PdfIntent.RESEND_EMAIL → termsType: 'initial'
+- PdfIntent.CUSTOMER_VIEW → termsType: 'initial'
+- PdfIntent.SIGNED_ARCHIVE → termsType: 'initial'
+- PdfIntent.SHIPPING_PRINT → termsType: 'warranty'
+
+2) FIX SHIPPING ROUTE INTENT
+Update the shipping PDF route (server/src/routes/shippingPdf.ts line ~943) to use:
+  PdfIntent.SHIPPING_PRINT
+instead of PdfIntent.CUSTOMER_VIEW.
+
+3) PASS TERMS TYPE INTO PDF GENERATOR
+Update the PDF generation call chain so termsType is passed into the Sales Order PDF renderer:
+- Extend generateSalesOrderPDF(...) to accept a new parameter: termsType
+- Pass config.termsType from IntentConfig into generateSalesOrderPDF()
+
+4) EXTRACT TERMS INTO CONSTANTS
+Remove inline hardcoded terms from salesOrderPdf.ts.
+Define two reusable constants (same file or pdfConfig.ts):
+
+INITIAL_TERMS:
+Title: "Initial Terms and Conditions"
+Lines: (existing terms text, unchanged)
+
+WARRANTY_TERMS:
+Title: "Stocks Warranty & Shipping Terms"
+Lines:
+- "STOCKS WARRANTY: 100% Guaranteed Satisfaction"
+- "Every AG Composites stock carries a Lifetime Warranty against cracking, warping, splitting, breaking or becoming unserviceable. If a problem occurs, the stock will be repaired, replaced or the purchase price will be refunded at our option. Paint defects caused through normal use of the stock by the consumer are not warrantied. Contact us to return a product."
+- "The warranty is voided if the end user modifies the stock or uses the stock for a purpose for which it was not designed. All AGC stocks have been extensively tested and carry a warranty up to 300 RUM caliber. Using a more energetic caliber voids the warranty and AGC is not responsible for any damage or injury as a result of using the stock outside its tested capabilities."
+- "AGC only warranties products we produce. No warranty is applied to accessories or products we purchase from other manufacturers."
+- "If for any reason you are not 100% satisfied with your AG stock, return it within 30 days in good condition for a full refund or exchange. Shipping and handling charges are non-refundable. In addition, due to credit card transaction fees you will receive your refund minus 4%."
+- "We only guarantee the fitment for the actions, barrel channels and bottom metals we offer. If you order a stock with one of our options and try to put a different brand hardware in the stock, we DO NOT GUARANTEE that it will fit. Even though manufacturers say their hardware is a 'Rem Clone' there is a high probability that there will be subtle differences resulting in fitment issues. In this case you can return the stock in good condition with no modifications. We will assess a $75 re-stocking fee."
+
+5) PDF RENDERING BEHAVIOR
+In generateSalesOrderPDF():
+- Select terms based on termsType
+- Render title + lines on page 2 exactly as current terms are rendered
+- Preserve pagination (must remain 2 pages)
+- Preserve duplicated order details box on page 2
+
+6) NO SCOPE CREEP
+Do NOT:
+- Duplicate the PDF generator
+- Change snapshot logic
+- Change signature logic
+- Change pricing or totals
+- Change storage behavior
+
+7) VERIFICATION
+Confirm:
+- Order confirmation PDFs show Initial Terms
+- Resend PDFs show Initial Terms
+- Signed archive PDFs show Initial Terms
+- Shipping queue PDFs show Warranty Terms
+- Regenerating PDFs from different contexts selects the correct terms deterministically

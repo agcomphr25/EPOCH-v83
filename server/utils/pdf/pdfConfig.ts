@@ -593,3 +593,61 @@ export function drawSimpleTable(
   
   return startY - currentY;
 }
+
+export type TermsType = 'initial' | 'warranty';
+
+export interface TermsContent {
+  title: string;
+  lines: string[];
+}
+
+export const INITIAL_TERMS: TermsContent = {
+  title: 'Initial Terms and Conditions',
+  lines: [
+    '1. Please review the specs indicated and make sure they match your intent.',
+    '2. Any changes to specs requested after 30 days from Order Date may result in additional',
+    '   charges.',
+    '3. Remington "clones" are not made by Remington and may not fit as exactly as Remington',
+    '   models do.',
+    '4. The Estimated Completion Date is an estimation based on our current capacity and the',
+    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date',
+    '5. Please sign and return a copy of this form, or reply to the email that you are in agreement',
+    '   with the specs of your order and these terms and conditions. We are not able to place any',
+    '   order into production without a confirmation.',
+  ],
+};
+
+export const WARRANTY_TERMS: TermsContent = {
+  title: 'Stocks Warranty & Shipping Terms',
+  lines: [
+    'STOCKS WARRANTY: 100% Guaranteed Satisfaction',
+    '',
+    'Every AG Composites stock carries a Lifetime Warranty against cracking, warping, splitting,',
+    'breaking or becoming unserviceable. If a problem occurs, the stock will be repaired, replaced',
+    'or the purchase price will be refunded at our option. Paint defects caused through normal use',
+    'of the stock by the consumer are not warrantied. Contact us to return a product.',
+    '',
+    'The warranty is voided if the end user modifies the stock or uses the stock for a purpose for',
+    'which it was not designed. All AGC stocks have been extensively tested and carry a warranty',
+    'up to 300 RUM caliber. Using a more energetic caliber voids the warranty and AGC is not',
+    'responsible for any damage or injury as a result of using the stock outside its tested capabilities.',
+    '',
+    'AGC only warranties products we produce. No warranty is applied to accessories or products we',
+    'purchase from other manufacturers.',
+    '',
+    'If for any reason you are not 100% satisfied with your AG stock, return it within 30 days in',
+    'good condition for a full refund or exchange. Shipping and handling charges are non-refundable.',
+    'In addition, due to credit card transaction fees you will receive your refund minus 4%.',
+    '',
+    'We only guarantee the fitment for the actions, barrel channels and bottom metals we offer. If you',
+    'order a stock with one of our options and try to put a different brand hardware in the stock, we',
+    'DO NOT GUARANTEE that it will fit. Even though manufacturers say their hardware is a "Rem Clone"',
+    'there is a high probability that there will be subtle differences resulting in fitment issues. In this',
+    'case you can return the stock in good condition with no modifications. We will assess a 15%',
+    'restocking fee and your return shipping charges will not be refunded.',
+  ],
+};
+
+export function getTermsContent(termsType: TermsType): TermsContent {
+  return termsType === 'warranty' ? WARRANTY_TERMS : INITIAL_TERMS;
+}

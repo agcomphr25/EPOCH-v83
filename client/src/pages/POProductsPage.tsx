@@ -31,7 +31,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Package, Plus, Save, Edit, Trash2, Eye } from 'lucide-react';
+import { Package, Plus, Save, Edit, Trash2, Eye, Check, ChevronsUpDown } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface StockModel {
   id: string;
@@ -94,6 +108,7 @@ export default function POProductsPage() {
   const queryClient = useQueryClient();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [customerComboOpen, setCustomerComboOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<POProduct | null>(null);
   const [formData, setFormData] = useState<POProductFormData>({
     customerName: '',
@@ -464,23 +479,52 @@ export default function POProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="customerName">Customer Name *</Label>
-                    <Select
-                      value={formData.customerName}
-                      onValueChange={(value) =>
-                        handleInputChange('customerName', value)
-                      }
-                    >
-                      <SelectTrigger id="customerName" data-testid="input-customer-name">
-                        <SelectValue placeholder="Search and select customer..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.company || customer.name}>
-                            {customer.company || customer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={customerComboOpen}
+                          className="w-full justify-between font-normal"
+                          id="customerName"
+                          data-testid="input-customer-name"
+                        >
+                          {formData.customerName || "Search and select customer..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Type to search customers..." />
+                          <CommandList>
+                            <CommandEmpty>No customer found.</CommandEmpty>
+                            <CommandGroup>
+                              {customers.map((customer) => {
+                                const displayName = customer.company || customer.name;
+                                return (
+                                  <CommandItem
+                                    key={customer.id}
+                                    value={displayName}
+                                    onSelect={() => {
+                                      handleInputChange('customerName', displayName);
+                                      setCustomerComboOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.customerName === displayName ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {displayName}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div className="space-y-2">

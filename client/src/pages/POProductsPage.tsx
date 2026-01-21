@@ -149,11 +149,11 @@ export default function POProductsPage() {
     },
   });
 
-  // Fetch P1 PO customers (vendors) for customer dropdown
-  const { data: poVendors = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ['/api/po-vendors'],
+  // Fetch all customers for customer dropdown
+  const { data: customers = [] } = useQuery<{ id: string; name: string; company?: string }[]>({
+    queryKey: ['/api/customers'],
     queryFn: async () => {
-      const result = await apiRequest('/api/po-vendors');
+      const result = await apiRequest('/api/customers');
       return result;
     },
   });
@@ -471,12 +471,12 @@ export default function POProductsPage() {
                       }
                     >
                       <SelectTrigger id="customerName" data-testid="input-customer-name">
-                        <SelectValue placeholder="Select a P1 PO customer" />
+                        <SelectValue placeholder="Search and select customer..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {poVendors.map((vendor) => (
-                          <SelectItem key={vendor.id} value={vendor.name}>
-                            {vendor.name}
+                        {customers.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.company || customer.name}>
+                            {customer.company || customer.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

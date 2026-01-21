@@ -9300,8 +9300,19 @@ export class DatabaseStorage implements IStorage {
   async createProductionOrder(
     data: InsertProductionOrder
   ): Promise<ProductionOrder> {
-    // Remove departmentHistory from data if present since column doesn't exist in DB
-    const { departmentHistory, ...safeData } = data as any;
+    // Filter to only include columns that actually exist in the database
+    const validColumns = new Set([
+      'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
+      'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
+      'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+    ]);
+    const safeData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as any)) {
+      if (validColumns.has(key)) {
+        safeData[key] = value;
+      }
+    }
     const [order] = await db.insert(productionOrders).values(safeData).returning(productionOrdersColumns);
     return order;
   }
@@ -9310,8 +9321,20 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertProductionOrder>
   ): Promise<ProductionOrder> {
-    // Remove departmentHistory from data if present since column doesn't exist in DB
-    const { departmentHistory, ...safeData } = data as any;
+    // Filter to only include columns that actually exist in the database
+    // Schema may define columns that don't exist in DB (departmentHistory, layupCompletedAt, etc.)
+    const validColumns = new Set([
+      'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
+      'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
+      'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+    ]);
+    const safeData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as any)) {
+      if (validColumns.has(key)) {
+        safeData[key] = value;
+      }
+    }
     const [order] = await db
       .update(productionOrders)
       .set(safeData)

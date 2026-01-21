@@ -1110,6 +1110,12 @@ export const trainingProgramTasks = pgTable('training_program_tasks', {
   estimatedMinutes: integer('estimated_minutes'),
   dayNumber: integer('day_number').default(1), // Which day of training this task is on
   requiresObservation: boolean('requires_observation').default(false), // Trainer must observe for certification
+  // AI-generated 4-step training content
+  step1Content: text('step1_content'), // Step 1: Trainer Does/Explains
+  step2Content: text('step2_content'), // Step 2: Trainer Does/Trainee Explains
+  step3Content: text('step3_content'), // Step 3: Trainee Does/Trainer Coaches
+  step4Content: text('step4_content'), // Step 4: Trainee Does/Trainer Observes
+  trainingMaterialId: integer('training_material_id'), // Link to training topic/document
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -1155,6 +1161,12 @@ export const trainingBuilderTaskProgress = pgTable('training_builder_task_progre
   status: text('status').default('pending'), // pending, completed
   completedAt: timestamp('completed_at'),
   notes: text('notes'),
+  // 4-step progression tracking
+  currentStep: integer('current_step').default(1), // 1-4
+  step1CompletedAt: timestamp('step1_completed_at'),
+  step2CompletedAt: timestamp('step2_completed_at'),
+  step3CompletedAt: timestamp('step3_completed_at'),
+  step4CompletedAt: timestamp('step4_completed_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -1172,6 +1184,26 @@ export const trainingProgramQuizRefs = pgTable('training_program_quiz_refs', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Training SOA Daily Notes - Daily Strengths-Opportunities-Actions coaching notes
+export const trainingSoaNotes = pgTable('training_soa_notes', {
+  id: serial('id').primaryKey(),
+  assignmentId: integer('assignment_id').references(() => trainingAssignments.id).notNull(),
+  trainerId: integer('trainer_id').references(() => employees.id).notNull(),
+  traineeId: integer('trainee_id').references(() => employees.id).notNull(),
+  dayNumber: integer('day_number').notNull(), // Which day of training
+  noteDate: timestamp('note_date').defaultNow().notNull(),
+  // S-O-A Model fields
+  strengths: text('strengths'), // What did the trainee do well?
+  opportunities: text('opportunities'), // What could be improved?
+  actions: text('actions'), // What will we do differently next time?
+  // Additional notes
+  generalNotes: text('general_notes'),
+  trainerSignoff: boolean('trainer_signoff').default(false),
+  traineeAcknowledged: boolean('trainee_acknowledged').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Insert schemas for training program tables
 export const insertTrainingProgramSchema = createInsertSchema(trainingPrograms).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTrainingProgramTaskSchema = createInsertSchema(trainingProgramTasks).omit({ id: true, createdAt: true, updatedAt: true });
@@ -1179,6 +1211,7 @@ export const insertTrainingAssignmentSchema = createInsertSchema(trainingAssignm
 export const insertTrainingBuilderSessionSchema = createInsertSchema(trainingBuilderSessions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTrainingBuilderTaskProgressSchema = createInsertSchema(trainingBuilderTaskProgress).omit({ id: true, createdAt: true });
 export const insertTrainingProgramQuizRefSchema = createInsertSchema(trainingProgramQuizRefs).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTrainingSoaNoteSchema = createInsertSchema(trainingSoaNotes).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertTrainingProgram = z.infer<typeof insertTrainingProgramSchema>;
 export type InsertTrainingProgramTask = z.infer<typeof insertTrainingProgramTaskSchema>;
@@ -1193,6 +1226,8 @@ export type TrainingBuilderSession = typeof trainingBuilderSessions.$inferSelect
 export type TrainingBuilderTaskProgress = typeof trainingBuilderTaskProgress.$inferSelect;
 export type TrainingProgramQuizRef = typeof trainingProgramQuizRefs.$inferSelect;
 export type InsertTrainingProgramQuizRef = z.infer<typeof insertTrainingProgramQuizRefSchema>;
+export type TrainingSoaNote = typeof trainingSoaNotes.$inferSelect;
+export type InsertTrainingSoaNote = z.infer<typeof insertTrainingSoaNoteSchema>;
 
 // Work Instructions - Task-specific procedural documents with critical points and safety considerations
 export const workInstructions = pgTable('work_instructions', {

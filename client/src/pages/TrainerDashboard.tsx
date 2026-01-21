@@ -207,7 +207,25 @@ interface ProgramTraineeAssignment {
     sortOrder: number;
     estimatedMinutes: number | null;
     dayNumber: number;
+    step1Content: string | null;
+    step2Content: string | null;
+    step3Content: string | null;
+    step4Content: string | null;
   }[];
+}
+
+interface SoaNote {
+  id: number;
+  assignmentId: number;
+  trainerId: number;
+  traineeId: number;
+  dayNumber: number;
+  noteDate: string;
+  strengths: string | null;
+  opportunities: string | null;
+  actions: string | null;
+  generalNotes: string | null;
+  trainerSignoff: boolean;
 }
 
 export default function TrainerDashboard() {
@@ -235,6 +253,13 @@ export default function TrainerDashboard() {
   const [loadingTopicContent, setLoadingTopicContent] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedStep, setSelectedStep] = useState<string>('');
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [fourStepDialogOpen, setFourStepDialogOpen] = useState(false);
+  const [soaNotesDialogOpen, setSoaNotesDialogOpen] = useState(false);
+  const [selectedAssignmentForSoa, setSelectedAssignmentForSoa] = useState<ProgramTraineeAssignment | null>(null);
+  const [soaDay, setSoaDay] = useState(1);
+  const [soaNotes, setSoaNotes] = useState({ strengths: '', opportunities: '', actions: '', generalNotes: '' });
+  const [generatingContent, setGeneratingContent] = useState<number | null>(null);
 
   const { data: currentUser } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
@@ -280,6 +305,18 @@ export default function TrainerDashboard() {
     queryFn: async () => {
       if (!trainerId) return [];
       const res = await fetch(`/api/training/trainer-assignments/${trainerId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!trainerId,
+  });
+
+  // Recent SOA notes from this trainer
+  const { data: recentSoaNotes = [] } = useQuery<any[]>({
+    queryKey: ['/api/training/trainer', trainerId, 'soa-notes/recent'],
+    queryFn: async () => {
+      if (!trainerId) return [];
+      const res = await fetch(`/api/training/trainer/${trainerId}/soa-notes/recent`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -479,6 +516,46 @@ export default function TrainerDashboard() {
       setDeleteAssignmentOpen(false);
       setAssignmentToDelete(null);
       toast({ title: 'Assignment Deleted', description: 'Training assignment has been removed' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Generate 4-step content for a task
+  const generateFourStepMutation = useMutation({
+    mutationFn: async ({ programId, taskId, trainingMaterial }: { programId: number; taskId: number; trainingMaterial?: string }) => {
+      return apiRequest(`/api/training/programs/${programId}/tasks/${taskId}/generate-4step`, {
+        method: 'POST',
+        body: JSON.stringify({ trainingMaterial }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/trainer-assignments'] });
+      toast({ title: '4-Step Content Generated', description: 'AI has generated training content for all 4 steps' });
+      setGeneratingContent(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Generation Failed', description: error.message, variant: 'destructive' });
+      setGeneratingContent(null);
+    },
+  });
+
+  // Save SOA notes
+  const saveSoaNotesMutation = useMutation({
+    mutationFn: async (data: { assignmentId: number; trainerId: number; traineeId: number; dayNumber: number; strengths: string; opportunities: string; actions: string; generalNotes: string }) => {
+      return apiRequest(`/api/training/assignments/${data.assignmentId}/soa-notes`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/trainer', trainerId, 'soa-notes/recent'] });
+      toast({ title: 'Notes Saved', description: 'SOA coaching notes have been saved' });
+      setSoaNotesDialogOpen(false);
+      setSoaNotes({ strengths: '', opportunities: '', actions: '', generalNotes: '' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -1485,30 +1562,118 @@ export default function TrainerDashboard() {
                           </p>
                         )}
                         
-                        {/* Tasks/Materials for trainer */}
+                        {/* Tasks/Materials for trainer with 4-Step Content */}
                         <div>
                           <h4 className="font-medium mb-2 flex items-center gap-2">
                             <FileText className="h-4 w-4" />
                             Training Materials ({assignment.tasks.length} tasks)
                           </h4>
                           <div className="grid gap-2">
-                            {assignment.tasks.slice(0, 5).map((task) => (
-                              <div key={task.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                                <span>{task.title}</span>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">Day {task.dayNumber || 1}</Badge>
-                                  {task.estimatedMinutes && (
-                                    <span className="text-xs text-muted-foreground">~{task.estimatedMinutes}m</span>
+                            {assignment.tasks.map((task) => (
+                              <div key={task.id} className="p-3 bg-muted/50 rounded border">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{task.title}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">Day {task.dayNumber || 1}</Badge>
+                                    {task.estimatedMinutes && (
+                                      <span className="text-xs text-muted-foreground">~{task.estimatedMinutes}m</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {task.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2">
+                                  {task.step1Content ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs"
+                                      onClick={() => {
+                                        setSelectedTask(task);
+                                        setFourStepDialogOpen(true);
+                                      }}
+                                    >
+                                      <Eye className="h-3 w-3 mr-1" />
+                                      View 4-Step Content
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="text-xs"
+                                      disabled={generatingContent === task.id}
+                                      onClick={() => {
+                                        setGeneratingContent(task.id);
+                                        generateFourStepMutation.mutate({ 
+                                          programId: assignment.programId, 
+                                          taskId: task.id 
+                                        });
+                                      }}
+                                    >
+                                      {generatingContent === task.id ? (
+                                        <>Generating...</>
+                                      ) : (
+                                        <>
+                                          <Lightbulb className="h-3 w-3 mr-1" />
+                                          Generate 4-Step Content
+                                        </>
+                                      )}
+                                    </Button>
                                   )}
                                 </div>
                               </div>
                             ))}
-                            {assignment.tasks.length > 5 && (
-                              <p className="text-sm text-muted-foreground text-center">
-                                +{assignment.tasks.length - 5} more tasks
-                              </p>
-                            )}
                           </div>
+                        </div>
+                        
+                        {/* SOA Notes Section */}
+                        <Separator className="my-4" />
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <MessageCircle className="h-4 w-4 text-primary" />
+                              <span className="font-medium">Daily SOA Notes</span>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAssignmentForSoa(assignment);
+                                setSoaNotesDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Notes
+                            </Button>
+                          </div>
+                          
+                          {/* Show recent notes for this assignment */}
+                          {recentSoaNotes.filter((n: any) => n.assignmentId === assignment.id).length > 0 && (
+                            <div className="space-y-2">
+                              {recentSoaNotes
+                                .filter((n: any) => n.assignmentId === assignment.id)
+                                .slice(0, 2)
+                                .map((note: any) => (
+                                  <div key={note.id} className="p-2 bg-muted/30 rounded text-sm border-l-2 border-primary">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Badge variant="outline" className="text-xs">Day {note.dayNumber}</Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(note.noteDate).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                    {note.strengths && (
+                                      <p className="text-xs"><Star className="h-3 w-3 inline text-green-500 mr-1" />{note.strengths}</p>
+                                    )}
+                                    {note.opportunities && (
+                                      <p className="text-xs"><Target className="h-3 w-3 inline text-yellow-500 mr-1" />{note.opportunities}</p>
+                                    )}
+                                    {note.actions && (
+                                      <p className="text-xs"><Lightbulb className="h-3 w-3 inline text-blue-500 mr-1" />{note.actions}</p>
+                                    )}
+                                  </div>
+                                ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1519,6 +1684,187 @@ export default function TrainerDashboard() {
           </TabsContent>
         </Tabs>
       )}
+
+      {/* 4-Step Content Viewer Dialog */}
+      <Dialog open={fourStepDialogOpen} onOpenChange={setFourStepDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5" />
+              4-Step Training: {selectedTask?.title}
+            </DialogTitle>
+            <DialogDescription>
+              Train-the-Trainer methodology for this task
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTask && (
+            <div className="space-y-6">
+              {/* Step 1 */}
+              <Card className="border-l-4 border-l-blue-500">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Badge className="bg-blue-500">Step 1</Badge>
+                    Trainer Does / Explains
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {selectedTask.step1Content || 'No content generated yet'}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Step 2 */}
+              <Card className="border-l-4 border-l-green-500">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Badge className="bg-green-500">Step 2</Badge>
+                    Trainer Does / Trainee Explains
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {selectedTask.step2Content || 'No content generated yet'}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Step 3 */}
+              <Card className="border-l-4 border-l-yellow-500">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Badge className="bg-yellow-500">Step 3</Badge>
+                    Trainee Does / Trainer Coaches
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {selectedTask.step3Content || 'No content generated yet'}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Step 4 */}
+              <Card className="border-l-4 border-l-purple-500">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Badge className="bg-purple-500">Step 4</Badge>
+                    Trainee Does / Trainer Observes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {selectedTask.step4Content || 'No content generated yet'}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* SOA Notes Dialog */}
+      <Dialog open={soaNotesDialogOpen} onOpenChange={setSoaNotesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Daily SOA Coaching Notes
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAssignmentForSoa?.trainee?.name} - {selectedAssignmentForSoa?.program?.title}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Training Day</Label>
+              <Select value={soaDay.toString()} onValueChange={(v) => setSoaDay(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                    <SelectItem key={day} value={day.toString()}>Day {day}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-green-500" />
+                Strengths (What did they do well?)
+              </Label>
+              <Textarea
+                placeholder="Describe what the trainee did well today..."
+                value={soaNotes.strengths}
+                onChange={(e) => setSoaNotes({ ...soaNotes, strengths: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-yellow-500" />
+                Opportunities (What could be improved?)
+              </Label>
+              <Textarea
+                placeholder="Areas for improvement..."
+                value={soaNotes.opportunities}
+                onChange={(e) => setSoaNotes({ ...soaNotes, opportunities: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-blue-500" />
+                Actions (What will we do differently next time?)
+              </Label>
+              <Textarea
+                placeholder="Action items for next session..."
+                value={soaNotes.actions}
+                onChange={(e) => setSoaNotes({ ...soaNotes, actions: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label>General Notes</Label>
+              <Textarea
+                placeholder="Any additional observations or notes..."
+                value={soaNotes.generalNotes}
+                onChange={(e) => setSoaNotes({ ...soaNotes, generalNotes: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoaNotesDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedAssignmentForSoa) {
+                  saveSoaNotesMutation.mutate({
+                    assignmentId: selectedAssignmentForSoa.id,
+                    trainerId: trainerId,
+                    traineeId: selectedAssignmentForSoa.employeeId,
+                    dayNumber: soaDay,
+                    ...soaNotes,
+                  });
+                }
+              }}
+              disabled={saveSoaNotesMutation.isPending}
+            >
+              {saveSoaNotesMutation.isPending ? 'Saving...' : 'Save Notes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={startSessionOpen} onOpenChange={(open) => {
         setStartSessionOpen(open);

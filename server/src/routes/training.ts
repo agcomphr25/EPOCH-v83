@@ -31,6 +31,7 @@ import {
   trainingBuilderSessions,
   trainingBuilderTaskProgress,
   trainingProgramQuizRefs,
+  trainingSoaNotes,
   trainingBuilderQuizzes,
   trainingBuilderQuizQuestions,
   trainingDailyQuizSelections,
@@ -2444,6 +2445,211 @@ router.delete('/programs/:programId/tasks/:taskId', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate AI 4-Step Training Content for a task
+router.post('/programs/:programId/tasks/:taskId/generate-4step', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    const { trainingMaterial } = req.body; // Optional: training material content to base generation on
+    
+    // Get the task details
+    const [task] = await db.select().from(trainingProgramTasks).where(eq(trainingProgramTasks.id, taskId));
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Get program details for context
+    const [program] = await db.select().from(trainingPrograms).where(eq(trainingPrograms.id, task.programId));
+    
+    const openai = new OpenAI({ 
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL 
+    });
+    
+    const prompt = `You are a manufacturing training expert. Generate detailed 4-step training content for the following task using the Train-the-Trainer methodology.
+
+Task: ${task.title}
+${task.description ? `Description: ${task.description}` : ''}
+Department: ${program?.department || 'Manufacturing'}
+Role: ${program?.role || 'Production'}
+${trainingMaterial ? `\nTraining Material Reference:\n${trainingMaterial}` : ''}
+
+Generate content for each of the 4 steps:
+
+1. **Step 1 - Trainer Does/Explains**: The trainer demonstrates the task while explaining each step. Include:
+   - Key points to emphasize
+   - Safety considerations
+   - Quality checkpoints
+   - Common mistakes to point out
+
+2. **Step 2 - Trainer Does/Trainee Explains**: The trainer performs the task again while the trainee explains what's happening. Include:
+   - Questions to ask the trainee
+   - Key concepts to verify understanding
+   - Tips for the trainer
+
+3. **Step 3 - Trainee Does/Trainer Coaches**: The trainee performs the task with trainer coaching. Include:
+   - Coaching prompts
+   - Things to watch for
+   - Intervention points
+   - Encouragement phrases
+
+4. **Step 4 - Trainee Does/Trainer Observes**: The trainee performs independently while trainer observes. Include:
+   - Observation checklist
+   - Success criteria
+   - Certification requirements
+   - Sign-off criteria
+
+Format your response as JSON with keys: step1Content, step2Content, step3Content, step4Content (each as a string with the detailed content).`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 4000,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'No content generated' });
+    }
+    
+    const generated = JSON.parse(content);
+    
+    // Update the task with the generated content
+    const [updated] = await db
+      .update(trainingProgramTasks)
+      .set({
+        step1Content: generated.step1Content,
+        step2Content: generated.step2Content,
+        step3Content: generated.step3Content,
+        step4Content: generated.step4Content,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingProgramTasks.id, taskId))
+      .returning();
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error generating 4-step content:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// SOA DAILY NOTES (Strengths-Opportunities-Actions)
+// ============================================================================
+
+// Get SOA notes for an assignment
+router.get('/assignments/:assignmentId/soa-notes', async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const notes = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(eq(trainingSoaNotes.assignmentId, assignmentId))
+      .orderBy(desc(trainingSoaNotes.noteDate));
+    res.json(notes);
+  } catch (error: any) {
+    console.error('Error fetching SOA notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get today's and yesterday's SOA notes for a trainer's view
+router.get('/trainer/:trainerId/soa-notes/recent', async (req, res) => {
+  try {
+    const trainerId = parseInt(req.params.trainerId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const notes = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(and(
+        eq(trainingSoaNotes.trainerId, trainerId),
+        gte(trainingSoaNotes.noteDate, yesterday)
+      ))
+      .orderBy(desc(trainingSoaNotes.noteDate));
+    
+    // Separate into today and yesterday
+    const todaysNotes = notes.filter(n => new Date(n.noteDate) >= today);
+    const yesterdaysNotes = notes.filter(n => new Date(n.noteDate) < today);
+    
+    res.json({ todaysNotes, yesterdaysNotes });
+  } catch (error: any) {
+    console.error('Error fetching recent SOA notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create or update SOA note for a day
+router.post('/assignments/:assignmentId/soa-notes', async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const { trainerId, traineeId, dayNumber, strengths, opportunities, actions, generalNotes } = req.body;
+    
+    // Check if a note already exists for this day
+    const existing = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(and(
+        eq(trainingSoaNotes.assignmentId, assignmentId),
+        eq(trainingSoaNotes.dayNumber, dayNumber)
+      ))
+      .limit(1);
+    
+    if (existing && existing.length > 0) {
+      // Update existing note
+      const [updated] = await db
+        .update(trainingSoaNotes)
+        .set({
+          strengths,
+          opportunities,
+          actions,
+          generalNotes,
+          updatedAt: new Date(),
+        })
+        .where(eq(trainingSoaNotes.id, existing[0].id))
+        .returning();
+      return res.json(updated);
+    }
+    
+    // Create new note
+    const [note] = await db.insert(trainingSoaNotes).values({
+      assignmentId,
+      trainerId,
+      traineeId,
+      dayNumber,
+      strengths,
+      opportunities,
+      actions,
+      generalNotes,
+    }).returning();
+    
+    res.status(201).json(note);
+  } catch (error: any) {
+    console.error('Error saving SOA note:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trainer signoff on SOA note
+router.patch('/soa-notes/:noteId/signoff', async (req, res) => {
+  try {
+    const noteId = parseInt(req.params.noteId);
+    const [updated] = await db
+      .update(trainingSoaNotes)
+      .set({ trainerSignoff: true, updatedAt: new Date() })
+      .where(eq(trainingSoaNotes.id, noteId))
+      .returning();
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error signing off SOA note:', error);
     res.status(500).json({ error: error.message });
   }
 });

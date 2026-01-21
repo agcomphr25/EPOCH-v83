@@ -7318,22 +7318,19 @@ export function registerRoutes(app: Express): Server {
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
       
       // Get all Finish Technicians from employees table (regardless of whether they've completed orders)
-      const finishTechnicians = await pool.query(
+      const finishTechniciansResult = await pool.query(
         `SELECT id, name, employee_code
         FROM employees
         WHERE is_finish_technician = true
           AND is_active = true
         ORDER BY name`
       );
+      const finishTechnicians = finishTechniciansResult.rows;
       
-      console.log('📊 Found', finishTechnicians?.length || 0, 'active Finish QC technicians from employees table');
-      
-      // Ensure finishTechnicians is always an array
-      const techniciansArray = Array.isArray(finishTechnicians) ? finishTechnicians : [];
+      console.log('📊 Found', finishTechnicians.length, 'active Finish QC technicians from employees table');
       
       // Query orders that have department_history with a Finish QC exit
-      // Note: Neon serverless returns array directly, not { rows: [...] }
-      const allOrders = await pool.query(
+      const allOrdersResult = await pool.query(
         `SELECT 
           order_id,
           customer_po,
@@ -7349,14 +7346,12 @@ export function registerRoutes(app: Express): Server {
           AND jsonb_array_length(department_history) > 0
         ORDER BY assigned_technician, order_id`
       );
+      const allOrders = allOrdersResult.rows;
       
-      console.log('📊 Query returned', allOrders?.length || 0, 'orders with department history');
-      
-      // Ensure allOrders is always an array (handle edge case where query returns undefined or non-array)
-      const ordersArray = Array.isArray(allOrders) ? allOrders : [];
+      console.log('📊 Query returned', allOrders.length, 'orders with department history');
       
       // Filter to only include orders that were progressed OUT of Finish QC in the date range
-      const filteredOrders = ordersArray.filter((order: any) => {
+      const filteredOrders = allOrders.filter((order: any) => {
         if (!order.department_history || !Array.isArray(order.department_history)) {
           return false;
         }
@@ -7378,7 +7373,7 @@ export function registerRoutes(app: Express): Server {
       // Initialize grouped object with all Finish QC technicians (even with zero orders for this week)
       const grouped: Record<string, any[]> = {};
       
-      for (const tech of techniciansArray) {
+      for (const tech of finishTechnicians) {
         grouped[tech.name] = [];
       }
       

@@ -545,7 +545,7 @@ function VendorPOCard({
   onEdit: (vendorPo: VendorPO) => void;
   onDelete: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
-  onIssuePO: (id: number) => void;
+  onIssuePO: (id: number, skipEmail?: boolean) => void;
   onCreateRevision: (vendorPo: VendorPO) => void;
 }) {
   // Check if PO is issued (cannot be directly edited)
@@ -1013,13 +1013,16 @@ export default function VendorPOManager() {
 
   // Issue PO mutation - sends confirmation email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, skipEmail = false }: { id: number; skipEmail?: boolean }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
+        body: JSON.stringify({ skipEmail }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      if (data.emailSent) {
+      if (data.emailSkipped) {
+        toast.success('PO marked as issued (no email sent)');
+      } else if (data.emailSent) {
         toast.success(`PO issued! Confirmation email sent to ${data.emailRecipient}`);
       } else {
         toast.error(data.message || 'PO issued but email failed to send');
@@ -1071,11 +1074,19 @@ export default function VendorPOManager() {
     }
   };
 
-  const handleIssuePO = (id: number) => {
-    if (
-      confirm('Are you sure you want to issue this purchase order? This will send a confirmation email to the vendor.')
-    ) {
-      issuePOMutation.mutate(id);
+  const handleIssuePO = (id: number, skipEmail: boolean = false) => {
+    if (skipEmail) {
+      if (
+        confirm('Are you sure you want to mark this purchase order as issued WITHOUT sending an email to the vendor? This is useful for POs that were already submitted outside of EPOCH.')
+      ) {
+        issuePOMutation.mutate({ id, skipEmail: true });
+      }
+    } else {
+      if (
+        confirm('Are you sure you want to issue this purchase order? This will send a confirmation email to the vendor.')
+      ) {
+        issuePOMutation.mutate({ id, skipEmail: false });
+      }
     }
   };
 
@@ -1113,11 +1124,11 @@ export default function VendorPOManager() {
     setShowStatusChangeDialog(true);
   };
 
-  const confirmStatusChange = () => {
+  const confirmStatusChange = (skipEmail: boolean = false) => {
     if (selectedVendorPO) {
       // If changing to 'Sent' status, use the issue endpoint which sends the email
       if (pendingStatus === 'Sent') {
-        issuePOMutation.mutate(selectedVendorPO.id);
+        issuePOMutation.mutate({ id: selectedVendorPO.id, skipEmail });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
       } else {
@@ -1539,10 +1550,19 @@ export default function VendorPOManager() {
                 <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className={pendingStatus === 'Sent' ? 'flex-col sm:flex-row gap-2' : ''}>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmStatusChange} data-testid="button-confirm-status-change">
-                Confirm
+              {pendingStatus === 'Sent' && (
+                <Button
+                  variant="outline"
+                  onClick={() => confirmStatusChange(true)}
+                  data-testid="button-issue-no-email"
+                >
+                  Mark as Issued (No Email)
+                </Button>
+              )}
+              <AlertDialogAction onClick={() => confirmStatusChange(false)} data-testid="button-confirm-status-change">
+                {pendingStatus === 'Sent' ? 'Issue & Send Email' : 'Confirm'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -15691,7 +15691,7 @@ export class DatabaseStorage implements IStorage {
   // Order Reference Data - Dynamically pulls from actual orders
   async getOrderStatusTypes(): Promise<any[]> {
     // Query distinct status values from both orders tables
-    const statusRows = await pool.query(`
+    const statusResult = await pool.query(`
       SELECT DISTINCT status
       FROM (
         SELECT status FROM orders WHERE status IS NOT NULL AND status != ''
@@ -15700,10 +15700,10 @@ export class DatabaseStorage implements IStorage {
       ) AS combined_statuses
       ORDER BY status
     `);
+    const statusRows = statusResult.rows;
 
     // Format as reference data with id, name, and displayName
-    const statuses = Array.isArray(statusRows) ? statusRows : [];
-    return statuses.map((row: any, index: number) => ({
+    return statusRows.map((row: any, index: number) => ({
       id: index + 1,
       name: row.status,
       displayName: row.status,
@@ -15714,7 +15714,7 @@ export class DatabaseStorage implements IStorage {
 
   async getOrderDepartmentTypes(): Promise<any[]> {
     // Query distinct current_department values from both orders tables
-    const deptRows = await pool.query(`
+    const deptResult = await pool.query(`
       SELECT DISTINCT current_department
       FROM (
         SELECT current_department FROM orders WHERE current_department IS NOT NULL AND current_department != ''
@@ -15723,10 +15723,10 @@ export class DatabaseStorage implements IStorage {
       ) AS combined_departments
       ORDER BY current_department
     `);
+    const deptRows = deptResult.rows;
 
     // Format as reference data with id, name, and displayName
-    const departments = Array.isArray(deptRows) ? deptRows : [];
-    return departments.map((row: any, index: number) => ({
+    return deptRows.map((row: any, index: number) => ({
       id: index + 1,
       name: row.current_department,
       displayName: row.current_department,

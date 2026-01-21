@@ -237,11 +237,11 @@ async function hydrateAndValidateSession(
       [sessionToken]
     );
 
-    if (!sessionResult || sessionResult.length === 0) {
+    if (!sessionResult || sessionResult.rows.length === 0) {
       return { valid: false, error: 'Session not found' };
     }
 
-    const session = sessionResult[0];
+    const session = sessionResult.rows[0];
 
     if (session.user_id !== userId) {
       return { valid: false, error: 'Session user mismatch' };
@@ -257,11 +257,11 @@ async function hydrateAndValidateSession(
       [userId]
     );
 
-    if (!userResult || userResult.length === 0) {
+    if (!userResult || userResult.rows.length === 0) {
       return { valid: false, error: 'User not found' };
     }
 
-    const user = userResult[0];
+    const user = userResult.rows[0];
 
     if (!user.is_active) {
       return { valid: false, error: 'User account is inactive' };
@@ -334,13 +334,14 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     }
 
     // Look up employee by employee code
-    const employeeResult = await pool.query`
-      SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
+    const employeeResult = await pool.query(
+      `SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
       FROM employees
-      WHERE employee_code = ${employeeCode}
-    `;
+      WHERE employee_code = $1`,
+      [employeeCode]
+    );
 
-    if (!employeeResult || employeeResult.length === 0) {
+    if (!employeeResult || employeeResult.rows.length === 0) {
       logBadgeLoginAttempt({
         employeeId: null,
         employeeCode,
@@ -353,7 +354,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid employee code' });
     }
 
-    const employee = employeeResult[0];
+    const employee = employeeResult.rows[0];
     employeeId = employee.id;
 
     // Check if employee is active
@@ -371,17 +372,18 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     }
 
     // Look up linked user account for this employee
-    const linkedUserResult = await pool.query`
-      SELECT id, username, role, first_name as "firstName", last_name as "lastName", is_active as "isActive"
+    const linkedUserResult = await pool.query(
+      `SELECT id, username, role, first_name as "firstName", last_name as "lastName", is_active as "isActive"
       FROM users
-      WHERE employee_id = ${employee.id} AND is_active = true
-    `;
+      WHERE employee_id = $1 AND is_active = true`,
+      [employee.id]
+    );
 
     // Use linked user account if available, otherwise deny access
     let sessionUser: { id: number; username: string; role: string };
     
-    if (linkedUserResult && linkedUserResult.length > 0) {
-      const linkedUser = linkedUserResult[0];
+    if (linkedUserResult && linkedUserResult.rows.length > 0) {
+      const linkedUser = linkedUserResult.rows[0];
       sessionUser = {
         id: linkedUser.id,
         username: linkedUser.username,
@@ -404,20 +406,21 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     }
 
     // Look up employee's badge action configuration to determine redirect
-    const badgeActionResult = await pool.query`
-      SELECT action_type as "actionType", action_config as "actionConfig"
+    const badgeActionResult = await pool.query(
+      `SELECT action_type as "actionType", action_config as "actionConfig"
       FROM employee_badge_actions
-      WHERE employee_id = ${employee.id}
+      WHERE employee_id = $1
         AND is_active = true
       ORDER BY created_at DESC
-      LIMIT 1
-    `;
+      LIMIT 1`,
+      [employee.id]
+    );
 
     // Determine redirect URL based on badge action
     redirectUrl = '/dashboard'; // Default
 
-    if (badgeActionResult && badgeActionResult.length > 0) {
-      const badgeAction = badgeActionResult[0];
+    if (badgeActionResult && badgeActionResult.rows.length > 0) {
+      const badgeAction = badgeActionResult.rows[0];
       const actionType = badgeAction.actionType;
       const actionConfig = badgeAction.actionConfig;
 
@@ -444,12 +447,13 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Store session in database using the linked user's credentials
-    await pool.query`
-      INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active)
-      VALUES (${sessionToken}, ${sessionUser.id}, ${sessionUser.username}, ${expiresAt}, true)
+    await pool.query(
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active)
+      VALUES ($1, $2, $3, $4, true)
       ON CONFLICT (session_token) DO UPDATE
-      SET expires_at = ${expiresAt}, is_active = true
-    `;
+      SET expires_at = $4, is_active = true`,
+      [sessionToken, sessionUser.id, sessionUser.username, expiresAt]
+    );
 
     // SESSION HYDRATION INVARIANT: Validate session can be hydrated before returning success
     // This ensures badge login produces identical authenticated state as password login
@@ -458,7 +462,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     if (!hydrationResult.valid) {
       // Session was created but cannot be hydrated - this is a critical failure
       // Clean up the invalid session
-      await pool.query`DELETE FROM user_sessions WHERE session_token = ${sessionToken}`;
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       
       logBadgeLoginAttempt({
         employeeId,
@@ -685,11 +689,11 @@ router.get('/validate', async (req, res) => {
       [sessionToken]
     );
 
-    if (!result || result.length === 0) {
+    if (!result || result.rows.length === 0) {
       return res.status(401).json({ valid: false });
     }
 
-    const session = result[0];
+    const session = result.rows[0];
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
@@ -708,8 +712,8 @@ router.get('/validate', async (req, res) => {
 
     let user: any;
 
-    if (dbUserResult && dbUserResult.length > 0) {
-      user = dbUserResult[0];
+    if (dbUserResult && dbUserResult.rows.length > 0) {
+      user = dbUserResult.rows[0];
     } else {
       // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
@@ -758,23 +762,11 @@ router.get('/session', async (req, res) => {
       [sessionToken]
     );
 
-    console.log('🔍 Session query result:', { 
-      isArray: Array.isArray(result), 
-      length: result?.length,
-      firstRow: result?.[0] ? 'exists' : 'missing'
-    });
-
-    if (!result || !Array.isArray(result) || result.length === 0) {
+    if (!result || result.rows.length === 0) {
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    const session = result[0];
-    
-    // Additional null check for session object
-    if (!session || !session.expires_at) {
-      console.log('Session data invalid:', session);
-      return res.status(401).json({ error: 'Session expired' });
-    }
+    const session = result.rows[0];
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
@@ -793,8 +785,8 @@ router.get('/session', async (req, res) => {
 
     let user: any;
 
-    if (dbUserResult && dbUserResult.length > 0) {
-      user = dbUserResult[0];
+    if (dbUserResult && dbUserResult.rows.length > 0) {
+      user = dbUserResult.rows[0];
     } else {
       // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);

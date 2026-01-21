@@ -111,7 +111,7 @@ router.get('/', async (req, res) => {
       ORDER BY u.username
     `);
 
-    res.json(result);
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });

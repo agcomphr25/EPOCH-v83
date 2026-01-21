@@ -756,11 +756,17 @@ router.get('/session', async (req, res) => {
       [sessionToken]
     );
 
-    if (!result || result.length === 0) {
+    if (!result || !Array.isArray(result) || result.length === 0) {
       return res.status(401).json({ error: 'Session expired' });
     }
 
     const session = result[0];
+    
+    // Additional null check for session object
+    if (!session || !session.expires_at) {
+      console.log('Session data invalid:', session);
+      return res.status(401).json({ error: 'Session expired' });
+    }
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {

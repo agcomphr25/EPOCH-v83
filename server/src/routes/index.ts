@@ -6336,26 +6336,33 @@ export function registerRoutes(app: Express): Server {
             role: req.user?.role || 'system',
           };
 
-          // Audit field changes (BEFORE → AFTER comparison)
-          await auditService.logFieldChanges(
-            'p1_order',
-            orderId,
-            currentOrder,
-            afterState || updatedOrder,
-            actor,
-            { source: 'update-department' }
-          );
-
-          // Department timing: close previous, open new
-          await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
-          await auditService.recordDepartmentEntry({
-            entityType: 'p1_order',
-            entityId: orderId,
-            department: department,
-            enteredByUserId: req.user?.id,
-          });
-
+          // Add to updated orders FIRST (before audit) since the DB update succeeded
           updatedOrders.push(updatedOrder);
+
+          // Audit logging (non-blocking - don't fail update if audit fails)
+          try {
+            // Audit field changes (BEFORE → AFTER comparison)
+            await auditService.logFieldChanges(
+              'p1_order',
+              orderId,
+              currentOrder,
+              afterState || updatedOrder,
+              actor,
+              { source: 'update-department' }
+            );
+
+            // Department timing: close previous, open new
+            await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
+            await auditService.recordDepartmentEntry({
+              entityType: 'p1_order',
+              entityId: orderId,
+              department: department,
+              enteredByUserId: req.user?.id,
+            });
+          } catch (auditError) {
+            // Log audit errors but don't fail the update
+            console.warn(`⚠️ Audit logging failed for ${orderId}:`, auditError instanceof Error ? auditError.message : auditError);
+          }
         } catch (orderError) {
           console.error(`Error updating order ${orderId}:`, orderError);
         }

@@ -22,6 +22,7 @@ import {
   deactivateTemplate,
 } from '../../services/templatePdfService';
 import { FillableFieldDef } from '../../schema';
+import { getCurrentEnvironment } from '../../utils/magicLink';
 
 const router = express.Router();
 
@@ -255,7 +256,7 @@ router.post('/instances', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/pdf-template-instances/:publicSignatureId
+ * GET /api/pdf-templates/instances/:publicSignatureId
  * Get instance for customer fill-and-sign (public route)
  */
 router.get('/instances/:publicSignatureId', async (req: Request, res: Response) => {
@@ -268,6 +269,13 @@ router.get('/instances/:publicSignatureId', async (req: Request, res: Response) 
     }
 
     const { instance, template } = data;
+
+    // SIGNATURE LINK CONTRACT: Environment guard
+    const currentEnv = getCurrentEnvironment();
+    if (instance.environment && instance.environment !== currentEnv) {
+      console.log(`[FILLABLE-PDF] Environment mismatch: instance=${instance.environment}, current=${currentEnv}`);
+      return res.status(403).json({ error: 'This link is not valid in this environment' });
+    }
 
     // Mark as viewed if first access
     if (instance.status === 'sent' || instance.status === 'draft') {
@@ -293,12 +301,24 @@ router.get('/instances/:publicSignatureId', async (req: Request, res: Response) 
 });
 
 /**
- * POST /api/pdf-template-instances/:publicSignatureId/submit
+ * POST /api/pdf-templates/instances/:publicSignatureId/submit
  * Submit filled form values + signature (public route)
  */
 router.post('/instances/:publicSignatureId/submit', async (req: Request, res: Response) => {
   try {
     const { publicSignatureId } = req.params;
+    
+    // SIGNATURE LINK CONTRACT: Environment guard
+    const instanceData = await getInstanceByPublicId(publicSignatureId);
+    if (!instanceData) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+    
+    const currentEnv = getCurrentEnvironment();
+    if (instanceData.instance.environment && instanceData.instance.environment !== currentEnv) {
+      console.log(`[FILLABLE-PDF] Submit environment mismatch: instance=${instanceData.instance.environment}, current=${currentEnv}`);
+      return res.status(403).json({ error: 'This link is not valid in this environment' });
+    }
     
     const data = submitFormSchema.parse(req.body);
     const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
@@ -328,7 +348,7 @@ router.post('/instances/:publicSignatureId/submit', async (req: Request, res: Re
 });
 
 /**
- * GET /api/pdf-template-instances/:publicSignatureId/signed-pdf
+ * GET /api/pdf-templates/instances/:publicSignatureId/signed-pdf
  * Download the signed PDF (public route, only after signing)
  */
 router.get('/instances/:publicSignatureId/signed-pdf', async (req: Request, res: Response) => {
@@ -341,6 +361,13 @@ router.get('/instances/:publicSignatureId/signed-pdf', async (req: Request, res:
     }
 
     const { instance } = data;
+
+    // SIGNATURE LINK CONTRACT: Environment guard
+    const currentEnv = getCurrentEnvironment();
+    if (instance.environment && instance.environment !== currentEnv) {
+      console.log(`[FILLABLE-PDF] PDF download environment mismatch: instance=${instance.environment}, current=${currentEnv}`);
+      return res.status(403).json({ error: 'This link is not valid in this environment' });
+    }
 
     if (instance.status !== 'signed' || !instance.signedPdfPath) {
       return res.status(400).json({ error: 'Form has not been signed yet' });

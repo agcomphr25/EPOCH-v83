@@ -568,9 +568,11 @@ router.post('/generate', async (req: Request, res: Response) => {
         if (!item.stockModel) return false;
         
         // Model name alias mappings for stock models with non-standard naming
+        // Includes carbon fiber (cf_) and fiberglass (fg_) variants
         const modelAliases: Record<string, string[]> = {
-          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor', 'cf_adj_armor', 'cf_adj_gladius'],
-          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine', 'cf_adj_alp_hunter', 'cf_adj_alpine_hunter', 'cf_adj_alpine'],
+          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor', 'cf_adj_armor', 'cf_adj_gladius', 'fg_adj_armor', 'fg_adj_gladius'],
+          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine', 'cf_adj_alp_hunter', 'cf_adj_alpine_hunter', 'cf_adj_alpine', 'fg_adj_alp_hunter', 'fg_adj_alpine_hunter', 'fg_adj_alpine'],
+          'alpine_hunter': ['cf_alpine_hunter', 'fg_alpine_hunter'],
         };
         
         // Normalize function: "Mesa Universal" -> "mesa_universal"

@@ -119,15 +119,131 @@ router.post('/schedule', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections found for this batch' });
     }
 
-    // TODO: Implement layup schedule generation using existing LayupScheduler service
-    // This will integrate with the shared/services/LayupSchedulerService.ts
-    // For now, return a placeholder response
+    const scheduledOrders: string[] = [];
+    const errors: Array<{ poProductId: number; error: string }> = [];
+
+    for (const selection of selections) {
+      try {
+        const poItemId = selection.poProductId;
+        const quantity = selection.quantity || 1;
+
+        // Get the purchase order item details
+        const poItemQuery = `
+          SELECT poi.*, po.id as po_id, po.po_number, po.customer_name, po.customer_id
+          FROM purchase_order_items poi
+          JOIN purchase_orders po ON poi.po_id = po.id
+          WHERE poi.id = $1
+        `;
+        const poItem = await pool.query(poItemQuery, [poItemId]);
+
+        if (!poItem || poItem.length === 0) {
+          errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
+          continue;
+        }
+
+        const item = poItem[0];
+        const specs = item.specifications || {};
+        const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Create orders in all_orders table with Layup/Plugging department
+        for (let i = 0; i < quantity; i++) {
+          const currentOrderCount = (item.order_count || 0) + i + 1;
+          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number}`;
+          const features = JSON.stringify({
+            po_item_id: poItemId,
+            po_number: item.po_number,
+            po_id: item.po_id,
+            specifications: specs,
+            action_length: specs.action_length || '',
+          });
+
+          // Insert into all_orders table with Layup/Plugging department
+          const insertOrderQuery = `
+            INSERT INTO all_orders (
+              order_id,
+              order_date,
+              due_date,
+              customer_id,
+              model_id,
+              current_department,
+              status,
+              notes,
+              features,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1, NOW(), $2, $3, $4, 'Layup/Plugging', 'FINALIZED', $5, $6::jsonb, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Layup/Plugging',
+                status = 'FINALIZED',
+                updated_at = NOW()
+          `;
+          await pool.query(insertOrderQuery, [
+            orderId,
+            dueDate,
+            item.customer_id || item.customer_name,
+            item.item_id || '',
+            notes,
+            features,
+          ]);
+
+          // Also add to layup_schedule table for scheduler visibility
+          const scheduledDate = targetWeek 
+            ? new Date(targetWeek) 
+            : new Date(dueDate);
+
+          const insertScheduleQuery = `
+            INSERT INTO layup_schedule (
+              order_id,
+              scheduled_date,
+              priority_score,
+              is_locked,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1, $2, 1500, false, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET scheduled_date = $2,
+                updated_at = NOW()
+          `;
+          await pool.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+
+          scheduledOrders.push(orderId);
+        }
+
+        // Update the orderCount in purchase_order_items
+        const newOrderCount = (item.order_count || 0) + quantity;
+        const updatePOQuery = `
+          UPDATE purchase_order_items
+          SET order_count = $1, updated_at = NOW()
+          WHERE id = $2
+        `;
+        await pool.query(updatePOQuery, [newOrderCount, poItemId]);
+
+      } catch (error) {
+        console.error(`Error scheduling PO item ${selection.poProductId}:`, error);
+        errors.push({
+          poProductId: selection.poProductId,
+          error: (error as Error).message,
+        });
+      }
+    }
+
+    console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} orders in Layup/Plugging queue`);
+
     res.json({
+      success: true,
       batchId,
       targetWeek: targetWeek || 'Current Week',
       selectionCount: selections.length,
-      message: 'Schedule generation will be implemented in next phase',
-      selections,
+      scheduledCount: scheduledOrders.length,
+      targetDepartment: 'Layup/Plugging',
+      orderIds: scheduledOrders,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Successfully scheduled ${scheduledOrders.length} items to Layup/Plugging department queue`,
     });
   } catch (error) {
     console.error('Error generating schedule:', error);
@@ -172,12 +288,13 @@ router.post('/progress', async (req: Request, res: Response) => {
         const quantity = selection.quantity || 1;
 
         // Get the purchase order item details
-        const poItem = await pool.query`
+        const poItemQuery = `
           SELECT poi.*, po.id as po_id, po.po_number, po.customer_name, po.customer_id
           FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
-          WHERE poi.id = ${poItemId}
+          WHERE poi.id = $1
         `;
+        const poItem = await pool.query(poItemQuery, [poItemId]);
 
         if (!poItem || poItem.length === 0) {
           errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
@@ -195,59 +312,45 @@ router.post('/progress', async (req: Request, res: Response) => {
           const currentOrderCount = (item.order_count || 0) + i + 1;
           const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
           
-          await pool.query`
+          const insertProdQuery = `
             INSERT INTO production_orders (
-              order_id,
-              po_id,
-              po_item_id,
-              customer_id,
-              customer_name,
-              po_number,
-              item_type,
-              item_id,
-              item_name,
-              specifications,
-              order_date,
-              due_date,
-              production_status,
-              current_department,
-              created_at,
-              updated_at
+              order_id, po_id, po_item_id, customer_id, customer_name,
+              po_number, item_type, item_id, item_name, specifications,
+              order_date, due_date, production_status, current_department,
+              created_at, updated_at
             ) VALUES (
-              ${orderId},
-              ${item.po_id},
-              ${poItemId},
-              ${item.customer_id || ''},
-              ${item.customer_name},
-              ${item.po_number},
-              'stock',
-              ${item.item_id || ''},
-              ${item.item_name || ''},
-              ${JSON.stringify(specs)},
-              NOW(),
-              ${dueDate},
-              'LAID_UP',
-              'Barcode',
-              NOW(),
-              NOW()
+              $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
+              NOW(), $10, 'LAID_UP', 'Barcode', NOW(), NOW()
             )
             ON CONFLICT (order_id) DO UPDATE
             SET current_department = 'Barcode',
                 production_status = 'LAID_UP',
                 updated_at = NOW()
           `;
+          await pool.query(insertProdQuery, [
+            orderId,
+            item.po_id,
+            poItemId,
+            item.customer_id || '',
+            item.customer_name,
+            item.po_number,
+            item.item_id || '',
+            item.item_name || '',
+            JSON.stringify(specs),
+            dueDate,
+          ]);
 
           progressedOrders.push(orderId);
         }
 
         // Update the orderCount in purchase_order_items to reflect scheduled quantity
         const newOrderCount = (item.order_count || 0) + quantity;
-        await pool.query`
+        const updatePoQuery = `
           UPDATE purchase_order_items
-          SET order_count = ${newOrderCount},
-              updated_at = NOW()
-          WHERE id = ${poItemId}
+          SET order_count = $1, updated_at = NOW()
+          WHERE id = $2
         `;
+        await pool.query(updatePoQuery, [newOrderCount, poItemId]);
         
       } catch (error) {
         console.error(`Error progressing PO item ${selection.poProductId}:`, error);

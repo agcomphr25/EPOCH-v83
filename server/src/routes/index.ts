@@ -6215,14 +6215,26 @@ export function registerRoutes(app: Express): Server {
       for (const orderId of orderIds) {
         try {
           // Check production orders first (P1 PO items)
-          let currentOrder = await storage.getProductionOrderByOrderId(orderId);
-          let isProductionOrder = !!currentOrder;
+          // Production orders have format: PO-{poNumber}-{itemId}-{unit}
+          let currentOrder: any = null;
+          let isProductionOrder = false;
           let isFinalized = false;
+          
+          // Only check production_orders if orderId matches production order format
+          if (orderId.startsWith('PO-') && orderId.split('-').length >= 4) {
+            try {
+              currentOrder = await storage.getProductionOrderByOrderId(orderId);
+              isProductionOrder = !!currentOrder;
+            } catch (prodError) {
+              // Gracefully handle production order lookup errors
+              console.warn(`⚠️ Production order lookup failed for ${orderId}:`, prodError instanceof Error ? prodError.message : prodError);
+            }
+          }
 
           // If not a production order, check finalized orders
           if (!currentOrder) {
             currentOrder = await storage.getFinalizedOrderById(orderId);
-            isFinalized = true;
+            isFinalized = !!currentOrder;
             isProductionOrder = false;
           }
 

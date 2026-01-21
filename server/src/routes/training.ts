@@ -2530,12 +2530,17 @@ router.get('/programs/:programId/assignments', async (req, res) => {
       .where(eq(trainingAssignments.programId, programId))
       .orderBy(desc(trainingAssignments.createdAt));
 
+    // Handle null or undefined assignments
+    if (!assignments || !Array.isArray(assignments)) {
+      return res.json([]);
+    }
+
     // Get employee details for each assignment
     const employeeIds = Array.from(new Set(assignments.flatMap(a => [a.employeeId, a.trainerId].filter(Boolean))));
     const employeeList = employeeIds.length > 0 
       ? await db.select().from(employees).where(inArray(employees.id, employeeIds as number[]))
       : [];
-    const employeeMap = new Map(employeeList.map(e => [e.id, e]));
+    const employeeMap = new Map((employeeList || []).map(e => [e.id, e]));
 
     const enrichedAssignments = assignments.map(a => ({
       ...a,
@@ -2563,10 +2568,10 @@ router.post('/programs/:programId/assignments', async (req, res) => {
     const [assignment] = await db.insert(trainingAssignments).values({
       programId,
       employeeId,
-      trainerId: trainerId || null,
-      startDate: startDate ? new Date(startDate) : new Date(),
-      dueDate: dueDate ? new Date(dueDate) : null,
-      notes: notes || null,
+      trainerId: trainerId && trainerId !== '' ? Number(trainerId) : null,
+      startDate: startDate && startDate !== '' ? new Date(startDate) : new Date(),
+      dueDate: dueDate && dueDate !== '' ? new Date(dueDate) : null,
+      notes: notes && notes !== '' ? notes : null,
       status: 'pending',
     }).returning();
 

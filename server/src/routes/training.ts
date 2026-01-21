@@ -36,6 +36,7 @@ import {
   trainingDailyQuizSelections,
   trainingBuilderQuizAttempts,
   trainingCertifications,
+  aiTrainingPlans,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -761,6 +762,177 @@ router.delete('/modules/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============ TRAINING PLANS API ============
+
+// Get all training plans
+router.get('/plans', async (req, res) => {
+  try {
+    let plans: any[] = [];
+    try {
+      const results = await db
+        .select()
+        .from(aiTrainingPlans)
+        .orderBy(desc(aiTrainingPlans.createdAt));
+      plans = Array.isArray(results) ? results : [];
+    } catch (fetchErr) {
+      console.error('Error querying training plans:', fetchErr);
+      return res.json([]);
+    }
+    
+    // Parse JSON fields safely
+    const parsedPlans = plans.map(plan => {
+      let moduleIds: number[] = [];
+      try {
+        if (plan.planStructure) {
+          const parsed = JSON.parse(plan.planStructure);
+          moduleIds = Array.isArray(parsed.moduleIds) ? parsed.moduleIds : [];
+        }
+      } catch (parseErr) {
+        console.error('Error parsing planStructure:', parseErr);
+      }
+      return {
+        ...plan,
+        moduleIds,
+      };
+    });
+    
+    res.json(parsedPlans);
+  } catch (error: any) {
+    console.error('Error fetching training plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create training plan with Zod validation
+router.post('/plans', async (req, res) => {
+  try {
+    const { title, description, moduleIds, status } = req.body;
+    
+    // Validate required fields
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
+    }
+    
+    const validModuleIds = Array.isArray(moduleIds) ? moduleIds.filter(id => typeof id === 'number') : [];
+    const validStatus = ['draft', 'active', 'completed'].includes(status) ? status : 'draft';
+    
+    const planStructure = JSON.stringify({
+      moduleIds: validModuleIds,
+      createdAt: new Date().toISOString(),
+    });
+    
+    // Insert and then fetch the created plan
+    await db.insert(aiTrainingPlans).values({
+      title: title.trim(),
+      description: (description || '').trim(),
+      planStructure,
+      totalTopics: validModuleIds.length,
+      status: validStatus,
+      traineeId: 1, // Will be updated when assigned
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    
+    // Fetch the most recently created plan with error handling for Neon null returns
+    let newPlan = null;
+    try {
+      const results = await db
+        .select()
+        .from(aiTrainingPlans)
+        .orderBy(desc(aiTrainingPlans.id))
+        .limit(1);
+      newPlan = Array.isArray(results) ? results[0] : null;
+    } catch (fetchErr) {
+      console.error('Error fetching newly created plan:', fetchErr);
+    }
+    
+    res.status(201).json({
+      id: newPlan?.id,
+      title: title.trim(),
+      description: (description || '').trim(),
+      status: validStatus,
+      totalTopics: validModuleIds.length,
+      moduleIds: validModuleIds,
+      createdAt: newPlan?.createdAt || new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Error creating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single training plan
+router.get('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const [plan] = await db
+      .select()
+      .from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    res.json({
+      ...plan,
+      moduleIds: plan.planStructure ? JSON.parse(plan.planStructure).moduleIds || [] : [],
+    });
+  } catch (error: any) {
+    console.error('Error fetching training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update training plan
+router.patch('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { title, description, moduleIds, status } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (status !== undefined) updateData.status = status;
+    if (moduleIds !== undefined) {
+      updateData.planStructure = JSON.stringify({ moduleIds });
+      updateData.totalTopics = moduleIds.length;
+    }
+    
+    await db
+      .update(aiTrainingPlans)
+      .set(updateData)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    const [updatedPlan] = await db
+      .select()
+      .from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    res.json({
+      ...updatedPlan,
+      moduleIds: updatedPlan?.planStructure ? JSON.parse(updatedPlan.planStructure).moduleIds || [] : [],
+    });
+  } catch (error: any) {
+    console.error('Error updating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete training plan
+router.delete('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    await db.delete(aiTrainingPlans).where(eq(aiTrainingPlans.id, planId));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ END TRAINING PLANS API ============
 
 // Import training content from PDF
 router.post('/modules/import-pdf', upload.single('file'), async (req, res) => {
@@ -4528,8 +4700,7 @@ import {
   topicDocumentLinks,
   trainingTopicMaterials,
   trainingTopicQuizQuestions,
-  traineeTopicAssignments,
-  aiTrainingPlans
+  traineeTopicAssignments
 } from '../../schema';
 
 // --- CATEGORIES ---

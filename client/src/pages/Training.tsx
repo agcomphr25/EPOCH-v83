@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { GraduationCap, Clock, FileText, Award, Plus, Trash2, HelpCircle, BookOpen, Sparkles, Loader2 } from 'lucide-react';
+import { GraduationCap, Clock, FileText, Award, Plus, Trash2, HelpCircle, BookOpen, Sparkles, Loader2, ClipboardList, Users, CheckCircle2, Calendar } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface QuizQuestion {
   question: string;
@@ -118,10 +119,27 @@ const CATEGORIES = [
   { value: 'GENERAL', label: 'General' },
 ];
 
+interface TrainingPlan {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  totalTopics: number;
+  moduleIds: number[];
+  createdAt: string;
+}
+
 export default function Training() {
   const { toast } = useToast();
+  const [mainTab, setMainTab] = useState('modules');
   const [createOpen, setCreateOpen] = useState(false);
   const [createTab, setCreateTab] = useState('basic');
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [newPlan, setNewPlan] = useState({
+    title: '',
+    description: '',
+    moduleIds: [] as number[],
+  });
   const [newModule, setNewModule] = useState({
     title: '',
     description: '',
@@ -140,6 +158,38 @@ export default function Training() {
 
   const { data: modules, isLoading } = useQuery({
     queryKey: ['/api/training/modules'],
+  });
+
+  const { data: trainingPlans, isLoading: plansLoading } = useQuery({
+    queryKey: ['/api/training/plans'],
+  });
+
+  const { data: employees } = useQuery({
+    queryKey: ['/api/employees'],
+  });
+
+  const createPlanMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('/api/training/plans', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: newPlan.title,
+          description: newPlan.description,
+          moduleIds: newPlan.moduleIds,
+          status: 'draft',
+        }),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/plans'] });
+      setCreatePlanOpen(false);
+      setNewPlan({ title: '', description: '', moduleIds: [] });
+      toast({ title: 'Training Plan Created', description: 'Multi-topic training plan has been created.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
   });
 
   const createMutation = useMutation({
@@ -225,17 +275,27 @@ export default function Training() {
     setQuizQuestions(quizQuestions.filter((_, i) => i !== index));
   };
 
-  if (isLoading) {
+  const toggleModuleInPlan = (moduleId: number) => {
+    setNewPlan(prev => ({
+      ...prev,
+      moduleIds: prev.moduleIds.includes(moduleId)
+        ? prev.moduleIds.filter(id => id !== moduleId)
+        : [...prev.moduleIds, moduleId]
+    }));
+  };
+
+  if (isLoading || plansLoading) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Training Modules</h2>
-            <p className="text-muted-foreground">Employee training and certification programs</p>
+            <h2 className="text-2xl font-bold">Training Program Builder</h2>
+            <p className="text-muted-foreground">Build and manage training programs</p>
           </div>
         </div>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading training modules...</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">Loading training data...</p>
         </div>
       </div>
     );
@@ -247,15 +307,31 @@ export default function Training() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
-            Training Modules
+            Training Program Builder
           </h2>
-          <p className="text-muted-foreground">Employee training and certification programs</p>
+          <p className="text-muted-foreground">Build and manage training programs</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Module
-        </Button>
       </div>
+
+      <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="modules" className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Training Modules
+          </TabsTrigger>
+          <TabsTrigger value="plans" className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Training Plans
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="modules" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Module
+            </Button>
+          </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.isArray(modules) &&
@@ -323,23 +399,183 @@ export default function Training() {
               </CardContent>
             </Card>
           ))}
-      </div>
+          </div>
 
-      {(!modules || (Array.isArray(modules) && modules.length === 0)) && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <GraduationCap className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Training Modules Yet</h3>
-            <p className="text-muted-foreground mb-4">
-              Create training modules for employee certification programs
-            </p>
-            <Button onClick={() => setCreateOpen(true)}>
+          {(!modules || (Array.isArray(modules) && modules.length === 0)) && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <GraduationCap className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Training Modules Yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Create training modules for employee certification programs
+                </p>
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Module
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="plans" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setCreatePlanOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Your First Module
+              Create Training Plan
             </Button>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.isArray(trainingPlans) && trainingPlans.map((plan: any) => (
+              <Card key={plan.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="flex items-start gap-2">
+                      <ClipboardList className="h-5 w-5 text-primary mt-1" />
+                      <span>{plan.title}</span>
+                    </CardTitle>
+                    <Badge variant={plan.status === 'active' ? 'default' : 'secondary'}>
+                      {plan.status || 'draft'}
+                    </Badge>
+                  </div>
+                  <CardDescription className="line-clamp-2">{plan.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <BookOpen className="h-4 w-4" />
+                      <span>{plan.totalTopics || plan.moduleIds?.length || 0} modules included</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>Created: {new Date(plan.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button variant="outline" size="sm" className="flex-1">
+                        <Users className="h-4 w-4 mr-1" />
+                        Assign
+                      </Button>
+                      <Button size="sm" className="flex-1">
+                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                        View Plan
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {(!trainingPlans || (Array.isArray(trainingPlans) && trainingPlans.length === 0)) && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <ClipboardList className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Training Plans Yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Create multi-topic training programs that combine multiple modules
+                </p>
+                <Button onClick={() => setCreatePlanOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Training Plan
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={createPlanOpen} onOpenChange={setCreatePlanOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Create Training Plan</DialogTitle>
+            <DialogDescription>
+              Build a multi-topic training program by selecting modules to include
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="planTitle">Plan Title</Label>
+              <Input
+                id="planTitle"
+                placeholder="e.g., New Employee Onboarding"
+                value={newPlan.title}
+                onChange={(e) => setNewPlan({ ...newPlan, title: e.target.value })}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="planDescription">Description</Label>
+              <Textarea
+                id="planDescription"
+                placeholder="Describe what this training plan covers..."
+                value={newPlan.description}
+                onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })}
+                rows={2}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Select Modules to Include</Label>
+              <ScrollArea className="h-64 border rounded-lg p-3">
+                <div className="space-y-2">
+                  {Array.isArray(modules) && modules.map((module: any) => (
+                    <div
+                      key={module.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        newPlan.moduleIds.includes(module.id) ? 'bg-primary/10 border-primary' : 'hover:bg-muted'
+                      }`}
+                      onClick={() => toggleModuleInPlan(module.id)}
+                    >
+                      <Checkbox
+                        checked={newPlan.moduleIds.includes(module.id)}
+                        onCheckedChange={() => toggleModuleInPlan(module.id)}
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium">{module.title}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-1">{module.description}</p>
+                      </div>
+                      {module.category && (
+                        <Badge variant="secondary" className="text-xs">{module.category}</Badge>
+                      )}
+                    </div>
+                  ))}
+                  {(!modules || (Array.isArray(modules) && modules.length === 0)) && (
+                    <p className="text-center text-muted-foreground py-8">
+                      No modules available. Create some modules first.
+                    </p>
+                  )}
+                </div>
+              </ScrollArea>
+              {newPlan.moduleIds.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {newPlan.moduleIds.length} module(s) selected
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreatePlanOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createPlanMutation.mutate()}
+              disabled={!newPlan.title.trim() || newPlan.moduleIds.length === 0 || createPlanMutation.isPending}
+            >
+              {createPlanMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Training Plan'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh]">

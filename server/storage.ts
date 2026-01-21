@@ -9300,7 +9300,9 @@ export class DatabaseStorage implements IStorage {
   async createProductionOrder(
     data: InsertProductionOrder
   ): Promise<ProductionOrder> {
-    const [order] = await db.insert(productionOrders).values(data).returning();
+    // Remove departmentHistory from data if present since column doesn't exist in DB
+    const { departmentHistory, ...safeData } = data as any;
+    const [order] = await db.insert(productionOrders).values(safeData).returning(productionOrdersColumns);
     return order;
   }
 
@@ -9308,11 +9310,13 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertProductionOrder>
   ): Promise<ProductionOrder> {
+    // Remove departmentHistory from data if present since column doesn't exist in DB
+    const { departmentHistory, ...safeData } = data as any;
     const [order] = await db
       .update(productionOrders)
-      .set(data)
+      .set(safeData)
       .where(eq(productionOrders.id, id))
-      .returning();
+      .returning(productionOrdersColumns);
     return order;
   }
 

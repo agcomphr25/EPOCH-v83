@@ -710,13 +710,23 @@ export default function TicketsPage() {
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
                       {selectedTicket.title}
                     </h2>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadge(selectedTicket.status)}
                       {getPriorityBadge(selectedTicket.priority)}
                       <Badge variant="outline">{selectedTicket.ticketType}</Badge>
                       {selectedTicket.category && (
                         <Badge variant="secondary">{selectedTicket.category}</Badge>
                       )}
+                      {ticketOrders.length > 0 && ticketOrders.map(to => (
+                        <Badge 
+                          key={to.id} 
+                          className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 cursor-pointer hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
+                          onClick={() => navigate(`/order-entry/${to.orderId}`)}
+                        >
+                          <Link2 className="h-3 w-3 mr-1" />
+                          {to.orderId}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
                   <Button

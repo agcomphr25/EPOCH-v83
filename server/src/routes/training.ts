@@ -2681,11 +2681,22 @@ router.delete('/assignments/:id', async (req, res) => {
 router.get('/my-training/:employeeId', async (req, res) => {
   try {
     const employeeId = parseInt(req.params.employeeId);
-    const assignments = await db
-      .select()
-      .from(trainingAssignments)
-      .where(eq(trainingAssignments.employeeId, employeeId))
-      .orderBy(desc(trainingAssignments.createdAt));
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.employeeId, employeeId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching trainee assignments:', queryError);
+      return res.json([]);
+    }
+
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      return res.json([]);
+    }
 
     // Get program details and trainer info
     const programIds = Array.from(new Set(assignments.map(a => a.programId)));
@@ -2730,11 +2741,22 @@ router.get('/my-training/:employeeId', async (req, res) => {
 router.get('/trainer-assignments/:trainerId', async (req, res) => {
   try {
     const trainerId = parseInt(req.params.trainerId);
-    const assignments = await db
-      .select()
-      .from(trainingAssignments)
-      .where(eq(trainingAssignments.trainerId, trainerId))
-      .orderBy(desc(trainingAssignments.createdAt));
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.trainerId, trainerId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching trainer assignments:', queryError);
+      return res.json([]);
+    }
+
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      return res.json([]);
+    }
 
     // Get trainee and program details
     const traineeIds = Array.from(new Set(assignments.map(a => a.employeeId)));

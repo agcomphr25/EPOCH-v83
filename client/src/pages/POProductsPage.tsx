@@ -149,6 +149,15 @@ export default function POProductsPage() {
     },
   });
 
+  // Fetch P1 PO customers (vendors) for customer dropdown
+  const { data: poVendors = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/po-vendors'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/po-vendors');
+      return result;
+    },
+  });
+
   // Mutations for CRUD operations
   const createMutation = useMutation({
     mutationFn: async (
@@ -455,16 +464,23 @@ export default function POProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="customerName">Customer Name *</Label>
-                    <Input
-                      id="customerName"
-                      data-testid="input-customer-name"
+                    <Select
                       value={formData.customerName}
-                      onChange={(e) =>
-                        handleInputChange('customerName', e.target.value)
+                      onValueChange={(value) =>
+                        handleInputChange('customerName', value)
                       }
-                      placeholder="Enter customer name"
-                      required
-                    />
+                    >
+                      <SelectTrigger id="customerName" data-testid="input-customer-name">
+                        <SelectValue placeholder="Select a P1 PO customer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {poVendors.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.name}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">

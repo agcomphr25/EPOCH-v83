@@ -334,15 +334,11 @@ router.post('/generate', async (req: Request, res: Response) => {
     console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
     // Fetch ALL molds (don't filter by enabled status since database has them disabled)
-    // Use rawSql tagged template function for proper array handling
-    // Note: enabled/is_active status is ignored due to database driver write issues
-    const moldQueryResult = await rawSql`
+    // Use pool.query for proper PostgreSQL array handling (rawSql/Neon driver returns empty arrays)
+    const rawMolds = await pool.query(`
       SELECT id, mold_id, model_name, stock_models, instance_number, enabled, multiplier, is_active
       FROM molds
-    `;
-    
-    // Parse the results - handle both array format (from pool.query) and Neon result format
-    const rawMolds = Array.isArray(moldQueryResult) ? moldQueryResult : (moldQueryResult.rows || []);
+    `);
     
     // Debug: Log raw data to see what format stock_models is in
     if (rawMolds.length > 0) {
@@ -571,15 +567,38 @@ router.post('/generate', async (req: Request, res: Response) => {
       const compatibleMolds = activeMolds.filter(mold => {
         if (!item.stockModel) return false;
         
+        // Model name alias mappings for stock models with non-standard naming
+        // Includes carbon fiber (cf_) and fiberglass (fg_) variants
+        const modelAliases: Record<string, string[]> = {
+          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor', 'cf_adj_armor', 'cf_adj_gladius', 'fg_adj_armor', 'fg_adj_gladius'],
+          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine', 'cf_adj_alp_hunter', 'cf_adj_alpine_hunter', 'cf_adj_alpine', 'fg_adj_alp_hunter', 'fg_adj_alpine_hunter', 'fg_adj_alpine'],
+          'alpine_hunter': ['cf_alpine_hunter', 'fg_alpine_hunter'],
+        };
+        
         // Normalize function: "Mesa Universal" -> "mesa_universal"
         const normalizeModelName = (name: string) => 
           name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        
+        // Check if stock model matches any alias
+        const getCanonicalName = (stockModel: string): string => {
+          const normalized = stockModel.toLowerCase();
+          for (const [canonical, aliases] of Object.entries(modelAliases)) {
+            if (aliases.includes(normalized) || normalized === canonical) {
+              return canonical;
+            }
+          }
+          return normalized;
+        };
+        
+        const canonicalStockModel = getCanonicalName(item.stockModel);
         
         // First try stockModels array matching
         if (mold.stockModels && mold.stockModels.length > 0) {
           // If it's an array, use includes
           if (Array.isArray(mold.stockModels)) {
-            return mold.stockModels.includes(item.stockModel);
+            // Check both original and canonical names
+            return mold.stockModels.includes(item.stockModel) || 
+                   mold.stockModels.some(m => getCanonicalName(m) === canonicalStockModel);
           }
           
           // If it's a string (postgres array format like "{a,b,c}"), parse and check
@@ -587,7 +606,8 @@ router.post('/generate', async (req: Request, res: Response) => {
             const modelsStr = mold.stockModels as string;
             // Handle postgres array format: {model1,model2,model3}
             const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
-            return cleanedModels.includes(item.stockModel);
+            return cleanedModels.includes(item.stockModel) ||
+                   cleanedModels.some(m => getCanonicalName(m) === canonicalStockModel);
           }
         }
         
@@ -596,10 +616,13 @@ router.post('/generate', async (req: Request, res: Response) => {
         const normalizedMoldModel = normalizeModelName(mold.modelName);
         const normalizedStockModel = item.stockModel.toLowerCase();
         
-        // Check if normalized names match or contain each other
+        // Check if normalized names match, including aliases
         return normalizedMoldModel === normalizedStockModel ||
+               normalizedMoldModel === canonicalStockModel ||
                normalizedMoldModel.includes(normalizedStockModel) ||
-               normalizedStockModel.includes(normalizedMoldModel);
+               normalizedStockModel.includes(normalizedMoldModel) ||
+               normalizedMoldModel.includes(canonicalStockModel) ||
+               canonicalStockModel.includes(normalizedMoldModel);
       });
       
       if (compatibleMolds.length === 0) {
@@ -713,10 +736,12 @@ router.post('/save', async (req: Request, res: Response) => {
       `📅 Configured work days: ${workDays.map((d: number) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
     );
 
-    // Start transaction
-    await pool.query('BEGIN');
+    // Get a dedicated client for the transaction (all queries must use same client)
+    const client = await pool.connect();
 
     try {
+      // Start transaction on dedicated client
+      await client.query('BEGIN');
       // Derive the distinct layup_day values from the incoming entries
       const layupDaysSet = new Set(entries.map((e: any) => {
         const scheduledDate = typeof e.scheduledDate === 'string' 
@@ -729,7 +754,7 @@ router.post('/save', async (req: Request, res: Response) => {
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
       
       // Get existing schedule ONLY for the specific days being saved (to decrement PO item counts)
-      const existingResult = await pool.query(
+      const existingResult = await client.query(
         `
         SELECT order_id 
         FROM layup_schedule 
@@ -738,8 +763,8 @@ router.post('/save', async (req: Request, res: Response) => {
         [layupDays]
       );
       
-      // Handle Neon driver null result - ensure we have an array
-      const existingRows = existingResult?.rows || existingResult || [];
+      // Handle result - client.query returns { rows: [...] }
+      const existingRows = existingResult?.rows || [];
       
       // Decrement PO item counts for items being removed
       const existingPOCounts = new Map<string, number>();
@@ -761,7 +786,7 @@ router.post('/save', async (req: Request, res: Response) => {
         const poItemEntries = Array.from(existingPOCounts.entries());
         for (const [key, count] of poItemEntries) {
           const [poNumber, itemId] = key.split('-');
-          await pool.query(
+          await client.query(
             `
             UPDATE purchase_order_items
             SET order_count = GREATEST(COALESCE(order_count, 0) - $1, 0),
@@ -775,7 +800,7 @@ router.post('/save', async (req: Request, res: Response) => {
       }
       
       // Clear existing schedule ONLY for the specific days being saved (not entire week)
-      await pool.query(
+      await client.query(
         `
         DELETE FROM layup_schedule 
         WHERE layup_day = ANY($1::date[])
@@ -811,7 +836,7 @@ router.post('/save', async (req: Request, res: Response) => {
           ? processedScheduledDate.toISOString().split('T')[0]
           : new Date(processedScheduledDate).toISOString().split('T')[0];
         
-        await pool.query(
+        await client.query(
           `
           INSERT INTO layup_schedule (
             order_id, scheduled_date, layup_day, mold_id, employee_assignments,
@@ -858,7 +883,7 @@ router.post('/save', async (req: Request, res: Response) => {
         const newPOItemEntries = Array.from(poItemCounts.entries());
         for (const [key, count] of newPOItemEntries) {
           const [poNumber, itemId] = key.split('-');
-          await pool.query(
+          await client.query(
             `
             UPDATE purchase_order_items
             SET order_count = COALESCE(order_count, 0) + $1,
@@ -878,7 +903,7 @@ router.post('/save', async (req: Request, res: Response) => {
       if (orderIds.length > 0) {
         const uniqueOrderIds = Array.from(new Set(orderIds));
         
-        const updateResult = await pool.query(
+        const updateResult = await client.query(
           `
           UPDATE all_orders
           SET current_department = 'Layup/Plugging',
@@ -889,7 +914,7 @@ router.post('/save', async (req: Request, res: Response) => {
           [uniqueOrderIds]
         );
         
-        progressedCount = (updateResult as any).rowCount || 0;
+        progressedCount = updateResult.rowCount || 0;
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
       }
 
@@ -900,7 +925,7 @@ router.post('/save', async (req: Request, res: Response) => {
         // Check which POs have all items fully scheduled
         const fullyScheduledPOs = [];
         for (const poNumber of poNumbersArray) {
-          const checkRows = await pool.query(
+          const checkResult = await client.query(
             `
             SELECT COUNT(*) as total_items,
                    COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
@@ -913,6 +938,7 @@ router.post('/save', async (req: Request, res: Response) => {
             [poNumber]
           );
           
+          const checkRows = checkResult.rows || [];
           if (checkRows.length > 0) {
             const totalItems = parseInt(checkRows[0].total_items);
             const completedItems = parseInt(checkRows[0].completed_items);
@@ -928,7 +954,7 @@ router.post('/save', async (req: Request, res: Response) => {
         
         // Move only fully completed production orders
         if (fullyScheduledPOs.length > 0) {
-          const poUpdateResult = await pool.query(
+          const poUpdateResult = await client.query(
             `
             UPDATE production_orders
             SET current_department = 'Layup/Plugging',
@@ -939,7 +965,7 @@ router.post('/save', async (req: Request, res: Response) => {
             [fullyScheduledPOs]
           );
           
-          const poProgressedCount = (poUpdateResult as any).rowCount || 0;
+          const poProgressedCount = poUpdateResult.rowCount || 0;
           progressedCount += poProgressedCount;
           console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging (all items complete): ${fullyScheduledPOs.join(', ')}`);
         } else {
@@ -948,7 +974,7 @@ router.post('/save', async (req: Request, res: Response) => {
       }
 
       // Commit transaction
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       console.log(
         `✅ Successfully saved ${savedCount} schedule entries and progressed ${progressedCount} orders to Layup/Plugging`
@@ -963,8 +989,11 @@ router.post('/save', async (req: Request, res: Response) => {
         workDays: workDays,
       });
     } catch (transactionError) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw transactionError;
+    } finally {
+      // Always release the client back to the pool
+      client.release();
     }
   } catch (error) {
     console.error('❌ SCHEDULE SAVE: Error saving layup schedule:', error);

@@ -1,0 +1,3223 @@
+VM2171:8 [Coframe] Replit Enterprise watcher loaded
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-01-21?replId=d350e48b-5bf3-4feb-8499-2f9ede77cbbd&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-01-21?replId=d350e48b-5bf3-4feb-8499-2f9ede77cbbd&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-01-21?replId=d350e48b-5bf3-4feb-8499-2f9ede77cbbd&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+63b41234d0683768.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+63b41234d0683768.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+63b41234d0683768.js:2 [LaunchDarkly] LaunchDarkly client initialized
+63b41234d0683768.js:2 [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 63b41234d0683768.js:2
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+agcomphr-01-21?replId=d350e48b-5bf3-4feb-8499-2f9ede77cbbd&projectPane=true:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+63b41234d0683768.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 63b41234d0683768.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+63b41234d0683768.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:2fb3eab5-8a93-4cd6-86ee-18b8cec65505"},{"__ref":"OrgPresenceSession:b7d5cd82-f88c-4c27-b887-68e2017ea09f"},{"__ref":"OrgPresenceSession:70a587d2-fa9d-4176-8829-17fa1185f0a0"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:70a587d2-fa9d-4176-8829-17fa1185f0a0"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 63b41234d0683768.js:2
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.worf.platform.replit.com/wsv2/v2.public.Q2dZSThhN0V5d1lTQmdpUXk4VExCaUlFZDI5eVpqQUFPc2dCQ2lSa016VXdaVFE0WWkwMVltWXpMVFJtWldJdE9EUTVPUzB5WmpsbFpHVTNOMk5pWW1RU0EyNXBlQm9XY21Wd2JHbDBMWEpsY0d3dFptbHNaWE10ZDI5eVppSU9ZV2RqYjIxd2FISXRNREV0TWpFcUNHRm5ZMjl0Y0doeVFrNEtGM0psY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTEzYjNKbUVoVnlaWEJzYVhRdGNtVndiQzF0WlhSaExYZHZjbVlhSEhKbGNHeHBkQzF0WVhKbllYSnBibVV0WW14dlkydHpMWGR2Y21aS0J3amVtdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQUFBQUFBQUNCQUtJQ0FnSUNBQ0RBQ09BQmdBR29QQ042YTZ4UVNDR0ZuWTI5dGNHaHlnZ0VDS2dDQ0FRSXlBSm9CQ2dvSU1DNHdMakk1TkRlZ0FRRT3pAZM7uhPqxvtQy-9MMCtp2Ev8DUBrNjkN6XjFwm3IxyZvndVMAFXn6SPySZQRc-NLBCsGQsLryES_B10ttSMK.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 803eec1bacc00e5f.js:2
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.worf.platform.replit.com/wsv2/v2.public.Q2dZSXlMckV5d1lTQmdqbjFzVExCaUlFZDI5eVpqQUFPc2dCQ2lSa016VXdaVFE0WWkwMVltWXpMVFJtWldJdE9EUTVPUzB5WmpsbFpHVTNOMk5pWW1RU0EyNXBlQm9XY21Wd2JHbDBMWEpsY0d3dFptbHNaWE10ZDI5eVppSU9ZV2RqYjIxd2FISXRNREV0TWpFcUNHRm5ZMjl0Y0doeVFrNEtGM0psY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTEzYjNKbUVoVnlaWEJzYVhRdGNtVndiQzF0WlhSaExYZHZjbVlhSEhKbGNHeHBkQzF0WVhKbllYSnBibVV0WW14dlkydHpMWGR2Y21aS0J3amVtdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQUFBQUFBQUNCQUtJQ0FnSUNBQ0RBQ09BQmdBR29QQ042YTZ4UVNDR0ZuWTI5dGNHaHlnZ0VDS2dDQ0FRSXlBSm9CQ2dvSU1DNHdMakk1TkRlZ0FRRT0d9KkTQL8fpSM-W-QOEnm_YmI3myW71YSCMqJO0kDThi1Kw-2ZjAVByc6-UbUqykRot766zyAAASy5Ly61pwQK.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 803eec1bacc00e5f.js:2
+63b41234d0683768.js:2 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ 63b41234d0683768.js:2
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+VM8 injected.js:37 [vite] connecting...
+VM8 injected.js:37 [vite] connected.
+VM8 injected.js:37 React initialized: Object
+VM8 injected.js:37 React hooks: Object
+VM8 injected.js:37 App component is rendering...
+VM8 injected.js:37 Environment: development
+VM8 injected.js:37 Base URL: /
+VM8 injected.js:37 App component is rendering...
+VM8 injected.js:37 Environment: development
+VM8 injected.js:37 Base URL: /
+VM8 injected.js:37 Redirecting tasham to /admin-dashboard
+VM8 injected.js:37 Redirecting tasham to /admin-dashboard
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+VM8 injected.js:37 🔍 Fetching production queue...
+VM8 injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ API Response from /api/production-queue/attention: 200
+VM8 injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+VM8 injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+VM8 injected.js:37 🔍 Production queue result: 85 orders
+VM8 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM8 injected.js:37
+VM8 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM8 injected.js:37
+VM8 injected.js:37 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ API Response from /api/layup-schedule/generate: 200
+VM8 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM8 injected.js:37
+VM8 injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ VM8 injected.js:37
+VM8 injected.js:37 📊 Generating barcode: LAYUP20260125
+VM8 injected.js:37 ✅ Barcode generated successfully
+VM8 injected.js:37 🌐 API Request to /api/layup-schedule/save (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ API Response from /api/layup-schedule/save: 200
+VM8 injected.js:37 🔍 Fetching production queue...
+VM8 injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+VM8 injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+VM8 injected.js:37 🔍 Production queue result: 85 orders
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+VM8 injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+VM8 injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ API Response from /api/orders/all: 200
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🎯 Direct API response: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ API Response from /api/orders/update-department: 200
+VM8 injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ API Response from /api/orders/all: 200
+VM8 injected.js:37 🎯 Direct API response: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ API Response from /api/orders/update-department: 200
+VM8 injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+VM8 injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ API Response from /api/orders/all: 200
+VM8 injected.js:37 🎯 Direct API response: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+VM8 injected.js:37 ✅ Processing 916 orders in select transform
+VM8 injected.js:37 🔧 useUnifiedLayupOrders hook state: Object
+VM8 injected.js:37 🔧 Final hook return: Object
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+VM8 injected.js:37 [vite] server connection lost. Polling for restart...
+VM8 injected.js:214  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ VM8 injected.js:214
+ping @ VM15 client:736
+waitForSuccessfulPing @ VM15 client:749
+(anonymous) @ VM15 client:561
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ d350e48b-5bf3-4feb-8…ols/injected.js:214
+ping @ d350e48b-5bf3-4feb-8…ev/@vite/client:736
+waitForSuccessfulPing @ d350e48b-5bf3-4feb-8…ev/@vite/client:749
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:561
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ d350e48b-5bf3-4feb-8…ols/injected.js:214
+ping @ d350e48b-5bf3-4feb-8…ev/@vite/client:736
+waitForSuccessfulPing @ d350e48b-5bf3-4feb-8…ev/@vite/client:749
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:561
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ injected.js:214
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+VM15 client:562  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/layup-plugging 502 (Bad Gateway)
+(anonymous) @ VM15 client:562
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/layup-plugging 502 (Bad Gateway)
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:562
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/layup-plugging 502 (Bad Gateway)
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:562
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/layup-plugging 502 (Bad Gateway)
+(anonymous) @ client:562
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+a @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+next @ 018fe8094c3ecef7.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+V @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+v @ 1909402a84e22642.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+onNext @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+next @ 1909402a84e22642.js:2
+m @ c55d52fce612c0b3.js:2
+_ @ c55d52fce612c0b3.js:2
+t.next @ c55d52fce612c0b3.js:2
+(anonymous) @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+emit @ 1909402a84e22642.js:2
+a.onmessage @ 1909402a84e22642.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ c01529975c351fbd.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ c01529975c351fbd.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+y @ c01529975c351fbd.js:2
+s.emit @ 0459c4bda744f639.js:2
+s @ c01529975c351fbd.js:2
+m.maxWait @ c01529975c351fbd.js:2
+v @ 7a61916963f9e0af.js:2
+b @ 7a61916963f9e0af.js:2
+_ @ 7a61916963f9e0af.js:2
+a @ 63b41234d0683768.js:2
+setTimeout
+(anonymous) @ 63b41234d0683768.js:2
+S @ 7a61916963f9e0af.js:2
+x @ c01529975c351fbd.js:2
+onChange @ c01529975c351fbd.js:2
+$ @ 0459c4bda744f639.js:2
+(anonymous) @ 0459c4bda744f639.js:2
+(anonymous) @ 803eec1bacc00e5f.js:2
+handleCommand @ 803eec1bacc00e5f.js:2
+onSocketMessage @ 803eec1bacc00e5f.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+Promise.then
+(anonymous) @ 00d0654394da2e81.js:2
+y @ c01529975c351fbd.js:2
+s.emit @ 0459c4bda744f639.js:2
+s @ c01529975c351fbd.js:2
+m.maxWait @ c01529975c351fbd.js:2
+v @ 7a61916963f9e0af.js:2
+b @ 7a61916963f9e0af.js:2
+_ @ 7a61916963f9e0af.js:2
+a @ 63b41234d0683768.js:2
+setTimeout
+(anonymous) @ 63b41234d0683768.js:2
+S @ 7a61916963f9e0af.js:2
+x @ c01529975c351fbd.js:2
+onChange @ c01529975c351fbd.js:2
+$ @ 0459c4bda744f639.js:2
+(anonymous) @ 0459c4bda744f639.js:2
+(anonymous) @ 803eec1bacc00e5f.js:2
+handleCommand @ 803eec1bacc00e5f.js:2
+onSocketMessage @ 803eec1bacc00e5f.js:2
+63b41234d0683768.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 63b41234d0683768.js:2
+d @ 0d29bc7a257ca5a8.js:2
+(anonymous) @ 0d29bc7a257ca5a8.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ c01529975c351fbd.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+Promise.then
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ c01529975c351fbd.js:2
+(anonymous) @ 00d0654394da2e81.js:2
+y @ c01529975c351fbd.js:2
+s.emit @ 0459c4bda744f639.js:2
+s @ c01529975c351fbd.js:2
+m.maxWait @ c01529975c351fbd.js:2
+v @ 7a61916963f9e0af.js:2
+b @ 7a61916963f9e0af.js:2
+_ @ 7a61916963f9e0af.js:2
+a @ 63b41234d0683768.js:2
+setTimeout
+(anonymous) @ 63b41234d0683768.js:2
+S @ 7a61916963f9e0af.js:2
+x @ c01529975c351fbd.js:2
+onChange @ c01529975c351fbd.js:2
+$ @ 0459c4bda744f639.js:2
+(anonymous) @ 0459c4bda744f639.js:2
+(anonymous) @ 803eec1bacc00e5f.js:2
+handleCommand @ 803eec1bacc00e5f.js:2
+onSocketMessage @ 803eec1bacc00e5f.js:2
+commons.59560acdd69ed701c941.js.gz:1 [Violation] 'message' handler took 253ms
+commons.59560acdd69ed701c941.js.gz:1 [Violation] 'message' handler took 165ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+0806f034b483f38b8393eaedb9b70c5d:1  GET https://gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+e @ 803eec1bacc00e5f.js:2
+a @ 63b41234d0683768.js:2
+8b6de32b36be51e4cb37dcf3111af591:1  GET https://gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+e @ 803eec1bacc00e5f.js:2
+a @ 63b41234d0683768.js:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+ Environment: development
+ Base URL: /
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🚀 Making direct API call to /api/p1-layup-queue
+ 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ ✅ API Response from /api/orders/all: 200
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+ 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+ 🎯 Direct API response: {status: 200, length: 916, firstItem: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+iframe_form_detection.js:23 [Violation] 'click' handler took 231ms
+ 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ API Response from /api/orders/update-department: 200
+ 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+ 🚀 Making direct API call to /api/p1-layup-queue
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ API Response from /api/orders/all: 200
+ 🎯 Direct API response: {status: 200, length: 916, firstItem: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+chunk-NFC5BX5N.js:18625 [Violation] 'click' handler took 195ms
+ 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ API Response from /api/orders/update-department: 200
+ 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+ 🚀 Making direct API call to /api/p1-layup-queue
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ Processing 916 orders in select transform
+ 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+ 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+ ✅ API Response from /api/orders/all: 200
+ 🎯 Direct API response: {status: 200, length: 916, firstItem: 'AG1563'}
+VM1106 injected.js:37 [vite] connecting...
+VM1106 injected.js:37 [vite] connected.
+VM1106 injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+VM1106 injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+VM1106 injected.js:37 App component is rendering...
+VM1106 injected.js:37 Environment: development
+VM1106 injected.js:37 Base URL: /
+VM1106 injected.js:37 App component is rendering...
+VM1106 injected.js:37 Environment: development
+VM1106 injected.js:37 Base URL: /
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+VM1106 injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+VM1106 injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 ✅ API Response from /api/orders/all: 200
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+VM1106 injected.js:37 🎯 Direct API response: {status: 200, length: 916, firstItem: 'AG1563'}
+VM1106 injected.js:37 ✅ Processing 916 orders in select transform
+VM1106 injected.js:37 ✅ Processing 916 orders in select transform
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+VM1106 injected.js:37 ✅ Processing 916 orders in select transform
+VM1106 injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+VM1106 injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+VM1652 iframe_form_detection.js:23 [Violation] 'message' handler took 327ms
+VM1106 injected.js:37 🔍 Fetching production queue...
+VM1106 injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+VM1106 injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+VM1106 injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+VM1106 injected.js:37 ✅ API Response from /api/production-queue/attention: 200
+VM1106 injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+VM1106 injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+VM1106 injected.js:37 🔍 Production queue result: 85 orders
+VM1106 injected.js:37 [vite] server connection lost. Polling for restart...
+VM1106 injected.js:214  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ VM1106 injected.js:214
+ping @ VM1109 client:736
+waitForSuccessfulPing @ VM1109 client:749
+(anonymous) @ VM1109 client:561
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/ 502 (Bad Gateway)
+apply @ d350e48b-5bf3-4feb-8…ols/injected.js:214
+ping @ d350e48b-5bf3-4feb-8…ev/@vite/client:736
+waitForSuccessfulPing @ d350e48b-5bf3-4feb-8…ev/@vite/client:749
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:561
+VM1109 client:562  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/production-queue 502 (Bad Gateway)
+(anonymous) @ VM1109 client:562
+  GET https://d350e48b-5bf3-4feb-8499-2f9ede77cbbd-00-co9mahs5iiod.worf.replit.dev/department-queue/production-queue 502 (Bad Gateway)
+(anonymous) @ d350e48b-5bf3-4feb-8…ev/@vite/client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🔍 Fetching production queue...
+injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/production-queue/attention: 200
+injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:37 🔍 Production queue result: 85 orders
+8b6de32b36be51e4cb37dcf3111af591:1  GET https://gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ 7a61916963f9e0af.js:2
+n @ c01529975c351fbd.js:2
+a @ 63b41234d0683768.js:2
+0806f034b483f38b8393eaedb9b70c5d:1  GET https://gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ ed1e693c96a75807.js:2
+D @ ed1e693c96a75807.js:2
+t.unstable_scheduleCallback @ ed1e693c96a75807.js:2
+iC @ ed1e693c96a75807.js:2
+iE @ ed1e693c96a75807.js:2
+a$ @ ed1e693c96a75807.js:2
+(anonymous) @ 7a61916963f9e0af.js:2
+n @ c01529975c351fbd.js:2
+a @ 63b41234d0683768.js:2
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-EJAXTV4J.js?v=bbe69787:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=bbe69787:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=bbe69787:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=bbe69787:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=bbe69787:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=bbe69787:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=bbe69787:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=bbe69787:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19416
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=bbe69787:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=bbe69787:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-EJAXTV4J.js?v=bbe69787:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=bbe69787:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=bbe69787:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=bbe69787:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=bbe69787:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=bbe69787:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=bbe69787:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19416
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=bbe69787:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=bbe69787:18627
+injected.js:37 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/layup-schedule/generate: 200
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-EJAXTV4J.js?v=bbe69787:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=bbe69787:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=bbe69787:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=bbe69787:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=bbe69787:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=bbe69787:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=bbe69787:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=bbe69787:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19416
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=bbe69787:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19432
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=bbe69787:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18718
+workLoop @ chunk-NFC5BX5N.js?v=bbe69787:197
+flushWork @ chunk-NFC5BX5N.js?v=bbe69787:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=bbe69787:384
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-EJAXTV4J.js?v=bbe69787:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=bbe69787:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=bbe69787:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=bbe69787:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=bbe69787:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=bbe69787:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=bbe69787:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19416
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=bbe69787:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=bbe69787:19432
+commitRoot @ chunk-NFC5BX5N.js?v=bbe69787:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=bbe69787:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=bbe69787:18718
+workLoop @ chunk-NFC5BX5N.js?v=bbe69787:197
+flushWork @ chunk-NFC5BX5N.js?v=bbe69787:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=bbe69787:384
+injected.js:37 📊 Generating barcode: LAYUP20260125
+injected.js:37 ✅ Barcode generated successfully
+injected.js:37 🌐 API Request to /api/layup-schedule/save (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/layup-schedule/save: 200
+injected.js:37 🔍 Fetching production queue...
+injected.js:37 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:37 🔍 Production queue result: 85 orders
+injected.js:37 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 ✅ API Response from /api/orders/all: 200
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:37 🎯 Direct API response: {status: 200, length: 916, firstItem: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+chunk-NFC5BX5N.js?v=bbe69787:18625 [Violation] 'click' handler took 154ms
+injected.js:37 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/update-department: 200
+injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 916 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 916, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 916, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 🎯 Direct API response: {status: 200, length: 879, firstItem: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/all: 200
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/update-department: 200
+injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/all: 200
+injected.js:37 🎯 Direct API response: {status: 200, length: 879, firstItem: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 🌐 API Request to /api/orders/update-department (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/update-department: 200
+injected.js:37 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:37 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ Processing 879 orders in select transform
+injected.js:37 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 879, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:37 🔧 Final hook return: {ordersReturned: 879, isLoading: false, hasError: false, firstOrderId: 'AG1563'}
+injected.js:37 ✅ API Response from /api/orders/all: 200
+63b41234d0683768.js:2 [Violation] 'requestAnimationFrame' handler took 109ms
+injected.js:37 🎯 Direct API response: {status: 200, length: 879, firstItem: 'AG1563'}

@@ -6215,14 +6215,26 @@ export function registerRoutes(app: Express): Server {
       for (const orderId of orderIds) {
         try {
           // Check production orders first (P1 PO items)
-          let currentOrder = await storage.getProductionOrderByOrderId(orderId);
-          let isProductionOrder = !!currentOrder;
+          // Production orders have format: PO-{poNumber}-{itemId}-{unit}
+          let currentOrder: any = null;
+          let isProductionOrder = false;
           let isFinalized = false;
+          
+          // Only check production_orders if orderId matches production order format
+          if (orderId.startsWith('PO-') && orderId.split('-').length >= 4) {
+            try {
+              currentOrder = await storage.getProductionOrderByOrderId(orderId);
+              isProductionOrder = !!currentOrder;
+            } catch (prodError) {
+              // Gracefully handle production order lookup errors
+              console.warn(`⚠️ Production order lookup failed for ${orderId}:`, prodError instanceof Error ? prodError.message : prodError);
+            }
+          }
 
           // If not a production order, check finalized orders
           if (!currentOrder) {
             currentOrder = await storage.getFinalizedOrderById(orderId);
-            isFinalized = true;
+            isFinalized = !!currentOrder;
             isProductionOrder = false;
           }
 
@@ -6336,26 +6348,33 @@ export function registerRoutes(app: Express): Server {
             role: req.user?.role || 'system',
           };
 
-          // Audit field changes (BEFORE → AFTER comparison)
-          await auditService.logFieldChanges(
-            'p1_order',
-            orderId,
-            currentOrder,
-            afterState || updatedOrder,
-            actor,
-            { source: 'update-department' }
-          );
-
-          // Department timing: close previous, open new
-          await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
-          await auditService.recordDepartmentEntry({
-            entityType: 'p1_order',
-            entityId: orderId,
-            department: department,
-            enteredByUserId: req.user?.id,
-          });
-
+          // Add to updated orders FIRST (before audit) since the DB update succeeded
           updatedOrders.push(updatedOrder);
+
+          // Audit logging (non-blocking - don't fail update if audit fails)
+          try {
+            // Audit field changes (BEFORE → AFTER comparison)
+            await auditService.logFieldChanges(
+              'p1_order',
+              orderId,
+              currentOrder,
+              afterState || updatedOrder,
+              actor,
+              { source: 'update-department' }
+            );
+
+            // Department timing: close previous, open new
+            await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
+            await auditService.recordDepartmentEntry({
+              entityType: 'p1_order',
+              entityId: orderId,
+              department: department,
+              enteredByUserId: req.user?.id,
+            });
+          } catch (auditError) {
+            // Log audit errors but don't fail the update
+            console.warn(`⚠️ Audit logging failed for ${orderId}:`, auditError instanceof Error ? auditError.message : auditError);
+          }
         } catch (orderError) {
           console.error(`Error updating order ${orderId}:`, orderError);
         }

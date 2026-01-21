@@ -26,7 +26,8 @@ import {
   Filter,
   Search,
   ChevronDown,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -141,6 +142,8 @@ export default function TicketsPage() {
 
   const [newComment, setNewComment] = useState('');
   const [newOrderId, setNewOrderId] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
 
   const buildFilterParams = () => {
     const params = new URLSearchParams();
@@ -707,10 +710,67 @@ export default function TicketsPage() {
               <ScrollArea className="flex-1">
               <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                      {selectedTicket.title}
-                    </h2>
+                  <div className="flex-1 mr-4">
+                    {isEditingTitle ? (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Input
+                          value={editedTitle}
+                          onChange={(e) => setEditedTitle(e.target.value)}
+                          className="text-xl font-semibold"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && editedTitle.trim()) {
+                              updateTicketMutation.mutate({ 
+                                id: selectedTicket.id, 
+                                data: { title: editedTitle.trim() } 
+                              });
+                              setIsEditingTitle(false);
+                            } else if (e.key === 'Escape') {
+                              setIsEditingTitle(false);
+                              setEditedTitle(selectedTicket.title);
+                            }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (editedTitle.trim()) {
+                              updateTicketMutation.mutate({ 
+                                id: selectedTicket.id, 
+                                data: { title: editedTitle.trim() } 
+                              });
+                              setIsEditingTitle(false);
+                            }
+                          }}
+                          disabled={!editedTitle.trim() || updateTicketMutation.isPending}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingTitle(false);
+                            setEditedTitle(selectedTicket.title);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex items-center gap-2 group cursor-pointer mb-2"
+                        onClick={() => {
+                          setEditedTitle(selectedTicket.title);
+                          setIsEditingTitle(true);
+                        }}
+                      >
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                          {selectedTicket.title}
+                        </h2>
+                        <Pencil className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadge(selectedTicket.status)}
                       {getPriorityBadge(selectedTicket.priority)}

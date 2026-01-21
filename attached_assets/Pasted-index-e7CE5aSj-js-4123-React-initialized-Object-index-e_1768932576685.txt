@@ -1,0 +1,76 @@
+index-e7CE5aSj.js:4123 React initialized: Object
+index-e7CE5aSj.js:4123 React hooks: Object
+index-e7CE5aSj.js:4120 App component is rendering...
+index-e7CE5aSj.js:4120 Environment: production
+index-e7CE5aSj.js:4120 Base URL: /
+index-e7CE5aSj.js:3718 🔍 Fetching production queue...
+index-e7CE5aSj.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-e7CE5aSj.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-e7CE5aSj.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+department-queue/production-queue:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-e7CE5aSj.js:235 ✅ API Response from /api/production-queue/attention: 200
+api/production-queue/prioritized:1  Failed to load resource: the server responded with a status of 500 ()
+index-e7CE5aSj.js:235 ✅ API Response from /api/production-queue/prioritized: 500
+index-e7CE5aSj.js:4123 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.priority_source does not exist"}
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-e7CE5aSj.js:3718 🔍 Fetching production queue...
+index-e7CE5aSj.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+api/production-queue/prioritized:1  Failed to load resource: the server responded with a status of 500 ()
+index-e7CE5aSj.js:235 ✅ API Response from /api/production-queue/prioritized: 500
+index-e7CE5aSj.js:4123 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.priority_source does not exist"}
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 ❌ Production queue fetch error: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:3718 🔍 Fetching production queue...
+index-e7CE5aSj.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+api/production-queue/prioritized:1  Failed to load resource: the server responded with a status of 500 ()
+index-e7CE5aSj.js:235 ✅ API Response from /api/production-queue/prioritized: 500
+index-e7CE5aSj.js:4123 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.priority_source does not exist"}
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:3718 🔍 Fetching production queue...
+index-e7CE5aSj.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+api/production-queue/prioritized:1  Failed to load resource: the server responded with a status of 500 ()
+index-e7CE5aSj.js:235 ✅ API Response from /api/production-queue/prioritized: 500
+index-e7CE5aSj.js:4123 API error raw body: {"success":false,"error":"Failed to fetch prioritized production queue","details":"column o.priority_source does not exist"}
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/production-queue/prioritized: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 ❌ Production queue fetch error: Error: Failed to fetch prioritized production queue
+    at Ye (index-e7CE5aSj.js:235:6188)
+    at async queryFn (index-e7CE5aSj.js:3718:11777)
+console.error @ index-e7CE5aSj.js:4123
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-e7CE5aSj.js:235 🌐 API Request to /api/training/modules (timeout: 15000ms, deployment: true)
+index-e7CE5aSj.js:235 ✅ API Response from /api/training/modules: 201
+index-e7CE5aSj.js:235 🌐 API Request to /api/training/modules/10/ai-transform (timeout: 15000ms, deployment: true)
+index-e7CE5aSj.js:4123 🚨 API TIMEOUT: /api/training/modules/10/ai-transform took longer than 15000ms
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/training/modules/10/ai-transform: AbortError: signal is aborted without reason
+    at index-e7CE5aSj.js:235:5232
+console.error @ index-e7CE5aSj.js:4123
+index-e7CE5aSj.js:235 🌐 API Request to /api/training/modules/10/ai-transform (timeout: 15000ms, deployment: true)
+index-e7CE5aSj.js:4123 🚨 API TIMEOUT: /api/training/modules/10/ai-transform took longer than 15000ms
+console.error @ index-e7CE5aSj.js:4123
+(anonymous) @ index-e7CE5aSj.js:235
+index-e7CE5aSj.js:4123 💥 API Request failed for /api/training/modules/10/ai-transform: AbortError: signal is aborted without reason
+    at index-e7CE5aSj.js:235:5232
+console.error @ index-e7CE5aSj.js:4123
+Ye @ index-e7CE5aSj.js:235

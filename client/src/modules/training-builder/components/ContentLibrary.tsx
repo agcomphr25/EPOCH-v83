@@ -12,7 +12,8 @@ import {
   Plus, 
   Search,
   FileText,
-  Clock
+  Clock,
+  Lightbulb
 } from 'lucide-react';
 
 interface TrainingModule {
@@ -30,14 +31,23 @@ interface TrainingQuestion {
   questionType: string;
 }
 
+interface TrainingTopic {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  materialsCount?: number;
+}
+
 interface ContentLibraryProps {
   onAddModule: (module: TrainingModule) => void;
   onAddQuestion: (question: TrainingQuestion) => void;
+  onAddTopic?: (topic: TrainingTopic) => void;
 }
 
-export default function ContentLibrary({ onAddModule, onAddQuestion }: ContentLibraryProps) {
+export default function ContentLibrary({ onAddModule, onAddQuestion, onAddTopic }: ContentLibraryProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('modules');
+  const [activeTab, setActiveTab] = useState('topics');
 
   const { data: modules = [], isLoading: modulesLoading } = useQuery<TrainingModule[]>({
     queryKey: ['/api/training/modules'],
@@ -47,6 +57,10 @@ export default function ContentLibrary({ onAddModule, onAddQuestion }: ContentLi
     queryKey: ['/api/training/questions'],
   });
 
+  const { data: topics = [], isLoading: topicsLoading } = useQuery<TrainingTopic[]>({
+    queryKey: ['/api/training/content-library/topics'],
+  });
+
   const filteredModules = modules.filter(m => 
     m.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.description?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -54,6 +68,11 @@ export default function ContentLibrary({ onAddModule, onAddQuestion }: ContentLi
 
   const filteredQuestions = questions.filter(q =>
     q.questionText?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredTopics = topics.filter(t =>
+    t.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -76,6 +95,10 @@ export default function ContentLibrary({ onAddModule, onAddQuestion }: ContentLi
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full rounded-none border-b">
+            <TabsTrigger value="topics" className="flex-1 gap-1">
+              <Lightbulb className="h-4 w-4" />
+              Topics
+            </TabsTrigger>
             <TabsTrigger value="modules" className="flex-1 gap-1">
               <FileText className="h-4 w-4" />
               Modules
@@ -85,6 +108,58 @@ export default function ContentLibrary({ onAddModule, onAddQuestion }: ContentLi
               Questions
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="topics" className="m-0">
+            <ScrollArea className="h-[400px]">
+              {topicsLoading ? (
+                <div className="p-4 text-center text-muted-foreground">Loading topics...</div>
+              ) : filteredTopics.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">
+                  {searchTerm ? 'No topics match your search' : 'No training topics available'}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredTopics.map((topic) => (
+                    <div key={topic.id} className="p-3 hover:bg-muted/50 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">{topic.title}</h4>
+                          {topic.description && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                              {topic.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {topic.category && (
+                              <Badge variant="secondary" className="text-xs">
+                                {topic.category}
+                              </Badge>
+                            )}
+                            {topic.materialsCount !== undefined && topic.materialsCount > 0 && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {topic.materialsCount} materials
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {onAddTopic && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onAddTopic(topic)}
+                            className="shrink-0"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
 
           <TabsContent value="modules" className="m-0">
             <ScrollArea className="h-[400px]">

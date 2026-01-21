@@ -325,12 +325,12 @@ export default function ProgramsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Trainer (Optional)</Label>
-                <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
+                <Select value={selectedTrainer || "none"} onValueChange={(val) => setSelectedTrainer(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select trainer..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No trainer assigned</SelectItem>
+                    <SelectItem value="none">No trainer assigned</SelectItem>
                     {employees.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id.toString()}>
                         {emp.name || `Employee #${emp.id}`}

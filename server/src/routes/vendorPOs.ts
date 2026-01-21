@@ -557,13 +557,15 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendor-pos/:id/issue - Issue a PO and send confirmation email with magic link
+// POST /api/vendor-pos/:id/issue - Issue a PO and optionally send confirmation email with magic link
 router.post('/:id/issue', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
+
+    const { skipEmail } = req.body || {};
 
     // Get the PO
     const vendorPO = await storage.getVendorPO(id);
@@ -585,7 +587,19 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor not found' });
     }
 
-    // Check if vendor has an email
+    // If skipEmail is true, just update the status without sending email
+    if (skipEmail) {
+      const updatedPO = await storage.updateVendorPO(id, { status: 'Sent' });
+      console.log(`✅ PO ${vendorPO.poNumber} marked as issued (no email sent - manual entry mode)`);
+      return res.json({
+        ...updatedPO,
+        emailSent: false,
+        emailSkipped: true,
+        message: `PO marked as issued successfully. No email was sent.`,
+      });
+    }
+
+    // Check if vendor has an email (only required when sending email)
     if (!vendor.email) {
       return res.status(400).json({ 
         error: 'Vendor email not configured',

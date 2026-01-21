@@ -746,6 +746,8 @@ router.get('/session', async (req, res) => {
       req.cookies?.sessionToken ||
       req.headers.authorization?.replace('Bearer ', '');
 
+    console.log('🔍 Session check - token present:', !!sessionToken, 'from cookie:', !!req.cookies?.sessionToken);
+
     if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -755,6 +757,12 @@ router.get('/session', async (req, res) => {
       'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
     );
+
+    console.log('🔍 Session query result:', { 
+      isArray: Array.isArray(result), 
+      length: result?.length,
+      firstRow: result?.[0] ? 'exists' : 'missing'
+    });
 
     if (!result || !Array.isArray(result) || result.length === 0) {
       return res.status(401).json({ error: 'Session expired' });

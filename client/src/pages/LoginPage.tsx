@@ -106,6 +106,7 @@ export default function LoginPage() {
     setIsBadgeLoading(true);
 
     try {
+      // Step 1: Authenticate with badge code
       const response = await fetch('/api/auth/badge-login', {
         method: 'POST',
         headers: {
@@ -117,34 +118,53 @@ export default function LoginPage() {
 
       const data = await response.json();
 
-      if (response.ok) {
-        if (data.sessionToken) {
-          localStorage.setItem('sessionToken', data.sessionToken);
-        }
-        
-        // Store username for navigation component to use
-        if (data.user?.username) {
-          localStorage.setItem('dev_username', data.user.username.toLowerCase());
-        }
-
-        toast({
-          title: 'Welcome!',
-          description: `Logged in as ${data.employee?.name || badgeCode}`,
-        });
-        
-        // Invalidate the currentUser query to refresh navigation with new user data
-        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-
-        // Redirect to assigned task page (from badge configuration) or default dashboard
-        const redirectUrl = data.redirectUrl || getDashboardRoute(data.user.username);
-        setLocation(redirectUrl);
-      } else {
+      if (!response.ok) {
         toast({
           title: 'Badge Login Failed',
           description: data.error || 'Invalid employee badge code',
           variant: 'destructive',
         });
+        return;
       }
+
+      if (data.sessionToken) {
+        localStorage.setItem('sessionToken', data.sessionToken);
+      }
+
+      // Step 2: Validate session before redirect (client-side safety check)
+      // This ensures the session is fully hydrated and valid before navigation
+      const sessionResponse = await fetch('/api/auth/session', {
+        credentials: 'include',
+      });
+
+      if (!sessionResponse.ok) {
+        console.error('Badge login: Session validation failed after successful login');
+        toast({
+          title: 'Login Error',
+          description: 'Session could not be validated. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const sessionData = await sessionResponse.json();
+
+      // Store username for navigation component to use
+      if (sessionData.username) {
+        localStorage.setItem('dev_username', sessionData.username.toLowerCase());
+      }
+
+      toast({
+        title: 'Welcome!',
+        description: `Logged in as ${data.employee?.name || badgeCode}`,
+      });
+      
+      // Invalidate the currentUser query to refresh navigation with new user data
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+
+      // Step 3: Only redirect after session is validated
+      const redirectUrl = data.redirectUrl || getDashboardRoute(sessionData.username);
+      setLocation(redirectUrl);
     } catch (error) {
       console.error('Badge login error:', error);
       toast({

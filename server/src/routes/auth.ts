@@ -224,13 +224,112 @@ function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Helper function to hydrate session and verify user is valid
+// Used by badge-login to ensure session is valid before returning success
+async function hydrateAndValidateSession(
+  sessionToken: string,
+  userId: number
+): Promise<{ valid: boolean; user?: any; error?: string }> {
+  try {
+    // Verify session exists and is active
+    const sessionResult = await pool.query(
+      'SELECT user_id, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
+      [sessionToken]
+    );
+
+    if (!sessionResult || sessionResult.length === 0) {
+      return { valid: false, error: 'Session not found' };
+    }
+
+    const session = sessionResult[0];
+
+    if (session.user_id !== userId) {
+      return { valid: false, error: 'Session user mismatch' };
+    }
+
+    if (new Date(session.expires_at) < new Date()) {
+      return { valid: false, error: 'Session expired' };
+    }
+
+    // Hydrate user from database using user_id
+    const userResult = await pool.query(
+      `SELECT id, username, first_name, last_name, role, employee_id, is_active FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    if (!userResult || userResult.length === 0) {
+      return { valid: false, error: 'User not found' };
+    }
+
+    const user = userResult[0];
+
+    if (!user.is_active) {
+      return { valid: false, error: 'User account is inactive' };
+    }
+
+    return {
+      valid: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+        employeeId: user.employee_id,
+      },
+    };
+  } catch (error) {
+    console.error('Session hydration error:', error);
+    return { valid: false, error: 'Session validation failed' };
+  }
+}
+
+// Minimal audit logging for badge login attempts
+function logBadgeLoginAttempt(data: {
+  employeeId: number | null;
+  employeeCode: string;
+  userId: number | null;
+  sessionToken: string | null;
+  redirectUrl: string | null;
+  success: boolean;
+  failureReason: string | null;
+}) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    type: 'BADGE_LOGIN',
+    ...data,
+  };
+  
+  if (data.success) {
+    console.log(`🔐 [BADGE_LOGIN] SUCCESS | employee_id=${data.employeeId} user_id=${data.userId} redirect=${data.redirectUrl} session=${data.sessionToken?.substring(0, 8)}...`);
+  } else {
+    console.warn(`🔐 [BADGE_LOGIN] FAILED | employee_code=${data.employeeCode} reason=${data.failureReason}`);
+  }
+  
+  return logEntry;
+}
+
 // Badge login endpoint - employees log in with just their employee code
 // Rate limited to prevent brute-force attacks
 router.post('/badge-login', loginRateLimiter, async (req, res) => {
-  try {
-    const { employeeCode } = req.body;
+  const { employeeCode } = req.body;
+  let employeeId: number | null = null;
+  let userId: number | null = null;
+  let sessionToken: string | null = null;
+  let redirectUrl: string | null = null;
 
+  try {
     if (!employeeCode) {
+      logBadgeLoginAttempt({
+        employeeId: null,
+        employeeCode: employeeCode || '',
+        userId: null,
+        sessionToken: null,
+        redirectUrl: null,
+        success: false,
+        failureReason: 'Employee code is required',
+      });
       return res.status(400).json({ error: 'Employee code is required' });
     }
 
@@ -242,13 +341,32 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     `;
 
     if (!employeeResult || employeeResult.length === 0) {
+      logBadgeLoginAttempt({
+        employeeId: null,
+        employeeCode,
+        userId: null,
+        sessionToken: null,
+        redirectUrl: null,
+        success: false,
+        failureReason: 'Invalid employee code',
+      });
       return res.status(401).json({ error: 'Invalid employee code' });
     }
 
     const employee = employeeResult[0];
+    employeeId = employee.id;
 
     // Check if employee is active
     if (!employee.isActive) {
+      logBadgeLoginAttempt({
+        employeeId,
+        employeeCode,
+        userId: null,
+        sessionToken: null,
+        redirectUrl: null,
+        success: false,
+        failureReason: 'Employee account is inactive',
+      });
       return res.status(401).json({ error: 'Employee account is inactive' });
     }
 
@@ -259,7 +377,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       WHERE employee_id = ${employee.id} AND is_active = true
     `;
 
-    // Use linked user account if available, otherwise create employee-based session
+    // Use linked user account if available, otherwise deny access
     let sessionUser: { id: number; username: string; role: string };
     
     if (linkedUserResult && linkedUserResult.length > 0) {
@@ -269,11 +387,17 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
         username: linkedUser.username,
         role: linkedUser.role || 'EMPLOYEE',
       };
-      console.log(`🔗 Badge login using linked user account: ${linkedUser.username} (user ID: ${linkedUser.id})`);
+      userId = linkedUser.id;
     } else {
-      // No linked user - deny access or create temporary session
-      // For security, require a linked user account for badge login
-      console.log(`⚠️ Employee ${employee.name} (${employeeCode}) has no linked user account`);
+      logBadgeLoginAttempt({
+        employeeId,
+        employeeCode,
+        userId: null,
+        sessionToken: null,
+        redirectUrl: null,
+        success: false,
+        failureReason: 'No user account linked to this employee badge',
+      });
       return res.status(401).json({ 
         error: 'No user account linked to this employee badge. Please contact an administrator.' 
       });
@@ -290,7 +414,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     `;
 
     // Determine redirect URL based on badge action
-    let redirectUrl = '/dashboard'; // Default
+    redirectUrl = '/dashboard'; // Default
 
     if (badgeActionResult && badgeActionResult.length > 0) {
       const badgeAction = badgeActionResult[0];
@@ -299,19 +423,15 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
 
       switch (actionType) {
         case 'QUICK_NAVIGATION':
-          // Redirect to configured page
           redirectUrl = actionConfig?.targetPage || '/dashboard';
           break;
         case 'P1_DEPARTMENT_PROGRESS':
-          // Redirect to badge scanner to scan orders for department progression
           redirectUrl = '/badge-scanner';
           break;
         case 'P2_DEPARTMENT_PROGRESS':
-          // Redirect to P2 department manager
           redirectUrl = '/p2-department-manager';
           break;
         case 'CLOCK_IN_OUT':
-          // Redirect to employee portal or badge scanner
           redirectUrl = '/employee-portal';
           break;
         default:
@@ -320,7 +440,7 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     }
 
     // Generate session token
-    const sessionToken = generateSessionToken();
+    sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Store session in database using the linked user's credentials
@@ -331,7 +451,29 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       SET expires_at = ${expiresAt}, is_active = true
     `;
 
-    console.log('✅ Badge login session created for employee:', employee.name, '(linked to user:', sessionUser.username + ')');
+    // SESSION HYDRATION INVARIANT: Validate session can be hydrated before returning success
+    // This ensures badge login produces identical authenticated state as password login
+    const hydrationResult = await hydrateAndValidateSession(sessionToken, sessionUser.id);
+    
+    if (!hydrationResult.valid) {
+      // Session was created but cannot be hydrated - this is a critical failure
+      // Clean up the invalid session
+      await pool.query`DELETE FROM user_sessions WHERE session_token = ${sessionToken}`;
+      
+      logBadgeLoginAttempt({
+        employeeId,
+        employeeCode,
+        userId,
+        sessionToken,
+        redirectUrl,
+        success: false,
+        failureReason: `Session hydration failed: ${hydrationResult.error}`,
+      });
+      
+      return res.status(500).json({ 
+        error: 'Badge login failed: Unable to create valid session. Please contact an administrator.' 
+      });
+    }
 
     // Set HTTP-only cookie
     const isProduction =
@@ -349,6 +491,17 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
 
     res.cookie('sessionToken', sessionToken, cookieOptions);
 
+    // Log successful badge login
+    logBadgeLoginAttempt({
+      employeeId,
+      employeeCode,
+      userId,
+      sessionToken,
+      redirectUrl,
+      success: true,
+      failureReason: null,
+    });
+
     res.json({
       success: true,
       sessionToken,
@@ -362,10 +515,19 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
         email: employee.email,
         id: employee.id,
       },
-      redirectUrl, // Send redirect URL to frontend
+      redirectUrl,
     });
   } catch (error) {
     console.error('Badge login error:', error);
+    logBadgeLoginAttempt({
+      employeeId,
+      employeeCode: employeeCode || '',
+      userId,
+      sessionToken,
+      redirectUrl,
+      success: false,
+      failureReason: error instanceof Error ? error.message : 'Unknown error',
+    });
     res.status(500).json({ error: 'Badge login failed' });
   }
 });
@@ -519,7 +681,7 @@ router.get('/validate', async (req, res) => {
 
     // Query database for session
     const result = await pool.query(
-      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
     );
 
@@ -537,10 +699,11 @@ router.get('/validate', async (req, res) => {
       return res.status(401).json({ valid: false });
     }
 
-    // Try to get user data from database first
+    // FIXED: Use user_id as source of truth instead of username
+    // This eliminates username casing, rename, and drift issues
     const dbUserResult = await pool.query(
-      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
-      [session.username.toLowerCase()]
+      `SELECT id, username, role FROM users WHERE id = $1 AND is_active = true`,
+      [session.user_id]
     );
 
     let user: any;
@@ -548,8 +711,11 @@ router.get('/validate', async (req, res) => {
     if (dbUserResult && dbUserResult.length > 0) {
       user = dbUserResult[0];
     } else {
-      // Fall back to hardcoded users
-      user = USERS.get(session.username.toLowerCase());
+      // Fall back to hardcoded users only if user_id matches
+      const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
+      if (hardcodedUser) {
+        user = hardcodedUser;
+      }
     }
 
     if (!user) {
@@ -586,7 +752,7 @@ router.get('/session', async (req, res) => {
 
     // Query database for session
     const result = await pool.query(
-      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
     );
 
@@ -604,10 +770,11 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    // Try to get user data from database first
+    // FIXED: Use user_id as source of truth instead of username
+    // This eliminates username casing, rename, and drift issues
     const dbUserResult = await pool.query(
-      `SELECT id, username, first_name, last_name, role, employee_id FROM users WHERE username = $1 AND is_active = true`,
-      [session.username.toLowerCase()]
+      `SELECT id, username, first_name, last_name, role, employee_id FROM users WHERE id = $1 AND is_active = true`,
+      [session.user_id]
     );
 
     let user: any;
@@ -615,8 +782,11 @@ router.get('/session', async (req, res) => {
     if (dbUserResult && dbUserResult.length > 0) {
       user = dbUserResult[0];
     } else {
-      // Fall back to hardcoded users
-      user = USERS.get(session.username.toLowerCase());
+      // Fall back to hardcoded users only if user_id matches
+      const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
+      if (hardcodedUser) {
+        user = hardcodedUser;
+      }
     }
 
     if (!user) {

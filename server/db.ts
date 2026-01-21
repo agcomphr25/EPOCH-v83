@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
+import { Pool } from 'pg';
 import * as schema from './schema';
 
 if (!process.env.DATABASE_URL) {
@@ -17,6 +18,12 @@ export const db = drizzle({ client: sql, schema });
 
 // Export raw SQL function for cases where Drizzle query builder has issues
 export const rawSql = sql;
+
+// Create a real PostgreSQL pool for operations that need proper UPDATE/INSERT support
+// The Neon HTTP driver doesn't work properly with non-Neon PostgreSQL databases
+export const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Test database connection with timeout
 export async function testDatabaseConnection() {
@@ -40,11 +47,12 @@ export async function testDatabaseConnection() {
 }
 
 // Export a pool wrapper for compatibility with existing code that uses pool.query(sql, params) pattern
+// Now uses real pg Pool for proper PostgreSQL operations
 export const pool = {
   query: async (queryString: string, params?: any[]) => {
-    // Use the Neon sql function with the proper call syntax
-    const result = await sql(queryString, params || []);
+    // Use real pg Pool for proper UPDATE/INSERT support
+    const result = await pgPool.query(queryString, params || []);
     return result;
   },
-  end: () => Promise.resolve(),
+  end: () => pgPool.end(),
 };

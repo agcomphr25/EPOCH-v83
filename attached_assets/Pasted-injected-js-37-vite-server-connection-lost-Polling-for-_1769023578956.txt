@@ -1,0 +1,714 @@
+injected.js:37 [vite] server connection lost. Polling for restart...
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar3ha%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 [vite] hot updated: /src/pages/OrdersList.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=ClNOE8jtuj0vN-P7rtF1N
+injected.js:37 [vite] hot updated: /src/pages/CostCenterManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostAccountingPage.tsx
+injected.js:37 [vite] hot updated: /src/pages/VendorManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/ManageGroups.tsx
+injected.js:37 [vite] hot updated: /src/pages/PDFTemplateManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackTracking.tsx
+injected.js:37 [vite] hot updated: /src/components/QCManager.tsx
+injected.js:37 [vite] hot updated: /src/components/MaintenanceManager.tsx
+injected.js:37 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+injected.js:37 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackReportModal.tsx
+injected.js:37 [vite] hot updated: /src/modules/training-builder/pages/ProgramsPage.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=ClNOE8jtuj0vN-P7rtF1N
+injected.js:37 [vite] hot updated: /src/modules/training-builder/pages/ProgramsPage.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=ClNOE8jtuj0vN-P7rtF1N
+injected.js:37 [vite] hot updated: /src/modules/training-builder/pages/ProgramsPage.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=ClNOE8jtuj0vN-P7rtF1N
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ VM8 injected.js:214
+ping @ VM11 client:736
+waitForSuccessfulPing @ VM11 client:749
+(anonymous) @ VM11 client:561
+d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@vite/client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard 502 (Bad Gateway)
+(anonymous) @ VM11 client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+client:602  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/pages/TraineeTrainingPortal.tsx?t=1769021394526 net::ERR_ABORTED 502 (Bad Gateway)
+importUpdatedModule @ client:602
+fetchUpdate @ client:211
+queueUpdate @ client:186
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550
+injected.js:37 [hmr] Failed to reload /src/pages/TraineeTrainingPortal.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+(anonymous) @ injected.js:37
+console.error @ d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/main.tsx?v=OUW3yCvdMG4YQAflhqZ-f:25
+(anonymous) @ injected.js:37
+warnFailedUpdate @ client:176
+fetchUpdate @ client:213
+await in fetchUpdate
+queueUpdate @ client:186
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550
+client:602  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/index.css?t=1769021394526&v=jGshmniwaoZann4ATgl9m net::ERR_ABORTED 502 (Bad Gateway)
+importUpdatedModule @ client:602
+fetchUpdate @ client:211
+queueUpdate @ client:186
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550
+injected.js:37 [hmr] Failed to reload /src/index.css?v=jGshmniwaoZann4ATgl9m. This could be due to syntax errors or importing non-existent modules. (see errors above)
+(anonymous) @ injected.js:37
+console.error @ d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/main.tsx?v=OUW3yCvdMG4YQAflhqZ-f:25
+(anonymous) @ injected.js:37
+warnFailedUpdate @ client:176
+fetchUpdate @ client:213
+await in fetchUpdate
+queueUpdate @ client:186
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550
+injected.js:37 [vite] hot updated: /src/pages/TraineeTrainingPortal.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=jGshmniwaoZann4ATgl9m
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ injected.js:214
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard 502 (Bad Gateway)
+(anonymous) @ client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=LJxZzSZz4Us0u5ZIa_WXe
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=LJxZzSZz4Us0u5ZIa_WXe
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=LJxZzSZz4Us0u5ZIa_WXe
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=LJxZzSZz4Us0u5ZIa_WXe
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ injected.js:214
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard 502 (Bad Gateway)
+(anonymous) @ client:562
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] hot updated: /src/pages/TraineeTrainingPortal.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=xxDMoYbABnAjUonTCjD9h
+injected.js:37 [vite] hot updated: /src/modules/training-builder/pages/ProgramsPage.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=xxDMoYbABnAjUonTCjD9h
+injected.js:37 [vite] hot updated: /src/modules/training-builder/pages/ProgramsPage.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=xxDMoYbABnAjUonTCjD9h
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=xxDMoYbABnAjUonTCjD9h
+injected.js:37 [vite] hot updated: /src/pages/TrainerDashboard.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=xxDMoYbABnAjUonTCjD9h
+injected.js:37 [vite] server connection lost. Polling for restart...
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/ 502 (Bad Gateway)
+apply @ injected.js:214
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+client:562  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/admin-dashboard 502 (Bad Gateway)
+(anonymous) @ client:562
+ed1e693c96a75807.js:2 [Violation] 'message' handler took 193ms
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] server connection lost. Polling for restart...
+client:552 [Violation] 'close' handler took 344735ms
+ed1e693c96a75807.js:2 [Violation] 'close' handler took 197ms
+chunk-NFC5BX5N.js?v=ab6c7ac3:377 [Violation] 'message' handler took 161ms
+ed1e693c96a75807.js:2 [Violation] 'message' handler took 175ms
+ed1e693c96a75807.js:2 [Violation] 'message' handler took 175ms
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iA @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b4e994bfbe53d8da.js:2 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer {0: MutationRecord, 1: MutationRecord, 2: MutationRecord, 3: MutationRecord, 4: MutationRecord, 5: MutationRecord, 6: MutationRecord, 7: MutationRecord, 8: MutationRecord, 9: MutationRecord, 10: MutationRecord, 11: MutationRecord, 12: MutationRecord, 13: MutationRecord, 14: MutationRecord, 15: MutationRecord, 16: MutationRecord, 17: MutationRecord, 18: MutationRecord, 19: MutationRecord, 20: MutationRecord, 21: MutationRecord, 22: MutationRecord, 23: MutationRecord}
+(anonymous) @ b4e994bfbe53d8da.js:2
+A.<computed> @ 11ba7bb2b392543e.js:2
+o @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1769012293677%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+error @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1769012293677%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+(anonymous) @ cf.js?config=%257B%2522projectId%2522%253A%252268c9ad4d4cddb58cf3a1f93d%2522%252C%2522startTime%2522%253A1769012293677%252C%2522timeoutMs%2522%253A1000%252C%2522currentUrl%2522%253A%2522https%253A%252F%252Freplit.com%252Ft%252Fag-composites%2522%252C%2522trackingOnly%2522%253Atrue%257D:10
+childList
+value @ 786787936ed6975f.js:2
+value @ 786787936ed6975f.js:2
+(anonymous) @ 5693ff7e6d0ea0c0.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+Promise.then
+t @ e3c8814c599ded25.js:2
+s @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ e3c8814c599ded25.js:2
+(anonymous) @ 5693ff7e6d0ea0c0.js:2
+uV @ ed1e693c96a75807.js:2
+uG @ ed1e693c96a75807.js:2
+e @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+iT @ ed1e693c96a75807.js:2
+r6 @ ed1e693c96a75807.js:2
+(anonymous) @ ed1e693c96a75807.js:2
+iB @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar470%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=ab6c7ac3:880:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=ab6c7ac3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=ab6c7ac3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=ab6c7ac3:15946:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=ab6c7ac3:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=ab6c7ac3:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=ab6c7ac3:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=ab6c7ac3:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=ab6c7ac3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19137:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+handleError @ App.tsx:290
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 Warning: Cannot update a component (`App`) while rendering a different component (`SelectItem`). To locate the bad setState() call inside `SelectItem`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=ab6c7ac3:853:7
+    at _c1 (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/ui/select.tsx:208:12)
+    at div
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=ab6c7ac3:43:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:79:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:56:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=ab6c7ac3:41:15
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=ab6c7ac3:764:13
+    at div
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:79:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:56:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=ab6c7ac3:41:15
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=ab6c7ac3:307:58
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:79:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:56:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=ab6c7ac3:43:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-H24IPAYX.js?v=ab6c7ac3:27:22
+    at SelectPortal
+    at _c7 (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/ui/select.tsx:123:12)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at CollectionProvider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=ab6c7ac3:31:13)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at Popper (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SFV7J6LC.js?v=ab6c7ac3:1947:11)
+    at Select (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=ab6c7ac3:93:5)
+    at div
+    at div
+    at div
+    at div
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=ab6c7ac3:43:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-5UOLJTYF.js?v=ab6c7ac3:57:7
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:79:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:56:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=ab6c7ac3:43:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IBSYTY4L.js?v=ab6c7ac3:34:5
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-R3KBKBJQ.js?v=ab6c7ac3:238:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-R3KBKBJQ.js?v=ab6c7ac3:161:58
+    at Presence (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=ab6c7ac3:24:11)
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-R3KBKBJQ.js?v=ab6c7ac3:152:64
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:79:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=ab6c7ac3:56:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=ab6c7ac3:43:13
+    at https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-H24IPAYX.js?v=ab6c7ac3:27:22
+    at Presence (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=ab6c7ac3:24:11)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at DialogPortal (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-R3KBKBJQ.js?v=ab6c7ac3:114:11)
+    at _c3 (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=ab6c7ac3:38:15)
+    at Dialog (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-R3KBKBJQ.js?v=ab6c7ac3:54:5)
+    at div
+    at ProgramsPage (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/modules/training-builder/pages/ProgramsPage.tsx:58:21)
+    at Route (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=ab6c7ac3:280:16)
+    at Switch (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=ab6c7ac3:336:17)
+    at RouteGuard (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/auth/RouteGuard.tsx:66:38)
+    at main
+    at div
+    at Router (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=ab6c7ac3:235:17)
+    at DeploymentAuthWrapper (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=ab6c7ac3:2934:3)
+    at App (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/src/App.tsx?v=ZTPaUq1t9lojLulEEvjEM:299:35)
+    at Router (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=ab6c7ac3:6332:13)
+    at BrowserRouter (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=ab6c7ac3:9416:3)
+    at QueryClientProvider (https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=ab6c7ac3:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=ab6c7ac3:521
+error @ chunk-NFC5BX5N.js?v=ab6c7ac3:505
+warnAboutRenderPhaseUpdatesInDEV @ chunk-NFC5BX5N.js?v=ab6c7ac3:19793
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18546
+dispatchSetState @ chunk-NFC5BX5N.js?v=ab6c7ac3:12403
+handleError @ App.tsx:291
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+@radix-ui_react-select.js?v=ab6c7ac3:880 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=ab6c7ac3:880:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=ab6c7ac3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=ab6c7ac3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=ab6c7ac3:15946:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=ab6c7ac3:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=ab6c7ac3:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=ab6c7ac3:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=ab6c7ac3:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=ab6c7ac3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19137:13)
+(anonymous) @ @radix-ui_react-select.js?v=ab6c7ac3:880
+renderWithHooks @ chunk-NFC5BX5N.js?v=ab6c7ac3:11548
+updateForwardRef @ chunk-NFC5BX5N.js?v=ab6c7ac3:14325
+beginWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:15946
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=ab6c7ac3:880:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=ab6c7ac3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=ab6c7ac3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=ab6c7ac3:15946:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=ab6c7ac3:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=ab6c7ac3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19116:15)
+    at performSyncWorkOnRoot (chunk-NFC5BX5N.js?v=ab6c7ac3:18874:28)
+    at flushSyncCallbacks (chunk-NFC5BX5N.js?v=ab6c7ac3:9119:30)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+handleError @ App.tsx:290
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19403
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+@radix-ui_react-select.js?v=ab6c7ac3:880 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=ab6c7ac3:880:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=ab6c7ac3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=ab6c7ac3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=ab6c7ac3:15946:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=ab6c7ac3:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=ab6c7ac3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=ab6c7ac3:19116:15)
+    at performSyncWorkOnRoot (chunk-NFC5BX5N.js?v=ab6c7ac3:18874:28)
+    at flushSyncCallbacks (chunk-NFC5BX5N.js?v=ab6c7ac3:9119:30)
+(anonymous) @ @radix-ui_react-select.js?v=ab6c7ac3:880
+renderWithHooks @ chunk-NFC5BX5N.js?v=ab6c7ac3:11548
+updateForwardRef @ chunk-NFC5BX5N.js?v=ab6c7ac3:14325
+beginWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:15946
+beginWork$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=ab6c7ac3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=ab6c7ac3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:214  GET https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/programs/1/assignments 500 (Internal Server Error)
+apply @ injected.js:214
+queryFn @ ProgramsPage.tsx:80
+fetchFn @ @tanstack_react-query.js?v=ab6c7ac3:879
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+fetch @ @tanstack_react-query.js?v=ab6c7ac3:918
+executeFetch_fn @ @tanstack_react-query.js?v=ab6c7ac3:2280
+setOptions @ @tanstack_react-query.js?v=ab6c7ac3:2033
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=ab6c7ac3:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=ab6c7ac3:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=ab6c7ac3:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=ab6c7ac3:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=ab6c7ac3:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=ab6c7ac3:19416
+commitRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=ab6c7ac3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=ab6c7ac3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:18627

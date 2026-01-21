@@ -258,6 +258,19 @@ export default function ProgramBuilderPage() {
     toast({ title: 'Added quiz question' });
   };
 
+  const handleAddTopic = (topic: { id: string; title: string; description?: string }) => {
+    const newTask: TaskItem = {
+      tempId: `temp-${Date.now()}`,
+      title: `Topic: ${topic.title}`,
+      description: topic.description || '',
+      sortOrder: tasks.length + 1,
+      estimatedMinutes: 30,
+      type: 'module',
+    };
+    setTasks([...tasks, newTask]);
+    toast({ title: `Added topic: ${topic.title}` });
+  };
+
   const handleAddManualTask = () => {
     const newTask: TaskItem = {
       tempId: `temp-${Date.now()}`,
@@ -508,6 +521,7 @@ export default function ProgramBuilderPage() {
           <ContentLibrary
             onAddModule={handleAddModule}
             onAddQuestion={handleAddQuestion}
+            onAddTopic={handleAddTopic}
           />
 
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200">

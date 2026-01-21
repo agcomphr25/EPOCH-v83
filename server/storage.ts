@@ -498,6 +498,35 @@ import {
 } from './utils/orderIdGenerator';
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
 
+// Helper: Explicit column selection for production_orders table
+// Note: departmentHistory is defined in schema but does NOT exist in actual database table
+// Using SELECT * would fail because Drizzle tries to select the non-existent column
+const productionOrdersColumns = {
+  id: productionOrders.id,
+  orderId: productionOrders.orderId,
+  poId: productionOrders.poId,
+  poItemId: productionOrders.poItemId,
+  customerId: productionOrders.customerId,
+  customerName: productionOrders.customerName,
+  poNumber: productionOrders.poNumber,
+  itemType: productionOrders.itemType,
+  itemId: productionOrders.itemId,
+  itemName: productionOrders.itemName,
+  specifications: productionOrders.specifications,
+  orderDate: productionOrders.orderDate,
+  dueDate: productionOrders.dueDate,
+  productionStatus: productionOrders.productionStatus,
+  laidUpAt: productionOrders.laidUpAt,
+  shippedAt: productionOrders.shippedAt,
+  notes: productionOrders.notes,
+  createdAt: productionOrders.createdAt,
+  updatedAt: productionOrders.updatedAt,
+  priorityScore: productionOrders.priorityScore,
+  currentPipelineConfig: productionOrders.currentPipelineConfig,
+  hasP1Priority: productionOrders.hasP1Priority,
+  currentDepartment: productionOrders.currentDepartment,
+};
+
 // modify the interface with any CRUD methods
 // you might need
 
@@ -2792,7 +2821,6 @@ export class DatabaseStorage implements IStorage {
         barcode: allOrders.barcode,
         currentDepartment: allOrders.currentDepartment,
         currentDepartmentId: allOrders.currentDepartmentId,
-        departmentHistory: allOrders.departmentHistory,
         scrappedQuantity: allOrders.scrappedQuantity,
         totalProduced: allOrders.totalProduced,
         layupCompletedAt: allOrders.layupCompletedAt,
@@ -2899,7 +2927,6 @@ export class DatabaseStorage implements IStorage {
         barcode: allOrders.barcode,
         currentDepartment: allOrders.currentDepartment,
         currentDepartmentId: allOrders.currentDepartmentId,
-        departmentHistory: allOrders.departmentHistory,
         scrappedQuantity: allOrders.scrappedQuantity,
         totalProduced: allOrders.totalProduced,
         layupCompletedAt: allOrders.layupCompletedAt,
@@ -2999,7 +3026,7 @@ export class DatabaseStorage implements IStorage {
     
     // Also query production_orders table for P1 PO items
     const productionOrdersResults = await db
-      .select()
+      .select(productionOrdersColumns)
       .from(productionOrders)
       .where(ne(productionOrders.productionStatus, 'CANCELLED'))
       .orderBy(desc(productionOrders.updatedAt));
@@ -3786,7 +3813,6 @@ export class DatabaseStorage implements IStorage {
         barcode: allOrders.barcode,
         currentDepartment: allOrders.currentDepartment,
         currentDepartmentId: allOrders.currentDepartmentId,
-        departmentHistory: allOrders.departmentHistory,
         scrappedQuantity: allOrders.scrappedQuantity,
         totalProduced: allOrders.totalProduced,
         layupCompletedAt: allOrders.layupCompletedAt,
@@ -4079,7 +4105,6 @@ export class DatabaseStorage implements IStorage {
           status: allOrders.status,
           barcode: allOrders.barcode,
           currentDepartment: allOrders.currentDepartment,
-          departmentHistory: allOrders.departmentHistory,
           scrappedQuantity: allOrders.scrappedQuantity,
           totalProduced: allOrders.totalProduced,
           scrapDate: allOrders.scrapDate,
@@ -4173,7 +4198,7 @@ export class DatabaseStorage implements IStorage {
 
       // Also query production_orders table for P1 PO items in this department
       const productionOrdersResults = await db
-        .select()
+        .select(productionOrdersColumns)
         .from(productionOrders)
         .where(eq(productionOrders.currentDepartment, department))
         .orderBy(asc(productionOrders.dueDate), asc(productionOrders.createdAt));
@@ -9229,7 +9254,7 @@ export class DatabaseStorage implements IStorage {
   // Production Orders CRUD
   async getAllProductionOrders(): Promise<ProductionOrder[]> {
     return await db
-      .select()
+      .select(productionOrdersColumns)
       .from(productionOrders)
       .orderBy(
         asc(productionOrders.dueDate), // Most urgent due dates first
@@ -9245,7 +9270,7 @@ export class DatabaseStorage implements IStorage {
 
   async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {
     const [order] = await db
-      .select()
+      .select(productionOrdersColumns)
       .from(productionOrders)
       .where(eq(productionOrders.id, id))
       .limit(1);
@@ -9256,7 +9281,7 @@ export class DatabaseStorage implements IStorage {
     orderId: string
   ): Promise<ProductionOrder | undefined> {
     const [order] = await db
-      .select()
+      .select(productionOrdersColumns)
       .from(productionOrders)
       .where(eq(productionOrders.orderId, orderId))
       .limit(1);
@@ -9265,7 +9290,7 @@ export class DatabaseStorage implements IStorage {
 
   async getProductionOrdersByPoId(poId: number): Promise<ProductionOrder[]> {
     const orders = await db
-      .select()
+      .select(productionOrdersColumns)
       .from(productionOrders)
       .where(eq(productionOrders.poId, poId))
       .orderBy(productionOrders.createdAt);
@@ -9275,7 +9300,20 @@ export class DatabaseStorage implements IStorage {
   async createProductionOrder(
     data: InsertProductionOrder
   ): Promise<ProductionOrder> {
-    const [order] = await db.insert(productionOrders).values(data).returning();
+    // Filter to only include columns that actually exist in the database
+    const validColumns = new Set([
+      'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
+      'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
+      'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+    ]);
+    const safeData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as any)) {
+      if (validColumns.has(key)) {
+        safeData[key] = value;
+      }
+    }
+    const [order] = await db.insert(productionOrders).values(safeData).returning(productionOrdersColumns);
     return order;
   }
 
@@ -9283,11 +9321,25 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertProductionOrder>
   ): Promise<ProductionOrder> {
+    // Filter to only include columns that actually exist in the database
+    // Schema may define columns that don't exist in DB (departmentHistory, layupCompletedAt, etc.)
+    const validColumns = new Set([
+      'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
+      'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
+      'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+    ]);
+    const safeData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as any)) {
+      if (validColumns.has(key)) {
+        safeData[key] = value;
+      }
+    }
     const [order] = await db
       .update(productionOrders)
-      .set(data)
+      .set(safeData)
       .where(eq(productionOrders.id, id))
-      .returning();
+      .returning(productionOrdersColumns);
     return order;
   }
 

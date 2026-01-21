@@ -1,0 +1,99 @@
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+Connecting to '<URL>' violates the following Content Security Policy directive: "connect-src 'none'". The policy is report-only, so the violation has been logged but no further action has been taken.
+injected.js:37 🌐 API Request to /api/training/programs/1/assignments (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://d2c31125-92fd-4acf-97a5-aae9440185f2-00-3k36tqoogy7t6.spock.replit.dev/api/training/programs/1/assignments 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ ProgramsPage.tsx:100
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+handleAssign @ ProgramsPage.tsx:144
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 ✅ API Response from /api/training/programs/1/assignments: 500
+injected.js:37 API error raw body: {"error":"Cannot read properties of undefined (reading 'id')"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ ProgramsPage.tsx:100
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+handleAssign @ ProgramsPage.tsx:144
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449
+injected.js:37 💥 API Request failed for /api/training/programs/1/assignments: Error: Cannot read properties of undefined (reading 'id')
+    at apiRequest (queryClient.ts:135:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ ProgramsPage.tsx:100
+fn @ @tanstack_react-query.js?v=ab6c7ac3:1234
+run @ @tanstack_react-query.js?v=ab6c7ac3:507
+start @ @tanstack_react-query.js?v=ab6c7ac3:550
+execute @ @tanstack_react-query.js?v=ab6c7ac3:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=ab6c7ac3:2692
+(anonymous) @ @tanstack_react-query.js?v=ab6c7ac3:3415
+handleAssign @ ProgramsPage.tsx:144
+callCallback2 @ chunk-NFC5BX5N.js?v=ab6c7ac3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=ab6c7ac3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=ab6c7ac3:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=ab6c7ac3:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=ab6c7ac3:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=ab6c7ac3:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=ab6c7ac3:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=ab6c7ac3:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=ab6c7ac3:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=ab6c7ac3:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=ab6c7ac3:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=ab6c7ac3:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=ab6c7ac3:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=ab6c7ac3:5449

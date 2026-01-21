@@ -1,0 +1,289 @@
+📖 Step 1: Review Training Material
+Please read through all the information below before taking the quiz
+FOD Prevention (Foreign Object Debris)
+4
+
+📌 TRAINING PURPOSE (Read Aloud)
+
+This facility standard defines Foreign Object Debris (FOD) prevention practices required to protect product integrity, flight safety, and compliance in an aerospace composite manufacturing environment.
+
+FOD prevention is everyone’s responsibility.
+
+1️⃣ What FOD Is & Why It Matters
+What FOD Means
+FOD (Foreign Object Debris) is any object that does not belong in or on a product, tool, mold, or work area.
+
+Examples include:
+
+Loose hardware
+
+Tools
+
+Rags
+
+Tape backing
+
+Gloves
+
+Hair, jewelry, or personal items
+
+Carbon or fiberglass debris
+
+Why FOD Is Critical
+
+FOD can:
+
+Cause internal defects
+
+Create structural weaknesses
+
+Lead to in-service failures
+
+Result in product escapes and recalls
+
+🔴 IMPORTANT POINTS
+FOD can be invisible once enclosed
+
+Small objects can cause major failures
+
+Composite parts can trap FOD permanently
+
+Prevention is mandatory
+
+2️⃣ FOD Control Areas & Expectations
+Controlled Areas
+FOD control applies to:
+
+Cutting tables
+
+Layup areas
+
+Mold assembly/disassembly
+
+CNC
+
+Finish
+
+QC / Shipping
+
+Entry Expectations
+
+Before entering controlled areas:
+
+Secure loose items
+
+Empty pockets if required
+
+Wear approved clothing
+
+Remove jewelry and accessories
+
+🔴 IMPORTANT POINTS
+Loose items are prohibited
+
+Personal items increase risk
+
+Entry checks prevent defects
+
+Everyone is accountable
+
+3️⃣ Tool Control & Accountability
+Tool Control Requirements
+Use only approved tools
+
+Keep tools organized
+
+Account for tools before and after tasks
+
+Return tools to designated locations
+
+Tool Accountability
+
+Missing tools must be reported immediately
+
+Never assume a tool is “somewhere else”
+
+Tool shadow boards must be followed
+
+🔴 IMPORTANT POINTS
+Unaccounted tools = FOD risk
+
+Tool tracking is mandatory
+
+Never leave tools unattended
+
+Missing tools stop work
+
+4️⃣ Housekeeping & Work Area Cleanliness
+Clean-As-You-Go Standard
+Keep work areas clean throughout the task
+
+Remove scrap and debris promptly
+
+Do not allow buildup of dust or fibers
+
+End-of-Task Cleanliness
+
+Inspect work area
+
+Inspect tools and molds
+
+Dispose of waste correctly
+
+🔴 IMPORTANT POINTS
+Cleanliness is a quality requirement
+
+Dust and fibers are FOD
+
+Messy areas hide defects
+
+End-of-task inspections are required
+
+5️⃣ Materials, Consumables & Packaging
+Consumable Control
+Control peel ply, breather, tape, backing paper
+
+Dispose of excess materials immediately
+
+Do not reuse single-use materials unless approved
+
+Packaging Awareness
+
+Remove packaging completely
+
+Inspect materials before use
+
+Prevent packaging fragments from entering work areas
+
+🔴 IMPORTANT POINTS
+Backing paper is common FOD
+
+Consumables must be controlled
+
+Packaging must not enter parts
+
+Inspect before use
+
+6️⃣ Personal Responsibility & Behavior
+Personal FOD Sources
+Jewelry
+
+Watches
+
+Rings
+
+Earbuds
+
+Pens or markers
+
+Behavior Expectations
+
+Secure personal items
+
+Report FOD immediately
+
+Correct unsafe behavior respectfully
+
+🔴 IMPORTANT POINTS
+Personal items are FOD risks
+
+Convenience does not override safety
+
+Peer reminders are professional
+
+Silence allows defects
+
+7️⃣ FOD Inspections & Verification
+When Inspections Occur
+Before starting work
+
+During critical steps
+
+Before closing parts or molds
+
+At task completion
+
+Inspection Responsibilities
+
+Inspect parts, molds, and tools
+
+Verify cleanliness
+
+Document inspections as required
+
+🔴 IMPORTANT POINTS
+Final inspections catch hidden FOD
+
+Documentation proves compliance
+
+Never skip inspections
+
+Inspection is part of the job
+
+8️⃣ Stop-Work Authority (FOD)
+When to Stop Work
+Stop work immediately if:
+
+FOD is suspected
+
+A tool or item is missing
+
+Cleanliness cannot be verified
+
+A foreign object cannot be accounted for
+
+🔴 IMPORTANT POINTS
+Anyone may stop work
+
+No permission required
+
+FOD concerns override schedule
+
+Work resumes only when resolved
+
+9️⃣ FOD Culture & Continuous Improvement
+Cultural Expectations
+Prevent, not react
+
+Speak up early
+
+Improve processes
+
+Share lessons learned
+
+Improvement Mindset
+
+Identify recurring FOD risks
+
+Suggest improvements
+
+Fix root causes
+
+🔴 IMPORTANT POINTS
+FOD prevention is continuous
+
+Lessons learned prevent repeats
+
+Process improvements matter
+
+Everyone contributes
+
+✅ Training Completion Requirements
+
+To complete this Facility Standard:
+
+✔ All sections reviewed
+
+✔ Quiz passed (100%)
+
+✔ Employee acknowledgment signed
+
+✔ Trainer or system sign-off recorded
+
+FOD Prevention training is required before any production, assembly, or inspection task.
+
+🔒 GATING STATEMENT (System-Visible)
+
+“Employee is not authorized to perform production or inspection tasks until FOD Prevention Facility Standard training is completed.”
+
+✍️ Step 2: Complete the Certification Quiz

@@ -31,11 +31,13 @@ import {
   trainingBuilderSessions,
   trainingBuilderTaskProgress,
   trainingProgramQuizRefs,
+  trainingSoaNotes,
   trainingBuilderQuizzes,
   trainingBuilderQuizQuestions,
   trainingDailyQuizSelections,
   trainingBuilderQuizAttempts,
   trainingCertifications,
+  aiTrainingPlans,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -425,41 +427,43 @@ router.post('/modules/:id/ai-transform', async (req, res) => {
       baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined
     });
     
-    const systemPrompt = `You are an expert training content developer. Your job is to REFORMAT and RESTRUCTURE the provided raw content into a professional, easy-to-follow training module.
+    const systemPrompt = `You are a training content formatter. Your ONLY job is to REFORMAT the exact content provided - nothing more.
 
-CRITICAL RULES:
-- DO NOT create new content or replace the original material
-- PRESERVE all the specific information, examples, and details from the original content
-- Only reorganize and format the existing content more professionally
-- Keep the original topic focus - if it's about "Travelers", keep it about travelers specifically
+ABSOLUTE RULES - VIOLATION = FAILURE:
+1. ONLY use content that appears in the provided text
+2. DO NOT add any content from other training topics
+3. DO NOT add AS9100 orientation material, quality policy, KPIs, or general company info
+4. DO NOT combine multiple training topics into one
+5. If the content is about "Travelers" - output ONLY traveler content
+6. If the content is about "FOD" - output ONLY FOD content
+7. NEVER add sections that don't exist in the original
 
-Restructure the content with:
-1. A clear title that matches the original topic
-2. A "Training Purpose" section (1-2 sentences based on the original content's goal)
-3. Numbered sections (use emoji numbers like 1️⃣, 2️⃣) organizing the original content by topic
-4. Important points from the original highlighted with 🔴 IMPORTANT POINTS callouts
-5. Original bullet points formatted cleanly
-6. Safety or critical items from the original marked with ⚠️
-7. Best practices from the original marked with ✅
+Your task is FORMATTING ONLY:
+- Add emoji numbers (1️⃣, 2️⃣) to existing sections
+- Add 🔴 IMPORTANT POINTS markers to key items from the original
+- Add 📌 markers for key definitions from the original  
+- Add ⚠️ for warnings that exist in the original
+- Add ✅ for completion requirements from the original
+- Use --- for section separators
 
-Also generate 6-8 quiz questions that test understanding of the SPECIFIC concepts in the original content.
+Generate 5-7 quiz questions based ONLY on the specific content provided.
 
-Return JSON with this structure:
+Return JSON:
 {
-  "title": "Original Topic Title (improved if needed)",
-  "description": "Brief 1-2 sentence description based on original content",
-  "formattedContent": "The reformatted training content preserving ALL original information",
+  "title": "Title matching the original topic exactly",
+  "description": "1 sentence description of the original topic",
+  "formattedContent": "The reformatted content using ONLY information from the original",
   "quizQuestions": [
     {
-      "questionText": "Question about specific content from the original",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "questionText": "Question about content that appears in the original",
+      "options": ["A", "B", "C", "D"],
       "correctAnswerIndex": 0,
-      "explanation": "Why this is correct based on the training"
+      "explanation": "Why correct based on original content"
     }
   ]
 }
 
-Remember: Reformat the EXISTING content, do not replace it with generic material.`;
+CRITICAL: If the original content does not mention AS9100 basics, quality policy, KPIs, or employee orientation - DO NOT ADD THEM.`;
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -759,6 +763,177 @@ router.delete('/modules/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============ TRAINING PLANS API ============
+
+// Get all training plans
+router.get('/plans', async (req, res) => {
+  try {
+    let plans: any[] = [];
+    try {
+      const results = await db
+        .select()
+        .from(aiTrainingPlans)
+        .orderBy(desc(aiTrainingPlans.createdAt));
+      plans = Array.isArray(results) ? results : [];
+    } catch (fetchErr) {
+      console.error('Error querying training plans:', fetchErr);
+      return res.json([]);
+    }
+    
+    // Parse JSON fields safely
+    const parsedPlans = plans.map(plan => {
+      let moduleIds: number[] = [];
+      try {
+        if (plan.planStructure) {
+          const parsed = JSON.parse(plan.planStructure);
+          moduleIds = Array.isArray(parsed.moduleIds) ? parsed.moduleIds : [];
+        }
+      } catch (parseErr) {
+        console.error('Error parsing planStructure:', parseErr);
+      }
+      return {
+        ...plan,
+        moduleIds,
+      };
+    });
+    
+    res.json(parsedPlans);
+  } catch (error: any) {
+    console.error('Error fetching training plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create training plan with Zod validation
+router.post('/plans', async (req, res) => {
+  try {
+    const { title, description, moduleIds, status } = req.body;
+    
+    // Validate required fields
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
+    }
+    
+    const validModuleIds = Array.isArray(moduleIds) ? moduleIds.filter(id => typeof id === 'number') : [];
+    const validStatus = ['draft', 'active', 'completed'].includes(status) ? status : 'draft';
+    
+    const planStructure = JSON.stringify({
+      moduleIds: validModuleIds,
+      createdAt: new Date().toISOString(),
+    });
+    
+    // Insert and then fetch the created plan
+    await db.insert(aiTrainingPlans).values({
+      title: title.trim(),
+      description: (description || '').trim(),
+      planStructure,
+      totalTopics: validModuleIds.length,
+      status: validStatus,
+      traineeId: 1, // Will be updated when assigned
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    
+    // Fetch the most recently created plan with error handling for Neon null returns
+    let newPlan = null;
+    try {
+      const results = await db
+        .select()
+        .from(aiTrainingPlans)
+        .orderBy(desc(aiTrainingPlans.id))
+        .limit(1);
+      newPlan = Array.isArray(results) ? results[0] : null;
+    } catch (fetchErr) {
+      console.error('Error fetching newly created plan:', fetchErr);
+    }
+    
+    res.status(201).json({
+      id: newPlan?.id,
+      title: title.trim(),
+      description: (description || '').trim(),
+      status: validStatus,
+      totalTopics: validModuleIds.length,
+      moduleIds: validModuleIds,
+      createdAt: newPlan?.createdAt || new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Error creating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single training plan
+router.get('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const [plan] = await db
+      .select()
+      .from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    if (!plan) {
+      return res.status(404).json({ error: 'Training plan not found' });
+    }
+    
+    res.json({
+      ...plan,
+      moduleIds: plan.planStructure ? JSON.parse(plan.planStructure).moduleIds || [] : [],
+    });
+  } catch (error: any) {
+    console.error('Error fetching training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update training plan
+router.patch('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    const { title, description, moduleIds, status } = req.body;
+    
+    const updateData: any = { updatedAt: new Date() };
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (status !== undefined) updateData.status = status;
+    if (moduleIds !== undefined) {
+      updateData.planStructure = JSON.stringify({ moduleIds });
+      updateData.totalTopics = moduleIds.length;
+    }
+    
+    await db
+      .update(aiTrainingPlans)
+      .set(updateData)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    const [updatedPlan] = await db
+      .select()
+      .from(aiTrainingPlans)
+      .where(eq(aiTrainingPlans.id, planId));
+    
+    res.json({
+      ...updatedPlan,
+      moduleIds: updatedPlan?.planStructure ? JSON.parse(updatedPlan.planStructure).moduleIds || [] : [],
+    });
+  } catch (error: any) {
+    console.error('Error updating training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete training plan
+router.delete('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id);
+    await db.delete(aiTrainingPlans).where(eq(aiTrainingPlans.id, planId));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ END TRAINING PLANS API ============
 
 // Import training content from PDF
 router.post('/modules/import-pdf', upload.single('file'), async (req, res) => {
@@ -2274,6 +2449,211 @@ router.delete('/programs/:programId/tasks/:taskId', async (req, res) => {
   }
 });
 
+// Generate AI 4-Step Training Content for a task
+router.post('/programs/:programId/tasks/:taskId/generate-4step', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    const { trainingMaterial } = req.body; // Optional: training material content to base generation on
+    
+    // Get the task details
+    const [task] = await db.select().from(trainingProgramTasks).where(eq(trainingProgramTasks.id, taskId));
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Get program details for context
+    const [program] = await db.select().from(trainingPrograms).where(eq(trainingPrograms.id, task.programId));
+    
+    const openai = new OpenAI({ 
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL 
+    });
+    
+    const prompt = `You are a manufacturing training expert. Generate detailed 4-step training content for the following task using the Train-the-Trainer methodology.
+
+Task: ${task.title}
+${task.description ? `Description: ${task.description}` : ''}
+Department: ${program?.department || 'Manufacturing'}
+Role: ${program?.role || 'Production'}
+${trainingMaterial ? `\nTraining Material Reference:\n${trainingMaterial}` : ''}
+
+Generate content for each of the 4 steps:
+
+1. **Step 1 - Trainer Does/Explains**: The trainer demonstrates the task while explaining each step. Include:
+   - Key points to emphasize
+   - Safety considerations
+   - Quality checkpoints
+   - Common mistakes to point out
+
+2. **Step 2 - Trainer Does/Trainee Explains**: The trainer performs the task again while the trainee explains what's happening. Include:
+   - Questions to ask the trainee
+   - Key concepts to verify understanding
+   - Tips for the trainer
+
+3. **Step 3 - Trainee Does/Trainer Coaches**: The trainee performs the task with trainer coaching. Include:
+   - Coaching prompts
+   - Things to watch for
+   - Intervention points
+   - Encouragement phrases
+
+4. **Step 4 - Trainee Does/Trainer Observes**: The trainee performs independently while trainer observes. Include:
+   - Observation checklist
+   - Success criteria
+   - Certification requirements
+   - Sign-off criteria
+
+Format your response as JSON with keys: step1Content, step2Content, step3Content, step4Content (each as a string with the detailed content).`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 4000,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return res.status(500).json({ error: 'No content generated' });
+    }
+    
+    const generated = JSON.parse(content);
+    
+    // Update the task with the generated content
+    const [updated] = await db
+      .update(trainingProgramTasks)
+      .set({
+        step1Content: generated.step1Content,
+        step2Content: generated.step2Content,
+        step3Content: generated.step3Content,
+        step4Content: generated.step4Content,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingProgramTasks.id, taskId))
+      .returning();
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error generating 4-step content:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// SOA DAILY NOTES (Strengths-Opportunities-Actions)
+// ============================================================================
+
+// Get SOA notes for an assignment
+router.get('/assignments/:assignmentId/soa-notes', async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const notes = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(eq(trainingSoaNotes.assignmentId, assignmentId))
+      .orderBy(desc(trainingSoaNotes.noteDate));
+    res.json(notes);
+  } catch (error: any) {
+    console.error('Error fetching SOA notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get today's and yesterday's SOA notes for a trainer's view
+router.get('/trainer/:trainerId/soa-notes/recent', async (req, res) => {
+  try {
+    const trainerId = parseInt(req.params.trainerId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const notes = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(and(
+        eq(trainingSoaNotes.trainerId, trainerId),
+        gte(trainingSoaNotes.noteDate, yesterday)
+      ))
+      .orderBy(desc(trainingSoaNotes.noteDate));
+    
+    // Separate into today and yesterday
+    const todaysNotes = notes.filter(n => new Date(n.noteDate) >= today);
+    const yesterdaysNotes = notes.filter(n => new Date(n.noteDate) < today);
+    
+    res.json({ todaysNotes, yesterdaysNotes });
+  } catch (error: any) {
+    console.error('Error fetching recent SOA notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create or update SOA note for a day
+router.post('/assignments/:assignmentId/soa-notes', async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const { trainerId, traineeId, dayNumber, strengths, opportunities, actions, generalNotes } = req.body;
+    
+    // Check if a note already exists for this day
+    const existing = await db
+      .select()
+      .from(trainingSoaNotes)
+      .where(and(
+        eq(trainingSoaNotes.assignmentId, assignmentId),
+        eq(trainingSoaNotes.dayNumber, dayNumber)
+      ))
+      .limit(1);
+    
+    if (existing && existing.length > 0) {
+      // Update existing note
+      const [updated] = await db
+        .update(trainingSoaNotes)
+        .set({
+          strengths,
+          opportunities,
+          actions,
+          generalNotes,
+          updatedAt: new Date(),
+        })
+        .where(eq(trainingSoaNotes.id, existing[0].id))
+        .returning();
+      return res.json(updated);
+    }
+    
+    // Create new note
+    const [note] = await db.insert(trainingSoaNotes).values({
+      assignmentId,
+      trainerId,
+      traineeId,
+      dayNumber,
+      strengths,
+      opportunities,
+      actions,
+      generalNotes,
+    }).returning();
+    
+    res.status(201).json(note);
+  } catch (error: any) {
+    console.error('Error saving SOA note:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trainer signoff on SOA note
+router.patch('/soa-notes/:noteId/signoff', async (req, res) => {
+  try {
+    const noteId = parseInt(req.params.noteId);
+    const [updated] = await db
+      .update(trainingSoaNotes)
+      .set({ trainerSignoff: true, updatedAt: new Date() })
+      .where(eq(trainingSoaNotes.id, noteId))
+      .returning();
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error signing off SOA note:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================================================
 // TRAINING ASSIGNMENTS
 // ============================================================================
@@ -2332,6 +2712,309 @@ router.post('/assignments', async (req, res) => {
     res.status(201).json({ assignment, session });
   } catch (error: any) {
     console.error('Error creating assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get assignments for a specific program (with trainee and trainer details)
+router.get('/programs/:programId/assignments', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.programId);
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.programId, programId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching assignments:', queryError);
+      return res.json([]);
+    }
+
+    // Handle null or undefined assignments
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      return res.json([]);
+    }
+
+    // Get employee details for each assignment
+    const employeeIds = Array.from(new Set(assignments.flatMap(a => [a.employeeId, a.trainerId].filter(Boolean))));
+    let employeeList: any[] = [];
+    if (employeeIds.length > 0) {
+      try {
+        employeeList = await db.select().from(employees).where(inArray(employees.id, employeeIds as number[]));
+      } catch (empError) {
+        console.error('Error fetching employees for assignments:', empError);
+      }
+    }
+    const employeeMap = new Map((employeeList || []).map(e => [e.id, e]));
+
+    const enrichedAssignments = assignments.map(a => ({
+      id: a.id,
+      programId: a.programId,
+      employeeId: a.employeeId,
+      trainerId: a.trainerId,
+      status: a.status,
+      startDate: a.startDate,
+      dueDate: a.dueDate,
+      notes: a.notes,
+      createdAt: a.createdAt,
+      trainee: employeeMap.get(a.employeeId) || null,
+      trainer: a.trainerId ? employeeMap.get(a.trainerId) || null : null,
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching program assignments:', error);
+    res.json([]);
+  }
+});
+
+// Create assignment for a program
+router.post('/programs/:programId/assignments', async (req, res) => {
+  try {
+    const programId = parseInt(req.params.programId);
+    const { employeeId, trainerId } = req.body;
+
+    console.log('Creating assignment with body:', JSON.stringify(req.body));
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'Trainee (employeeId) is required' });
+    }
+
+    // Build the values object explicitly to avoid undefined/null issues
+    const insertValues: any = {
+      programId,
+      employeeId: Number(employeeId),
+      status: 'pending',
+      startDate: new Date(),
+    };
+    
+    // Only add trainerId if it's a valid number
+    if (trainerId && trainerId !== '' && !isNaN(Number(trainerId))) {
+      insertValues.trainerId = Number(trainerId);
+    }
+
+    // Insert assignment - Neon HTTP driver may not return rows properly with .returning()
+    const result = await db.insert(trainingAssignments).values(insertValues).returning();
+    
+    // Handle case where returning() doesn't work properly with Neon HTTP driver
+    let assignment;
+    if (result && result.length > 0) {
+      assignment = result[0];
+    } else {
+      // Fallback: fetch the most recently created assignment for this program/employee
+      const [fetched] = await db
+        .select()
+        .from(trainingAssignments)
+        .where(and(
+          eq(trainingAssignments.programId, programId),
+          eq(trainingAssignments.employeeId, Number(employeeId))
+        ))
+        .orderBy(desc(trainingAssignments.id))
+        .limit(1);
+      assignment = fetched;
+    }
+
+    if (!assignment) {
+      return res.status(500).json({ error: 'Failed to create assignment - could not retrieve created record' });
+    }
+
+    // Create a session for this assignment
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    try {
+      await db.insert(trainingBuilderSessions).values({
+        sessionId,
+        assignmentId: assignment.id,
+        employeeId: assignment.employeeId,
+        programId: assignment.programId,
+      });
+    } catch (sessionError) {
+      console.error('Error creating training session:', sessionError);
+      // Continue - assignment was created even if session failed
+    }
+
+    res.status(201).json(assignment);
+  } catch (error: any) {
+    console.error('Error creating program assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update assignment (change trainer, status, etc.)
+router.patch('/assignments/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { trainerId, status, dueDate, notes } = req.body;
+
+    const updateData: any = { updatedAt: new Date() };
+    if (trainerId !== undefined) updateData.trainerId = trainerId || null;
+    if (status) updateData.status = status;
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (notes !== undefined) updateData.notes = notes;
+    if (status === 'completed') updateData.completedAt = new Date();
+
+    const [updated] = await db
+      .update(trainingAssignments)
+      .set(updateData)
+      .where(eq(trainingAssignments.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete assignment
+router.delete('/assignments/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(trainingAssignments).where(eq(trainingAssignments.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainee's assigned programs (for trainee dashboard)
+router.get('/my-training/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.employeeId, employeeId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching trainee assignments:', queryError);
+      return res.json([]);
+    }
+
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      return res.json([]);
+    }
+
+    // Get program details and trainer info
+    const programIds = Array.from(new Set(assignments.map(a => a.programId)));
+    const trainerIds = Array.from(new Set(assignments.map(a => a.trainerId).filter(Boolean)));
+
+    const programs = programIds.length > 0
+      ? await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds))
+      : [];
+    const trainers = trainerIds.length > 0
+      ? await db.select().from(employees).where(inArray(employees.id, trainerIds as number[]))
+      : [];
+
+    const programMap = new Map(programs.map(p => [p.id, p]));
+    const trainerMap = new Map(trainers.map(t => [t.id, t]));
+
+    // Get tasks for each program
+    const allTasks = programIds.length > 0
+      ? await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder)
+      : [];
+
+    const tasksByProgram = allTasks.reduce((acc, task) => {
+      if (!acc[task.programId]) acc[task.programId] = [];
+      acc[task.programId].push(task);
+      return acc;
+    }, {} as Record<number, typeof allTasks>);
+
+    const enrichedAssignments = assignments.map(a => ({
+      ...a,
+      program: programMap.get(a.programId) || null,
+      trainer: a.trainerId ? trainerMap.get(a.trainerId) || null : null,
+      tasks: tasksByProgram[a.programId] || [],
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching trainee assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get trainer's assigned trainees (for trainer dashboard)
+router.get('/trainer-assignments/:trainerId', async (req, res) => {
+  try {
+    const trainerId = parseInt(req.params.trainerId);
+    
+    let assignments: any[] = [];
+    try {
+      assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.trainerId, trainerId))
+        .orderBy(desc(trainingAssignments.createdAt));
+    } catch (queryError) {
+      console.error('Query error fetching trainer assignments:', queryError);
+      return res.json([]);
+    }
+
+    if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      return res.json([]);
+    }
+
+    // Get trainee and program details - wrap in try-catch for Neon driver issues
+    const traineeIds = Array.from(new Set(assignments.map(a => a.employeeId)));
+    const programIds = Array.from(new Set(assignments.map(a => a.programId)));
+
+    let trainees: any[] = [];
+    let programs: any[] = [];
+    let allTasks: any[] = [];
+
+    try {
+      if (traineeIds.length > 0) {
+        trainees = await db.select().from(employees).where(inArray(employees.id, traineeIds)) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching trainees:', e);
+    }
+
+    try {
+      if (programIds.length > 0) {
+        programs = await db.select().from(trainingPrograms).where(inArray(trainingPrograms.id, programIds)) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching programs:', e);
+    }
+
+    try {
+      if (programIds.length > 0) {
+        allTasks = await db.select().from(trainingProgramTasks).where(inArray(trainingProgramTasks.programId, programIds)).orderBy(trainingProgramTasks.sortOrder) || [];
+      }
+    } catch (e) {
+      console.error('Error fetching tasks:', e);
+    }
+
+    const traineeMap = new Map((trainees || []).map(t => [t.id, t]));
+    const programMap = new Map((programs || []).map(p => [p.id, p]));
+
+    const tasksByProgram = (allTasks || []).reduce((acc: Record<number, any[]>, task: any) => {
+      if (!acc[task.programId]) acc[task.programId] = [];
+      acc[task.programId].push(task);
+      return acc;
+    }, {} as Record<number, any[]>);
+
+    const enrichedAssignments = assignments.map(a => ({
+      ...a,
+      trainee: traineeMap.get(a.employeeId) || null,
+      program: programMap.get(a.programId) || null,
+      tasks: tasksByProgram[a.programId] || [],
+    }));
+
+    res.json(enrichedAssignments);
+  } catch (error: any) {
+    console.error('Error fetching trainer assignments:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -4526,8 +5209,7 @@ import {
   topicDocumentLinks,
   trainingTopicMaterials,
   trainingTopicQuizQuestions,
-  traineeTopicAssignments,
-  aiTrainingPlans
+  traineeTopicAssignments
 } from '../../schema';
 
 // --- CATEGORIES ---

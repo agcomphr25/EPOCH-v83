@@ -187,7 +187,7 @@ router.post('/upload', (req, res, next) => {
         storagePath: `uploads/media-library/${req.file.filename}`,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
-        capturedById: user?.id || null,
+        capturedById: null,
         capturedByName: user?.username || 'Unknown',
         title: title || req.file.originalname,
         notes: notes || null,

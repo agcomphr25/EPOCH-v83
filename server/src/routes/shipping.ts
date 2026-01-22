@@ -4,7 +4,8 @@ import axios from 'axios';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords } from '../../schema';
+import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots } from '../../schema';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
@@ -47,6 +48,104 @@ async function checkLinkedOrders(orderId: string) {
     linkGroup: linkGroup[0],
     linkedOrders: groupOrders.map(lo => lo.orderId),
   };
+}
+
+async function captureAccountingSnapshot(orderId: string) {
+  try {
+    let order = await storage.getFinalizedOrderById(orderId) as any;
+    if (!order) {
+      order = await storage.getOrderDraft(orderId);
+    }
+    if (!order) {
+      console.log(`[Accounting Prep] Order ${orderId} not found, skipping snapshot`);
+      return null;
+    }
+    
+    const [existing] = await db
+      .select()
+      .from(shipmentAccountingSnapshots)
+      .where(eq(shipmentAccountingSnapshots.salesOrderId, orderId))
+      .limit(1);
+    
+    if (existing) {
+      console.log(`[Accounting Prep] Snapshot already exists for order ${orderId}`);
+      return existing;
+    }
+    
+    const shippingAmount = parseFloat(order.shipping || 0);
+    
+    let stockRevenue = 0;
+    const ordersWithPayment = await storage.getAllOrdersWithPaymentStatus([orderId]);
+    const orderWithPayment = ordersWithPayment[0];
+    if (orderWithPayment && orderWithPayment.totalPrice) {
+      stockRevenue = parseFloat(String(orderWithPayment.totalPrice)) - shippingAmount;
+      if (stockRevenue < 0) stockRevenue = 0;
+    } else if (order.priceOverride) {
+      stockRevenue = parseFloat(order.priceOverride);
+    } else if (order.flattopPriceOverride) {
+      stockRevenue = parseFloat(order.flattopPriceOverride);
+    }
+    
+    let discountAmount = 0;
+    if (order.discountValue) {
+      const discountVal = parseFloat(order.discountValue);
+      if (order.discountType === 'percentage' || order.discountType === 'percent') {
+        discountAmount = (stockRevenue + shippingAmount) * (discountVal / 100);
+      } else {
+        discountAmount = discountVal;
+      }
+    }
+    if (order.customDiscountValue && order.showCustomDiscount) {
+      const customDiscount = parseFloat(order.customDiscountValue || 0);
+      if (order.customDiscountType === 'percent') {
+        discountAmount += stockRevenue * (customDiscount / 100);
+      } else {
+        discountAmount += customDiscount;
+      }
+    }
+    
+    const netTotal = stockRevenue + shippingAmount - discountAmount;
+    const arAmount = netTotal;
+    
+    const shipmentId = uuidv4();
+    
+    let customerName = order.customerName || null;
+    if (!customerName && order.customerId) {
+      try {
+        const customer = await storage.getCustomer(parseInt(order.customerId));
+        customerName = customer?.name || null;
+      } catch (e) {
+      }
+    }
+    
+    const [snapshot] = await db
+      .insert(shipmentAccountingSnapshots)
+      .values({
+        shipmentId,
+        shipmentDate: new Date(),
+        customerId: String(order.customerId || ''),
+        customerName,
+        salesOrderId: orderId,
+        arAmount: String(arAmount),
+        stockRevenueAmount: String(stockRevenue),
+        shippingIncomeAmount: String(shippingAmount),
+        discountAmount: String(discountAmount),
+        netTotal: String(netTotal),
+        currency: 'USD',
+        originalArAmount: String(arAmount),
+        originalStockRevenueAmount: String(stockRevenue),
+        originalShippingIncomeAmount: String(shippingAmount),
+        originalDiscountAmount: String(discountAmount),
+        originalNetTotal: String(netTotal),
+      })
+      .returning();
+    
+    console.log(`[Accounting Prep] Captured snapshot for order ${orderId}: AR=$${arAmount}, Stock=$${stockRevenue}, Shipping=$${shippingAmount}, Discount=$${discountAmount}, Net=$${netTotal}`);
+    return snapshot;
+  } catch (error) {
+    console.error('[Accounting Prep] Failed to capture snapshot:', error);
+    return null;
+  }
 }
 
 // Get order by ID with customer and address data for shipping
@@ -297,6 +396,14 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
         );
         // Don't fail the entire request if notification fails
       }
+    }
+
+    // Capture accounting snapshot for QuickBooks journal entry prep
+    try {
+      await captureAccountingSnapshot(orderId);
+    } catch (snapshotError) {
+      console.error('[Accounting Prep] Error capturing snapshot:', snapshotError);
+      // Don't fail the shipment if snapshot capture fails
     }
 
     res.json({

@@ -11710,3 +11710,75 @@ export type FillablePdfTemplate = typeof fillablePdfTemplates.$inferSelect;
 export type InsertFillablePdfTemplate = z.infer<typeof insertFillablePdfTemplateSchema>;
 export type FillablePdfInstance = typeof fillablePdfInstances.$inferSelect;
 export type InsertFillablePdfInstance = z.infer<typeof insertFillablePdfInstanceSchema>;
+
+// ============================================================================
+// ACCOUNTING PREP - Shipment Accounting Snapshots for QuickBooks Journal Entry Prep
+// ============================================================================
+
+export const shipmentAccountingSnapshots = pgTable('shipment_accounting_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shipmentId: uuid('shipment_id').notNull(),
+  shipmentDate: timestamp('shipment_date').notNull(),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name'),
+  salesOrderId: text('sales_order_id'),
+  arAmount: numeric('ar_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  stockRevenueAmount: numeric('stock_revenue_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  shippingIncomeAmount: numeric('shipping_income_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  netTotal: numeric('net_total', { precision: 12, scale: 2 }).notNull().default('0'),
+  currency: text('currency').notNull().default('USD'),
+  originalArAmount: numeric('original_ar_amount', { precision: 12, scale: 2 }),
+  originalStockRevenueAmount: numeric('original_stock_revenue_amount', { precision: 12, scale: 2 }),
+  originalShippingIncomeAmount: numeric('original_shipping_income_amount', { precision: 12, scale: 2 }),
+  originalDiscountAmount: numeric('original_discount_amount', { precision: 12, scale: 2 }),
+  originalNetTotal: numeric('original_net_total', { precision: 12, scale: 2 }),
+  autoCapturedAt: timestamp('auto_captured_at').defaultNow().notNull(),
+  lastAdjustedAt: timestamp('last_adjusted_at'),
+  lastAdjustedBy: text('last_adjusted_by'),
+  adjustmentReason: text('adjustment_reason'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  shipmentIdIdx: index('shipment_accounting_snapshots_shipment_id_idx').on(table.shipmentId),
+  customerIdIdx: index('shipment_accounting_snapshots_customer_id_idx').on(table.customerId),
+  shipmentDateIdx: index('shipment_accounting_snapshots_shipment_date_idx').on(table.shipmentDate),
+}));
+
+export const shipmentAccountingAdjustments = pgTable('shipment_accounting_adjustments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  snapshotId: uuid('snapshot_id').references(() => shipmentAccountingSnapshots.id, { onDelete: 'cascade' }).notNull(),
+  fieldName: text('field_name').notNull(),
+  oldValue: numeric('old_value', { precision: 12, scale: 2 }).notNull(),
+  newValue: numeric('new_value', { precision: 12, scale: 2 }).notNull(),
+  reason: text('reason').notNull(),
+  adjustedBy: text('adjusted_by').notNull(),
+  adjustedAt: timestamp('adjusted_at').defaultNow().notNull(),
+}, (table) => ({
+  snapshotIdIdx: index('shipment_accounting_adjustments_snapshot_id_idx').on(table.snapshotId),
+}));
+
+export const insertShipmentAccountingSnapshotSchema = createInsertSchema(shipmentAccountingSnapshots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  arAmount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  stockRevenueAmount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  shippingIncomeAmount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  discountAmount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  netTotal: z.union([z.string(), z.number()]).transform(v => String(v)),
+});
+
+export const insertShipmentAccountingAdjustmentSchema = createInsertSchema(shipmentAccountingAdjustments).omit({
+  id: true,
+  adjustedAt: true,
+}).extend({
+  oldValue: z.union([z.string(), z.number()]).transform(v => String(v)),
+  newValue: z.union([z.string(), z.number()]).transform(v => String(v)),
+});
+
+export type ShipmentAccountingSnapshot = typeof shipmentAccountingSnapshots.$inferSelect;
+export type InsertShipmentAccountingSnapshot = z.infer<typeof insertShipmentAccountingSnapshotSchema>;
+export type ShipmentAccountingAdjustment = typeof shipmentAccountingAdjustments.$inferSelect;
+export type InsertShipmentAccountingAdjustment = z.infer<typeof insertShipmentAccountingAdjustmentSchema>;

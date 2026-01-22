@@ -1,3 +1,25 @@
+/**
+ * Accounting Prep Routes - Phase 0
+ * 
+ * This module provides a disposable, migratable reporting layer for capturing
+ * shipment accounting data at the point of fulfillment to prepare monthly
+ * QuickBooks journal entries.
+ * 
+ * KEY DESIGN DECISIONS:
+ * - All amounts stored as positive semantic values (no debit/credit signs in DB)
+ * - Debit/Credit presentation is handled at display time in the frontend
+ * - Access restricted to authorized users only (currently: glennj)
+ * - One immutable snapshot per sales order (see shipping.ts for capture logic)
+ * 
+ * NET TOTAL HANDLING:
+ * - netTotal is derived at capture time from: stockRevenue + shippingIncome - discounts
+ * - On manual adjustment, netTotal is ALWAYS recalculated from component fields
+ * - Original values preserved in original* fields for audit trail
+ * 
+ * ADJUSTMENT AUDIT TRAIL:
+ * - All field changes recorded in shipment_accounting_adjustments table
+ * - Each adjustment includes: old value, new value, reason, user, timestamp
+ */
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db';
 import { eq, desc, and, gte, lte, isNotNull, sql } from 'drizzle-orm';
@@ -140,6 +162,11 @@ router.patch('/:id', checkAccountingPrepAccess, async (req: Request, res: Respon
     const newStockRevenue = parseFloat(updates.stockRevenueAmount ?? existingSnapshot.stockRevenueAmount ?? '0');
     const newShippingIncome = parseFloat(updates.shippingIncomeAmount ?? existingSnapshot.shippingIncomeAmount ?? '0');
     const newDiscount = parseFloat(updates.discountAmount ?? existingSnapshot.discountAmount ?? '0');
+    
+    // NET TOTAL RECALCULATION:
+    // netTotal is ALWAYS recalculated from component fields on every adjustment.
+    // This ensures consistency: netTotal = stockRevenue + shippingIncome - discounts.
+    // The original captured netTotal is preserved in originalNetTotal for audit.
     const newNetTotal = newStockRevenue + newShippingIncome - newDiscount;
     
     if (String(newNetTotal) !== existingSnapshot.netTotal) {

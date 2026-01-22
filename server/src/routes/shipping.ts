@@ -50,6 +50,26 @@ async function checkLinkedOrders(orderId: string) {
   };
 }
 
+/**
+ * Captures an immutable accounting snapshot when an order is shipped.
+ * 
+ * ASSUMPTION: Each order currently produces a single shipment.
+ * If partial or multi-shipment fulfillment is introduced,
+ * accounting snapshot capture must be revisited to create one snapshot
+ * per actual shipment event rather than per sales order.
+ * 
+ * REVENUE SOURCE OF TRUTH:
+ * - Primary: getAllOrdersWithPaymentStatus().totalPrice - this is the calculated
+ *   order total including all line items, options, and adjustments.
+ * - Fallback: order.priceOverride or order.flattopPriceOverride fields.
+ * - Stock revenue = totalPrice - shipping (to separate product vs shipping income).
+ * 
+ * NET TOTAL CALCULATION:
+ * - netTotal is derived at capture time as: stockRevenue + shippingIncome - discounts
+ * - On manual adjustment, netTotal is always recalculated from component fields
+ *   (see accountingPrep.ts PATCH route) to maintain consistency.
+ * - Original values are preserved in original* fields for audit purposes.
+ */
 async function captureAccountingSnapshot(orderId: string) {
   try {
     let order = await storage.getFinalizedOrderById(orderId) as any;
@@ -61,6 +81,7 @@ async function captureAccountingSnapshot(orderId: string) {
       return null;
     }
     
+    // Enforce one snapshot per sales order (unique constraint also exists in DB)
     const [existing] = await db
       .select()
       .from(shipmentAccountingSnapshots)
@@ -74,6 +95,9 @@ async function captureAccountingSnapshot(orderId: string) {
     
     const shippingAmount = parseFloat(order.shipping || 0);
     
+    // Revenue source of truth: Use order total from payment status calculation,
+    // which includes all pricing logic (base price, options, adjustments).
+    // Stock revenue = total price minus shipping to separate income streams.
     let stockRevenue = 0;
     const ordersWithPayment = await storage.getAllOrdersWithPaymentStatus([orderId]);
     const orderWithPayment = ordersWithPayment[0];
@@ -81,8 +105,10 @@ async function captureAccountingSnapshot(orderId: string) {
       stockRevenue = parseFloat(String(orderWithPayment.totalPrice)) - shippingAmount;
       if (stockRevenue < 0) stockRevenue = 0;
     } else if (order.priceOverride) {
+      // Fallback: manual price override
       stockRevenue = parseFloat(order.priceOverride);
     } else if (order.flattopPriceOverride) {
+      // Fallback: flattop price override
       stockRevenue = parseFloat(order.flattopPriceOverride);
     }
     

@@ -159,6 +159,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
           });
 
           // Insert into all_orders table with Layup/Plugging department
+          // order_source = 'PO_RELEASE' marks this as a Production-Only Order (non-invoiceable)
           const insertOrderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -170,14 +171,22 @@ router.post('/schedule', async (req: Request, res: Response) => {
               status,
               notes,
               features,
+              order_source,
+              source_po_id,
+              source_po_item_id,
+              department_history,
               created_at,
               updated_at
             ) VALUES (
-              $1, NOW(), $2, $3, $4, 'Layup/Plugging', 'FINALIZED', $5, $6::jsonb, NOW(), NOW()
+              $1, NOW(), $2, $3, $4, 'Layup/Plugging', 'IN_PROGRESS', $5, $6::jsonb, 
+              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
             )
             ON CONFLICT (order_id) DO UPDATE
             SET current_department = 'Layup/Plugging',
-                status = 'FINALIZED',
+                status = 'IN_PROGRESS',
+                order_source = 'PO_RELEASE',
+                source_po_id = $7,
+                source_po_item_id = $8,
                 updated_at = NOW()
           `;
           await pool.query(insertOrderQuery, [
@@ -187,6 +196,8 @@ router.post('/schedule', async (req: Request, res: Response) => {
             item.item_id || '',
             notes,
             features,
+            item.po_id,
+            poItemId,
           ]);
 
           // Also add to layup_schedule table for scheduler visibility

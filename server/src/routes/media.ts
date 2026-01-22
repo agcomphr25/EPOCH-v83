@@ -439,6 +439,32 @@ router.delete('/folders/:id', async (req, res) => {
   }
 });
 
+// Move a document to a different folder
+// NOTE: Must be defined BEFORE generic /:id routes to avoid route interception
+router.patch('/:id/move', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { folderId } = req.body;
+
+    const rows = await pool.query(
+      `UPDATE media_library 
+       SET folder_id = $1, updated_at = now()
+       WHERE id = $2
+       RETURNING id, folder_id as "folderId"`,
+      [folderId || null, id]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error moving document:', error);
+    res.status(500).json({ error: 'Failed to move document' });
+  }
+});
+
 // Get a single media item
 router.get('/:id', async (req, res) => {
   try {
@@ -600,31 +626,6 @@ router.get('/:id/references', async (req, res) => {
   } catch (error) {
     console.error('Error fetching references:', error);
     res.status(500).json({ error: 'Failed to fetch references' });
-  }
-});
-
-// Move a document to a different folder
-router.patch('/:id/move', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { folderId } = req.body;
-
-    const rows = await pool.query(
-      `UPDATE media_library 
-       SET folder_id = $1, updated_at = now()
-       WHERE id = $2
-       RETURNING id, folder_id as "folderId"`,
-      [folderId || null, id]
-    );
-
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: 'Document not found' });
-    }
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error moving document:', error);
-    res.status(500).json({ error: 'Failed to move document' });
   }
 });
 

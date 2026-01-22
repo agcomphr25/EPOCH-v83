@@ -1,0 +1,100 @@
+COPY-PASTE PROMPT — Fix “Success Toast but No Update” in Admin Orders
+You are authorized to APPLY FIXES.
+
+Problem Summary:
+The Admin Orders screen shows a success toast even when:
+- No DB rows were updated
+- The refetch returns cached data
+
+Root causes are CONFIRMED:
+1) Server returns success even when update affects 0 rows
+2) Orders list endpoint is cacheable (max-age=30), so refetch can return stale data
+
+Objective:
+Make “success” truthful and guarantee fresh data after updates.
+
+Scope (DO ALL — minimal diff only):
+
+────────────────────────────────────
+1) ENFORCE DB WRITE TRUTH
+────────────────────────────────────
+File: server/src/routes/orders.ts
+Route: PATCH /api/orders/:orderId/field
+
+After executing the update query:
+
+- Validate updateResult.rowCount
+- If rowCount === 0:
+    - Return HTTP 409 (Conflict) or 400
+    - Include a clear error message:
+      “No rows updated — value unchanged or order not found”
+- Only return success: true if rowCount > 0
+
+DO NOT change:
+- DB schema
+- Update logic
+- Field validation config
+
+This ensures the frontend never receives a false success.
+
+────────────────────────────────────
+2) DISABLE CACHING FOR ORDERS LIST
+────────────────────────────────────
+File: server/src/routes/orders.ts
+Route: GET /api/orders/with-payment-status
+
+Replace existing cache headers with:
+
+Cache-Control: no-store
+
+(or equivalent no-cache, must-revalidate headers)
+
+This endpoint is ADMIN-ONLY and MUTABLE.
+Freshness is more important than caching here.
+
+DO NOT change caching behavior for other endpoints.
+
+────────────────────────────────────
+3) FRONTEND: HANDLE REAL FAILURE
+────────────────────────────────────
+File: client/src/pages/AdminPanelPage.tsx
+
+In updateFieldMutation:
+- Add onError handler
+- Show error toast using server message
+- Do NOT show success toast on failure
+
+Do NOT:
+- Add optimistic updates
+- Add delays
+- Force re-renders
+- Change query keys
+
+────────────────────────────────────
+4) VERIFY BEHAVIOR
+────────────────────────────────────
+Manually verify:
+
+- Updating to a new value:
+    ✔ DB row changes
+    ✔ Success toast appears
+    ✔ UI reflects change immediately
+
+- Updating to the same value:
+    ✔ Error response
+    ✔ Error toast shown
+    ✔ No misleading success
+
+- Rapid consecutive updates:
+    ✔ UI always reflects latest DB state
+
+────────────────────────────────────
+Rules:
+- No refactors
+- No unrelated cleanup
+- No UI hacks
+- Minimal, targeted diff only
+
+After completion:
+- List exact files + line ranges changed
+- Confirm manual verification steps passed

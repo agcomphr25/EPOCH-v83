@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, pool } from '../../db';
-import { mediaLibrary, mediaAttachments } from '../../schema';
-import { eq, desc, and, ilike, or, inArray, sql } from 'drizzle-orm';
+import { mediaLibrary, mediaAttachments, mediaFolders } from '../../schema';
+import { eq, desc, and, ilike, or, inArray, sql, isNull } from 'drizzle-orm';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -156,11 +156,12 @@ router.post('/upload', (req, res, next) => {
         });
       }
 
-      const { title, notes, tags, category } = req.body;
+      const { title, notes, tags, category, folderId } = req.body;
       const user = (req as any).user;
       const finalCategory = category || 'other';
 
       console.log('[UPLOAD DEBUG] Category received:', category, '-> Using:', finalCategory);
+      console.log('[UPLOAD DEBUG] Folder ID:', folderId || 'root');
       console.log('[UPLOAD DEBUG] User:', user?.username || 'Unknown');
 
       const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
@@ -187,6 +188,7 @@ router.post('/upload', (req, res, next) => {
         storagePath: `uploads/media-library/${req.file.filename}`,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
+        folderId: folderId || null,
         capturedByName: user?.username || 'Unknown',
         title: title || req.file.originalname,
         notes: notes || null,
@@ -204,14 +206,15 @@ router.post('/upload', (req, res, next) => {
       // 2. RETURNING clause provides the inserted row(s)
       // If this query fails, it throws an exception - reaching the next line means success.
       const rows = await pool.query(
-        `INSERT INTO media_library (filename, storage_path, mime_type, file_size, captured_by_name, title, notes, tags, category)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id, filename, storage_path, mime_type, file_size, title, category, created_at`,
+        `INSERT INTO media_library (filename, storage_path, mime_type, file_size, folder_id, captured_by_name, title, notes, tags, category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, filename, storage_path, mime_type, file_size, folder_id, title, category, created_at`,
         [
           insertValues.filename,
           insertValues.storagePath,
           insertValues.mimeType,
           insertValues.fileSize,
+          insertValues.folderId,
           insertValues.capturedByName,
           insertValues.title,
           insertValues.notes,
@@ -291,7 +294,7 @@ router.get('/', async (req, res) => {
     const result = await pool.query(`
       SELECT 
         id, filename, storage_path as "storagePath", mime_type as "mimeType", 
-        file_size as "fileSize", captured_by_id as "capturedById", 
+        file_size as "fileSize", folder_id as "folderId", captured_by_id as "capturedById", 
         captured_by_name as "capturedByName", capture_date as "captureDate",
         title, notes, tags, category, thumbnail_path as "thumbnailPath",
         is_archived as "isArchived", created_at as "createdAt", updated_at as "updatedAt"
@@ -495,6 +498,132 @@ router.get('/:id/references', async (req, res) => {
   } catch (error) {
     console.error('Error fetching references:', error);
     res.status(500).json({ error: 'Failed to fetch references' });
+  }
+});
+
+// =====================
+// FOLDER MANAGEMENT ROUTES
+// =====================
+
+// Get all folders (with hierarchy)
+router.get('/folders', async (req, res) => {
+  try {
+    const rows = await pool.query(`
+      SELECT 
+        id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles",
+        created_by_id as "createdById", created_by_name as "createdByName",
+        created_at as "createdAt", updated_at as "updatedAt"
+      FROM media_folders
+      ORDER BY name ASC
+    `);
+    res.json(rows || []);
+  } catch (error) {
+    console.error('Error fetching folders:', error);
+    res.status(500).json({ error: 'Failed to fetch folders' });
+  }
+});
+
+// Create a new folder
+router.post('/folders', async (req, res) => {
+  try {
+    const { name, parentId, visibleToRoles } = req.body;
+    const user = (req as any).user;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Folder name is required' });
+    }
+
+    const rows = await pool.query(
+      `INSERT INTO media_folders (name, parent_id, visible_to_roles, created_by_id, created_by_name)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles", created_at as "createdAt"`,
+      [name, parentId || null, visibleToRoles || null, null, user?.username || 'Unknown']
+    );
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+// Update a folder
+router.patch('/folders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, parentId, visibleToRoles } = req.body;
+
+    const rows = await pool.query(
+      `UPDATE media_folders 
+       SET name = COALESCE($1, name), 
+           parent_id = $2, 
+           visible_to_roles = COALESCE($3, visible_to_roles),
+           updated_at = now()
+       WHERE id = $4
+       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles"`,
+      [name, parentId, visibleToRoles, id]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating folder:', error);
+    res.status(500).json({ error: 'Failed to update folder' });
+  }
+});
+
+// Delete a folder (moves contents to root)
+router.delete('/folders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Move all documents in this folder to root (null folder_id)
+    await pool.query(
+      `UPDATE media_library SET folder_id = NULL WHERE folder_id = $1`,
+      [id]
+    );
+
+    // Move all child folders to root (null parent_id)
+    await pool.query(
+      `UPDATE media_folders SET parent_id = NULL WHERE parent_id = $1`,
+      [id]
+    );
+
+    // Delete the folder
+    await pool.query(`DELETE FROM media_folders WHERE id = $1`, [id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    res.status(500).json({ error: 'Failed to delete folder' });
+  }
+});
+
+// Move a document to a different folder
+router.patch('/:id/move', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { folderId } = req.body;
+
+    const rows = await pool.query(
+      `UPDATE media_library 
+       SET folder_id = $1, updated_at = now()
+       WHERE id = $2
+       RETURNING id, folder_id as "folderId"`,
+      [folderId || null, id]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error moving document:', error);
+    res.status(500).json({ error: 'Failed to move document' });
   }
 });
 

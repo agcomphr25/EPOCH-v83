@@ -117,6 +117,7 @@ import punchesRoutes from './punches';
 import laborRoutes from './labor';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
+import accountingPrepRoutes from './accountingPrep';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -430,6 +431,9 @@ export function registerRoutes(app: Express): Server {
 
   // Fillable PDF Templates routes
   app.use('/api/pdf-templates', fillablePdfTemplatesRoutes);
+
+  // Accounting Prep routes (Phase 0 - QuickBooks Journal Entry Prep)
+  app.use('/api/accounting-prep', accountingPrepRoutes);
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);

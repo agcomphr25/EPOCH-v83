@@ -172,6 +172,7 @@ import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
+import AccountingPrepPage from './pages/AccountingPrepPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import CommunicationLogsPage from './pages/CommunicationLogsPage';
 import MonitoredLinksManager from './pages/MonitoredLinksManager';
@@ -388,6 +389,7 @@ function App() {
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/admin/monitored-links" component={MonitoredLinksManager} />
                   <Route path="/admin/communication-logs" component={CommunicationLogsPage} />
+                  <Route path="/admin/accounting-prep" component={AccountingPrepPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />

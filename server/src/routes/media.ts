@@ -187,7 +187,6 @@ router.post('/upload', (req, res, next) => {
         storagePath: `uploads/media-library/${req.file.filename}`,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
-        capturedById: null,
         capturedByName: user?.username || 'Unknown',
         title: title || req.file.originalname,
         notes: notes || null,
@@ -197,11 +196,26 @@ router.post('/upload', (req, res, next) => {
 
       console.log('[UPLOAD DEBUG] Inserting into DB:', insertValues);
 
-      const result = await db.insert(mediaLibrary).values(insertValues).returning();
+      const result = await pool.query(
+        `INSERT INTO media_library (filename, storage_path, mime_type, file_size, captured_by_name, title, notes, tags, category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          insertValues.filename,
+          insertValues.storagePath,
+          insertValues.mimeType,
+          insertValues.fileSize,
+          insertValues.capturedByName,
+          insertValues.title,
+          insertValues.notes,
+          insertValues.tags,
+          insertValues.category
+        ]
+      );
       
-      console.log('[UPLOAD DEBUG] DB insert result:', result);
+      console.log('[UPLOAD DEBUG] DB insert result:', result.rows);
 
-      if (!result || result.length === 0) {
+      if (!result.rows || result.rows.length === 0) {
         console.error('[UPLOAD DEBUG] DB insert returned no rows');
         return res.status(500).json({ 
           success: false, 
@@ -212,7 +226,7 @@ router.post('/upload', (req, res, next) => {
         });
       }
 
-      const newMedia = result[0];
+      const newMedia = result.rows[0];
       console.log('[UPLOAD DEBUG] SUCCESS - Document ID:', newMedia.id);
 
       res.json({ 

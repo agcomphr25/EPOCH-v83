@@ -86,7 +86,7 @@ router.post('/complete-upload', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: objectPath, filename' });
     }
 
-    const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
+    const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
 
     // Set ACL policy for the uploaded object (make it publicly readable)
     try {
@@ -163,7 +163,7 @@ router.post('/upload', (req, res, next) => {
       console.log('[UPLOAD DEBUG] Category received:', category, '-> Using:', finalCategory);
       console.log('[UPLOAD DEBUG] User:', user?.username || 'Unknown');
 
-      const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
+      const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
 
       // Verify file exists on disk
       const filePath = path.join(process.cwd(), 'uploads', 'media-library', req.file.filename);

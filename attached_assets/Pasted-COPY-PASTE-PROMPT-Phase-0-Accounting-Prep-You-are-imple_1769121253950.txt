@@ -1,0 +1,121 @@
+COPY-PASTE PROMPT (Phase 0 Accounting Prep)
+You are implementing a Phase 0 “Accounting Prep” feature in EPOCH.
+This is NOT an accounting system and must never post or enforce accounting.
+It is a disposable, migratable reporting layer used only to prepare monthly journal entries for QuickBooks.
+
+GOALS
+- Capture per-shipment accounting snapshots automatically at shipment completion
+- Allow post-capture edits with a full audit trail
+- Provide a centralized read/review dashboard
+- No access from Order pages
+- USD only
+- Skip sales tax entirely
+
+CORE CONCEPT
+Create a “Shipment Accounting Snapshot”:
+One immutable auto-captured snapshot per shipment, editable later with audit history.
+This snapshot answers:
+“If I were booking this shipment in QuickBooks, what would the journal entry look like?”
+
+DO NOT:
+- Post accounting
+- Enforce balancing
+- Track ‘Posted to QB’ states
+- Integrate with QuickBooks
+- Build a ledger
+
+DATA MODEL
+
+Create table: shipment_accounting_snapshots
+
+Fields:
+- id (pk)
+- shipment_id (fk → shipments / fulfillments)
+- shipment_date
+- customer_id
+- sales_order_id (reference only)
+
+Accounting amounts (store as positive semantic amounts, never signed):
+- ar_amount
+- stock_revenue_amount
+- shipping_income_amount
+- discount_amount
+- net_total (stored or derived)
+
+Metadata:
+- currency (default 'USD')
+- auto_captured_at
+- last_adjusted_at
+- last_adjusted_by
+- adjustment_reason (nullable)
+
+Audit:
+- Create child table shipment_accounting_adjustments OR
+- JSON change log recording field, old value, new value, user, timestamp
+
+IMPORTANT:
+- Do NOT store debit/credit signs in the DB
+- Debits/credits are a UI concern only
+
+CAPTURE LOGIC
+
+At shipment completion:
+- Automatically create a snapshot row
+- Capture totals based on shipment contents:
+  - All stock-related revenue (models, bottom metal, paint, etc.)
+  - Shipping separated into shipping_income_amount
+  - Discounts captured separately
+- AR amount should equal net total
+- No user interaction required
+
+MULTIPLE SHIPMENTS:
+- Each shipment gets its own snapshot
+- Partial shipments are supported
+
+UI
+
+Create a centralized admin-only dashboard:
+Route: /admin/accounting-prep
+Access: glennj only
+
+Dashboard table (one row per shipment snapshot):
+- Shipment ID
+- Shipment Date
+- Customer
+- A/R
+- Stock Revenue
+- Shipping Income
+- Discounts
+- Net Total
+
+Filters:
+- Date range (month-first)
+- Customer
+- “Adjusted only”
+
+Row click opens a drawer or modal with:
+
+1) Journal-style visual preview (display only):
+   Dr Accounts Receivable        $X
+      Cr Stock Revenue           $X
+      Cr Shipping Income         $X
+      Dr Discounts               $X
+
+2) Editable fields:
+- ar_amount
+- stock_revenue_amount
+- shipping_income_amount
+- discount_amount
+
+3) Required adjustment reason on save
+
+4) Audit trail viewer
+
+GUARDRAILS
+- Original auto-captured values must be preserved
+- Adjustments append audit history, never overwrite silently
+- net_total should always be recalculated or validated
+- No balance enforcement — show imbalance but allow save
+
+DELIVERABLE
+This feature must function purely as a reporting and review tool for monthly batched journal entry creation in QuickBooks.

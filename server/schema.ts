@@ -74,6 +74,10 @@ export const allOrders = pgTable('all_orders', {
   status: text('status').default('FINALIZED'), // Legacy - will be removed after migration
   statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
   barcode: text('barcode'), // Code 39 barcode for order identification
+  // Order Source and PO Linkage Fields
+  orderSource: text('order_source').default('SALES'), // SALES = customer order, PO_RELEASE = production-only from PO
+  sourcePoId: integer('source_po_id'), // Reference to purchase_orders.id for PO_RELEASE orders
+  sourcePoItemId: integer('source_po_item_id'), // Reference to purchase_order_items.id for PO_RELEASE orders
   // Department Progression Fields
   currentDepartment: text('current_department').default('P1 Production Queue'), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer('current_department_id').references(

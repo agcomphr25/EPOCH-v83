@@ -216,14 +216,12 @@ export default function FabricInventoryPage() {
     queryKey: ['/api/cutting-table/materials'],
   });
 
-  // Fetch inventory items from Enhanced MRP Inventory Items Management
+  // Fetch inventory items from Inventory Items Management for Part Number dropdown
   const { data: inventoryItems = [], isLoading: isLoadingInventoryItems } = useQuery<{ agPartNumber: string; name: string }[]>({
-    queryKey: ['/api/enhanced/inventory/items'],
+    queryKey: ['/api/inventory/items/part-numbers'],
     select: (data: any[]) => {
       if (!Array.isArray(data)) return [];
-      return data
-        .filter(item => item && item.agPartNumber)
-        .map(item => ({ agPartNumber: item.agPartNumber, name: item.name || '' }));
+      return data.filter(item => item && item.agPartNumber);
     },
   });
 

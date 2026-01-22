@@ -44,6 +44,7 @@ export default function HistoricalDataEntry() {
   const [activeTab, setActiveTab] = useState('credit_card');
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const { data: historicalData, isLoading, refetch } = useQuery<HistoricalEntry[]>({
     queryKey: ['/api/historical-data'],
@@ -85,11 +86,29 @@ export default function HistoricalDataEntry() {
     return entry?.amount || '';
   };
 
+  const getDisplayValue = (year: number, month: number, category: string): string => {
+    const key = getKey(year, month, category);
+    const rawValue = getValue(year, month, category);
+    if (focusedField === key) {
+      return rawValue;
+    }
+    return rawValue ? formatCurrency(rawValue) : '';
+  };
+
   const handleChange = (year: number, month: number, category: string, value: string) => {
     const key = getKey(year, month, category);
-    const numValue = parseCurrency(value);
-    setEditedData(prev => ({ ...prev, [key]: numValue }));
+    const cleaned = value.replace(/[$,\s]/g, '');
+    setEditedData(prev => ({ ...prev, [key]: cleaned }));
     setHasChanges(true);
+  };
+
+  const handleFocus = (year: number, month: number, category: string) => {
+    const key = getKey(year, month, category);
+    setFocusedField(key);
+  };
+
+  const handleBlur = () => {
+    setFocusedField(null);
   };
 
   const handleSave = () => {
@@ -161,8 +180,10 @@ export default function HistoricalDataEntry() {
                           type="text"
                           className="h-8 text-right text-sm"
                           placeholder="$0.00"
-                          value={getValue(year, idx + 1, 'online') ? formatCurrency(getValue(year, idx + 1, 'online')) : ''}
+                          value={getDisplayValue(year, idx + 1, 'online')}
                           onChange={(e) => handleChange(year, idx + 1, 'online', e.target.value)}
+                          onFocus={() => handleFocus(year, idx + 1, 'online')}
+                          onBlur={handleBlur}
                         />
                       </td>
                       <td key={`${year}-${idx + 1}-phone`} className="py-1 px-1">
@@ -170,8 +191,10 @@ export default function HistoricalDataEntry() {
                           type="text"
                           className="h-8 text-right text-sm"
                           placeholder="$0.00"
-                          value={getValue(year, idx + 1, 'phone') ? formatCurrency(getValue(year, idx + 1, 'phone')) : ''}
+                          value={getDisplayValue(year, idx + 1, 'phone')}
                           onChange={(e) => handleChange(year, idx + 1, 'phone', e.target.value)}
+                          onFocus={() => handleFocus(year, idx + 1, 'phone')}
+                          onBlur={handleBlur}
                         />
                       </td>
                     </>
@@ -239,8 +262,10 @@ export default function HistoricalDataEntry() {
                           type="text"
                           className="h-8 text-right text-sm"
                           placeholder="$0.00"
-                          value={getValue(year, idx + 1, 'aerospace') ? formatCurrency(getValue(year, idx + 1, 'aerospace')) : ''}
+                          value={getDisplayValue(year, idx + 1, 'aerospace')}
                           onChange={(e) => handleChange(year, idx + 1, 'aerospace', e.target.value)}
+                          onFocus={() => handleFocus(year, idx + 1, 'aerospace')}
+                          onBlur={handleBlur}
                         />
                       </td>
                       <td key={`${year}-${idx + 1}-combined`} className="py-1 px-1">
@@ -248,8 +273,10 @@ export default function HistoricalDataEntry() {
                           type="text"
                           className="h-8 text-right text-sm"
                           placeholder="$0.00"
-                          value={getValue(year, idx + 1, 'combined') ? formatCurrency(getValue(year, idx + 1, 'combined')) : ''}
+                          value={getDisplayValue(year, idx + 1, 'combined')}
                           onChange={(e) => handleChange(year, idx + 1, 'combined', e.target.value)}
+                          onFocus={() => handleFocus(year, idx + 1, 'combined')}
+                          onBlur={handleBlur}
                         />
                       </td>
                     </>

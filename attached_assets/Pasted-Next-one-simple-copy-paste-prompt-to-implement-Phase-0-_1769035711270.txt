@@ -1,0 +1,70 @@
+Next: one simple copy-paste prompt to implement Phase 0 (MVP)
+
+This will build the smallest working slice: upload template PDF, define field defs JSON, render HTML form for customer fill, apply values + signature to PDF, flatten + archive.
+
+COPY/PASTE TO AGENT:
+
+Implement Phase 0: Fillable PDF Templates (MVP) in EPOCH using existing PDF/sign infrastructure.
+Constraints: Do not modify existing sales order PDF generator (generateSalesOrderPDF) except to add new wiring in a safe additive way. Reuse orderPdfService.generateOrderPdf() and the PdfIntent + INTENT_CONFIGS pattern.
+
+Goal
+
+Allow an admin to upload a template PDF and define a set of fillable fields (JSON definitions). Then allow a customer (via public link) to fill those fields in an HTML form UI, submit, and EPOCH will apply the values + signature into the PDF, flatten, and store the signed archive similarly to followup_orders.
+
+Backend tasks
+
+Add/confirm a pdf_templates table (or use existing) with: id, name, version, templatePdfPath, fieldDefsJson, createdAt, updatedAt, isActive.
+
+Add a pdf_template_instances table linked to either followup_orders or standalone: id, templateId, entityType, entityId, publicSignatureId, signatureToken, status(draft/sent/signed), valuesJson, pdfPath, signedPdfPath, createdAt, updatedAt.
+
+Create server/services/templatePdfService.ts with functions:
+
+loadTemplatePdf(templateId)
+
+applyFieldValuesToPdf(pdfBytes, fieldDefs, values) using pdf-lib (use AcroForm fields if present; otherwise draw text at coordinates as a fallback based on fieldDefs)
+
+embedSignatureInPDF(pdfBytes, signatureDataUrl, options) reuse existing embed logic where possible
+
+Add new PdfIntent values: TEMPLATE_CUSTOMER_FILL, TEMPLATE_SIGNED_ARCHIVE.
+
+Extend orderPdfService.generateOrderPdf() to route these intents to the new template generator (do not break existing intents).
+
+Add API routes:
+
+POST /api/pdf-templates upload PDF + create template + fieldDefsJson
+
+POST /api/pdf-template-instances create instance (generates publicSignatureId + token)
+
+GET /api/pdf-template-instances/:publicSignatureId returns template metadata + fieldDefs + existing values
+
+POST /api/pdf-template-instances/:publicSignatureId/submit accepts valuesJson + optional signatureDataUrl, generates final PDF, flattens, writes signedPdfPath, sets status=signed
+
+Frontend tasks
+
+Add Admin page: “PDF Templates”
+
+Upload template PDF
+
+Edit fieldDefsJson in a simple JSON editor (MVP)
+
+Create “Send for Fill+Sign” instance
+
+Add Customer page: /fill-and-sign/:publicSignatureId
+
+Render an HTML form from fieldDefsJson
+
+Submit values + signature canvas
+
+Show “download/view signed PDF” after success
+
+Output requirements
+
+Keep code additive and isolated.
+
+Reuse existing signature token + publicSignatureId patterns and environment guards.
+
+Store files under uploads/pdf-templates/ and uploads/pdf-template-instances/.
+
+Ensure signed instances cannot be resubmitted or regenerated (same protection pattern as followup_orders.signatureSigned).
+
+Provide a brief summary of files changed and new routes added.

@@ -184,6 +184,9 @@ import FabricInventoryPage from './pages/FabricInventoryPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
+import FillAndSignPage from './pages/FillAndSignPage';
+import FillablePdfTemplatesAdmin from './pages/FillablePdfTemplatesAdmin';
+import VisualFieldEditor from './pages/VisualFieldEditor';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
@@ -210,7 +213,8 @@ function ConditionalNavigation() {
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
-    location.startsWith('/sign-order'); // Hide navigation on customer sign order page
+    location.startsWith('/sign-order') || // Hide navigation on customer sign order page
+    location.startsWith('/fill-and-sign'); // Hide navigation on customer fill-and-sign page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -411,6 +415,8 @@ function App() {
                   
                   {/* PDF Template Routes */}
                   <Route path="/pdf-templates" component={PDFTemplateManager} />
+                  <Route path="/fillable-pdf-templates" component={FillablePdfTemplatesAdmin} />
+                  <Route path="/fillable-pdf-templates/:id/editor" component={VisualFieldEditor} />
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />
@@ -886,6 +892,12 @@ function App() {
                   <Route
                     path="/sign-order"
                     component={SignOrderPage}
+                  />
+                  
+                  {/* Fill and Sign Routes - Public routes for customers */}
+                  <Route
+                    path="/fill-and-sign/:publicSignatureId"
+                    component={FillAndSignPage}
                   />
 
                     {/* Catch-all route for 404 */}

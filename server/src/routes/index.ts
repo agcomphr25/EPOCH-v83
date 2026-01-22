@@ -116,6 +116,7 @@ import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
 import historicalDataRoutes from './historicalData';
+import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -426,6 +427,9 @@ export function registerRoutes(app: Express): Server {
 
   // Follow-up orders routes
   app.use('/api/followup-orders', followupOrdersRoutes);
+
+  // Fillable PDF Templates routes
+  app.use('/api/pdf-templates', fillablePdfTemplatesRoutes);
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);
@@ -6435,8 +6439,8 @@ export function registerRoutes(app: Express): Server {
           // If not found in regular orders, check production_orders table (P1 orders and PO items)
           if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
             console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
-            const productionOrderResult = await pool.query`
-              SELECT 
+            const productionOrderResult = await pool.query(
+              `SELECT 
                 order_id,
                 customer_id,
                 customer_name,
@@ -6450,9 +6454,10 @@ export function registerRoutes(app: Express): Server {
                 created_at,
                 updated_at
               FROM production_orders
-              WHERE order_id = ${orderId}
-              LIMIT 1
-            `;
+              WHERE order_id = $1
+              LIMIT 1`,
+              [orderId]
+            );
             
             if (productionOrderResult && productionOrderResult.length > 0) {
               const po = productionOrderResult[0];

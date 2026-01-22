@@ -11,8 +11,8 @@ const router = Router();
 // GET all certifications
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query`
-      SELECT 
+    const result = await pool.query(
+      `SELECT 
         id,
         name,
         description,
@@ -27,8 +27,8 @@ router.get('/', async (req: Request, res: Response) => {
         updated_at as "updatedAt"
       FROM certifications
       WHERE is_active = true
-      ORDER BY name
-    `;
+      ORDER BY name`
+    );
 
     res.json(result || []);
   } catch (error) {
@@ -62,30 +62,28 @@ router.post(
       };
 
       // Create certification in database
-      const result = await pool.query`
-      INSERT INTO certifications (
-        name,
-        description,
-        category,
-        requirements,
-        requirements_data,
-        work_instructions,
-        is_active,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${extractedData.name || 'Unnamed Certification'},
-        ${extractedData.description || ''},
-        ${'DEPARTMENT'},
-        ${extractedData.requirements || ''},
-        ${JSON.stringify(requirementsData)},
-        ${extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null},
-        true,
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `;
+      const result = await pool.query(
+        `INSERT INTO certifications (
+          name,
+          description,
+          category,
+          requirements,
+          requirements_data,
+          work_instructions,
+          is_active,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
+        RETURNING *`,
+        [
+          extractedData.name || 'Unnamed Certification',
+          extractedData.description || '',
+          'DEPARTMENT',
+          extractedData.requirements || '',
+          JSON.stringify(requirementsData),
+          extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null
+        ]
+      );
 
       const certification = result[0];
 
@@ -172,8 +170,8 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
     };
 
     // Create certification in database
-    const result = await pool.query`
-      INSERT INTO certifications (
+    const result = await pool.query(
+      `INSERT INTO certifications (
         name,
         description,
         category,
@@ -183,19 +181,17 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
         is_active,
         created_at,
         updated_at
-      ) VALUES (
-        ${extractedData.name || fileMetadata.name || 'Unnamed Certification'},
-        ${extractedData.description || ''},
-        ${'DEPARTMENT'},
-        ${extractedData.requirements || ''},
-        ${JSON.stringify(requirementsData)},
-        ${extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null},
-        true,
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `;
+      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
+      RETURNING *`,
+      [
+        extractedData.name || fileMetadata.name || 'Unnamed Certification',
+        extractedData.description || '',
+        'DEPARTMENT',
+        extractedData.requirements || '',
+        JSON.stringify(requirementsData),
+        extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null
+      ]
+    );
 
     const certification = result[0];
 
@@ -257,11 +253,12 @@ router.post('/complete-training', async (req: Request, res: Response) => {
     }
 
     // Get certification details for training matrix
-    const certResult = await pool.query`
-      SELECT name, category, validity_period_months as "validityPeriodMonths", requirements_data as "requirementsData"
-      FROM certifications
-      WHERE id = ${certificationId}
-    `;
+    const certResult = await pool.query(
+      `SELECT name, category, validity_period_months as "validityPeriodMonths", requirements_data as "requirementsData"
+       FROM certifications
+       WHERE id = $1`,
+      [certificationId]
+    );
 
     if (!certResult || certResult.length === 0) {
       return res.status(404).json({ error: 'Certification not found' });
@@ -300,11 +297,12 @@ router.post('/complete-training', async (req: Request, res: Response) => {
     }
 
     // Get employee details
-    const empResult = await pool.query`
-      SELECT name, job_title as "jobTitle", department
-      FROM employees
-      WHERE id = ${employeeId}
-    `;
+    const empResult = await pool.query(
+      `SELECT name, job_title as "jobTitle", department
+       FROM employees
+       WHERE id = $1`,
+      [employeeId]
+    );
 
     if (!empResult || empResult.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -324,8 +322,8 @@ router.post('/complete-training', async (req: Request, res: Response) => {
     }
 
     // Create employee certification record
-    const empCertResult = await pool.query`
-      INSERT INTO employee_certifications (
+    const empCertResult = await pool.query(
+      `INSERT INTO employee_certifications (
         employee_id,
         certification_id,
         date_obtained,
@@ -341,29 +339,25 @@ router.post('/complete-training', async (req: Request, res: Response) => {
         created_at,
         updated_at,
         form_completed_at
-      ) VALUES (
-        ${employeeId},
-        ${certificationId},
-        ${trainingDate},
-        ${expiryDate},
-        ${trainerName},
-        ${trainerSignature},
-        ${trainingDate},
-        ${JSON.stringify(criticalPointsCompleted)},
-        ${JSON.stringify(workInstructionsCompleted)},
-        'ACTIVE',
-        ${notes || null},
-        true,
-        NOW(),
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `;
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ACTIVE', $10, true, NOW(), NOW(), NOW())
+      RETURNING *`,
+      [
+        employeeId,
+        certificationId,
+        trainingDate,
+        expiryDate,
+        trainerName,
+        trainerSignature,
+        trainingDate,
+        JSON.stringify(criticalPointsCompleted),
+        JSON.stringify(workInstructionsCompleted),
+        notes || null
+      ]
+    );
 
     // Add to training matrix
-    await pool.query`
-      INSERT INTO training_matrix (
+    await pool.query(
+      `INSERT INTO training_matrix (
         employee_id,
         employee_name,
         job_title,
@@ -377,22 +371,20 @@ router.post('/complete-training', async (req: Request, res: Response) => {
         notes,
         created_at,
         updated_at
-      ) VALUES (
-        ${employeeId},
-        ${employee.name},
-        ${employee.jobTitle || null},
-        ${employee.department || null},
-        ${certification.name},
-        ${certification.category || null},
-        ${certification.validityPeriodMonths ? `Every ${certification.validityPeriodMonths} months` : 'One-time'},
-        ${trainingDate},
-        ${nextDueDate ? nextDueDate.toISOString() : null},
-        'COMPLETED',
-        ${`Certified by ${trainerName} on ${trainingDate}${notes ? '. ' + notes : ''}`},
-        NOW(),
-        NOW()
-      )
-    `;
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'COMPLETED', $10, NOW(), NOW())`,
+      [
+        employeeId,
+        employee.name,
+        employee.jobTitle || null,
+        employee.department || null,
+        certification.name,
+        certification.category || null,
+        certification.validityPeriodMonths ? `Every ${certification.validityPeriodMonths} months` : 'One-time',
+        trainingDate,
+        nextDueDate ? nextDueDate.toISOString() : null,
+        `Certified by ${trainerName} on ${trainingDate}${notes ? '. ' + notes : ''}`
+      ]
+    );
 
     res.status(201).json({
       message: 'Certification completed successfully',
@@ -416,11 +408,12 @@ router.post('/:certificationId/upload-file', uploadMiddleware.single('file'), as
     }
 
     // Get the current uploaded files
-    const certResult = await pool.query`
-      SELECT uploaded_files as "uploadedFiles"
-      FROM employee_certifications
-      WHERE id = ${parseInt(certificationId)}
-    `;
+    const certResult = await pool.query(
+      `SELECT uploaded_files as "uploadedFiles"
+       FROM employee_certifications
+       WHERE id = $1`,
+      [parseInt(certificationId)]
+    );
 
     if (!certResult || certResult.length === 0) {
       // Clean up uploaded file
@@ -446,12 +439,12 @@ router.post('/:certificationId/upload-file', uploadMiddleware.single('file'), as
     uploadedFiles.push(newFile);
 
     // Update database
-    await pool.query`
-      UPDATE employee_certifications
-      SET uploaded_files = ${JSON.stringify(uploadedFiles)},
-          updated_at = NOW()
-      WHERE id = ${parseInt(certificationId)}
-    `;
+    await pool.query(
+      `UPDATE employee_certifications
+       SET uploaded_files = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(uploadedFiles), parseInt(certificationId)]
+    );
 
     res.status(201).json({
       message: 'File uploaded successfully',
@@ -475,11 +468,12 @@ router.delete('/:certificationId/delete-file/:fileId', async (req: Request, res:
     const { certificationId, fileId } = req.params;
 
     // Get the current uploaded files
-    const certResult = await pool.query`
-      SELECT uploaded_files as "uploadedFiles"
-      FROM employee_certifications
-      WHERE id = ${parseInt(certificationId)}
-    `;
+    const certResult = await pool.query(
+      `SELECT uploaded_files as "uploadedFiles"
+       FROM employee_certifications
+       WHERE id = $1`,
+      [parseInt(certificationId)]
+    );
 
     if (!certResult || certResult.length === 0) {
       return res.status(404).json({ error: 'Employee certification not found' });
@@ -503,12 +497,12 @@ router.delete('/:certificationId/delete-file/:fileId', async (req: Request, res:
     const updatedFiles = uploadedFiles.filter((f: any) => f.id !== fileId);
 
     // Update database
-    await pool.query`
-      UPDATE employee_certifications
-      SET uploaded_files = ${JSON.stringify(updatedFiles)},
-          updated_at = NOW()
-      WHERE id = ${parseInt(certificationId)}
-    `;
+    await pool.query(
+      `UPDATE employee_certifications
+       SET uploaded_files = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(updatedFiles), parseInt(certificationId)]
+    );
 
     res.json({
       message: 'File deleted successfully',
@@ -525,11 +519,12 @@ router.get('/:certificationId/download-file/:fileId', async (req: Request, res: 
     const { certificationId, fileId } = req.params;
 
     // Get the uploaded files
-    const certResult = await pool.query`
-      SELECT uploaded_files as "uploadedFiles"
-      FROM employee_certifications
-      WHERE id = ${parseInt(certificationId)}
-    `;
+    const certResult = await pool.query(
+      `SELECT uploaded_files as "uploadedFiles"
+       FROM employee_certifications
+       WHERE id = $1`,
+      [parseInt(certificationId)]
+    );
 
     if (!certResult || certResult.length === 0) {
       return res.status(404).json({ error: 'Employee certification not found' });
@@ -559,20 +554,20 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
 
     // Check if certification exists
-    const certResult = await pool.query`
-      SELECT id, name FROM certifications WHERE id = ${parseInt(id)}
-    `;
+    const certResult = await pool.query(
+      `SELECT id, name FROM certifications WHERE id = $1`,
+      [parseInt(id)]
+    );
 
     if (!certResult || certResult.length === 0) {
       return res.status(404).json({ error: 'Certification template not found' });
     }
 
     // Soft delete by setting is_active to false
-    await pool.query`
-      UPDATE certifications
-      SET is_active = false, updated_at = NOW()
-      WHERE id = ${parseInt(id)}
-    `;
+    await pool.query(
+      `UPDATE certifications SET is_active = false, updated_at = NOW() WHERE id = $1`,
+      [parseInt(id)]
+    );
 
     res.json({ 
       success: true, 

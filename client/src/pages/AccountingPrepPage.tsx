@@ -102,15 +102,6 @@ function getFieldDisplayName(fieldName: string): string {
   return names[fieldName] || fieldName;
 }
 
-const AUTHORIZED_USERS = ['glennj'];
-
-function isDeploymentEnvironment(): boolean {
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-  return !isLocalhost && !isReplitEditor;
-}
-
 export default function AccountingPrepPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -125,63 +116,18 @@ export default function AccountingPrepPage() {
     reason: '',
   });
   
-  const { data: currentUser, isLoading: isLoadingUser } = useQuery<{ username: string } | null>({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
-      if (!isDeploymentEnvironment()) {
-        const storedUsername = localStorage.getItem('dev_username');
-        if (storedUsername) {
-          return { username: storedUsername };
-        }
-        return { username: 'anonymous' };
-      }
-      if (!token) return null;
-      const response = await fetch('/api/auth/session', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) return null;
-      return response.json();
-    },
-    staleTime: 60000,
-  });
-  
   const now = new Date();
   const [startDate, setStartDate] = useState(format(startOfMonth(now), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(now), 'yyyy-MM-dd'));
   const [customerFilter, setCustomerFilter] = useState('');
   const [adjustedOnly, setAdjustedOnly] = useState(false);
   
-  const isAuthorized = currentUser && AUTHORIZED_USERS.includes(currentUser.username.toLowerCase());
+  const { data: session, isLoading: isLoadingUser } = useQuery<{ username: string } | null>({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => apiRequest('/api/auth/session'),
+  });
   
-  if (isLoadingUser) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <RefreshCw className="h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-  
-  if (!isAuthorized) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Access Denied</CardTitle>
-            <CardDescription>
-              You do not have permission to access the Accounting Prep feature. 
-              This page is restricted to authorized personnel only.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" onClick={() => setLocation('/')}>
-              Return to Dashboard
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const isAuthorized = session?.username === 'glennj';
   
   const { data: snapshots = [], isLoading, refetch } = useQuery<ShipmentAccountingSnapshot[]>({
     queryKey: ['/api/accounting-prep', startDate, endDate, customerFilter, adjustedOnly],
@@ -195,6 +141,7 @@ export default function AccountingPrepPage() {
       if (!res.ok) throw new Error('Failed to fetch snapshots');
       return res.json();
     },
+    enabled: isAuthorized === true,
   });
   
   const { data: adjustments = [] } = useQuery<ShipmentAccountingAdjustment[]>({
@@ -205,7 +152,7 @@ export default function AccountingPrepPage() {
       if (!res.ok) throw new Error('Failed to fetch adjustments');
       return res.json();
     },
-    enabled: !!selectedSnapshot?.id,
+    enabled: !!selectedSnapshot?.id && isAuthorized === true,
   });
   
   const updateMutation = useMutation({
@@ -285,6 +232,35 @@ export default function AccountingPrepPage() {
     const ar = parseFloat(editedValues.arAmount || '0');
     return Math.abs(ar - calculatedNetTotal) > 0.01;
   }, [editedValues.arAmount, calculatedNetTotal]);
+
+  if (isLoadingUser) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <RefreshCw className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+  
+  if (!isAuthorized) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Access Denied</CardTitle>
+            <CardDescription>
+              You do not have permission to access the Accounting Prep feature. 
+              This page is restricted to authorized personnel only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => setLocation('/')}>
+              Return to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">

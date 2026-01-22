@@ -337,6 +337,108 @@ router.get('/cloud/:path(*)', async (req, res) => {
   }
 });
 
+// =====================
+// FOLDER MANAGEMENT ROUTES
+// NOTE: These must be defined BEFORE /:id routes to avoid "folders" being treated as a UUID
+// =====================
+
+// Get all folders (with hierarchy)
+router.get('/folders', async (req, res) => {
+  try {
+    const rows = await pool.query(`
+      SELECT 
+        id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles",
+        created_by_id as "createdById", created_by_name as "createdByName",
+        created_at as "createdAt", updated_at as "updatedAt"
+      FROM media_folders
+      ORDER BY name ASC
+    `);
+    res.json(rows || []);
+  } catch (error) {
+    console.error('Error fetching folders:', error);
+    res.status(500).json({ error: 'Failed to fetch folders' });
+  }
+});
+
+// Create a new folder
+router.post('/folders', async (req, res) => {
+  try {
+    const { name, parentId, visibleToRoles } = req.body;
+    const user = (req as any).user;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Folder name is required' });
+    }
+
+    const rows = await pool.query(
+      `INSERT INTO media_folders (name, parent_id, visible_to_roles, created_by_id, created_by_name)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles", created_at as "createdAt"`,
+      [name, parentId || null, visibleToRoles || null, null, user?.username || 'Unknown']
+    );
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+// Update a folder
+router.patch('/folders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, parentId, visibleToRoles } = req.body;
+
+    const rows = await pool.query(
+      `UPDATE media_folders 
+       SET name = COALESCE($1, name), 
+           parent_id = $2, 
+           visible_to_roles = COALESCE($3, visible_to_roles),
+           updated_at = now()
+       WHERE id = $4
+       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles"`,
+      [name, parentId, visibleToRoles, id]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating folder:', error);
+    res.status(500).json({ error: 'Failed to update folder' });
+  }
+});
+
+// Delete a folder (moves contents to root)
+router.delete('/folders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Move all documents in this folder to root (null folder_id)
+    await pool.query(
+      `UPDATE media_library SET folder_id = NULL WHERE folder_id = $1`,
+      [id]
+    );
+
+    // Move all child folders to root (null parent_id)
+    await pool.query(
+      `UPDATE media_folders SET parent_id = NULL WHERE parent_id = $1`,
+      [id]
+    );
+
+    // Delete the folder
+    await pool.query(`DELETE FROM media_folders WHERE id = $1`, [id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    res.status(500).json({ error: 'Failed to delete folder' });
+  }
+});
+
 // Get a single media item
 router.get('/:id', async (req, res) => {
   try {
@@ -498,107 +600,6 @@ router.get('/:id/references', async (req, res) => {
   } catch (error) {
     console.error('Error fetching references:', error);
     res.status(500).json({ error: 'Failed to fetch references' });
-  }
-});
-
-// =====================
-// FOLDER MANAGEMENT ROUTES
-// =====================
-
-// Get all folders (with hierarchy)
-router.get('/folders', async (req, res) => {
-  try {
-    const rows = await pool.query(`
-      SELECT 
-        id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles",
-        created_by_id as "createdById", created_by_name as "createdByName",
-        created_at as "createdAt", updated_at as "updatedAt"
-      FROM media_folders
-      ORDER BY name ASC
-    `);
-    res.json(rows || []);
-  } catch (error) {
-    console.error('Error fetching folders:', error);
-    res.status(500).json({ error: 'Failed to fetch folders' });
-  }
-});
-
-// Create a new folder
-router.post('/folders', async (req, res) => {
-  try {
-    const { name, parentId, visibleToRoles } = req.body;
-    const user = (req as any).user;
-
-    if (!name) {
-      return res.status(400).json({ error: 'Folder name is required' });
-    }
-
-    const rows = await pool.query(
-      `INSERT INTO media_folders (name, parent_id, visible_to_roles, created_by_id, created_by_name)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles", created_at as "createdAt"`,
-      [name, parentId || null, visibleToRoles || null, null, user?.username || 'Unknown']
-    );
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error creating folder:', error);
-    res.status(500).json({ error: 'Failed to create folder' });
-  }
-});
-
-// Update a folder
-router.patch('/folders/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, parentId, visibleToRoles } = req.body;
-
-    const rows = await pool.query(
-      `UPDATE media_folders 
-       SET name = COALESCE($1, name), 
-           parent_id = $2, 
-           visible_to_roles = COALESCE($3, visible_to_roles),
-           updated_at = now()
-       WHERE id = $4
-       RETURNING id, name, parent_id as "parentId", visible_to_roles as "visibleToRoles"`,
-      [name, parentId, visibleToRoles, id]
-    );
-
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: 'Folder not found' });
-    }
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error updating folder:', error);
-    res.status(500).json({ error: 'Failed to update folder' });
-  }
-});
-
-// Delete a folder (moves contents to root)
-router.delete('/folders/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Move all documents in this folder to root (null folder_id)
-    await pool.query(
-      `UPDATE media_library SET folder_id = NULL WHERE folder_id = $1`,
-      [id]
-    );
-
-    // Move all child folders to root (null parent_id)
-    await pool.query(
-      `UPDATE media_folders SET parent_id = NULL WHERE parent_id = $1`,
-      [id]
-    );
-
-    // Delete the folder
-    await pool.query(`DELETE FROM media_folders WHERE id = $1`, [id]);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting folder:', error);
-    res.status(500).json({ error: 'Failed to delete folder' });
   }
 });
 

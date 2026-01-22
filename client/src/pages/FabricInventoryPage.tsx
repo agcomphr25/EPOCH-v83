@@ -216,9 +216,9 @@ export default function FabricInventoryPage() {
     queryKey: ['/api/cutting-table/materials'],
   });
 
-  // Fetch inventory items for Part Number dropdown
+  // Fetch inventory items from Enhanced MRP Inventory Items Management
   const { data: inventoryItems = [], isLoading: isLoadingInventoryItems } = useQuery<{ agPartNumber: string; name: string }[]>({
-    queryKey: ['/api/inventory/items'],
+    queryKey: ['/api/enhanced/inventory/items'],
     select: (data: any[]) => {
       if (!Array.isArray(data)) return [];
       return data

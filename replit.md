@@ -42,7 +42,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking.
 - **Order Audit System**: Comprehensive audit tracking for P1 orders and P2 serialized items, including configurable event categories, field change detection, department transition timing, and a unified Audit Drawer.
-- **Media Library System**: Centralized image storage with camera capture, file upload, and reference-based attachments.
+- **Media Library System**: Centralized image storage with camera capture, file upload, reference-based attachments, and hierarchical folder organization with role-based access control. The Reference Documents page includes a folder sidebar with create/delete capabilities, document upload to specific folders, and move-to-folder functionality. Uses `media_folders` table with `parent_id` for unlimited nesting.
 - **Document Scanner**: Built-in scanning with OpenCV.js for automatic edge detection, perspective correction, image enhancement, and PDF conversion.
 - **Voice Notes System**: Voice-activated note recording for production issues, with automatic order ID extraction, issue categorization, resolution tracking, and analytics dashboard.
 - **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments, with multi-person visibility sharing and dashboard integration.

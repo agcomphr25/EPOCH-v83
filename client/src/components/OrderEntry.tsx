@@ -3275,7 +3275,7 @@ export default function OrderEntry() {
                             onValueChange={(value) =>
                               setFeatures((prev) => ({
                                 ...prev,
-                                handedness: value,
+                                handedness: value === '__NONE__' ? undefined : value,
                               }))
                             }
                           >
@@ -3283,6 +3283,7 @@ export default function OrderEntry() {
                               <SelectValue placeholder="Select handedness..." />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="__NONE__">None</SelectItem>
                               <SelectItem value="right">Right</SelectItem>
                               {!shouldRestrictLeft && (
                                 <SelectItem value="left">Left</SelectItem>
@@ -3340,26 +3341,29 @@ export default function OrderEntry() {
                         key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                         value={features.action_inlet || undefined}
                         onValueChange={async (value) => {
+                          const normalizedValue = value === '__NONE__' ? undefined : value;
                           // Track the selection for AI-powered smart sorting
-                          const selectedOption = smartSortedActionInlet.find(
-                            (opt) => opt.value === value
-                          );
-                          if (selectedOption) {
-                            await trackActionInletSelection(
-                              selectedOption.value,
-                              selectedOption.label
+                          if (normalizedValue) {
+                            const selectedOption = smartSortedActionInlet.find(
+                              (opt) => opt.value === normalizedValue
                             );
-                            // Invalidate the query to refresh the sorted list
-                            queryClient.invalidateQueries({
-                              queryKey: [
-                                '/api/feature-selections/sorted',
-                                'action_inlet',
-                              ],
-                            });
+                            if (selectedOption) {
+                              await trackActionInletSelection(
+                                selectedOption.value,
+                                selectedOption.label
+                              );
+                              // Invalidate the query to refresh the sorted list
+                              queryClient.invalidateQueries({
+                                queryKey: [
+                                  '/api/feature-selections/sorted',
+                                  'action_inlet',
+                                ],
+                              });
+                            }
                           }
                           setFeatures((prev) => ({
                             ...prev,
-                            action_inlet: value,
+                            action_inlet: normalizedValue,
                           }));
                         }}
                         disabled={isFlattop}
@@ -3378,6 +3382,7 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             // Check if selected model is a Tikka model
                             const selectedModel = modelOptions.find(
@@ -3489,17 +3494,18 @@ export default function OrderEntry() {
                       <Select
                         value={features.barrel_inlet || undefined}
                         onValueChange={(value) => {
+                          const normalizedValue = value === '__NONE__' ? undefined : value;
                           // Auto-enable shank checkbox for Bartlein #3B
-                          if (value === 'bartlein_#3b') {
+                          if (normalizedValue === 'bartlein_#3b') {
                             setFeatures((prev) => ({
                               ...prev,
-                              barrel_inlet: value,
+                              barrel_inlet: normalizedValue,
                               add_shank: true,
                             }));
                           } else {
                             setFeatures((prev) => ({
                               ...prev,
-                              barrel_inlet: value,
+                              barrel_inlet: normalizedValue,
                             }));
                           }
                         }}
@@ -3519,6 +3525,7 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             // Check if selected model is a Tikka model
                             const selectedModel = modelOptions.find(
@@ -3676,7 +3683,7 @@ export default function OrderEntry() {
                             onValueChange={(value) =>
                               setFeatures((prev) => ({
                                 ...prev,
-                                length_of_pull: value,
+                                length_of_pull: value === '__NONE__' ? undefined : value,
                               }))
                             }
                             disabled={isRestrictedModel}
@@ -3740,19 +3747,24 @@ export default function OrderEntry() {
                                   );
                                 }
 
-                                return lopFeature.options
-                                  .filter(
-                                    (option) =>
-                                      option.value && option.value.trim() !== ''
-                                  )
-                                  .map((option) => (
-                                    <SelectItem
-                                      key={option.value}
-                                      value={option.value}
-                                    >
-                                      {option.label}
-                                    </SelectItem>
-                                  ));
+                                return (
+                                  <>
+                                    <SelectItem value="__NONE__">None</SelectItem>
+                                    {lopFeature.options
+                                      .filter(
+                                        (option) =>
+                                          option.value && option.value.trim() !== ''
+                                      )
+                                      .map((option) => (
+                                        <SelectItem
+                                          key={option.value}
+                                          value={option.value}
+                                        >
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                  </>
+                                );
                               })()}
                             </SelectContent>
                           </Select>
@@ -3768,7 +3780,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            texture_options: value,
+                            texture_options: value === '__NONE__' ? undefined : value,
                           }))
                         }
                       >
@@ -3776,6 +3788,7 @@ export default function OrderEntry() {
                           <SelectValue placeholder="Select..." />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             const textureFeature = featureDefs.find(
                               (f) =>
@@ -4027,7 +4040,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            action_length: value,
+                            action_length: value === '__NONE__' ? undefined : value,
                           }))
                         }
                         disabled={isFlattop}
@@ -4046,6 +4059,7 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           <SelectItem value="short">Short</SelectItem>
                           {(() => {
                             // Check if selected model contains "Ferrata" or "Armor"
@@ -4124,7 +4138,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            bottom_metal: value,
+                            bottom_metal: value === '__NONE__' ? undefined : value,
                           }))
                         }
                         disabled={isFlattop}
@@ -4143,6 +4157,7 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             // Check if selected model is a Tikka model
                             const selectedModel = modelOptions.find(
@@ -4255,7 +4270,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            qd_accessory: value,
+                            qd_accessory: value === '__NONE__' ? undefined : value,
                           }))
                         }
                       >
@@ -4263,6 +4278,7 @@ export default function OrderEntry() {
                           <SelectValue placeholder="Select..." />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             const qdFeature = featureDefs.find(
                               (f) =>
@@ -4580,7 +4596,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            swivel_studs: value,
+                            swivel_studs: value === '__NONE__' ? undefined : value,
                           }))
                         }
                       >
@@ -4588,6 +4604,7 @@ export default function OrderEntry() {
                           <SelectValue placeholder="Select..." />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             const swivelFeature = featureDefs.find(
                               (f) =>
@@ -4631,7 +4648,7 @@ export default function OrderEntry() {
                         onValueChange={(value) =>
                           setFeatures((prev) => ({
                             ...prev,
-                            paint_options: value,
+                            paint_options: value === '__NONE__' ? undefined : value,
                           }))
                         }
                       >
@@ -4639,6 +4656,7 @@ export default function OrderEntry() {
                           <SelectValue placeholder="Select or search..." />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
                             // Find all paint-related features from different sub-categories
                             const paintFeatures = featureDefs.filter(

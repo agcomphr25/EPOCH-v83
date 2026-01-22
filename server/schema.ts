@@ -9280,6 +9280,30 @@ export const insertOrderScrapCycleSchema = createInsertSchema(orderScrapCycles).
 export type OrderScrapCycle = typeof orderScrapCycles.$inferSelect;
 export type InsertOrderScrapCycle = z.infer<typeof insertOrderScrapCycleSchema>;
 
+// Media Folders - Hierarchical folder structure for organizing documents
+export const mediaFolders = pgTable('media_folders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  parentId: uuid('parent_id'), // Self-referencing for nested folders, null = root level
+  visibleToRoles: text('visible_to_roles').array(), // Role-based access control (null = visible to all)
+  createdById: integer('created_by_id').references(() => employees.id),
+  createdByName: text('created_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  parentIdIdx: index('media_folders_parent_id_idx').on(table.parentId),
+  nameIdx: index('media_folders_name_idx').on(table.name),
+}));
+
+export const insertMediaFolderSchema = createInsertSchema(mediaFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MediaFolder = typeof mediaFolders.$inferSelect;
+export type InsertMediaFolder = z.infer<typeof insertMediaFolderSchema>;
+
 // Media Library - Central storage for captured images/documents
 export const mediaLibrary = pgTable('media_library', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -9287,6 +9311,7 @@ export const mediaLibrary = pgTable('media_library', {
   storagePath: text('storage_path').notNull(), // Path in storage folder
   mimeType: text('mime_type').notNull(), // image/jpeg, image/png, application/pdf
   fileSize: integer('file_size'), // Size in bytes
+  folderId: uuid('folder_id').references(() => mediaFolders.id), // Folder this document belongs to (null = root)
   capturedById: integer('captured_by_id').references(() => employees.id),
   capturedByName: text('captured_by_name'), // Denormalized for display
   captureDate: timestamp('capture_date').defaultNow(),
@@ -9299,6 +9324,7 @@ export const mediaLibrary = pgTable('media_library', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
+  folderIdIdx: index('media_library_folder_id_idx').on(table.folderId),
   capturedByIdIdx: index('media_library_captured_by_id_idx').on(table.capturedById),
   captureDateIdx: index('media_library_capture_date_idx').on(table.captureDate),
   categoryIdx: index('media_library_category_idx').on(table.category),

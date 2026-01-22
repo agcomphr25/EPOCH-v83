@@ -7342,6 +7342,9 @@ export function registerRoutes(app: Express): Server {
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
       
       // Get all Finish Technicians from employees table (regardless of whether they've completed orders)
+      // Defensive helper: pool.query returns rows[] directly, but handle QueryResult too
+      const getRows = (r: any) => Array.isArray(r) ? r : (r?.rows ?? []);
+      
       const finishTechniciansResult = await pool.query(
         `SELECT id, name, employee_code
         FROM employees
@@ -7349,7 +7352,7 @@ export function registerRoutes(app: Express): Server {
           AND is_active = true
         ORDER BY name`
       );
-      const finishTechnicians = finishTechniciansResult.rows;
+      const finishTechnicians = getRows(finishTechniciansResult);
       
       console.log('📊 Found', finishTechnicians.length, 'active Finish QC technicians from employees table');
       
@@ -7370,7 +7373,7 @@ export function registerRoutes(app: Express): Server {
           AND jsonb_array_length(department_history) > 0
         ORDER BY assigned_technician, order_id`
       );
-      const allOrders = allOrdersResult.rows;
+      const allOrders = getRows(allOrdersResult);
       
       console.log('📊 Query returned', allOrders.length, 'orders with department history');
       
@@ -7448,9 +7451,9 @@ export function registerRoutes(app: Express): Server {
         byTechnician: grouped,
         allTechnicians: finishTechnicians.map((t: any) => t.name),
       });
-    } catch (_error) {
-      console.error('📊 Finish QC report _error:', _error);
-      res.status(500).json({ _error: 'Failed to generate report' });
+    } catch (err) {
+      console.error('📊 Finish QC report error:', err);
+      res.status(500).json({ error: 'Failed to generate report' });
     }
   });
 

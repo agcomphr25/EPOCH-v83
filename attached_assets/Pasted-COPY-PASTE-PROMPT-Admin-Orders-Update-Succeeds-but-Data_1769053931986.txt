@@ -1,0 +1,86 @@
+COPY-PASTE PROMPT — Admin Orders Update Succeeds but Data Does Not Persist (Forensic Mode)
+You are performing a ZERO-CHANGE forensic audit.
+Do NOT modify any code. Do NOT propose fixes yet.
+
+Problem:
+In the Admin Orders page, updating Status or Department often shows a SUCCESS toast,
+but the value does not actually persist or re-render correctly.
+
+Goal:
+Determine whether this is a frontend state issue, API issue, backend persistence issue,
+or a mismatch between optimistic UI and real DB writes.
+
+Investigate and REPORT ONLY.
+
+1) Identify the exact frontend mutation(s)
+   - File path(s)
+   - Hook or function used to update:
+     - Status
+     - Department
+   - Whether optimistic updates are used
+   - Where the success toast is triggered
+
+2) Trace the request lifecycle
+   - API endpoint(s) called when:
+     - Status changes
+     - Department changes
+   - HTTP method
+   - Request payload (exact JSON sent)
+
+3) Verify server-side handling
+   - Route handler file + function
+   - What fields are extracted from req.body
+   - What DB update query is executed
+   - Whether conditional guards exist (e.g. ignores same value, workflow locks, etc.)
+
+4) Confirm DB write reality
+   - Log or query the DB immediately after an update attempt
+   - Show before/after row values for:
+     - status
+     - current_department
+   - Confirm whether the update actually occurred
+
+5) Check response integrity
+   - What does the API return on success?
+   - Does it return:
+     - updated row
+     - rowCount
+     - boolean success only
+   - Does it ever return success when rowCount = 0?
+
+6) Compare frontend re-render source of truth
+   - Is the table re-rendering from:
+     - cached query data
+     - refetch()
+     - local state mutation
+   - Is refetch guaranteed after update?
+
+7) Look for silent failure conditions
+   - Try updating to the SAME value
+   - Try updating only status vs only department
+   - Check for race conditions between multiple updates
+
+8) Inspect recent changes
+   - Git diff for last commits touching:
+     - AdminPanelPage.tsx
+     - orders update routes
+     - toast logic
+     - react-query / fetch logic
+
+9) Report findings in THIS FORMAT ONLY:
+
+ROOT CAUSE CANDIDATES:
+- ...
+
+CONFIRMED FAILURES:
+- ...
+
+EVIDENCE:
+- File:
+- Line:
+- Payload:
+- DB result:
+
+NO FIXES.
+NO REFACTORING.
+DATA ONLY.

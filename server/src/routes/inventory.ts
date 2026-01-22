@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import { sql } from 'drizzle-orm';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
@@ -17,6 +18,7 @@ import {
 } from '@shared/schema';
 
 import { storage } from '../../storage';
+import { db } from '../../db';
 
 const router = Router();
 
@@ -86,6 +88,19 @@ router.get('/items', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get inventory items error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory items' });
+  }
+});
+
+// Simple endpoint to get part numbers for dropdown selection
+router.get('/items/part-numbers', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT ag_part_number as "agPartNumber", name FROM inventory_items WHERE is_active = true OR is_active IS NULL ORDER BY ag_part_number`
+    );
+    res.json(result.rows || []);
+  } catch (error) {
+    console.error('Get part numbers error:', error);
+    res.status(500).json({ error: 'Failed to fetch part numbers' });
   }
 });
 

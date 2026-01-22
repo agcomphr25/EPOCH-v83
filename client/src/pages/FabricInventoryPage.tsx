@@ -216,6 +216,23 @@ export default function FabricInventoryPage() {
     queryKey: ['/api/cutting-table/materials'],
   });
 
+  // Fetch inventory items from Inventory Items Management for Part Number dropdown
+  const { data: inventoryItems = [], isLoading: isLoadingInventoryItems } = useQuery<{ agPartNumber: string; name: string }[]>({
+    queryKey: ['/api/inventory/items/part-numbers'],
+    select: (data: any[]) => {
+      if (!Array.isArray(data)) return [];
+      return data.filter(item => item && item.agPartNumber);
+    },
+  });
+
+  // State for custom fabric type
+  const [showCustomFabricInput, setShowCustomFabricInput] = useState(false);
+  const [customFabricType, setCustomFabricType] = useState("");
+  const [previousFabricType, setPreviousFabricType] = useState("");
+  
+  // Predefined fabric types
+  const predefinedFabricTypes = ["Carbon Fiber", "Fiberglass"];
+
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       return apiRequest('/api/cutting-table/fabric-inventory', {
@@ -393,6 +410,9 @@ export default function FabricInventoryPage() {
     setConformanceLinkType("url");
     setUploadedFileName("");
     setAdditionalRolls([]);
+    setShowCustomFabricInput(false);
+    setCustomFabricType("");
+    setPreviousFabricType("");
     setIsAddDialogOpen(true);
   };
 
@@ -431,6 +451,15 @@ export default function FabricInventoryPage() {
     } else {
       setConformanceLinkType("url");
       setUploadedFileName("");
+    }
+    // Check if current fabric type is a predefined one or custom
+    const isPredefined = predefinedFabricTypes.includes(item.fabric || "");
+    if (!isPredefined && item.fabric) {
+      setShowCustomFabricInput(true);
+      setCustomFabricType(item.fabric);
+    } else {
+      setShowCustomFabricInput(false);
+      setCustomFabricType("");
     }
     setIsEditDialogOpen(true);
   };
@@ -788,13 +817,61 @@ export default function FabricInventoryPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="fabric">Fabric Type *</Label>
-          <Input
-            id="fabric"
-            value={form.fabric}
-            onChange={(e) => setForm({ ...form, fabric: e.target.value })}
-            placeholder="e.g., Carbon Fiber, Fiberglass"
-            data-testid="input-fabric"
-          />
+          {showCustomFabricInput ? (
+            <div className="flex gap-2">
+              <Input
+                id="customFabricType"
+                value={customFabricType}
+                onChange={(e) => {
+                  setCustomFabricType(e.target.value);
+                  setForm({ ...form, fabric: e.target.value });
+                }}
+                placeholder="Enter new fabric type"
+                data-testid="input-custom-fabric"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowCustomFabricInput(false);
+                  setCustomFabricType("");
+                  setForm({ ...form, fabric: previousFabricType });
+                }}
+                data-testid="button-cancel-custom-fabric"
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Select
+              value={form.fabric}
+              onValueChange={(value) => {
+                if (value === "__add_new__") {
+                  setPreviousFabricType(form.fabric);
+                  setShowCustomFabricInput(true);
+                  setForm({ ...form, fabric: "" });
+                } else {
+                  setForm({ ...form, fabric: value });
+                }
+              }}
+            >
+              <SelectTrigger data-testid="select-fabric-type">
+                <SelectValue placeholder="Select fabric type" />
+              </SelectTrigger>
+              <SelectContent>
+                {predefinedFabricTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__add_new__" className="text-blue-600 font-medium">
+                  <Plus className="h-4 w-4 inline mr-1" />
+                  Add New Type
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="source">Source/Manufacturer</Label>
@@ -853,13 +930,31 @@ export default function FabricInventoryPage() {
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="fabricPartNumber">Part Number *</Label>
-            <Input
-              id="fabricPartNumber"
+            <Select
               value={form.fabricPartNumber}
-              onChange={(e) => setForm({ ...form, fabricPartNumber: e.target.value })}
-              placeholder="e.g., 011798"
-              data-testid="input-part-number"
-            />
+              onValueChange={(value) => setForm({ ...form, fabricPartNumber: value })}
+            >
+              <SelectTrigger data-testid="select-part-number">
+                <SelectValue placeholder={isLoadingInventoryItems ? "Loading..." : "Select part number"} />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingInventoryItems ? (
+                  <SelectItem value="__loading__" disabled>
+                    Loading part numbers...
+                  </SelectItem>
+                ) : inventoryItems.length === 0 ? (
+                  <SelectItem value="__empty__" disabled>
+                    No part numbers available
+                  </SelectItem>
+                ) : (
+                  inventoryItems.map((item) => (
+                    <SelectItem key={item.agPartNumber} value={item.agPartNumber}>
+                      {item.agPartNumber}{item.name ? ` - ${item.name}` : ''}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="supplierPartNumber">Supplier Part Number</Label>

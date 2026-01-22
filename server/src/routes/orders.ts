@@ -171,10 +171,10 @@ router.get('/stats', async (req: Request, res: Response) => {
 // Get all orders with payment status for All Orders List with payment column
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
-    // Add basic caching headers to reduce server load
+    // Disable caching - this admin endpoint needs fresh data after mutations
     res.set({
-      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
-      ETag: `"orders-${Date.now()}"`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
     });
 
     const search = (req.query.search as string) || '';
@@ -2821,6 +2821,16 @@ router.patch(
             .set(updateData)
             .where(eq(orders.orderId, orderIdParam));
         }
+      }
+
+      // Validate that rows were actually updated
+      const rowCount = (updateResult as any)?.rowCount ?? 0;
+      if (rowCount === 0) {
+        return res.status(409).json({
+          error: 'No rows updated — value unchanged or order not found',
+          fieldName,
+          value: validatedValue,
+        });
       }
 
       // Log the change to audit logs

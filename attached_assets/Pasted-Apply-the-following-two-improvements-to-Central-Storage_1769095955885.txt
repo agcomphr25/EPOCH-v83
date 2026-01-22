@@ -1,0 +1,56 @@
+Apply the following two improvements to Central Storage / Reference Documents.
+
+1) ADD A DRIVER GUARDRAIL (NO BEHAVIOR CHANGE)
+Near the database insert in the reference document upload pipeline, add a clear guardrail comment and minimal assertion that documents the driver contract.
+
+Requirements:
+- Add a comment explicitly stating:
+  “Do NOT depend on result.rows — database drivers (e.g., Neon) may not return pg-style result objects.”
+- Ensure success detection is based on:
+  - absence of a thrown error, OR
+  - rowCount / returned id
+- Do NOT change runtime behavior beyond clarifying and enforcing this contract.
+This is a documentation + safety guardrail only.
+
+2) ADD SUBFOLDERS TO CENTRAL STORAGE
+Introduce first-class folder support so reference documents can be organized and access-controlled.
+
+Folder requirements:
+- Support nested folders (parent → child)
+- Folders are logical (DB-backed), not filesystem-only
+- Documents belong to exactly one folder
+- Root folder exists by default
+
+Database:
+- Add a folders table (e.g., media_folders or storage_folders) with:
+  - id
+  - name
+  - parent_id (nullable, self-referencing)
+  - created_at / updated_at
+- Add folder_id (nullable) to media_library
+
+Access control:
+- Allow folder-level access rules (initially simple):
+  - visible_to_roles (array or join table)
+  - default: visible to all authenticated users
+- Do NOT over-engineer permissions yet
+
+UI:
+- Allow creating folders from the Central Storage UI
+- Allow uploading documents directly into a selected folder
+- Allow moving documents between folders
+- Show folder tree / hierarchy in the UI
+
+Behavior constraints:
+- Do NOT change existing document behavior if no folders are used
+- Existing documents should default to the root folder
+- Uploads without a folder selection go to root
+
+Verification:
+- Upload a document into root
+- Create a subfolder and upload into it
+- Move a document between folders
+- Confirm DB + UI remain consistent
+
+Do not refactor unrelated upload logic.
+Do not change storage backends as part of this task.

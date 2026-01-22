@@ -1,0 +1,130 @@
+Perform a Phase 0 forensic analysis of Purchase Orders (POs) vs Sales Orders in the EPOCH system.
+This is an analysis-only task — DO NOT refactor, modify, or suggest code changes yet.
+
+Objective:
+Determine why PO orders and PO line items do not progress through production the same way Sales Orders do, and identify exactly where the lifecycle diverges.
+
+Deliver the following, in order:
+
+1️⃣ PO Data Inventory (Schema + Counts)
+Identify every database table that stores:
+
+Purchase Orders
+
+Purchase Order line items
+
+Any PO-related production, traveler, or routing data
+
+For each table, report:
+
+Table name
+
+Row count
+
+Primary key
+
+Foreign keys
+
+Fields related to:
+
+production_order_number
+
+traveler_id
+
+status / state
+
+current_department / routing
+
+2️⃣ PO → Production Touchpoints (Code Survey)
+List every file, route, service, or utility where PO orders or PO items:
+
+Are created
+
+Are read or displayed
+
+Might intersect with production logic
+
+For each location include:
+
+File path
+
+Function or route name
+
+Line numbers
+
+One-sentence description of purpose
+
+Explicitly note where production logic exists for Sales Orders but NOT for POs.
+
+3️⃣ Lifecycle Trace (Side-by-Side Comparison)
+Trace one representative Sales Order line item and one PO line item from creation forward.
+
+For each, show:
+
+Creation entry point
+
+Whether a production order number is assigned (where / where not)
+
+Whether a traveler is created
+
+How department progression is handled (or blocked)
+
+Where the lifecycle stops
+
+Present this as a side-by-side timeline comparison.
+
+4️⃣ Progression Blockers & Assumptions
+Identify all explicit or implicit blockers that prevent PO items from entering or progressing through production, including:
+
+Hard-coded checks (order type, source, required fields)
+
+Missing foreign keys or identity fields
+
+Status enums that exclude PO states
+
+UI filters that hide PO-based work
+
+List each blocker with file name and line number where possible.
+
+5️⃣ Identity & Numbering System Audit
+Enumerate all numbering systems involved in order progression:
+
+Sales order numbers
+
+Production order numbers
+
+Traveler numbers
+
+Purchase order numbers
+
+For each, report:
+
+Where it is generated
+
+What entity it attaches to
+
+Whether PO items can legally receive that identity today
+
+6️⃣ UI Surface Area Summary
+Identify:
+
+Where PO orders or PO items are visible in the UI
+
+Where they are explicitly filtered out
+
+Which views or dashboards source their data from production vs sales vs PO tables
+
+Output Requirements:
+
+Analysis only — no fixes yet
+
+Structured bullet points
+
+File names and line numbers where applicable
+
+Clear identification of where PO and Sales Order flows diverge
+
+End with a short summary titled:
+“Where PO Orders Fall Out of the Production Lifecycle”
+
+Do not propose solutions yet.

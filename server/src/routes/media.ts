@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { mediaLibrary, mediaAttachments } from '../../schema';
-import { eq, desc, and, ilike, or, inArray } from 'drizzle-orm';
+import { eq, desc, and, ilike, or, inArray, sql } from 'drizzle-orm';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -240,34 +240,42 @@ router.get('/', async (req, res) => {
   try {
     const { search, category, includeArchived } = req.query;
     
-    let conditions = [];
+    // Use pg pool to avoid drizzle schema issues with newly created table
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
     
     if (!includeArchived || includeArchived === 'false') {
-      conditions.push(eq(mediaLibrary.isArchived, false));
+      conditions.push('(is_archived = false OR is_archived IS NULL)');
     }
     
     if (category && category !== 'all') {
-      conditions.push(eq(mediaLibrary.category, category as string));
+      conditions.push(`category = $${paramIndex++}`);
+      params.push(category);
     }
     
     if (search) {
       const searchTerm = `%${search}%`;
-      conditions.push(
-        or(
-          ilike(mediaLibrary.title, searchTerm),
-          ilike(mediaLibrary.filename, searchTerm),
-          ilike(mediaLibrary.notes, searchTerm),
-          ilike(mediaLibrary.capturedByName, searchTerm)
-        )
-      );
+      conditions.push(`(title ILIKE $${paramIndex} OR filename ILIKE $${paramIndex} OR notes ILIKE $${paramIndex} OR captured_by_name ILIKE $${paramIndex})`);
+      params.push(searchTerm);
+      paramIndex++;
     }
 
-    const media = await db.select()
-      .from(mediaLibrary)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(mediaLibrary.captureDate));
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    res.json(media);
+    const result = await pool.query(`
+      SELECT 
+        id, filename, storage_path as "storagePath", mime_type as "mimeType", 
+        file_size as "fileSize", captured_by_id as "capturedById", 
+        captured_by_name as "capturedByName", capture_date as "captureDate",
+        title, notes, tags, category, thumbnail_path as "thumbnailPath",
+        is_archived as "isArchived", created_at as "createdAt", updated_at as "updatedAt"
+      FROM media_library 
+      ${whereClause}
+      ORDER BY capture_date DESC NULLS LAST
+    `, params);
+
+    res.json(result || []);
   } catch (error) {
     console.error('Error fetching media:', error);
     res.status(500).json({ error: 'Failed to fetch media' });

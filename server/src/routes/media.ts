@@ -196,10 +196,12 @@ router.post('/upload', (req, res, next) => {
 
       console.log('[UPLOAD DEBUG] Inserting into DB:', insertValues);
 
-      const result = await pool.query(
+      // pool.query returns rows directly as an array (not result.rows)
+      // If the query fails, it throws - reaching this point means success
+      const rows = await pool.query(
         `INSERT INTO media_library (filename, storage_path, mime_type, file_size, captured_by_name, title, notes, tags, category)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING *`,
+         RETURNING id, filename, storage_path, mime_type, file_size, title, category, created_at`,
         [
           insertValues.filename,
           insertValues.storagePath,
@@ -213,31 +215,35 @@ router.post('/upload', (req, res, next) => {
         ]
       );
       
-      console.log('[UPLOAD DEBUG] DB insert result:', result.rows);
+      console.log('[UPLOAD DEBUG] DB insert result (rows array):', rows);
 
-      if (!result.rows || result.rows.length === 0) {
-        console.error('[UPLOAD DEBUG] DB insert returned no rows');
-        return res.status(500).json({ 
-          success: false, 
-          fileReceived: true, 
-          fileStored: true, 
-          documentId: null,
-          error: 'Database insert failed' 
-        });
-      }
-
-      const newMedia = result.rows[0];
-      console.log('[UPLOAD DEBUG] SUCCESS - Document ID:', newMedia.id);
+      // rows is the array directly, not rows.rows
+      const newMedia = rows[0];
+      console.log('[UPLOAD DEBUG] SUCCESS - Document ID:', newMedia?.id);
 
       res.json({ 
         success: true, 
         fileReceived: true, 
         fileStored: true, 
-        documentId: newMedia.id,
+        documentId: newMedia?.id || null,
         ...newMedia 
       });
     } catch (error: any) {
       console.error('[UPLOAD DEBUG] Exception:', error);
+      
+      // ATOMICITY: Clean up the orphaned file on disk if DB insert failed
+      if (req.file) {
+        const orphanedFilePath = path.join(process.cwd(), 'uploads', 'media-library', req.file.filename);
+        try {
+          if (fs.existsSync(orphanedFilePath)) {
+            fs.unlinkSync(orphanedFilePath);
+            console.log('[UPLOAD DEBUG] Cleaned up orphaned file:', orphanedFilePath);
+          }
+        } catch (cleanupError) {
+          console.error('[UPLOAD DEBUG] Failed to clean up orphaned file:', cleanupError);
+        }
+      }
+      
       res.status(500).json({ 
         success: false, 
         fileReceived: !!req.file, 

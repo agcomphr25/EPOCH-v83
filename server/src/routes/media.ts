@@ -196,8 +196,13 @@ router.post('/upload', (req, res, next) => {
 
       console.log('[UPLOAD DEBUG] Inserting into DB:', insertValues);
 
-      // pool.query returns rows directly as an array (not result.rows)
-      // If the query fails, it throws - reaching this point means success
+      // DRIVER GUARDRAIL:
+      // Do NOT depend on result.rows - database drivers (e.g., Neon, pg pool wrapper)
+      // may not return pg-style result objects. Our pool.query() returns rows directly
+      // as an array. Success is determined by:
+      // 1. Absence of a thrown error (query execution completed)
+      // 2. RETURNING clause provides the inserted row(s)
+      // If this query fails, it throws an exception - reaching the next line means success.
       const rows = await pool.query(
         `INSERT INTO media_library (filename, storage_path, mime_type, file_size, captured_by_name, title, notes, tags, category)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

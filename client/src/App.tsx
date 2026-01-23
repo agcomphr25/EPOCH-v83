@@ -57,6 +57,7 @@ import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
+import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
@@ -680,6 +681,7 @@ function App() {
                   <Route path="/forms" component={AdminFormsPage} />
                   <Route path="/form/:id" component={FormPage} />
                   <Route path="/reports" component={ReportPage} />
+                  <Route path="/reports/po-production-orders" component={POProductionOrdersReport} />
                   <Route
                     path="/form-renderer/:id"
                     component={FormRendererPage}

@@ -3948,6 +3948,7 @@ router.get('/heat-map', async (req: Request, res: Response) => {
       WHERE o.is_cancelled = false 
         AND ca.is_default = true
         AND o.customer_id ~ '^[0-9]+$'
+        AND (o.order_source = 'SALES' OR o.order_source IS NULL)
     `;
     
     const queryParams: any[] = [];

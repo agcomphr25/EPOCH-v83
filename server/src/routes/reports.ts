@@ -45,7 +45,12 @@ router.get('/monthly-fulfilled', async (req, res) => {
         and(
           eq(allOrders.status, 'FULFILLED'),
           gte(allOrders.updatedAt, startDate),
-          lt(allOrders.updatedAt, endDate)
+          lt(allOrders.updatedAt, endDate),
+          // Exclude Production-Only Orders (PO_RELEASE) from financial reports
+          or(
+            eq(allOrders.orderSource, 'SALES'),
+            sql`${allOrders.orderSource} IS NULL`
+          )
         )
       )
       .orderBy(allOrders.updatedAt);
@@ -582,7 +587,12 @@ router.get('/analytics/metrics', async (req, res) => {
         and(
           eq(allOrders.status, 'FULFILLED'),
           gte(allOrders.updatedAt, start),
-          lt(allOrders.updatedAt, endInclusive)
+          lt(allOrders.updatedAt, endInclusive),
+          // Exclude Production-Only Orders (PO_RELEASE) from financial reports
+          or(
+            eq(allOrders.orderSource, 'SALES'),
+            sql`${allOrders.orderSource} IS NULL`
+          )
         )
       )
       .orderBy(allOrders.updatedAt);

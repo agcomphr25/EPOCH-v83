@@ -3768,6 +3768,8 @@ export class DatabaseStorage implements IStorage {
       sql`${allOrders.orderId} NOT LIKE 'PO%'`,
       sql`${allOrders.orderId} != 'AG1'`,
       sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+      // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+      sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`,
     ];
 
     // Add search filter if provided
@@ -3957,7 +3959,9 @@ export class DatabaseStorage implements IStorage {
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
           sql`${allOrders.orderId} NOT LIKE 'PO%'`,
           sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+          // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+          sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`
         )
       );
 
@@ -4014,7 +4018,9 @@ export class DatabaseStorage implements IStorage {
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
           sql`${allOrders.orderId} NOT LIKE 'PO%'`,
           sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+          // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+          sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`
         )
       )
       .orderBy(desc(allOrders.updatedAt))

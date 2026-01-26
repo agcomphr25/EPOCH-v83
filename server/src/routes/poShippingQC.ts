@@ -671,7 +671,73 @@ router.get('/oem-shipments', async (req, res) => {
       offset,
     });
 
-    // Build WHERE conditions
+    // Check if shipment_records table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'shipment_records'
+      ) as table_exists
+    `);
+    const tableExists = (tableCheck.rows || tableCheck)[0]?.table_exists || false;
+
+    if (!tableExists) {
+      // Fallback: Query shipped items from production_orders instead
+      console.log('📦 shipment_records table not found, using fallback query from production_orders');
+      
+      const { storage } = await import('../../storage');
+      
+      // Get shipped production orders grouped by PO
+      const shippedOrders = await pool.query(`
+        SELECT 
+          po.po_number,
+          po.customer_id,
+          po.customer_name,
+          po.shipped_at,
+          json_agg(
+            json_build_object(
+              'orderId', po.order_id,
+              'poItemId', po.po_item_id,
+              'itemName', po.item_name,
+              'quantity', 1
+            ) ORDER BY po.order_id
+          ) as items,
+          COUNT(*) as item_count
+        FROM production_orders po
+        WHERE po.production_status = 'SHIPPED'
+        ${customerName ? `AND po.customer_name ILIKE '%' || $1 || '%'` : ''}
+        GROUP BY po.po_number, po.customer_id, po.customer_name, po.shipped_at
+        ORDER BY po.shipped_at DESC NULLS LAST
+        LIMIT $${customerName ? '2' : '1'} OFFSET $${customerName ? '3' : '2'}
+      `, customerName 
+        ? [customerName, parseInt(limit as string, 10), parseInt(offset as string, 10)]
+        : [parseInt(limit as string, 10), parseInt(offset as string, 10)]
+      );
+      
+      const shipments = (shippedOrders.rows || shippedOrders).map((row: any) => ({
+        id: `fallback-${row.po_number}`,
+        customer_id: row.customer_id,
+        customer_name: row.customer_name,
+        master_tracking_number: 'N/A (Legacy)',
+        created_at: row.shipped_at,
+        items: row.items,
+        item_count: parseInt(row.item_count),
+        po_count: 1,
+        has_shipping_label: false,
+      }));
+      
+      return res.json({
+        shipments,
+        pagination: {
+          total: shipments.length,
+          limit: parseInt(limit as string, 10),
+          offset: parseInt(offset as string, 10),
+          hasMore: false,
+        },
+        fallbackMode: true,
+      });
+    }
+
+    // Build WHERE conditions for shipment_records table
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
     let paramIndex = 1;
@@ -898,20 +964,41 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     console.log(`📦 ${isFulfilled ? 'Marking' : 'Unmarking'} ${orderId} as fulfilled...`);
 
     const { storage } = await import('../../storage');
+    
+    // Check if this is a PO item (non-stock/metal accessory) or a production order
+    if (orderId.startsWith('PO-') && orderId.includes('-')) {
+      // This is a PO item - extract poItemId from orderId (format: PO-{poItemId}-{unitNumber})
+      const parts = orderId.split('-');
+      if (parts.length >= 3) {
+        const poItemId = parseInt(parts[1]);
+        if (!isNaN(poItemId)) {
+          // Update PO item stock status
+          await storage.updatePurchaseOrderItem(poItemId, {
+            stockStatus: isFulfilled ? 'SHIPPED' : 'IN_STOCK',
+          });
+          console.log(`✅ PO Item ${poItemId} marked as ${isFulfilled ? 'SHIPPED' : 'IN_STOCK'}`);
+          
+          return res.json({
+            success: true,
+            orderId,
+            isFulfilled,
+            shippedAt: isFulfilled ? new Date().toISOString() : null,
+          });
+        }
+      }
+    }
+    
+    // Try to find as production order
     const order = await storage.getProductionOrderByOrderId(orderId);
 
     if (!order) {
       return res.status(404).json({ _error: 'Order not found' });
     }
 
-    // Get username from session
-    const username = (req as any).user?.username || 'system';
-
-    // Update fulfillment status
+    // Update production status to SHIPPED or back to previous status
     await storage.updateProductionOrder(order.id, {
-      isFulfilled,
-      fulfilledDate: isFulfilled ? new Date().toISOString() : null,
-      fulfilledBy: isFulfilled ? username : null,
+      productionStatus: isFulfilled ? 'SHIPPED' : 'PENDING',
+      shippedAt: isFulfilled ? new Date() : null,
     });
 
     console.log(`✅ ${orderId} fulfillment status updated: ${isFulfilled}`);
@@ -920,8 +1007,7 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
       success: true,
       orderId,
       isFulfilled,
-      fulfilledDate: isFulfilled ? new Date().toISOString() : null,
-      fulfilledBy: isFulfilled ? username : null,
+      shippedAt: isFulfilled ? new Date().toISOString() : null,
     });
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);

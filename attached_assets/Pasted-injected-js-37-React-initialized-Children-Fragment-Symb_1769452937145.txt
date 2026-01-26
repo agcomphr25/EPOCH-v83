@@ -1,0 +1,2996 @@
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+agcomphr-01-26:1 Unrecognized feature: 'pointer-lock'.
+injected.js:37 Redirecting tasham to /admin-dashboard
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+[Violation] Forced reflow while executing JavaScript took <N>ms
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ injected.js:214
+queryFn @ WeeklyShippingWidget.tsx:20
+fetchFn @ @tanstack_react-query.js?v=d7b3056c:879
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+fetch @ @tanstack_react-query.js?v=d7b3056c:918
+executeFetch_fn @ @tanstack_react-query.js?v=d7b3056c:2280
+onSubscribe @ @tanstack_react-query.js?v=d7b3056c:1976
+subscribe @ @tanstack_react-query.js?v=d7b3056c:24
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=d7b3056c:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ injected.js:214
+queryFn @ WeeklyShippingWidget.tsx:20
+fetchFn @ @tanstack_react-query.js?v=d7b3056c:879
+run @ @tanstack_react-query.js?v=d7b3056c:507
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:528
+Promise.catch
+run @ @tanstack_react-query.js?v=d7b3056c:511
+start @ @tanstack_react-query.js?v=d7b3056c:550
+fetch @ @tanstack_react-query.js?v=d7b3056c:918
+executeFetch_fn @ @tanstack_react-query.js?v=d7b3056c:2280
+onSubscribe @ @tanstack_react-query.js?v=d7b3056c:1976
+subscribe @ @tanstack_react-query.js?v=d7b3056c:24
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=d7b3056c:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 51ms
+injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 ✅ API Response from /api/po-orders/process-shipment: 500
+injected.js:37 API error raw body: {"_error":"Failed to process shipment","details":"Order PO-P18835-107-2 has already been shipped"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"Order PO-P18835-107-2 has already been shipped"}
+    at apiRequest (queryClient.ts:80:13)
+    at async Object.mutationFn (ShipmentDialog.tsx:108:14)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+injected.js:37 [vite] server connection lost. Polling for restart...
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ed1e693c96a75807.js:2 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+e @ ed1e693c96a75807.js:2
+e @ ed1e693c96a75807.js:2
+uX @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+e @ ed1e693c96a75807.js:2
+e @ ed1e693c96a75807.js:2
+uX @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+e @ ed1e693c96a75807.js:2
+e @ ed1e693c96a75807.js:2
+uX @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+VM9 injected.js:37 [vite] connecting...
+App.tsx:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:24  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/OfflineIndicator.tsx net::ERR_NAME_NOT_RESOLVED
+App.tsx:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:25  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/MessageNotificationPopup.tsx net::ERR_NAME_NOT_RESOLVED
+App.tsx:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:26  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/not-found.tsx net::ERR_NAME_NOT_RESOLVED
+App.tsx:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=Ga0azJ22t6vqT9_JJS8Nn:27  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/AccessDenied.tsx net::ERR_NAME_NOT_RESOLVED
+VM9 injected.js:37 [vite] connected.
+VM9 injected.js:37 [vite] server connection lost. Polling for restart...
+VM9 injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ VM9 injected.js:214
+ping @ VM15 client:736
+waitForSuccessfulPing @ VM15 client:749
+(anonymous) @ VM15 client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+VM15 client:562  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ VM15 client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+VM228 injected.js:37 [vite] connecting...
+VM228 injected.js:37 [vite] connected.
+VM228 injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+VM228 injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+VM228 injected.js:37 App component is rendering...
+VM228 injected.js:37 Environment: development
+VM228 injected.js:37 Base URL: /
+VM228 injected.js:37 App component is rendering...
+VM228 injected.js:37 Environment: development
+VM228 injected.js:37 Base URL: /
+VM228 injected.js:37 Redirecting tasham to /admin-dashboard
+VM228 injected.js:37 Redirecting tasham to /admin-dashboard
+VM228 injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+queryFn @ VM641 WeeklyShippingWidget.tsx:34
+fetchFn @ VM241 @tanstack_react-query.js:879
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+fetch @ VM241 @tanstack_react-query.js:918
+executeFetch_fn @ VM241 @tanstack_react-query.js:2280
+onSubscribe @ VM241 @tanstack_react-query.js:1976
+subscribe @ VM241 @tanstack_react-query.js:24
+(anonymous) @ VM241 @tanstack_react-query.js:3147
+subscribeToStore @ VM245 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM245 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM245 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM245 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM245 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM245 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM245 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM245 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM245 chunk-NFC5BX5N.js:19416
+commitRoot @ VM245 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM245 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM245 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM245 chunk-NFC5BX5N.js:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+VM228 injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+queryFn @ VM641 WeeklyShippingWidget.tsx:34
+fetchFn @ VM241 @tanstack_react-query.js:879
+run @ VM241 @tanstack_react-query.js:507
+(anonymous) @ VM241 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM241 @tanstack_react-query.js:528
+Promise.catch
+run @ VM241 @tanstack_react-query.js:511
+start @ VM241 @tanstack_react-query.js:550
+fetch @ VM241 @tanstack_react-query.js:918
+executeFetch_fn @ VM241 @tanstack_react-query.js:2280
+onSubscribe @ VM241 @tanstack_react-query.js:1976
+subscribe @ VM241 @tanstack_react-query.js:24
+(anonymous) @ VM241 @tanstack_react-query.js:3147
+subscribeToStore @ VM245 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM245 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM245 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM245 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM245 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM245 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM245 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM245 chunk-NFC5BX5N.js:19447
+commitRootImpl @ VM245 chunk-NFC5BX5N.js:19416
+commitRoot @ VM245 chunk-NFC5BX5N.js:19277
+performSyncWorkOnRoot @ VM245 chunk-NFC5BX5N.js:18895
+flushSyncCallbacks @ VM245 chunk-NFC5BX5N.js:9119
+(anonymous) @ VM245 chunk-NFC5BX5N.js:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+queryFn @ 96386dd4-936c-41a0-b…ippingWidget.tsx:34
+fetchFn @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:879
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:528
+Promise.catch
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:511
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+fetch @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:918
+executeFetch_fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2280
+onSubscribe @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1976
+subscribe @ 96386dd4-936c-41a0-b…ry.js?v=d7b3056c:24
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3147
+subscribeToStore @ 96386dd4-936c-41a0-b…js?v=d7b3056c:11984
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+(anonymous) @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18627
+VM228 injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+VM228 injected.js:37 🌐 API Request to /api/po-orders/toggle-fulfilled (timeout: 120000ms, deployment: false)
+VM228 injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+apiRequest @ VM254 queryClient.ts:63
+onClick @ VM412 QCShippingQueuePage.tsx:2237
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/toggle-fulfilled 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+onClick @ 96386dd4-936c-41a0-b…gQueuePage.tsx:2237
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+VM228 injected.js:37 ✅ API Response from /api/po-orders/toggle-fulfilled: 500
+VM228 injected.js:37 API error raw body: {"_error":"Failed to update fulfilled status","details":"No values to set"}
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:68
+await in apiRequest
+onClick @ VM412 QCShippingQueuePage.tsx:2237
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 💥 API Request failed for /api/po-orders/toggle-fulfilled: Error: {"_error":"Failed to update fulfilled status","details":"No values to set"}
+    at apiRequest (VM254 queryClient.ts:80:13)
+    at async onClick (VM412 QCShippingQueuePage.tsx:2237:39)
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:92
+await in apiRequest
+onClick @ VM412 QCShippingQueuePage.tsx:2237
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+VM228 injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+apiRequest @ VM254 queryClient.ts:63
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+VM228 injected.js:37 ✅ API Response from /api/po-orders/process-shipment: 500
+VM228 injected.js:37 API error raw body: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:68
+await in apiRequest
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+    at apiRequest (VM254 queryClient.ts:80:13)
+    at async Object.mutationFn (VM697 ShipmentDialog.tsx:108:14)
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:92
+await in apiRequest
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+VM228 injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+apiRequest @ VM254 queryClient.ts:63
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+VM228 injected.js:37 ✅ API Response from /api/po-orders/process-shipment: 500
+VM228 injected.js:37 API error raw body: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:68
+await in apiRequest
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+    at apiRequest (VM254 queryClient.ts:80:13)
+    at async Object.mutationFn (VM697 ShipmentDialog.tsx:108:14)
+(anonymous) @ VM228 injected.js:37
+console.error @ VM236 main.tsx:25
+(anonymous) @ VM228 injected.js:37
+apiRequest @ VM254 queryClient.ts:92
+await in apiRequest
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+VM228 injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+VM228 injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ VM228 injected.js:214
+apiRequest @ VM254 queryClient.ts:63
+mutationFn @ VM697 ShipmentDialog.tsx:108
+fn @ VM241 @tanstack_react-query.js:1234
+run @ VM241 @tanstack_react-query.js:507
+start @ VM241 @tanstack_react-query.js:550
+execute @ VM241 @tanstack_react-query.js:1270
+await in execute
+mutate @ VM241 @tanstack_react-query.js:2692
+(anonymous) @ VM241 @tanstack_react-query.js:3415
+handleSubmit @ VM697 ShipmentDialog.tsx:219
+callCallback2 @ VM245 chunk-NFC5BX5N.js:3674
+invokeGuardedCallbackDev @ VM245 chunk-NFC5BX5N.js:3699
+invokeGuardedCallback @ VM245 chunk-NFC5BX5N.js:3733
+invokeGuardedCallbackAndCatchFirstError @ VM245 chunk-NFC5BX5N.js:3736
+executeDispatch @ VM245 chunk-NFC5BX5N.js:7014
+processDispatchQueueItemsInOrder @ VM245 chunk-NFC5BX5N.js:7034
+processDispatchQueue @ VM245 chunk-NFC5BX5N.js:7043
+dispatchEventsForPlugins @ VM245 chunk-NFC5BX5N.js:7051
+(anonymous) @ VM245 chunk-NFC5BX5N.js:7174
+batchedUpdates$1 @ VM245 chunk-NFC5BX5N.js:18913
+batchedUpdates @ VM245 chunk-NFC5BX5N.js:3579
+dispatchEventForPluginEventSystem @ VM245 chunk-NFC5BX5N.js:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ VM245 chunk-NFC5BX5N.js:5478
+dispatchEvent @ VM245 chunk-NFC5BX5N.js:5472
+dispatchDiscreteEvent @ VM245 chunk-NFC5BX5N.js:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ ✅ API Response from /api/po-orders/process-shipment: 500
+ API error raw body: {"_error":"Failed to process shipment","details":"PO item 414 has already been shipped"}
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+console.error @ 96386dd4-936c-41a0-b…f2T2Ndc2T6wylCwS:25
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:68
+await in apiRequest
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"PO item 414 has already been shipped"}
+    at apiRequest (96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/lib/queryClient.ts:80:13)
+    at async Object.mutationFn (96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ShipmentDialog.tsx:108:14)
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+console.error @ 96386dd4-936c-41a0-b…f2T2Ndc2T6wylCwS:25
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:92
+await in apiRequest
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:63
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ ✅ API Response from /api/po-orders/process-shipment: 500
+ API error raw body: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+console.error @ 96386dd4-936c-41a0-b…f2T2Ndc2T6wylCwS:25
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:68
+await in apiRequest
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"PO item 413 has already been shipped"}
+    at apiRequest (96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/lib/queryClient.ts:80:13)
+    at async Object.mutationFn (96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ShipmentDialog.tsx:108:14)
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+console.error @ 96386dd4-936c-41a0-b…f2T2Ndc2T6wylCwS:25
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+apiRequest @ 96386dd4-936c-41a0-b…b/queryClient.ts:92
+await in apiRequest
+mutationFn @ 96386dd4-936c-41a0-b…pmentDialog.tsx:108
+fn @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1234
+run @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:507
+start @ 96386dd4-936c-41a0-b…y.js?v=d7b3056c:550
+execute @ 96386dd4-936c-41a0-b….js?v=d7b3056c:1270
+await in execute
+mutate @ 96386dd4-936c-41a0-b….js?v=d7b3056c:2692
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3415
+handleSubmit @ 96386dd4-936c-41a0-b…pmentDialog.tsx:219
+callCallback2 @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3699
+invokeGuardedCallback @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3736
+executeDispatch @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7034
+processDispatchQueue @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7043
+dispatchEventsForPlugins @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7051
+(anonymous) @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7174
+batchedUpdates$1 @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18913
+batchedUpdates @ 96386dd4-936c-41a0-b….js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ 96386dd4-936c-41a0-b….js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5478
+dispatchEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5472
+dispatchDiscreteEvent @ 96386dd4-936c-41a0-b….js?v=d7b3056c:5449
+ [vite] server connection lost. Polling for restart...
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/ 502 (Bad Gateway)
+apply @ 96386dd4-936c-41a0-b…ols/injected.js:214
+ping @ 96386dd4-936c-41a0-b…ev/@vite/client:736
+waitForSuccessfulPing @ 96386dd4-936c-41a0-b…ev/@vite/client:749
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:561
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping 502 (Bad Gateway)
+(anonymous) @ 96386dd4-936c-41a0-b…ev/@vite/client:562
+ [vite] connecting...
+ [vite] connected.
+ React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+ React hooks: {useState: ƒ, useEffect: ƒ}
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/po-orders/process-shipment: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18324
+invokeEffectsInDev @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19503
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ShipmentDialog.tsx:1372 [Violation] 'setTimeout' handler took 26964ms
+chrome-extension://fheoggkfdfchfphceeifdbepaooicaho/scripts/iframe_form_detection.js:23 [Violation] 'click' handler took 152ms
+ [vite] hot updated: /src/components/ShipmentDialog.tsx
+ [vite] hot updated: /src/index.css?v=vk7k-3LXtH4VBAfZxRmgj
+ [vite] hot updated: /src/components/ShipmentDialog.tsx
+ [vite] hot updated: /src/index.css?v=vk7k-3LXtH4VBAfZxRmgj
+ 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/po-orders/process-shipment: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18324
+invokeEffectsInDev @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19503
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384
+ [vite] hot updated: /src/components/ShipmentDialog.tsx
+ [vite] hot updated: /src/index.css?v=vk7k-3LXtH4VBAfZxRmgj
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ShipmentDialog.tsx?t=1769451365936:1374 [Violation] 'setTimeout' handler took 17199ms
+ [vite] server connection lost. Polling for restart...
+ [vite] connecting...
+ [vite] connected.
+ React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+ React hooks: {useState: ƒ, useEffect: ƒ}
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 64ms
+ 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/po-orders/process-shipment: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18119
+commitPassiveMountEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19490
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ 96386dd4-936c-41a0-b…ools/injected.js:37
+(anonymous) @ 96386dd4-936c-41a0-b…Q.js?v=d7b3056c:342
+commitHookEffectListMount @ 96386dd4-936c-41a0-b…js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18324
+invokeEffectsInDev @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19503
+flushPassiveEffects @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19447
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19416
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+performSyncWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18895
+flushSyncCallbacks @ 96386dd4-936c-41a0-b….js?v=d7b3056c:9119
+commitRootImpl @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19432
+commitRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:19277
+finishConcurrentRender @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18805
+performConcurrentWorkOnRoot @ 96386dd4-936c-41a0-b…js?v=d7b3056c:18718
+workLoop @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:197
+flushWork @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:176
+performWorkUntilDeadline @ 96386dd4-936c-41a0-b…N.js?v=d7b3056c:384

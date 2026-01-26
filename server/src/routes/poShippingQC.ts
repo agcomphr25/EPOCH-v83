@@ -1349,6 +1349,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       console.log(`🧪 TEST MODE: Skipping packing slip generation`);
     } else {
     for (const [poNumber, items] of poGroups.entries()) {
+      try {
       const pdfDoc = await PDFDocument.create();
       let currentPage = pdfDoc.addPage([612, 792]); // US Letter
       const { width, height } = currentPage.getSize();
@@ -1362,10 +1363,20 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       const customerName = items[0].po.customerName || 'Unknown Customer';
       
       // Get customer address
-      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      let customerAddress = null;
+      try {
+        customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      } catch (e) {
+        console.log(`⚠️ Could not get customer address: ${(e as Error).message}`);
+      }
       
-      // Generate invoice number
-      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+      // Generate invoice number (fallback to timestamp if table missing)
+      let invoiceNumber = `INV-${Date.now()}`;
+      try {
+        invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+      } catch (e) {
+        console.log(`⚠️ Could not get invoice number, using fallback: ${(e as Error).message}`);
+      }
 
       let currentY = height - margin;
 
@@ -1581,6 +1592,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         filename: `Packing-Slip-PO-${poNumber}.pdf`,
         data: Buffer.from(pdfBytes).toString('base64'),
       });
+      } catch (packingSlipError: any) {
+        console.error(`⚠️ Failed to generate packing slip for PO ${poNumber}: ${packingSlipError.message}`);
+        // Continue without packing slip - shipment already succeeded
+      }
     }
     } // end else (production mode packing slip generation)
 

@@ -8514,7 +8514,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(customerAddresses)
         .where(eq(customerAddresses.customerId, numericId))
-        .orderBy(customerAddresses.isDefault, customerAddresses.id);
+        .orderBy(desc(customerAddresses.isDefault), customerAddresses.id);
       return result || [];
     } catch (error) {
       console.error('Error fetching customer addresses:', error);

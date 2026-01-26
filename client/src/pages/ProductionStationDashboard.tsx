@@ -135,6 +135,43 @@ function playAlertSound() {
   }
 }
 
+let alertIntervalId: NodeJS.Timeout | null = null;
+
+function startLoopingAlert(stepName: string) {
+  if (alertIntervalId) return;
+  
+  playAlertSound();
+  
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Step Time Complete!', {
+      body: `${stepName} - Press Next Step to continue`,
+      icon: '/favicon.ico',
+      requireInteraction: true,
+    });
+  } else if ('Notification' in window && Notification.permission !== 'denied') {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        new Notification('Step Time Complete!', {
+          body: `${stepName} - Press Next Step to continue`,
+          icon: '/favicon.ico',
+          requireInteraction: true,
+        });
+      }
+    });
+  }
+  
+  alertIntervalId = setInterval(() => {
+    playAlertSound();
+  }, 4000);
+}
+
+function stopLoopingAlert() {
+  if (alertIntervalId) {
+    clearInterval(alertIntervalId);
+    alertIntervalId = null;
+  }
+}
+
 function TimerCard({ run }: { run: RunWithDetails }) {
   const { toast } = useToast();
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -209,6 +246,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/resume`, { method: 'POST' });
     },
     onSuccess: () => {
+      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       toast({ title: 'Timer resumed' });
     },
@@ -222,6 +260,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/advance`, { method: 'POST' });
     },
     onSuccess: () => {
+      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       toast({ title: 'Advanced to next step' });
       setHasTriggeredTimeout(false);
@@ -237,7 +276,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
-      playAlertSound();
+      startLoopingAlert(currentStep?.stepName || `Step ${run.currentStepIndex + 1}`);
       toast({ title: 'Step time completed!', description: 'Press Next Step to continue' });
     },
     onError: (error: any) => {
@@ -250,6 +289,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/stop`, { method: 'POST' });
     },
     onSuccess: () => {
+      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       toast({ title: 'Timer stopped' });
     },
@@ -291,51 +331,51 @@ function TimerCard({ run }: { run: RunWithDetails }) {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Program</p>
-            <CardTitle className="text-2xl font-bold">{run.program?.name || 'Unknown Program'}</CardTitle>
+            <CardTitle className="text-3xl font-bold">{run.program?.name || 'Unknown Program'}</CardTitle>
             {run.instanceName && (
-              <p className="text-lg text-muted-foreground mt-1">{run.instanceName}</p>
+              <p className="text-xl text-muted-foreground mt-1">{run.instanceName}</p>
             )}
           </div>
-          <Badge className={`text-lg px-3 py-1 ${getStatusColor(run.status)}`}>
+          <Badge className={`text-lg px-4 py-2 ${getStatusColor(run.status)}`}>
             {getStatusLabel(run.status)}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-base">
           {run.serialNumber && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Serial #:</span>
+              <span className="text-sm text-muted-foreground">Serial #:</span>
               <span className="font-mono font-semibold">{run.serialNumber}</span>
             </div>
           )}
           {run.mandrelNumber && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Mandrel:</span>
+              <span className="text-sm text-muted-foreground">Mandrel:</span>
               <span className="font-semibold">{run.mandrelNumber}</span>
+            </div>
+          )}
+          {run.inventoryItemId && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Item ID:</span>
+              <span className="font-semibold">{run.inventoryItemId}</span>
             </div>
           )}
           {run.ovenNumber && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Oven:</span>
+              <span className="text-sm text-muted-foreground">Oven:</span>
               <span className="font-semibold">{run.ovenNumber}</span>
               {run.ovenSlot && (
                 <>
-                  <span className="text-muted-foreground ml-2">Slot:</span>
+                  <span className="text-sm text-muted-foreground ml-2">Slot:</span>
                   <span className="font-semibold">{run.ovenSlot}</span>
                 </>
               )}
             </div>
           )}
-          {run.inventoryItemId && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Item ID:</span>
-              <span className="font-semibold">{run.inventoryItemId}</span>
-            </div>
-          )}
           {run.sku && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">SKU:</span>
+              <span className="text-sm text-muted-foreground">SKU:</span>
               <span className="font-mono font-semibold">{run.sku}</span>
             </div>
           )}
@@ -343,21 +383,21 @@ function TimerCard({ run }: { run: RunWithDetails }) {
 
         <div className="bg-muted rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Current Step:</span>
-            <span className="text-xl font-semibold">
+            <span className="text-sm text-muted-foreground">Current Step:</span>
+            <span className="text-2xl font-semibold">
               {currentStep?.stepName || `Step ${run.currentStepIndex + 1}`}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Progress:</span>
-            <span className="text-lg">
+            <span className="text-sm text-muted-foreground">Progress:</span>
+            <span className="text-xl font-medium">
               Step {run.currentStepIndex + 1} of {totalSteps}
             </span>
           </div>
           {(run.status === 'running' || run.status === 'paused') && currentStep && (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Step Time Remaining:</span>
-              <span className={`text-2xl font-mono font-bold ${run.status === 'paused' ? 'text-yellow-600' : 'text-blue-600'}`}>
+              <span className="text-sm text-muted-foreground">Step Time Remaining:</span>
+              <span className={`text-3xl font-mono font-bold ${run.status === 'paused' ? 'text-yellow-600' : 'text-blue-600'}`}>
                 {formatTime(stepTimeRemaining)}
               </span>
             </div>
@@ -369,7 +409,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
             <Clock className="w-5 h-5 text-muted-foreground" />
             <div>
               <p className="text-sm text-muted-foreground">Started</p>
-              <p className="text-lg font-semibold">
+              <p className="text-xl font-semibold">
                 {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
               </p>
             </div>
@@ -378,7 +418,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
             <Timer className="w-5 h-5 text-muted-foreground" />
             <div>
               <p className="text-sm text-muted-foreground">Overall Time</p>
-              <p className="text-xl font-mono font-semibold">
+              <p className="text-2xl font-mono font-semibold">
                 {formatTime(Math.min(elapsedTime, totalProgramDuration))}
               </p>
             </div>
@@ -388,7 +428,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
               <Clock className="w-5 h-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Est. Completion</p>
-                <p className="text-lg font-semibold">
+                <p className="text-xl font-semibold">
                   {estimatedCompletion.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>

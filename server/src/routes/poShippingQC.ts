@@ -1022,18 +1022,21 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           }
           
           const customerId = parseInt(po.customerId);
-          if (isNaN(customerId)) {
-            throw new Error(`Invalid customer ID: ${po.customerId}`);
+          let customer: any = null;
+          if (!isNaN(customerId)) {
+            try {
+              customer = await storage.getCustomer(customerId);
+            } catch (dbError: any) {
+              console.warn(`Database error fetching customer ${customerId}:`, dbError.message);
+            }
           }
-          let customer;
-          try {
-            customer = await storage.getCustomer(customerId);
-          } catch (dbError: any) {
-            console.error(`Database error fetching customer ${customerId}:`, dbError.message);
-            throw new Error(`Failed to fetch customer ${po.customerId}: ${dbError.message}`);
-          }
+          // Fallback to PO customer info if customer not found
           if (!customer) {
-            throw new Error(`Customer ${po.customerId} not found`);
+            console.warn(`Customer ${po.customerId} not found, using PO customer data`);
+            customer = {
+              id: customerId || 0,
+              name: po.customerName || 'Unknown Customer',
+            };
           }
           
           // Create a synthetic order object for non-stock items
@@ -1078,18 +1081,21 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
           // Get customer details
           const customerId = parseInt(order.customerId);
-          if (isNaN(customerId)) {
-            throw new Error(`Invalid customer ID: ${order.customerId}`);
+          let customer: any = null;
+          if (!isNaN(customerId)) {
+            try {
+              customer = await storage.getCustomer(customerId);
+            } catch (dbError: any) {
+              console.warn(`Database error fetching customer ${customerId}:`, dbError.message);
+            }
           }
-          let customer;
-          try {
-            customer = await storage.getCustomer(customerId);
-          } catch (dbError: any) {
-            console.error(`Database error fetching customer ${customerId}:`, dbError.message);
-            throw new Error(`Failed to fetch customer ${order.customerId}: ${dbError.message}`);
-          }
+          // Fallback to PO customer info if customer not found
           if (!customer) {
-            throw new Error(`Customer ${order.customerId} not found`);
+            console.warn(`Customer ${order.customerId} not found, using PO customer data`);
+            customer = {
+              id: customerId || 0,
+              name: po.customerName || 'Unknown Customer',
+            };
           }
 
           return { order: { ...order, isNonStock: false }, poItem, po, customer, quantity: item.quantity };

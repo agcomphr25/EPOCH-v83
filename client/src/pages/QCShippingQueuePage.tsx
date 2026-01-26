@@ -1522,6 +1522,16 @@ export default function QCShippingQueuePage() {
                                 const poReadyCount = po.items.filter((item: any) => item.isReadyToShip).length;
                                 const completionPercentage = Math.round((po.completedUnits / po.totalUnits) * 100);
                                 
+                                // Separate metal accessories (stock model "None" or empty) from regular items
+                                const metalAccessories = po.items.filter((item: any) => 
+                                  !item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === ''
+                                );
+                                const regularItems = po.items.filter((item: any) => 
+                                  item.stockModel && item.stockModel !== 'None' && item.stockModel.toLowerCase() !== 'none' && item.stockModel.trim() !== ''
+                                );
+                                const accessoriesReadyCount = metalAccessories.filter((item: any) => item.isReadyToShip).length;
+                                const regularReadyCount = regularItems.filter((item: any) => item.isReadyToShip).length;
+                                
                                 return (
                                   <Collapsible key={po.poNumber} defaultOpen={poReadyCount > 0}>
                                     <div className="border rounded-lg bg-gray-50 dark:bg-gray-800/50">
@@ -1540,6 +1550,23 @@ export default function QCShippingQueuePage() {
                                               </Badge>
                                             </div>
                                           </div>
+                                          
+                                          {/* Summary badges for Units and Accessories */}
+                                          <div className="flex items-center gap-3 mb-2 text-xs">
+                                            {regularItems.length > 0 && (
+                                              <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-700 dark:text-blue-300">
+                                                <Package className="h-3 w-3" />
+                                                <span>{regularReadyCount}/{regularItems.length} Units Ready</span>
+                                              </div>
+                                            )}
+                                            {metalAccessories.length > 0 && (
+                                              <div className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 rounded text-amber-700 dark:text-amber-300">
+                                                <Zap className="h-3 w-3" />
+                                                <span>{accessoriesReadyCount}/{metalAccessories.length} Metal Accessories Ready</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                          
                                           {/* Progress Bar */}
                                           <div className="space-y-1">
                                             <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
@@ -1599,19 +1626,31 @@ export default function QCShippingQueuePage() {
                                                 {!item.isReadyToShip && <div className="w-6" />}
                                                 
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
-                                                  <div>
-                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                                      {item.orderId || `Unit ${item.unitNumber}`}
-                                                    </span>
-                                                    <span className="text-gray-500 ml-2 text-xs">
-                                                      {item.unitNumber}/{item.totalQuantity}
-                                                    </span>
+                                                  <div className="flex items-center gap-2">
+                                                    {/* Metal Accessory indicator */}
+                                                    {(!item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === '') && (
+                                                      <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
+                                                        <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                                      </span>
+                                                    )}
+                                                    <div>
+                                                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                        {item.orderId || `Unit ${item.unitNumber}`}
+                                                      </span>
+                                                      <span className="text-gray-500 ml-2 text-xs">
+                                                        {item.unitNumber}/{item.totalQuantity}
+                                                      </span>
+                                                    </div>
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
                                                     {item.description || 'No description'}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
-                                                    {item.stockModel || '—'}
+                                                    {(!item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === '') ? (
+                                                      <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
+                                                    ) : (
+                                                      item.stockModel
+                                                    )}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
                                                     {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}

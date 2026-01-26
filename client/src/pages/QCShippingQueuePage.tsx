@@ -437,7 +437,7 @@ export default function QCShippingQueuePage() {
       'Paint': { label: 'Paint', variant: 'default', className: 'bg-pink-100 text-pink-800 border-pink-300' },
       'Gunsmith': { label: 'Gunsmith', variant: 'default', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
       'Shipping QC': { label: 'Shipping QC', variant: 'default', className: 'bg-green-100 text-green-800 border-green-300' },
-      'Shipping': { label: 'Shipped', variant: 'default', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+      'Shipping': { label: '✓ SHIPPED', variant: 'default', className: 'bg-emerald-500 text-white font-bold border-emerald-600' },
     };
 
     return badgeMap[department] || { label: department, variant: 'secondary' as const, className: '' };
@@ -1591,14 +1591,17 @@ export default function QCShippingQueuePage() {
                                             // Disable if: not ready to ship, or different customer selected
                                             const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment);
+                                            const isShipped = item.currentDepartment === 'Shipping';
                                             
                                             return (
                                               <div
                                                 key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
                                                 className={`
                                                   flex items-center gap-3 p-3 rounded border
-                                                  ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}
-                                                  ${!item.isReadyToShip ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
+                                                  ${isShipped ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : ''}
+                                                  ${isSelected && !isShipped ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : ''}
+                                                  ${!isSelected && !isShipped ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : ''}
+                                                  ${!item.isReadyToShip && !isShipped ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
                                                   ${isDisabled && item.isReadyToShip ? 'opacity-50 cursor-not-allowed' : ''}
                                                 `}
                                                 data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}

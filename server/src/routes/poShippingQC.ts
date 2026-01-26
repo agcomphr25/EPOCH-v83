@@ -1139,13 +1139,33 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
     // 5. GET CUSTOMER SHIPPING ADDRESS
     const firstCustomer = orderDetails[0].customer;
-    const addresses = await storage.getCustomerAddresses(orderDetails[0].order.customerId);
-    const primaryAddress = addresses[0];
+    let addresses: any[] = [];
+    try {
+      addresses = await storage.getCustomerAddresses(orderDetails[0].order.customerId);
+    } catch (addrError: any) {
+      console.error('Error fetching customer addresses:', addrError.message);
+    }
+    let primaryAddress = addresses[0];
 
+    const isDev = process.env.NODE_ENV === 'development';
+    
     if (!primaryAddress) {
-      return res.status(400).json({
-        _error: `No shipping address found for customer ${firstCustomer.name}`,
-      });
+      if (isDev) {
+        // Use test address in development mode
+        console.log(`🧪 DEV MODE: Using test shipping address for ${firstCustomer.name}`);
+        primaryAddress = {
+          street: '123 Test Street',
+          street2: '',
+          city: 'Test City',
+          state: 'AL',
+          zipCode: '35801',
+          country: 'United States',
+        };
+      } else {
+        return res.status(400).json({
+          _error: `No shipping address found for customer ${firstCustomer.name}`,
+        });
+      }
     }
 
     const shipTo: ShipTo = {

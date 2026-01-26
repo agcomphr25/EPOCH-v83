@@ -5,16 +5,7 @@ import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
 export default defineConfig({
   plugins: [
-    react({
-      // Ensure React refresh is properly configured
-      include: '**/*.{jsx,tsx}',
-      exclude: /node_modules/,
-      fastRefresh: true,
-      // Disable babel runtime for better performance
-      babel: {
-        compact: false,
-      },
-    }),
+    react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
@@ -45,5 +36,6 @@ export default defineConfig({
       strict: true,
       deny: ['**/.*'],
     },
+    allowedHosts: true,
   },
 });

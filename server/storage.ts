@@ -487,6 +487,7 @@ import {
   sum,
   max,
   notInArray,
+  desc,
 } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt';
@@ -3768,6 +3769,8 @@ export class DatabaseStorage implements IStorage {
       sql`${allOrders.orderId} NOT LIKE 'PO%'`,
       sql`${allOrders.orderId} != 'AG1'`,
       sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+      // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+      sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`,
     ];
 
     // Add search filter if provided
@@ -3957,7 +3960,9 @@ export class DatabaseStorage implements IStorage {
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
           sql`${allOrders.orderId} NOT LIKE 'PO%'`,
           sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+          // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+          sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`
         )
       );
 
@@ -4014,7 +4019,9 @@ export class DatabaseStorage implements IStorage {
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
           sql`${allOrders.orderId} NOT LIKE 'PO%'`,
           sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+          // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
+          sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} IS NULL)`
         )
       )
       .orderBy(desc(allOrders.updatedAt))
@@ -8503,19 +8510,29 @@ export class DatabaseStorage implements IStorage {
     if (isNaN(numericId)) {
       return [];
     }
-    return await db
-      .select()
-      .from(customerAddresses)
-      .where(eq(customerAddresses.customerId, numericId))
-      .orderBy(customerAddresses.isDefault, customerAddresses.id);
+    try {
+      const result = await db
+        .select()
+        .from(customerAddresses)
+        .where(eq(customerAddresses.customerId, numericId))
+        .orderBy(desc(customerAddresses.isDefault), customerAddresses.id);
+      return result || [];
+    } catch (error) {
+      console.error('Error fetching customer addresses:', error);
+      return [];
+    }
   }
 
   async createCustomerAddress(
     data: InsertCustomerAddress
   ): Promise<CustomerAddress> {
+    const insertData = {
+      ...data,
+      customerId: typeof data.customerId === 'string' ? parseInt(data.customerId, 10) : data.customerId,
+    };
     const [address] = await db
       .insert(customerAddresses)
-      .values(data)
+      .values(insertData)
       .returning();
     return address;
   }
@@ -8626,8 +8643,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrder(data: InsertPurchaseOrder): Promise<PurchaseOrder> {
-    const [po] = await db.insert(purchaseOrders).values(data).returning();
-    return po;
+    console.log('📦 Creating purchase order with data:', JSON.stringify(data));
+    const result = await db.insert(purchaseOrders).values(data).returning();
+    console.log('📦 Insert result:', JSON.stringify(result));
+    if (!result || result.length === 0) {
+      throw new Error('Failed to create purchase order - no result returned');
+    }
+    return result[0];
   }
 
   async updatePurchaseOrder(
@@ -8744,6 +8766,7 @@ export class DatabaseStorage implements IStorage {
             poNumber: po.poNumber,
             productName: item.itemName || '',
             stockModel: stockModel,
+            itemType: item.itemType || null,
             actionLength: specs.actionLength || specs.action_length || null,
             material: specs.material || null,
             handedness: specs.handedness || null,
@@ -8764,9 +8787,15 @@ export class DatabaseStorage implements IStorage {
         })
         .filter((item) => {
           // Only include items with:
-          // 1. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
-          // 2. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
-          // 3. NOT all production orders are fulfilled
+          // 1. itemType === 'stock_model' (exclude metal accessories like 'custom_model')
+          // 2. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
+          // 3. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
+          // 4. NOT all production orders are fulfilled
+          
+          // Filter out metal accessories - they don't need production
+          if (!item.itemType || item.itemType.toLowerCase() !== 'stock_model') {
+            return false;
+          }
           
           if (!item.stockModel || item.stockModel.trim() === '') {
             return false;
@@ -8774,7 +8803,7 @@ export class DatabaseStorage implements IStorage {
           const lowerStockModel = item.stockModel.toLowerCase().trim();
           const hasValidStockModel = lowerStockModel !== 'no stock' && 
                  lowerStockModel !== 'no_stock' && 
-                 lowerStockModel !== 'none';
+                 lowerStockModel !== 'unknown';
           
           if (!hasValidStockModel) {
             return false;
@@ -8989,12 +9018,11 @@ export class DatabaseStorage implements IStorage {
         poi.specifications,
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
+        poi.item_type as "itemType",
+        poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
-        prod.production_status as "productionStatus",
-        prod.is_fulfilled as "isFulfilled",
-        prod.fulfilled_date as "fulfilledDate",
-        prod.fulfilled_by as "fulfilledBy"
+        prod.production_status as "productionStatus"
       FROM purchase_orders po
       INNER JOIN purchase_order_items poi ON po.id = poi.po_id
       LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
@@ -9048,9 +9076,11 @@ export class DatabaseStorage implements IStorage {
           material: specs.material || null,
           finishType: specs.finishType || null,
           stockModel: row.stockModelId,
+          itemType: (row as any).itemType || null,
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
+          stockStatus: (row as any).stockStatus || null,
           productionOrders: [],
         });
       }
@@ -9061,18 +9091,20 @@ export class DatabaseStorage implements IStorage {
       if (row.orderId) {
         const unitMatch = row.orderId.match(/-(\d+)$/);
         const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
-        const isFulfilled = row.isFulfilled || false;
+
+        // Don't mark as ready to ship if already shipped
+        const isShipped = row.productionStatus === 'SHIPPED' || (row as any).stockStatus === 'SHIPPED';
+        const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
 
         poItem.productionOrders.push({
           orderId: row.orderId,
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled,
-          fulfilledDate: row.fulfilledDate?.toString() || null,
-          fulfilledBy: row.fulfilledBy || null,
-          // Fulfilled items are NEVER ready to ship (already shipped externally)
-          isReadyToShip: !isFulfilled && (row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping'),
+          isFulfilled: isShipped,
+          fulfilledDate: null,
+          fulfilledBy: null,
+          isReadyToShip: isInShippingDept && !isShipped,
         });
       }
     }
@@ -9087,20 +9119,24 @@ export class DatabaseStorage implements IStorage {
         Array.from(po.itemsMap.values()).forEach((poItem) => {
           if (poItem.productionOrders.length === 0) {
             // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
-            // Business rule: PO items WITHOUT stock models go straight to Shipping QC (no production needed)
-            const hasStockModel = poItem.stockModel && poItem.stockModel !== 'no stock' && poItem.stockModel.trim() !== '';
+            // Business rule: PO items with itemType NOT equal to "stock_model" are metal accessories
+            // Metal accessories go straight to Shipping QC (no production needed)
+            const isMetalAccessory = poItem.itemType && poItem.itemType.toLowerCase() !== 'stock_model';
             
-            // CRITICAL FIX: Skip items with stock models that haven't entered production yet
+            // CRITICAL FIX: Skip stock_model items that haven't entered production yet
             // They should NOT appear in Shipping QC until they're scheduled to production
-            if (hasStockModel) {
+            if (!isMetalAccessory) {
               // This item needs production but hasn't been scheduled yet - skip it entirely
               return;
             }
             
-            // Only non-stock items (ready-to-sell) should proceed to Shipping QC without production
-            const department = 'Shipping QC';
-            const status = 'IN_SHIPPING_QC';
-            const readyToShip = true;
+            // Check if this item has already been shipped (stockStatus = 'SHIPPED')
+            const isShipped = poItem.stockStatus === 'SHIPPED';
+            
+            // Only non-stock items (metal accessories) should proceed to Shipping QC without production
+            const department = isShipped ? 'Shipped' : 'Shipping QC';
+            const status = isShipped ? 'SHIPPED' : 'IN_SHIPPING_QC';
+            const readyToShip = !isShipped;
             
             for (let i = 1; i <= poItem.quantity; i++) {
               allItems.push({
@@ -9116,9 +9152,10 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
+                itemType: poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
-                isFulfilled: false,
+                isFulfilled: isShipped,
                 fulfilledDate: null,
                 fulfilledBy: null,
                 isReadyToShip: readyToShip,
@@ -9140,6 +9177,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
+                itemType: poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: prodOrder.isFulfilled,
@@ -9198,11 +9236,17 @@ export class DatabaseStorage implements IStorage {
   // Purchase Order Items CRUD
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]> {
-    return await db
-      .select()
-      .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.poId, poId))
-      .orderBy(purchaseOrderItems.createdAt);
+    try {
+      const result = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.poId, poId))
+        .orderBy(purchaseOrderItems.createdAt);
+      return result || [];
+    } catch (error: any) {
+      console.error('Error in getPurchaseOrderItems for poId', poId, ':', error?.message || error);
+      return [];
+    }
   }
 
   async getPurchaseOrderItem(id: number): Promise<PurchaseOrderItem | undefined> {
@@ -9217,8 +9261,13 @@ export class DatabaseStorage implements IStorage {
   async createPurchaseOrderItem(
     data: InsertPurchaseOrderItem
   ): Promise<PurchaseOrderItem> {
-    const [item] = await db.insert(purchaseOrderItems).values(data).returning();
-    return item;
+    console.log('📦 Creating purchase order item with data:', JSON.stringify(data));
+    const result = await db.insert(purchaseOrderItems).values(data).returning();
+    console.log('📦 Insert result:', JSON.stringify(result));
+    if (!result || result.length === 0) {
+      throw new Error('Failed to create purchase order item - no result returned from database');
+    }
+    return result[0];
   }
 
   async updatePurchaseOrderItem(
@@ -9289,12 +9338,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProductionOrdersByPoId(poId: number): Promise<ProductionOrder[]> {
-    const orders = await db
-      .select(productionOrdersColumns)
-      .from(productionOrders)
-      .where(eq(productionOrders.poId, poId))
-      .orderBy(productionOrders.createdAt);
-    return orders;
+    try {
+      const orders = await db
+        .select(productionOrdersColumns)
+        .from(productionOrders)
+        .where(eq(productionOrders.poId, poId))
+        .orderBy(productionOrders.createdAt);
+      return orders || [];
+    } catch (error: any) {
+      console.error('Error in getProductionOrdersByPoId for poId', poId, ':', error?.message || error);
+      return [];
+    }
   }
 
   async createProductionOrder(

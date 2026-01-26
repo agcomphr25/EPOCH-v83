@@ -107,6 +107,7 @@ import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
 import fieldRoutes from './field';
 import timerRoutes from './timer';
+import productionTimersRoutes from './productionTimers';
 import ticketsRoutes from './tickets';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
@@ -276,6 +277,9 @@ export function registerRoutes(app: Express): Server {
   // Signature workflow routes - multi-signer document routing
   app.use('/api/signature-workflow', signatureWorkflowRoutes);
   app.use('/api/timer', timerRoutes);
+  
+  // Native EPOCH Production Timer module
+  app.use('/api/production/timers', productionTimersRoutes);
   
   // Field - Calm thinking surface (unstructured, opaque)
   // Field does not affect EPOCH data - no integration allowed

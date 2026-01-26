@@ -158,7 +158,8 @@ router.post('/schedule', async (req: Request, res: Response) => {
             action_length: specs.action_length || '',
           });
 
-          // Insert into all_orders table with Layup/Plugging department
+          // Insert into all_orders table with P1 Production Queue department
+          // order_source = 'PO_RELEASE' marks this as a Production-Only Order (non-invoiceable)
           const insertOrderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -170,23 +171,71 @@ router.post('/schedule', async (req: Request, res: Response) => {
               status,
               notes,
               features,
+              order_source,
+              source_po_id,
+              source_po_item_id,
+              department_history,
               created_at,
               updated_at
             ) VALUES (
-              $1, NOW(), $2, $3, $4, 'Layup/Plugging', 'FINALIZED', $5, $6::jsonb, NOW(), NOW()
+              $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb, 
+              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
             )
-            ON CONFLICT (order_id) DO UPDATE
-            SET current_department = 'Layup/Plugging',
-                status = 'FINALIZED',
-                updated_at = NOW()
+            RETURNING id
           `;
-          await pool.query(insertOrderQuery, [
+          const allOrderResult = await pool.query(insertOrderQuery, [
             orderId,
             dueDate,
             item.customer_id || item.customer_name,
             item.item_id || '',
             notes,
             features,
+            item.po_id,
+            poItemId,
+          ]);
+          const allOrdersId = allOrderResult[0]?.id;
+
+          // Also create a production_orders record for queue visibility
+          const insertProductionOrderQuery = `
+            INSERT INTO production_orders (
+              order_id,
+              po_id,
+              po_item_id,
+              customer_id,
+              customer_name,
+              po_number,
+              item_type,
+              item_id,
+              item_name,
+              specifications,
+              order_date,
+              due_date,
+              production_status,
+              current_department,
+              department_history,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11, 
+              'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'P1 Production Queue',
+                production_status = 'PENDING',
+                updated_at = NOW()
+          `;
+          await pool.query(insertProductionOrderQuery, [
+            orderId,
+            item.po_id,
+            poItemId,
+            item.customer_id || '',
+            item.customer_name || '',
+            item.po_number || '',
+            specs.item_type || 'Stock',
+            item.item_id || '',
+            item.item_name || '',
+            JSON.stringify(specs),
+            dueDate,
           ]);
 
           // Also add to layup_schedule table for scheduler visibility
@@ -232,7 +281,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} orders in Layup/Plugging queue`);
+    console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`);
 
     res.json({
       success: true,
@@ -240,10 +289,11 @@ router.post('/schedule', async (req: Request, res: Response) => {
       targetWeek: targetWeek || 'Current Week',
       selectionCount: selections.length,
       scheduledCount: scheduledOrders.length,
-      targetDepartment: 'Layup/Plugging',
+      targetDepartment: 'P1 Production Queue',
+      orderSource: 'PO_RELEASE',
       orderIds: scheduledOrders,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully scheduled ${scheduledOrders.length} items to Layup/Plugging department queue`,
+      message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`,
     });
   } catch (error) {
     console.error('Error generating schedule:', error);

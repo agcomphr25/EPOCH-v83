@@ -1,0 +1,188 @@
+injected.js:37 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:37 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar9pq%3A:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+agcomphr-01-26:1 Unrecognized feature: 'ambient-light-sensor'.
+agcomphr-01-26:1 Unrecognized feature: 'battery'.
+agcomphr-01-26:1 Unrecognized feature: 'execution-while-not-rendered'.
+agcomphr-01-26:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+agcomphr-01-26:1 Unrecognized feature: 'layout-animations'.
+agcomphr-01-26:1 Unrecognized feature: 'legacy-image-formats'.
+agcomphr-01-26:1 Unrecognized feature: 'navigation-override'.
+agcomphr-01-26:1 Unrecognized feature: 'oversized-images'.
+agcomphr-01-26:1 Unrecognized feature: 'publickey-credentials'.
+agcomphr-01-26:1 Unrecognized feature: 'speaker-selection'.
+agcomphr-01-26:1 Unrecognized feature: 'unoptimized-images'.
+agcomphr-01-26:1 Unrecognized feature: 'unsized-media'.
+agcomphr-01-26:1 Unrecognized feature: 'pointer-lock'.
+agcomphr-01-26:1 Allow attribute will take precedence over 'allowfullscreen'.
+agcomphr-01-26:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 Redirecting tasham to /admin-dashboard
+[Violation] Forced reflow while executing JavaScript took 62ms
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ injected.js:214
+queryFn @ WeeklyShippingWidget.tsx:20
+fetchFn @ @tanstack_react-query.js?v=d7b3056c:879
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+fetch @ @tanstack_react-query.js?v=d7b3056c:918
+executeFetch_fn @ @tanstack_react-query.js?v=d7b3056c:2280
+onSubscribe @ @tanstack_react-query.js?v=d7b3056c:1976
+subscribe @ @tanstack_react-query.js?v=d7b3056c:24
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=d7b3056c:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:214  GET https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status 500 (Internal Server Error)
+apply @ injected.js:214
+queryFn @ WeeklyShippingWidget.tsx:20
+fetchFn @ @tanstack_react-query.js?v=d7b3056c:879
+run @ @tanstack_react-query.js?v=d7b3056c:507
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:528
+Promise.catch
+run @ @tanstack_react-query.js?v=d7b3056c:511
+start @ @tanstack_react-query.js?v=d7b3056c:550
+fetch @ @tanstack_react-query.js?v=d7b3056c:918
+executeFetch_fn @ @tanstack_react-query.js?v=d7b3056c:2280
+onSubscribe @ @tanstack_react-query.js?v=d7b3056c:1976
+subscribe @ @tanstack_react-query.js?v=d7b3056c:24
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=d7b3056c:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 51ms
+[Violation] Forced reflow while executing JavaScript took 50ms
+[Violation] Forced reflow while executing JavaScript took 36ms
+injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 ✅ API Response from /api/po-orders/process-shipment: 500
+injected.js:37 API error raw body: {"_error":"Failed to process shipment","details":"Order PO-P18835-107-2 has already been shipped"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"Failed to process shipment","details":"Order PO-P18835-107-2 has already been shipped"}
+    at apiRequest (queryClient.ts:135:13)
+    at async Object.mutationFn (ShipmentDialog.tsx:151:14)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:151
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:279
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449

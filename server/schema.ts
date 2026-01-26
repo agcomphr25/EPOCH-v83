@@ -74,6 +74,10 @@ export const allOrders = pgTable('all_orders', {
   status: text('status').default('FINALIZED'), // Legacy - will be removed after migration
   statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
   barcode: text('barcode'), // Code 39 barcode for order identification
+  // Order Source and PO Linkage Fields
+  orderSource: text('order_source').default('SALES'), // SALES = customer order, PO_RELEASE = production-only from PO
+  sourcePoId: integer('source_po_id'), // Reference to purchase_orders.id for PO_RELEASE orders
+  sourcePoItemId: integer('source_po_item_id'), // Reference to purchase_order_items.id for PO_RELEASE orders
   // Department Progression Fields
   currentDepartment: text('current_department').default('P1 Production Queue'), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer('current_department_id').references(
@@ -11782,3 +11786,114 @@ export type ShipmentAccountingSnapshot = typeof shipmentAccountingSnapshots.$inf
 export type InsertShipmentAccountingSnapshot = z.infer<typeof insertShipmentAccountingSnapshotSchema>;
 export type ShipmentAccountingAdjustment = typeof shipmentAccountingAdjustments.$inferSelect;
 export type InsertShipmentAccountingAdjustment = z.infer<typeof insertShipmentAccountingAdjustmentSchema>;
+
+// ============================================================================
+// PRODUCTION TIMER MODULE - Native EPOCH production timing system
+// ============================================================================
+
+// Enum for production program run status
+export const productionProgramRunStatusEnum = pgEnum('production_program_run_status', [
+  'running',
+  'paused',
+  'awaiting_next',
+  'completed',
+  'stopped',
+]);
+
+// Production Programs - defines timed production workflows
+export const productionPrograms = pgTable('production_programs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  nameIdx: index('production_programs_name_idx').on(table.name),
+}));
+
+// Production Program Steps - individual timed steps within a program
+export const productionProgramSteps = pgTable('production_program_steps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  programId: uuid('program_id').references(() => productionPrograms.id, { onDelete: 'cascade' }).notNull(),
+  stepIndex: integer('step_index').notNull(),
+  stepName: text('step_name').notNull(),
+  durationSeconds: integer('duration_seconds').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  programIdIdx: index('production_program_steps_program_id_idx').on(table.programId),
+  stepOrderIdx: index('production_program_steps_order_idx').on(table.programId, table.stepIndex),
+}));
+
+// Production Program Runs - active/historical executions of programs
+export const productionProgramRuns = pgTable('production_program_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  programId: uuid('program_id').references(() => productionPrograms.id).notNull(),
+  startedByUserId: integer('started_by_user_id').references(() => users.id),
+  instanceName: text('instance_name'),
+  sku: text('sku'),
+  serialNumber: text('serial_number'),
+  inventoryItemId: integer('inventory_item_id'),
+  mandrelNumber: integer('mandrel_number'),
+  ovenNumber: integer('oven_number'),
+  ovenSlot: text('oven_slot'),
+  status: productionProgramRunStatusEnum('status').default('running').notNull(),
+  currentStepIndex: integer('current_step_index').default(0).notNull(),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+  lastPausedAt: timestamp('last_paused_at'),
+  totalElapsedSeconds: integer('total_elapsed_seconds').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  programIdIdx: index('production_program_runs_program_id_idx').on(table.programId),
+  statusIdx: index('production_program_runs_status_idx').on(table.status),
+  startedAtIdx: index('production_program_runs_started_at_idx').on(table.startedAt),
+}));
+
+// Production Program Run Events - audit trail for run lifecycle
+export const productionProgramRunEvents = pgTable('production_program_run_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  runId: uuid('run_id').references(() => productionProgramRuns.id, { onDelete: 'cascade' }).notNull(),
+  eventType: text('event_type').notNull(), // started, step_complete, resumed, paused, advanced, completed
+  stepIndex: integer('step_index'),
+  userId: integer('user_id').references(() => users.id),
+  occurredAt: timestamp('occurred_at').defaultNow().notNull(),
+}, (table) => ({
+  runIdIdx: index('production_program_run_events_run_id_idx').on(table.runId),
+  eventTypeIdx: index('production_program_run_events_event_type_idx').on(table.eventType),
+  occurredAtIdx: index('production_program_run_events_occurred_at_idx').on(table.occurredAt),
+}));
+
+// Insert schemas for Production Timer module
+export const insertProductionProgramSchema = createInsertSchema(productionPrograms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProductionProgramStepSchema = createInsertSchema(productionProgramSteps).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProductionProgramRunSchema = createInsertSchema(productionProgramRuns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProductionProgramRunEventSchema = createInsertSchema(productionProgramRunEvents).omit({
+  id: true,
+  occurredAt: true,
+});
+
+// Types for Production Timer module
+export type ProductionProgram = typeof productionPrograms.$inferSelect;
+export type InsertProductionProgram = z.infer<typeof insertProductionProgramSchema>;
+export type ProductionProgramStep = typeof productionProgramSteps.$inferSelect;
+export type InsertProductionProgramStep = z.infer<typeof insertProductionProgramStepSchema>;
+export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
+export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
+export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
+export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;

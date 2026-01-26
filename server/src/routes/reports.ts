@@ -45,7 +45,12 @@ router.get('/monthly-fulfilled', async (req, res) => {
         and(
           eq(allOrders.status, 'FULFILLED'),
           gte(allOrders.updatedAt, startDate),
-          lt(allOrders.updatedAt, endDate)
+          lt(allOrders.updatedAt, endDate),
+          // Exclude Production-Only Orders (PO_RELEASE) from financial reports
+          or(
+            eq(allOrders.orderSource, 'SALES'),
+            sql`${allOrders.orderSource} IS NULL`
+          )
         )
       )
       .orderBy(allOrders.updatedAt);
@@ -582,7 +587,12 @@ router.get('/analytics/metrics', async (req, res) => {
         and(
           eq(allOrders.status, 'FULFILLED'),
           gte(allOrders.updatedAt, start),
-          lt(allOrders.updatedAt, endInclusive)
+          lt(allOrders.updatedAt, endInclusive),
+          // Exclude Production-Only Orders (PO_RELEASE) from financial reports
+          or(
+            eq(allOrders.orderSource, 'SALES'),
+            sql`${allOrders.orderSource} IS NULL`
+          )
         )
       )
       .orderBy(allOrders.updatedAt);
@@ -672,6 +682,74 @@ router.get('/analytics/metrics', async (req, res) => {
   } catch (error) {
     console.error('Error fetching analytics metrics:', error);
     res.status(500).json({ error: 'Failed to fetch analytics metrics', details: (error as any).message });
+  }
+});
+
+// PO Production Orders Report - Temporary report for viewing all PO-released production orders
+router.get('/po-production-orders', async (req, res) => {
+  try {
+    const pool = (await import('../../db')).pool;
+    
+    // Get all production orders that came from POs
+    const productionOrdersQuery = `
+      SELECT 
+        order_id,
+        po_id,
+        po_number,
+        customer_name,
+        item_name,
+        current_department,
+        production_status,
+        created_at,
+        updated_at
+      FROM production_orders
+      WHERE po_id IS NOT NULL
+      ORDER BY created_at DESC
+    `;
+    const productionOrdersResult = await pool.query(productionOrdersQuery);
+    const productionOrders = Array.isArray(productionOrdersResult) ? productionOrdersResult : productionOrdersResult.rows || [];
+
+    // Get summary by department
+    const summaryQuery = `
+      SELECT 
+        current_department,
+        production_status,
+        COUNT(*) as count
+      FROM production_orders
+      WHERE po_id IS NOT NULL
+      GROUP BY current_department, production_status
+      ORDER BY count DESC
+    `;
+    const summaryResult = await pool.query(summaryQuery);
+    const summary = Array.isArray(summaryResult) ? summaryResult : summaryResult.rows || [];
+
+    // Check for any with order_source = 'PO_RELEASE' in all_orders (new Phase 1B orders)
+    const newSystemOrdersQuery = `
+      SELECT 
+        order_id,
+        order_source,
+        source_po_id,
+        current_department,
+        status,
+        created_at
+      FROM all_orders 
+      WHERE order_source = 'PO_RELEASE' 
+         OR source_po_id IS NOT NULL
+      ORDER BY created_at DESC
+    `;
+    const newSystemOrdersResult = await pool.query(newSystemOrdersQuery);
+    const newSystemOrders = Array.isArray(newSystemOrdersResult) ? newSystemOrdersResult : newSystemOrdersResult.rows || [];
+
+    res.json({
+      productionOrders,
+      summary,
+      newSystemOrders,
+      totalCount: productionOrders.length,
+      newSystemCount: newSystemOrders.length,
+    });
+  } catch (error) {
+    console.error('Error fetching PO production orders:', error);
+    res.status(500).json({ error: 'Failed to fetch PO production orders', details: (error as any).message });
   }
 });
 

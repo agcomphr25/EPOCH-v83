@@ -1,0 +1,1309 @@
+injected.js:37 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 54ms
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14290
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+[Violation] Forced reflow while executing JavaScript took 33ms
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+[Violation] Forced reflow while executing JavaScript took 32ms
+injected.js:37 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/po-orders/process-shipment 400 (Bad Request)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ ShipmentDialog.tsx:129
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:229
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 ✅ API Response from /api/po-orders/process-shipment: 400
+injected.js:37 API error raw body: {"_error":"No shipping address found for customer Red Hawk Rifles LLC"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:129
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:229
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"No shipping address found for customer Red Hawk Rifles LLC"}
+    at apiRequest (queryClient.ts:135:13)
+    at async Object.mutationFn (ShipmentDialog.tsx:129:14)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:129
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleSubmit @ ShipmentDialog.tsx:229
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18678
+workLoop @ chunk-NFC5BX5N.js?v=d7b3056c:197
+flushWork @ chunk-NFC5BX5N.js?v=d7b3056c:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d7b3056c:384
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Encountered two children with the same key, `Red Hawk Rifles LLC`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at _c9 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Presence (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ZEYZZQRY.js?v=d7b3056c:24:11)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:178:13
+    at _c5 (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=d7b3056c:43:13
+    at Provider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d7b3056c:38:15)
+    at https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=d7b3056c:55:7
+    at div
+    at QCShippingQueuePage (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/pages/QCShippingQueuePage.tsx:65:37)
+    at Route (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:280:16)
+    at Switch (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:336:17)
+    at RouteGuard (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/auth/RouteGuard.tsx:74:38)
+    at main
+    at div
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d7b3056c:235:17)
+    at DeploymentAuthWrapper (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+    at App (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/src/App.tsx?v=HnT_-wVtdMebBi8niBXKu:308:35)
+    at Router (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:6332:13)
+    at BrowserRouter (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=d7b3056c:9416:3)
+    at QueryClientProvider (https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d7b3056c:2934:3)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=d7b3056c:521
+error @ chunk-NFC5BX5N.js?v=d7b3056c:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=d7b3056c:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d7b3056c:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d7b3056c:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d7b3056c:14292
+updateFragment @ chunk-NFC5BX5N.js?v=d7b3056c:14522
+beginWork @ chunk-NFC5BX5N.js?v=d7b3056c:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=d7b3056c:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d7b3056c:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d7b3056c:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d7b3056c:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18678
+workLoop @ chunk-NFC5BX5N.js?v=d7b3056c:197
+flushWork @ chunk-NFC5BX5N.js?v=d7b3056c:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d7b3056c:384
+injected.js:37 🌐 API Request to /api/pos (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/customers (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/stock-models (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/stock-models: 200
+injected.js:37 ✅ API Response from /api/customers: 200
+injected.js:37 ✅ API Response from /api/pos: 200
+injected.js:37 🌐 API Request to /api/pos/41/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/41 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/8/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/8 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/40/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/40 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/39/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/39 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/38/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/38 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/18/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/18 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/17/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/17 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/16/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/16 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/15/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/15 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/14/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/14 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/13/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/13 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/12/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/12 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/11/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/11 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/10/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/10 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/9/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/9 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/7/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/7 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/5/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/5 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/4/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/4 (timeout: 120000ms, deployment: false)
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 267ms
+injected.js:37 ✅ API Response from /api/production-orders/by-po/41: 200
+injected.js:37 ✅ API Response from /api/pos/41/items: 200
+injected.js:37 ✅ API Response from /api/pos/8/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/40: 200
+injected.js:37 ✅ API Response from /api/pos/40/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/8: 200
+injected.js:37 ✅ API Response from /api/pos/39/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/39: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/38: 200
+injected.js:37 ✅ API Response from /api/pos/38/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/18: 200
+injected.js:37 ✅ API Response from /api/pos/18/items: 200
+injected.js:37 ✅ API Response from /api/pos/17/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/17: 200
+injected.js:37 ✅ API Response from /api/pos/16/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/16: 200
+injected.js:37 ✅ API Response from /api/pos/15/items: 200
+injected.js:37 ✅ API Response from /api/pos/14/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/15: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/14: 200
+injected.js:37 ✅ API Response from /api/pos/13/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/13: 200
+injected.js:37 ✅ API Response from /api/pos/12/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/11: 200
+injected.js:37 ✅ API Response from /api/pos/11/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/12: 200
+injected.js:37 ✅ API Response from /api/pos/10/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/10: 200
+injected.js:37 ✅ API Response from /api/pos/9/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/9: 200
+injected.js:37 ✅ API Response from /api/pos/4/items: 200
+injected.js:37 ✅ API Response from /api/pos/7/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/7: 200
+injected.js:37 ✅ API Response from /api/pos/5/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/5: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/4: 200
+injected.js:37 🔵 Dialog onOpenChange called, open: true
+injected.js:37 🔵 Dialog opening, resetting form...
+injected.js:37 🔵 Dialog state set to: true
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'click' handler took 187ms
+[Violation] Forced reflow while executing JavaScript took 47ms
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'click' handler took 300ms
+injected.js:37 🔵 Dialog onOpenChange called, open: false
+injected.js:37 🔵 Dialog state set to: false
+injected.js:37 🌐 API Request to /api/auth/session (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/customers/bypass (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/addresses/all (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/marketing/customer-types (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/auth/session: 200
+injected.js:37 ✅ API Response from /api/addresses/all: 200
+injected.js:37 ✅ API Response from /api/marketing/customer-types: 200
+injected.js:37 ✅ API Response from /api/customers/bypass: 200
+8a66ba322fb44859.js:2 [Violation] 'message' handler took 166ms
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 3097ms
+chunk-NFC5BX5N.js?v=d7b3056c:377 [Violation] 'message' handler took 2061ms
+[Violation] 'input' handler took 1249ms
+[Violation] 'input' handler took 380ms
+injected.js:37 🌐 API Request to /api/addresses?customerId=544 (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 ✅ API Response from /api/addresses?customerId=544: 200
+chunk-NFC5BX5N.js?v=d7b3056c:18625 [Violation] 'setTimeout' handler took 71ms
+injected.js:37 🌐 API Request to /api/addresses?customerId=546 (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d7b3056c:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d7b3056c:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d7b3056c:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d7b3056c:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ chunk-R3KBKBJQ.js?v=d7b3056c:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d7b3056c:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=d7b3056c:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=d7b3056c:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d7b3056c:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d7b3056c:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d7b3056c:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d7b3056c:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d7b3056c:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:18627
+injected.js:37 ✅ API Response from /api/addresses?customerId=546: 200
+injected.js:37 🔧 handleCustomerAddressChange called with: street 2317 Grand Park Drive
+injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/customers/address-autocomplete-bypass 500 (Internal Server Error)
+apply @ injected.js:214
+handleCustomerAddressChange @ CustomerManagement.tsx:885
+onChange @ CustomerManagement.tsx:2143
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 🔧 SmartyStreets response for customer form: {error: 'SmartyStreets credentials not configured'}
+injected.js:37 🌐 API Request to /api/addresses (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/customers/update-bypass/546 (timeout: 120000ms, deployment: false)
+injected.js:214  POST https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/addresses 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+handleUpdateCustomer @ CustomerManagement.tsx:1241
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:214  PUT https://96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/customers/update-bypass/546 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:100
+mutationFn @ CustomerManagement.tsx:1019
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleUpdateCustomer @ CustomerManagement.tsx:1184
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 ✅ API Response from /api/addresses: 500
+injected.js:37 API error raw body: {"_error":"Failed to create address"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+handleUpdateCustomer @ CustomerManagement.tsx:1241
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 💥 API Request failed for /api/addresses: Error: {"_error":"Failed to create address"}
+    at apiRequest (queryClient.ts:135:13)
+    at async handleUpdateCustomer (CustomerManagement.tsx:1241:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+handleUpdateCustomer @ CustomerManagement.tsx:1241
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 Error updating address: Error: {"_error":"Failed to create address"}
+    at apiRequest (queryClient.ts:135:13)
+    at async handleUpdateCustomer (CustomerManagement.tsx:1241:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+handleUpdateCustomer @ CustomerManagement.tsx:1251
+await in handleUpdateCustomer
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 ✅ API Response from /api/customers/update-bypass/546: 500
+injected.js:37 API error raw body: {"error":"Failed to update customer"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:106
+await in apiRequest
+mutationFn @ CustomerManagement.tsx:1019
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleUpdateCustomer @ CustomerManagement.tsx:1184
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449
+injected.js:37 💥 API Request failed for /api/customers/update-bypass/546: Error: Failed to update customer
+    at apiRequest (queryClient.ts:135:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:155
+await in apiRequest
+mutationFn @ CustomerManagement.tsx:1019
+fn @ @tanstack_react-query.js?v=d7b3056c:1234
+run @ @tanstack_react-query.js?v=d7b3056c:507
+start @ @tanstack_react-query.js?v=d7b3056c:550
+execute @ @tanstack_react-query.js?v=d7b3056c:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=d7b3056c:2692
+(anonymous) @ @tanstack_react-query.js?v=d7b3056c:3415
+handleUpdateCustomer @ CustomerManagement.tsx:1184
+callCallback2 @ chunk-NFC5BX5N.js?v=d7b3056c:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d7b3056c:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d7b3056c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=d7b3056c:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=d7b3056c:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=d7b3056c:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=d7b3056c:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=d7b3056c:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=d7b3056c:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=d7b3056c:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=d7b3056c:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=d7b3056c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=d7b3056c:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=d7b3056c:5449

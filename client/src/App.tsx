@@ -41,6 +41,9 @@ import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
+import ProductionStationDashboard from './pages/ProductionStationDashboard';
+import ProductionTimerHistory from './pages/ProductionTimerHistory';
+import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
 import TicketsPage from './pages/TicketsPage';
 import PDFSignatureTool from './pages/PDFSignatureTool';
@@ -57,6 +60,7 @@ import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
+import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
@@ -399,6 +403,9 @@ function App() {
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
+                  <Route path="/app/production/stations" component={ProductionStationDashboard} />
+                  <Route path="/app/production/timer-history" component={ProductionTimerHistory} />
+                  <Route path="/app/production/timer-programs" component={TimerProgramsPage} />
                   
                   {/* Field - Calm thinking surface (single user: admin_glennj) */}
                   <Route path="/field" component={FieldPage} />
@@ -680,6 +687,7 @@ function App() {
                   <Route path="/forms" component={AdminFormsPage} />
                   <Route path="/form/:id" component={FormPage} />
                   <Route path="/reports" component={ReportPage} />
+                  <Route path="/reports/po-production-orders" component={POProductionOrdersReport} />
                   <Route
                     path="/form-renderer/:id"
                     component={FormRendererPage}

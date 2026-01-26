@@ -120,12 +120,25 @@ export default function QCShippingQueuePage() {
   // Helper function to handle shipment documents - shows modal for printing
   const handleShipmentDocuments = (shipmentData: any) => {
     try {
+      console.log('📦 handleShipmentDocuments called with:', {
+        trackingNumber: shipmentData.trackingNumber,
+        hasLabel: !!shipmentData.shippingLabel?.data,
+        packingSlipsCount: shipmentData.packingSlips?.length || 0,
+        packingSlips: shipmentData.packingSlips,
+      });
+      
       // Prepare document data for the modal
       const documentsData = {
         trackingNumber: shipmentData.trackingNumber || '',
         labelData: shipmentData.shippingLabel?.data || null,
         packingSlips: shipmentData.packingSlips || [],
       };
+      
+      console.log('📄 Documents data prepared:', {
+        trackingNumber: documentsData.trackingNumber,
+        hasLabel: !!documentsData.labelData,
+        packingSlipsCount: documentsData.packingSlips.length,
+      });
       
       // Store in state and show modal
       setShipmentDocumentsData(documentsData);
@@ -231,7 +244,7 @@ export default function QCShippingQueuePage() {
           poItemId: item.poItemId,
           orderId: item.orderId || `PO-${item.poItemId}-${item.unitNumber}`, // Use composite ID if no orderId
           quantity: item.quantity ?? 1,
-          description: item.itemName || item.stockModelName || 'Unknown Item',
+          description: item.description || item.itemName || item.stockModelName || item.stockModel || 'Unknown Item',
           customerName,
           poNumber,
         });
@@ -437,7 +450,7 @@ export default function QCShippingQueuePage() {
       'Paint': { label: 'Paint', variant: 'default', className: 'bg-pink-100 text-pink-800 border-pink-300' },
       'Gunsmith': { label: 'Gunsmith', variant: 'default', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
       'Shipping QC': { label: 'Shipping QC', variant: 'default', className: 'bg-green-100 text-green-800 border-green-300' },
-      'Shipping': { label: 'Shipped', variant: 'default', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+      'Shipping': { label: '✓ SHIPPED', variant: 'default', className: 'bg-emerald-500 text-white font-bold border-emerald-600' },
     };
 
     return badgeMap[department] || { label: department, variant: 'secondary' as const, className: '' };
@@ -1484,14 +1497,14 @@ export default function QCShippingQueuePage() {
                   </p>
                   
                   {/* Customer Groups */}
-                  {(poOrders as any[]).map((customer: any) => {
+                  {(poOrders as any[]).map((customer: any, customerIndex: number) => {
                     const readyToShipCount = customer.pos.reduce((sum: number, po: any) => 
                       sum + po.items.filter((item: any) => item.isReadyToShip).length, 0
                     );
                     const totalCount = customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0);
                     
                     return (
-                      <Collapsible key={customer.customerName} defaultOpen={readyToShipCount > 0}>
+                      <Collapsible key={`${customer.customerId}-${customerIndex}`} defaultOpen={readyToShipCount > 0}>
                         <Card className="border-2">
                           <CollapsibleTrigger className="w-full">
                             <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer">
@@ -1522,6 +1535,16 @@ export default function QCShippingQueuePage() {
                                 const poReadyCount = po.items.filter((item: any) => item.isReadyToShip).length;
                                 const completionPercentage = Math.round((po.completedUnits / po.totalUnits) * 100);
                                 
+                                // Separate metal accessories (itemType is NOT "stock_model") from regular stock items
+                                const metalAccessories = po.items.filter((item: any) => 
+                                  item.itemType && item.itemType.toLowerCase() !== 'stock_model'
+                                );
+                                const regularItems = po.items.filter((item: any) => 
+                                  !item.itemType || item.itemType.toLowerCase() === 'stock_model'
+                                );
+                                const accessoriesReadyCount = metalAccessories.filter((item: any) => item.isReadyToShip).length;
+                                const regularReadyCount = regularItems.filter((item: any) => item.isReadyToShip).length;
+                                
                                 return (
                                   <Collapsible key={po.poNumber} defaultOpen={poReadyCount > 0}>
                                     <div className="border rounded-lg bg-gray-50 dark:bg-gray-800/50">
@@ -1540,6 +1563,23 @@ export default function QCShippingQueuePage() {
                                               </Badge>
                                             </div>
                                           </div>
+                                          
+                                          {/* Summary badges for Units and Accessories */}
+                                          <div className="flex items-center gap-3 mb-2 text-xs">
+                                            {regularItems.length > 0 && (
+                                              <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-700 dark:text-blue-300">
+                                                <Package className="h-3 w-3" />
+                                                <span>{regularReadyCount}/{regularItems.length} Units Ready</span>
+                                              </div>
+                                            )}
+                                            {metalAccessories.length > 0 && (
+                                              <div className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 rounded text-amber-700 dark:text-amber-300">
+                                                <Zap className="h-3 w-3" />
+                                                <span>{accessoriesReadyCount}/{metalAccessories.length} Metal Accessories Ready</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                          
                                           {/* Progress Bar */}
                                           <div className="space-y-1">
                                             <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
@@ -1564,14 +1604,17 @@ export default function QCShippingQueuePage() {
                                             // Disable if: not ready to ship, or different customer selected
                                             const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment);
+                                            const isShipped = item.currentDepartment === 'Shipping';
                                             
                                             return (
                                               <div
                                                 key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
                                                 className={`
                                                   flex items-center gap-3 p-3 rounded border
-                                                  ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}
-                                                  ${!item.isReadyToShip ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
+                                                  ${isShipped ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : ''}
+                                                  ${isSelected && !isShipped ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : ''}
+                                                  ${!isSelected && !isShipped ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : ''}
+                                                  ${!item.isReadyToShip && !isShipped ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
                                                   ${isDisabled && item.isReadyToShip ? 'opacity-50 cursor-not-allowed' : ''}
                                                 `}
                                                 data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
@@ -1599,19 +1642,31 @@ export default function QCShippingQueuePage() {
                                                 {!item.isReadyToShip && <div className="w-6" />}
                                                 
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
-                                                  <div>
-                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                                      {item.orderId || `Unit ${item.unitNumber}`}
-                                                    </span>
-                                                    <span className="text-gray-500 ml-2 text-xs">
-                                                      {item.unitNumber}/{item.totalQuantity}
-                                                    </span>
+                                                  <div className="flex items-center gap-2">
+                                                    {/* Metal Accessory indicator */}
+                                                    {(item.itemType && item.itemType.toLowerCase() !== 'stock_model') && (
+                                                      <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
+                                                        <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                                      </span>
+                                                    )}
+                                                    <div>
+                                                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                        {item.orderId || `Unit ${item.unitNumber}`}
+                                                      </span>
+                                                      <span className="text-gray-500 ml-2 text-xs">
+                                                        {item.unitNumber}/{item.totalQuantity}
+                                                      </span>
+                                                    </div>
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
                                                     {item.description || 'No description'}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
-                                                    {item.stockModel || '—'}
+                                                    {(item.itemType && item.itemType.toLowerCase() !== 'stock_model') ? (
+                                                      <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
+                                                    ) : (
+                                                      item.stockModel || 'Unknown'
+                                                    )}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
                                                     {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}

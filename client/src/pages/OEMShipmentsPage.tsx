@@ -82,6 +82,9 @@ export default function OEMShipmentsPage() {
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(0);
   const [expandedShipments, setExpandedShipments] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<'date' | 'po'>('date');
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
   const limit = 20;
 
   // Fetch shipments with filters
@@ -201,6 +204,60 @@ export default function OEMShipmentsPage() {
     toast({ title: 'Tracking number copied to clipboard' });
   };
 
+  const toggleDateExpanded = (date: string) => {
+    const newExpanded = new Set(expandedDates);
+    if (newExpanded.has(date)) {
+      newExpanded.delete(date);
+    } else {
+      newExpanded.add(date);
+    }
+    setExpandedDates(newExpanded);
+  };
+
+  const togglePOExpanded = (po: string) => {
+    const newExpanded = new Set(expandedPOs);
+    if (newExpanded.has(po)) {
+      newExpanded.delete(po);
+    } else {
+      newExpanded.add(po);
+    }
+    setExpandedPOs(newExpanded);
+  };
+
+  // Group shipments by date
+  const shipmentsByDate = shipments.reduce((acc, shipment) => {
+    const dateKey = format(new Date(shipment.created_at), 'yyyy-MM-dd');
+    const displayDate = format(new Date(shipment.created_at), 'EEEE, MMMM d, yyyy');
+    if (!acc[dateKey]) {
+      acc[dateKey] = { displayDate, shipments: [] };
+    }
+    acc[dateKey].shipments.push(shipment);
+    return acc;
+  }, {} as Record<string, { displayDate: string; shipments: Shipment[] }>);
+
+  // Group all items by customer + PO number to avoid mixing shipments across customers
+  const itemsByPO = shipments.reduce((acc, shipment) => {
+    shipment.items.forEach((item) => {
+      const poKey = `${shipment.customer_id}-${item.poNumber}`;
+      if (!acc[poKey]) {
+        acc[poKey] = {
+          poNumber: item.poNumber,
+          customerName: shipment.customer_name,
+          customerId: shipment.customer_id,
+          items: [],
+        };
+      }
+      acc[poKey].items.push({
+        ...item,
+        trackingNumber: shipment.master_tracking_number,
+        shippedDate: shipment.created_at,
+        shipmentId: shipment.id,
+        hasLabel: shipment.has_shipping_label,
+      });
+    });
+    return acc;
+  }, {} as Record<string, { poNumber: string; customerName: string; customerId: number; items: Array<ShipmentItem & { trackingNumber: string; shippedDate: string; shipmentId: number; hasLabel: boolean }> }>);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -214,9 +271,31 @@ export default function OEMShipmentsPage() {
             Track all P1 PO shipments with UPS tracking and documents
           </p>
         </div>
-        <Badge variant="outline" className="text-lg px-4 py-2">
-          {pagination?.total || 0} Total Shipments
-        </Badge>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
+            <Button
+              size="sm"
+              variant={viewMode === 'date' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('date')}
+              className="gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              By Date
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === 'po' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('po')}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              By PO
+            </Button>
+          </div>
+          <Badge variant="outline" className="text-lg px-4 py-2">
+            {pagination?.total || 0} Total Shipments
+          </Badge>
+        </div>
       </div>
 
       {/* Filters */}
@@ -316,8 +395,267 @@ export default function OEMShipmentsPage() {
         </Card>
       )}
 
-      {/* Shipments List */}
-      {!isLoading && shipments.length > 0 && (
+      {/* Shipments List - Date View */}
+      {!isLoading && shipments.length > 0 && viewMode === 'date' && (
+        <div className="space-y-6">
+          {Object.entries(shipmentsByDate)
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([dateKey, { displayDate, shipments: dateShipments }]) => (
+              <div key={dateKey} className="space-y-3">
+                <div 
+                  className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded-lg"
+                  onClick={() => toggleDateExpanded(dateKey)}
+                >
+                  <div className="flex items-center gap-2 flex-1">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    <h2 className="text-lg font-semibold">{displayDate}</h2>
+                    <Badge variant="secondary">
+                      {dateShipments.length} shipment{dateShipments.length !== 1 ? 's' : ''}
+                    </Badge>
+                    <Badge variant="outline">
+                      {dateShipments.reduce((sum, s) => sum + s.item_count, 0)} items
+                    </Badge>
+                  </div>
+                  {expandedDates.has(dateKey) ? (
+                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+
+                {expandedDates.has(dateKey) && (
+                  <div className="space-y-3 ml-4 border-l-2 border-blue-200 pl-4">
+                    {dateShipments.map((shipment) => (
+                      <Card key={shipment.id} className="overflow-hidden">
+                        <Collapsible
+                          open={expandedShipments.has(shipment.id)}
+                          onOpenChange={() => toggleExpanded(shipment.id)}
+                        >
+                          <CardHeader className="bg-gray-50 dark:bg-gray-800/50 pb-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <Truck className="h-5 w-5 text-blue-600" />
+                                  <h3 className="text-lg font-semibold">{shipment.customer_name}</h3>
+                                  <Badge variant="secondary">
+                                    {shipment.po_count} PO{shipment.po_count !== 1 ? 's' : ''}
+                                  </Badge>
+                                  <Badge variant="outline">
+                                    {shipment.item_count} Item{shipment.item_count !== 1 ? 's' : ''}
+                                  </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                  <div>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                      Tracking Number
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
+                                        {shipment.master_tracking_number}
+                                      </code>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => copyTracking(shipment.master_tracking_number)}
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                      Service & Weight
+                                    </p>
+                                    <p className="text-sm font-medium">
+                                      {SERVICE_NAMES[shipment.service_code] || shipment.service_code} • {shipment.total_weight_lbs} lbs
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {shipment.has_shipping_label && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Label
+                                  </Button>
+                                )}
+                                <CollapsibleTrigger asChild>
+                                  <Button size="sm" variant="ghost">
+                                    {expandedShipments.has(shipment.id) ? (
+                                      <ChevronUp className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                              </div>
+                            </div>
+                          </CardHeader>
+
+                          <CollapsibleContent>
+                            <CardContent className="pt-4">
+                              <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-gray-100 dark:bg-gray-800">
+                                    <tr>
+                                      <th className="text-left p-3 font-semibold">PO Number</th>
+                                      <th className="text-left p-3 font-semibold">Order ID</th>
+                                      <th className="text-left p-3 font-semibold">Description</th>
+                                      <th className="text-center p-3 font-semibold">Qty</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {shipment.items.map((item) => (
+                                      <tr key={item.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="p-3">
+                                          <span className="font-mono text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded">
+                                            PO {item.poNumber}
+                                          </span>
+                                        </td>
+                                        <td className="p-3 font-mono text-xs">{item.orderId}</td>
+                                        <td className="p-3">{item.description}</td>
+                                        <td className="p-3 text-center">
+                                          <Badge variant="outline">{item.quantity}</Badge>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </CardContent>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Shipments List - PO View */}
+      {!isLoading && shipments.length > 0 && viewMode === 'po' && (
+        <div className="space-y-4">
+          {Object.values(itemsByPO)
+            .sort((a, b) => {
+              const aNum = parseInt(a.poNumber) || 0;
+              const bNum = parseInt(b.poNumber) || 0;
+              if (aNum !== bNum) return bNum - aNum;
+              return a.poNumber.localeCompare(b.poNumber);
+            })
+            .map((poGroup) => (
+              <Card key={poGroup.poNumber} className="overflow-hidden">
+                <Collapsible
+                  open={expandedPOs.has(poGroup.poNumber)}
+                  onOpenChange={() => togglePOExpanded(poGroup.poNumber)}
+                >
+                  <CardHeader className="bg-purple-50 dark:bg-purple-900/20 pb-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-purple-600" />
+                        <h3 className="text-lg font-semibold">PO {poGroup.poNumber}</h3>
+                        <Badge variant="secondary">{poGroup.customerName}</Badge>
+                        <Badge variant="outline">
+                          {poGroup.items.length} item{poGroup.items.length !== 1 ? 's' : ''} shipped
+                        </Badge>
+                      </div>
+                      <CollapsibleTrigger asChild>
+                        <Button size="sm" variant="ghost">
+                          {expandedPOs.has(poGroup.poNumber) ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
+                  </CardHeader>
+
+                  <CollapsibleContent>
+                    <CardContent className="pt-4">
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-100 dark:bg-gray-800">
+                            <tr>
+                              <th className="text-left p-3 font-semibold">Order ID</th>
+                              <th className="text-left p-3 font-semibold">Description</th>
+                              <th className="text-center p-3 font-semibold">Qty</th>
+                              <th className="text-left p-3 font-semibold">Shipped Date</th>
+                              <th className="text-left p-3 font-semibold">Tracking</th>
+                              <th className="text-center p-3 font-semibold">Documents</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {poGroup.items.map((item, idx) => (
+                              <tr key={`${item.id}-${idx}`} className="border-t hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td className="p-3 font-mono text-xs">{item.orderId}</td>
+                                <td className="p-3">{item.description}</td>
+                                <td className="p-3 text-center">
+                                  <Badge variant="outline">{item.quantity}</Badge>
+                                </td>
+                                <td className="p-3 text-sm">
+                                  {format(new Date(item.shippedDate), 'MMM dd, yyyy')}
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                                      {item.trackingNumber}
+                                    </code>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => copyTracking(item.trackingNumber)}
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center gap-1 justify-center">
+                                    {item.hasPackingSlip && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                        title="Download Packing Slip"
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    {item.hasLabel && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => downloadShippingLabel(item.shipmentId, item.trackingNumber)}
+                                        title="Download Shipping Label"
+                                      >
+                                        <Download className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            ))}
+        </div>
+      )}
+
+      {/* Legacy Shipments List - Keeping for backward compatibility */}
+      {!isLoading && shipments.length > 0 && false && (
         <div className="space-y-4">
           {shipments.map((shipment) => (
             <Card key={shipment.id} className="overflow-hidden">

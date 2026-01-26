@@ -603,12 +603,10 @@ export default function Navigation() {
       description: 'Preventive maintenance schedules',
     },
     {
-      path: '/timer/station',
+      path: '/app/production/stations',
       label: 'Timer Station',
       icon: Clock,
       description: 'Step-based timing programs for production processes',
-      external: true,
-      externalUrl: import.meta.env.VITE_TIMER_APP_URL || 'http://localhost:5173',
     },
   ];
 

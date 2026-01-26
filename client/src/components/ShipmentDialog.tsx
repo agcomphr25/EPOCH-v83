@@ -1,4 +1,4 @@
-import { useReducer, useEffect } from 'react';
+import { useState, useReducer, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck, Printer, FileText, X } from 'lucide-react';
 import { z } from 'zod';
 
 type ShipmentDialogState = {
@@ -20,6 +20,9 @@ type ShipmentDialogState = {
   thirdPartyCountryCode: string;
   weightLbs: string;
   boxSize: string;
+  customLength: string;
+  customWidth: string;
+  customHeight: string;
   validationErrors: Record<string, string>;
   previewData: {
     trackingNumber?: string;
@@ -38,6 +41,9 @@ type ShipmentDialogAction =
   | { type: 'SET_THIRD_PARTY_COUNTRY'; value: string }
   | { type: 'SET_WEIGHT_LBS'; value: string }
   | { type: 'SET_BOX_SIZE'; value: string }
+  | { type: 'SET_CUSTOM_LENGTH'; value: string }
+  | { type: 'SET_CUSTOM_WIDTH'; value: string }
+  | { type: 'SET_CUSTOM_HEIGHT'; value: string }
   | { type: 'SET_VALIDATION_ERRORS'; errors: Record<string, string> }
   | { type: 'SET_PREVIEW_DATA'; data: ShipmentDialogState['previewData'] }
   | { type: 'RESET' };
@@ -51,6 +57,9 @@ const initialState: ShipmentDialogState = {
   thirdPartyCountryCode: 'US',
   weightLbs: '',
   boxSize: 'medium',
+  customLength: '',
+  customWidth: '',
+  customHeight: '',
   validationErrors: {},
   previewData: null,
 };
@@ -75,6 +84,12 @@ function shipmentReducer(state: ShipmentDialogState, action: ShipmentDialogActio
       return { ...state, weightLbs: action.value };
     case 'SET_BOX_SIZE':
       return { ...state, boxSize: action.value };
+    case 'SET_CUSTOM_LENGTH':
+      return { ...state, customLength: action.value };
+    case 'SET_CUSTOM_WIDTH':
+      return { ...state, customWidth: action.value };
+    case 'SET_CUSTOM_HEIGHT':
+      return { ...state, customHeight: action.value };
     case 'SET_VALIDATION_ERRORS':
       return { ...state, validationErrors: action.errors };
     case 'SET_PREVIEW_DATA':
@@ -121,6 +136,13 @@ interface ShipmentDialogProps {
 
 export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: ShipmentDialogProps) {
   const [state, dispatch] = useReducer(shipmentReducer, initialState);
+  const [printPopup, setPrintPopup] = useState<{
+    show: boolean;
+    trackingNumber: string;
+    items: typeof selectedItems;
+    customerName: string;
+    poNumbers: string[];
+  } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -139,13 +161,22 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
       
-      // Call parent onSuccess handler if provided
+      const poNumbers = Array.from(new Set(selectedItems.map(item => item.poNumber)));
+      const customerName = selectedItems[0]?.customerName || 'Customer';
+      
+      setPrintPopup({
+        show: true,
+        trackingNumber: data.trackingNumber,
+        items: [...selectedItems],
+        customerName,
+        poNumbers,
+      });
+      
       if (onSuccess) {
         onSuccess(data);
       }
       
       dispatch({ type: 'RESET' });
-      onClose();
     },
     onError: (error: any) => {
       toast({
@@ -175,6 +206,17 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       }
       if (!state.boxSize) {
         errors.boxSize = 'Box size is required';
+      }
+      if (state.boxSize === 'custom') {
+        if (!state.customLength || parseFloat(state.customLength) <= 0) {
+          errors.customLength = 'Length is required';
+        }
+        if (!state.customWidth || parseFloat(state.customWidth) <= 0) {
+          errors.customWidth = 'Width is required';
+        }
+        if (!state.customHeight || parseFloat(state.customHeight) <= 0) {
+          errors.customHeight = 'Height is required';
+        }
       }
     }
 
@@ -211,7 +253,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   const handleSubmit = async () => {
     if (!validateStep(state.currentStep)) return;
 
-    const payload = {
+    const payload: any = {
       items: selectedItems.map((item) => ({
         poItemId: item.poItemId,
         orderId: item.orderId,
@@ -225,6 +267,14 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       weightLbs: parseFloat(state.weightLbs) || 5,
       boxSize: state.boxSize || 'medium',
     };
+
+    if (state.boxSize === 'custom') {
+      payload.customDimensions = {
+        length: parseFloat(state.customLength) || 0,
+        width: parseFloat(state.customWidth) || 0,
+        height: parseFloat(state.customHeight) || 0,
+      };
+    }
 
     processShipmentMutation.mutate(payload);
   };
@@ -242,7 +292,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   }, {} as Record<string, Record<string, typeof selectedItems>>);
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <>
+    <Dialog open={open && !printPopup?.show} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Shipment</DialogTitle>
@@ -340,6 +391,20 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         </div>
       </DialogContent>
     </Dialog>
+    
+    {printPopup?.show && (
+      <PrintShipmentPopup
+        trackingNumber={printPopup.trackingNumber}
+        customerName={printPopup.customerName}
+        poNumbers={printPopup.poNumbers}
+        items={printPopup.items}
+        onClose={() => {
+          setPrintPopup(null);
+          onClose();
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -433,6 +498,62 @@ function StepSelectionRecap({
             )}
           </div>
         </div>
+
+        {state.boxSize === 'custom' && (
+          <div className="mt-4 p-4 bg-muted/30 rounded-lg space-y-3">
+            <Label className="font-medium">Custom Dimensions (inches)</Label>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="customLength" className="text-xs text-muted-foreground">Length</Label>
+                <Input
+                  id="customLength"
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  placeholder="L"
+                  value={state.customLength}
+                  onChange={(e) => dispatch({ type: 'SET_CUSTOM_LENGTH', value: e.target.value })}
+                  className={errors.customLength ? 'border-destructive' : ''}
+                />
+                {errors.customLength && (
+                  <div className="text-xs text-destructive">{errors.customLength}</div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="customWidth" className="text-xs text-muted-foreground">Width</Label>
+                <Input
+                  id="customWidth"
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  placeholder="W"
+                  value={state.customWidth}
+                  onChange={(e) => dispatch({ type: 'SET_CUSTOM_WIDTH', value: e.target.value })}
+                  className={errors.customWidth ? 'border-destructive' : ''}
+                />
+                {errors.customWidth && (
+                  <div className="text-xs text-destructive">{errors.customWidth}</div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="customHeight" className="text-xs text-muted-foreground">Height</Label>
+                <Input
+                  id="customHeight"
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  placeholder="H"
+                  value={state.customHeight}
+                  onChange={(e) => dispatch({ type: 'SET_CUSTOM_HEIGHT', value: e.target.value })}
+                  className={errors.customHeight ? 'border-destructive' : ''}
+                />
+                {errors.customHeight && (
+                  <div className="text-xs text-destructive">{errors.customHeight}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -624,5 +745,233 @@ function StepReviewPreview({
         Click "Create Shipment" to generate shipping label and packing slips.
       </div>
     </div>
+  );
+}
+
+function PrintShipmentPopup({
+  trackingNumber,
+  customerName,
+  poNumbers,
+  items,
+  onClose,
+}: {
+  trackingNumber: string;
+  customerName: string;
+  poNumbers: string[];
+  items: Array<{
+    poItemId: number;
+    orderId: string;
+    quantity: number;
+    description: string;
+  }>;
+  onClose: () => void;
+}) {
+  const handlePrintPackingSlip = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      alert('Please allow popups for this site to print');
+      return;
+    }
+
+    const today = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const itemsHtml = items.map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.orderId}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.description || 'Item'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Packing Slip - ${poNumbers.join(', ')}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 24px; font-weight: bold; }
+          .title { font-size: 28px; text-align: center; margin-bottom: 30px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+          .info-box { background: #f9fafb; padding: 15px; border-radius: 8px; }
+          .info-label { font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px; }
+          .info-value { font-size: 16px; font-weight: 500; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #f3f4f6; padding: 12px 8px; text-align: left; font-weight: 600; border-bottom: 2px solid #d1d5db; }
+          .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">AG Composites</div>
+          <div style="text-align: right; color: #6b7280;">
+            <div>Date: ${today}</div>
+          </div>
+        </div>
+        <h1 class="title">PACKING SLIP</h1>
+        <div class="info-grid">
+          <div class="info-box">
+            <div class="info-label">Ship To</div>
+            <div class="info-value">${customerName}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">PO Number(s)</div>
+            <div class="info-value">${poNumbers.join(', ')}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Tracking Number</div>
+            <div class="info-value" style="font-family: monospace;">${trackingNumber}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Total Items</div>
+            <div class="info-value">${items.length} item(s)</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Description</th>
+              <th style="text-align: center;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>Thank you for your business!</p>
+          <p>AG Composites</p>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
+  const handlePrintShippingLabel = () => {
+    const printWindow = window.open('', '_blank', 'width=600,height=400');
+    if (!printWindow) {
+      alert('Please allow popups for this site to print');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Shipping Label - ${trackingNumber}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 30px; max-width: 400px; margin: 0 auto; }
+          .label-box { border: 3px solid #000; padding: 20px; }
+          .from, .to { margin-bottom: 20px; }
+          .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+          .address { font-size: 14px; line-height: 1.5; }
+          .to .address { font-size: 18px; font-weight: bold; }
+          .tracking { margin-top: 20px; padding-top: 20px; border-top: 2px dashed #000; text-align: center; }
+          .tracking-label { font-size: 12px; color: #666; }
+          .tracking-number { font-size: 20px; font-weight: bold; font-family: monospace; letter-spacing: 2px; margin-top: 5px; }
+          .barcode-placeholder { margin-top: 15px; padding: 10px; background: repeating-linear-gradient(90deg, #000 0px, #000 3px, #fff 3px, #fff 6px); height: 50px; }
+          @media print { body { padding: 10px; } }
+        </style>
+      </head>
+      <body>
+        <div class="label-box">
+          <div class="from">
+            <div class="label">From:</div>
+            <div class="address">
+              AG Composites<br>
+              123 Manufacturing Way<br>
+              Huntsville, AL 35801
+            </div>
+          </div>
+          <div class="to">
+            <div class="label">To:</div>
+            <div class="address">${customerName}</div>
+          </div>
+          <div class="tracking">
+            <div class="tracking-label">Tracking Number</div>
+            <div class="tracking-number">${trackingNumber}</div>
+            <div class="barcode-placeholder"></div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-green-600" />
+            Shipment Created Successfully
+          </DialogTitle>
+          <DialogDescription>
+            Print the packing slip and shipping label for this shipment.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="text-sm text-muted-foreground">Tracking Number</div>
+            <div className="font-mono text-lg font-semibold">{trackingNumber}</div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <div className="text-sm text-muted-foreground">Customer</div>
+              <div className="font-medium">{customerName}</div>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <div className="text-sm text-muted-foreground">PO Number(s)</div>
+              <div className="font-medium">{poNumbers.join(', ')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <Button
+            onClick={handlePrintPackingSlip}
+            className="w-full"
+            size="lg"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Print Packing Slip
+          </Button>
+          
+          <Button
+            onClick={handlePrintShippingLabel}
+            variant="outline"
+            className="w-full"
+            size="lg"
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Print Shipping Label
+          </Button>
+
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            className="w-full"
+          >
+            <X className="w-4 h-4 mr-2" />
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

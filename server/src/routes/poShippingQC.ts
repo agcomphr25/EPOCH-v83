@@ -948,66 +948,87 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
 });
 
 // POST /api/po-orders/toggle-fulfilled
-// Mark PO item as fulfilled (shipped through another system) or unfulfilled
+// Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
+// Supports both single orderId and batch orderIds array
 router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   try {
-    const { orderId, isFulfilled } = req.body;
-
-    if (!orderId) {
-      return res.status(400).json({ _error: 'orderId is required' });
+    // Support both single orderId and batch orderIds
+    const { orderId, orderIds, isFulfilled, fulfilled } = req.body;
+    const shouldFulfill = isFulfilled ?? fulfilled ?? true;
+    
+    // Normalize to array of order IDs
+    let idsToProcess: string[] = [];
+    if (orderIds && Array.isArray(orderIds)) {
+      idsToProcess = orderIds;
+    } else if (orderId) {
+      idsToProcess = [orderId];
     }
 
-    if (typeof isFulfilled !== 'boolean') {
-      return res.status(400).json({ _error: 'isFulfilled must be a boolean' });
+    if (idsToProcess.length === 0) {
+      return res.status(400).json({ _error: 'orderId or orderIds is required' });
     }
 
-    console.log(`📦 ${isFulfilled ? 'Marking' : 'Unmarking'} ${orderId} as fulfilled...`);
+    console.log(`📦 ${shouldFulfill ? 'Marking' : 'Unmarking'} ${idsToProcess.length} item(s) as fulfilled...`);
 
     const { storage } = await import('../../storage');
+    const results: any[] = [];
     
-    // Check if this is a PO item (non-stock/metal accessory) or a production order
-    if (orderId.startsWith('PO-') && orderId.includes('-')) {
-      // This is a PO item - extract poItemId from orderId (format: PO-{poItemId}-{unitNumber})
-      const parts = orderId.split('-');
-      if (parts.length >= 3) {
-        const poItemId = parseInt(parts[1]);
-        if (!isNaN(poItemId)) {
-          // Update PO item stock status
-          await storage.updatePurchaseOrderItem(poItemId, {
-            stockStatus: isFulfilled ? 'SHIPPED' : 'IN_STOCK',
-          });
-          console.log(`✅ PO Item ${poItemId} marked as ${isFulfilled ? 'SHIPPED' : 'IN_STOCK'}`);
-          
-          return res.json({
-            success: true,
-            orderId,
-            isFulfilled,
-            shippedAt: isFulfilled ? new Date().toISOString() : null,
-          });
+    for (const id of idsToProcess) {
+      // Check if this is a PO item (non-stock/metal accessory) or a production order
+      if (id.startsWith('PO-') && id.includes('-')) {
+        // This is a PO item - extract poItemId from orderId (format: PO-{poItemId}-{unitNumber})
+        const parts = id.split('-');
+        if (parts.length >= 3) {
+          const poItemId = parseInt(parts[1]);
+          if (!isNaN(poItemId)) {
+            // Update PO item stock status
+            await storage.updatePurchaseOrderItem(poItemId, {
+              stockStatus: shouldFulfill ? 'SHIPPED' : 'IN_STOCK',
+            });
+            console.log(`✅ PO Item ${poItemId} marked as ${shouldFulfill ? 'SHIPPED' : 'IN_STOCK'}`);
+            
+            results.push({
+              orderId: id,
+              success: true,
+              isFulfilled: shouldFulfill,
+            });
+            continue;
+          }
         }
       }
+      
+      // Try to find as production order
+      const order = await storage.getProductionOrderByOrderId(id);
+
+      if (!order) {
+        console.log(`⚠️ Order ${id} not found, skipping`);
+        results.push({
+          orderId: id,
+          success: false,
+          error: 'Order not found',
+        });
+        continue;
+      }
+
+      // Update production status to SHIPPED or back to previous status
+      await storage.updateProductionOrder(order.id, {
+        productionStatus: shouldFulfill ? 'SHIPPED' : 'PENDING',
+        shippedAt: shouldFulfill ? new Date() : null,
+      });
+
+      console.log(`✅ ${id} fulfillment status updated: ${shouldFulfill}`);
+      results.push({
+        orderId: id,
+        success: true,
+        isFulfilled: shouldFulfill,
+      });
     }
-    
-    // Try to find as production order
-    const order = await storage.getProductionOrderByOrderId(orderId);
-
-    if (!order) {
-      return res.status(404).json({ _error: 'Order not found' });
-    }
-
-    // Update production status to SHIPPED or back to previous status
-    await storage.updateProductionOrder(order.id, {
-      productionStatus: isFulfilled ? 'SHIPPED' : 'PENDING',
-      shippedAt: isFulfilled ? new Date() : null,
-    });
-
-    console.log(`✅ ${orderId} fulfillment status updated: ${isFulfilled}`);
 
     res.json({
       success: true,
-      orderId,
-      isFulfilled,
-      shippedAt: isFulfilled ? new Date().toISOString() : null,
+      processed: results.length,
+      results,
+      shippedAt: shouldFulfill ? new Date().toISOString() : null,
     });
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);

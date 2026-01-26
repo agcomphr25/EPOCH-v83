@@ -1522,12 +1522,12 @@ export default function QCShippingQueuePage() {
                                 const poReadyCount = po.items.filter((item: any) => item.isReadyToShip).length;
                                 const completionPercentage = Math.round((po.completedUnits / po.totalUnits) * 100);
                                 
-                                // Separate metal accessories (stock model "None" or empty) from regular items
+                                // Separate metal accessories (stock model "Unknown" or empty) from regular items
                                 const metalAccessories = po.items.filter((item: any) => 
-                                  !item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === ''
+                                  !item.stockModel || item.stockModel === 'Unknown' || item.stockModel.toLowerCase() === 'unknown' || item.stockModel.trim() === ''
                                 );
                                 const regularItems = po.items.filter((item: any) => 
-                                  item.stockModel && item.stockModel !== 'None' && item.stockModel.toLowerCase() !== 'none' && item.stockModel.trim() !== ''
+                                  item.stockModel && item.stockModel !== 'Unknown' && item.stockModel.toLowerCase() !== 'unknown' && item.stockModel.trim() !== ''
                                 );
                                 const accessoriesReadyCount = metalAccessories.filter((item: any) => item.isReadyToShip).length;
                                 const regularReadyCount = regularItems.filter((item: any) => item.isReadyToShip).length;
@@ -1628,7 +1628,7 @@ export default function QCShippingQueuePage() {
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
                                                   <div className="flex items-center gap-2">
                                                     {/* Metal Accessory indicator */}
-                                                    {(!item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === '') && (
+                                                    {(!item.stockModel || item.stockModel === 'Unknown' || item.stockModel.toLowerCase() === 'unknown' || item.stockModel.trim() === '') && (
                                                       <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
                                                         <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                                                       </span>
@@ -1646,7 +1646,7 @@ export default function QCShippingQueuePage() {
                                                     {item.description || 'No description'}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
-                                                    {(!item.stockModel || item.stockModel === 'None' || item.stockModel.toLowerCase() === 'none' || item.stockModel.trim() === '') ? (
+                                                    {(!item.stockModel || item.stockModel === 'Unknown' || item.stockModel.toLowerCase() === 'unknown' || item.stockModel.trim() === '') ? (
                                                       <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
                                                     ) : (
                                                       item.stockModel

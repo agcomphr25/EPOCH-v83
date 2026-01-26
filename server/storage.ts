@@ -8785,7 +8785,7 @@ export class DatabaseStorage implements IStorage {
           const lowerStockModel = item.stockModel.toLowerCase().trim();
           const hasValidStockModel = lowerStockModel !== 'no stock' && 
                  lowerStockModel !== 'no_stock' && 
-                 lowerStockModel !== 'none';
+                 lowerStockModel !== 'unknown';
           
           if (!hasValidStockModel) {
             return false;
@@ -9097,7 +9097,7 @@ export class DatabaseStorage implements IStorage {
             const stockModelLower = (poItem.stockModel || '').toLowerCase().trim();
             const hasStockModel = poItem.stockModel && 
               stockModelLower !== 'no stock' && 
-              stockModelLower !== 'none' && 
+              stockModelLower !== 'unknown' && 
               stockModelLower !== '' &&
               stockModelLower !== 'n/a';
             

@@ -107,6 +107,7 @@ function getStatusLabel(status: string): string {
 function TimerCard({ run }: { run: RunWithDetails }) {
   const { toast } = useToast();
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
 
   const currentStep = run.steps?.find(s => s.stepIndex === run.currentStepIndex);
   const totalSteps = run.steps?.length || 0;
@@ -118,18 +119,29 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     
     if (run.status === 'completed' || run.status === 'stopped') {
       setElapsedTime(run.totalElapsedSeconds);
+      setCurrentPauseSeconds(pauseSeconds);
       return;
     }
 
-    // When paused, elapsed time is frozen (wall-clock minus pause time, but no live update)
+    // When paused, elapsed time is frozen but we track growing pause time for est. completion
     if (run.status === 'paused') {
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
       setElapsedTime(elapsed);
-      return;
+      
+      // Update current pause seconds every second (for estimated completion to progress)
+      const updatePause = () => {
+        const currentNow = Date.now();
+        const totalPause = Math.floor((currentNow - startTime) / 1000) - elapsed;
+        setCurrentPauseSeconds(totalPause);
+      };
+      updatePause();
+      const interval = setInterval(updatePause, 1000);
+      return () => clearInterval(interval);
     }
 
     // When running, update elapsed time every second (excluding pause time)
+    setCurrentPauseSeconds(pauseSeconds);
     const updateElapsed = () => {
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
@@ -197,10 +209,9 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     ? Math.max(0, currentStep.durationSeconds - (elapsedTime % (currentStep.durationSeconds || 1)))
     : 0;
 
-  // Estimated completion shifts forward by cumulative pause time
-  const pauseSeconds = run.cumulativePauseSeconds || 0;
+  // Estimated completion shifts forward by cumulative pause time (updates while paused)
   const estimatedCompletion = totalProgramDuration > 0
-    ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + pauseSeconds) * 1000)
+    ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + currentPauseSeconds) * 1000)
     : null;
 
   return (
@@ -220,13 +231,6 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Started:</span>
-            <span className="font-semibold">
-              {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-            </span>
-          </div>
           {run.serialNumber && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Serial #:</span>
@@ -242,7 +246,13 @@ function TimerCard({ run }: { run: RunWithDetails }) {
           {run.ovenNumber && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Oven:</span>
-              <span className="font-semibold">{run.ovenNumber}{run.ovenSlot ? `-${run.ovenSlot}` : ''}</span>
+              <span className="font-semibold">{run.ovenNumber}</span>
+              {run.ovenSlot && (
+                <>
+                  <span className="text-muted-foreground ml-2">Slot:</span>
+                  <span className="font-semibold">{run.ovenSlot}</span>
+                </>
+              )}
             </div>
           )}
           {run.inventoryItemId && (
@@ -282,7 +292,16 @@ function TimerCard({ run }: { run: RunWithDetails }) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Started</p>
+              <p className="text-lg font-semibold">
+                {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Timer className="w-5 h-5 text-muted-foreground" />
             <div>

@@ -120,12 +120,25 @@ export default function QCShippingQueuePage() {
   // Helper function to handle shipment documents - shows modal for printing
   const handleShipmentDocuments = (shipmentData: any) => {
     try {
+      console.log('📦 handleShipmentDocuments called with:', {
+        trackingNumber: shipmentData.trackingNumber,
+        hasLabel: !!shipmentData.shippingLabel?.data,
+        packingSlipsCount: shipmentData.packingSlips?.length || 0,
+        packingSlips: shipmentData.packingSlips,
+      });
+      
       // Prepare document data for the modal
       const documentsData = {
         trackingNumber: shipmentData.trackingNumber || '',
         labelData: shipmentData.shippingLabel?.data || null,
         packingSlips: shipmentData.packingSlips || [],
       };
+      
+      console.log('📄 Documents data prepared:', {
+        trackingNumber: documentsData.trackingNumber,
+        hasLabel: !!documentsData.labelData,
+        packingSlipsCount: documentsData.packingSlips.length,
+      });
       
       // Store in state and show modal
       setShipmentDocumentsData(documentsData);

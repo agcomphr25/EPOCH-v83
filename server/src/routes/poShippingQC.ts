@@ -1142,33 +1142,45 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // 7. GENERATE UPS SHIPPING LABEL
     let trackingNumber: string;
     let labelBase64: string;
-    try {
-      const shipmentResult = await createShipment({
-        shipTo,
-        serviceCode,
-        weightLbs: Math.max(totalWeight, 1),
-        referenceNumber,
-        billingOption,
-        thirdPartyAccountNumber,
-        thirdPartyPostalCode,
-        thirdPartyCountryCode,
-      });
+    
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    if (isDevelopment) {
+      // In development, generate a test tracking number and skip UPS API
+      const crypto = await import('crypto');
+      trackingNumber = `TEST-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
+      labelBase64 = '';
+      console.log(`🧪 DEV MODE: Generated test tracking number: ${trackingNumber}`);
+    } else {
+      // In production, use real UPS API
+      try {
+        const shipmentResult = await createShipment({
+          shipTo,
+          serviceCode,
+          weightLbs: Math.max(totalWeight, 1),
+          referenceNumber,
+          billingOption,
+          thirdPartyAccountNumber,
+          thirdPartyPostalCode,
+          thirdPartyCountryCode,
+        });
 
-      trackingNumber = shipmentResult.trackingNumber;
-      labelBase64 = shipmentResult.labelBase64 || '';
+        trackingNumber = shipmentResult.trackingNumber;
+        labelBase64 = shipmentResult.labelBase64 || '';
 
-      if (!trackingNumber) {
-        throw new Error('UPS did not return a tracking number');
+        if (!trackingNumber) {
+          throw new Error('UPS did not return a tracking number');
+        }
+
+        console.log(`✅ UPS Label generated: ${trackingNumber}`);
+      } catch (upsError: any) {
+        console.error('❌ UPS API Error:', upsError.message);
+        return res.status(502).json({
+          _error: 'UPS shipping label generation failed',
+          details: upsError.message,
+          suggestion: 'Check UPS credentials and try again, or process manually',
+        });
       }
-
-      console.log(`✅ UPS Label generated: ${trackingNumber}`);
-    } catch (upsError: any) {
-      console.error('❌ UPS API Error:', upsError.message);
-      return res.status(502).json({
-        _error: 'UPS shipping label generation failed',
-        details: upsError.message,
-        suggestion: 'Check UPS credentials and try again, or process manually',
-      });
     }
 
     // 8. PERSIST SHIPMENT TO DATABASE

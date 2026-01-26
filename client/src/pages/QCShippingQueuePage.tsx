@@ -1484,14 +1484,14 @@ export default function QCShippingQueuePage() {
                   </p>
                   
                   {/* Customer Groups */}
-                  {(poOrders as any[]).map((customer: any) => {
+                  {(poOrders as any[]).map((customer: any, customerIndex: number) => {
                     const readyToShipCount = customer.pos.reduce((sum: number, po: any) => 
                       sum + po.items.filter((item: any) => item.isReadyToShip).length, 0
                     );
                     const totalCount = customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0);
                     
                     return (
-                      <Collapsible key={customer.customerName} defaultOpen={readyToShipCount > 0}>
+                      <Collapsible key={`${customer.customerId}-${customerIndex}`} defaultOpen={readyToShipCount > 0}>
                         <Card className="border-2">
                           <CollapsibleTrigger className="w-full">
                             <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer">

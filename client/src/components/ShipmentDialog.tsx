@@ -1003,7 +1003,7 @@ function PrintShipmentPopup({
           <Button
             onClick={() => fulfillMutation.mutate()}
             disabled={isFulfilled || fulfillMutation.isPending}
-            className={`w-full ${isFulfilled ? 'bg-green-600 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className="w-full bg-green-600 hover:bg-green-700 text-white"
             size="lg"
           >
             {fulfillMutation.isPending ? (

@@ -8755,6 +8755,7 @@ export class DatabaseStorage implements IStorage {
             poNumber: po.poNumber,
             productName: item.itemName || '',
             stockModel: stockModel,
+            itemType: item.itemType || null,
             actionLength: specs.actionLength || specs.action_length || null,
             material: specs.material || null,
             handedness: specs.handedness || null,
@@ -8775,9 +8776,15 @@ export class DatabaseStorage implements IStorage {
         })
         .filter((item) => {
           // Only include items with:
-          // 1. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
-          // 2. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
-          // 3. NOT all production orders are fulfilled
+          // 1. itemType === 'stock_model' (exclude metal accessories like 'custom_model')
+          // 2. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
+          // 3. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
+          // 4. NOT all production orders are fulfilled
+          
+          // Filter out metal accessories - they don't need production
+          if (!item.itemType || item.itemType.toLowerCase() !== 'stock_model') {
+            return false;
+          }
           
           if (!item.stockModel || item.stockModel.trim() === '') {
             return false;

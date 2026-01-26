@@ -1,0 +1,336 @@
+ [Coframe] Replit Enterprise watcher loaded
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+/t/ag-composites:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+/t/ag-composites:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+/t/ag-composites:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+ 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+ Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+ [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 8a66ba322fb44859.js:2
+sp.replit.com/sdk.js/v1/dMePKGC4BqfBivpe0Hvl8IoPpzSHgjdX/sdk.min.js:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+ WebSocket connection to 'wss://production-chort.replit.com/api/river' failed: 
+(anonymous) @ 8d1f09e91cdbf7d5.js:2
+ WebSocket connection to 'wss://production-chort.replit.com/api/river-chat?auth_token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQzNjk5NTUwLCJ1c2VyVGltZUNyZWF0ZWQiOiIyMDI1LTA2LTEwVDE3OjQwOjQ3LjA4M1oiLCJyZXBsSWQiOiJub25lLTQzNjk5NTUwIiwibWVtYmVyc2hpcCI6ImZyZWUiLCJpc3N1ZXIiOiJodHRwczovL3JlcGxpdC13ZWItcHJvZC5wLnJlcGxpdC5jb20iLCJyb2xlcyI6W10sImNhbldyaXRlIjpmYWxzZSwiaGFzUmVwbGl0QWlQcm8iOnRydWUsImZsYWdnaW5nQ29udGV4dCI6IntcImtleVwiOlwidXNlcjo0MzY5OTU1MFwiLFwia2luZFwiOlwib3duZXJcIixcInJvbGVzXCI6W10sXCJpc190ZWFtXCI6ZmFsc2UsXCJtZW1iZX...3BlbmFpRGlzYWJsZWQiOmZhbHNlLCJhbnRocm9waWNEaXNhYmxlZCI6ZmFsc2UsImdlbWluaURpc2FibGVkIjpmYWxzZSwiaXNFbnRlcnByaXNlIjpmYWxzZSwiaWF0IjoxNzY5NDM3NDMxLCJleHAiOjE3Njk0NDEwMzF9.YEvJ3As7ZPF8DsNSd9Rf5Bd3wOQPmEVNraGoe69TsyLOxIndC7-NHj_ht_t78Sze-OA8Z6XPOy6Kqkmdc5gts7x5kvw7neGQDx4kI768sIQTeCQyf5FtXn9St_6LOBsSPbkzIaPMHsij6BhImdazWesEY2np-E9BGwun3HLd4OIK3Okv7kS7WmH09ThKmjIlSHtn8SYPUuaxCj645cMMTXcJHHAle3pQDEb10YhkBrPUI1De2CuY6NN6ZQZXsdobZRuds5tL-5jViiJA6gegdm9lxnmDiMyaoX1DflFTLYAiHrpv_ONRmO3OSNpt01BsAbbKMJuKV1BNCIHNNDe94A' failed: 
+(anonymous) @ 8d1f09e91cdbf7d5.js:2
+adora-cdn.com/adora-start.js:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+featureassets.org/v1/initialize?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1769437429883&sid=b1261de8-48c2-4f5d-b066-80ee4e7ddbe9&se=1:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+js.stripe.com/acacia/stripe.js:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+prodregistryv2.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1769437429893&sid=b1261de8-48c2-4f5d-b066-80ee4e7ddbe9&ec=1&gz=1:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ [LaunchDarkly] Error fetching flag settings: network error (Error)
+(anonymous) @ 8a66ba322fb44859.js:2
+app.launchdarkly.com/sdk/evalx/62b35a865152ab14c5942820/contexts/eyJrZXkiOiI0MzY5OTU1MCIsImtpbmQiOiJ1c2VyIiwiYW5vbnltb3VzIjpmYWxzZX0:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+identitytoolkit.googleapis.com/v2/recaptchaConfig?key=AIzaSyARAzVTWc_KOBojIholLo2wzwNOQ6VKcB8&clientType=CLIENT_TYPE_WEB&version=RECAPTCHA_ENTERPRISE:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ loadStripe.setLoadParameters was called but an existing Stripe.js script already exists in the document; existing script parameters will be used
+(anonymous) @ 8a66ba322fb44859.js:2
+assetsconfigcdn.org/v1/initialize?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1769437431566&sid=b1261de8-48c2-4f5d-b066-80ee4e7ddbe9&se=1:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+prodregistryv2.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1769437429894&sid=b1261de8-48c2-4f5d-b066-80ee4e7ddbe9&ec=1&gz=1:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+prodregistryv2.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client&sv=3.26.0&t=1769437429937&sid=b1261de8-48c2-4f5d-b066-80ee4e7ddbe9&ec=2&gz=1:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+/t/ag-composites:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 8a66ba322fb44859.js:2
+ Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:a4cd8b9e-0898-4d53-a160-a43a8b9f4228"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:a4cd8b9e-0898-4d53-a160-a43a8b9f4228"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 8a66ba322fb44859.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1i1%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+ [vite] connecting...
+ [vite] connected.
+ React initialized: [object Object]
+ React hooks: [object Object]
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ Redirecting tasham to /admin-dashboard
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+ Redirecting tasham to /admin-dashboard
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ [vite] server connection lost. Polling for restart...
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/department-queue/qc-shipping:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ [vite] connecting...
+ [vite] connected.
+ React initialized: Object
+ React hooks: Object
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/pos (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/customers (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/stock-models (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/stock-models: 200
+ ✅ API Response from /api/pos: 200
+ 🌐 API Request to /api/pos/8/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/8 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/40/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/39/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/39 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/38/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/38 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/18/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/18 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/17/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/17 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/16/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/16 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/15/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/15 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/14/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/14 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/13/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/13 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/12/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/12 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/11/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/11 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/10/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/10 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/9/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/9 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/7/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/7 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/5/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/5 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/4/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/4 (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/customers: 200
+ ✅ API Response from /api/pos/8/items: 200
+ ✅ API Response from /api/pos/39/items: 200
+ ✅ API Response from /api/pos/40/items: 200
+ ✅ API Response from /api/production-orders/by-po/40: 200
+ ✅ API Response from /api/production-orders/by-po/39: 200
+ ✅ API Response from /api/pos/38/items: 200
+ ✅ API Response from /api/pos/18/items: 200
+ ✅ API Response from /api/production-orders/by-po/38: 200
+ ✅ API Response from /api/pos/17/items: 200
+ ✅ API Response from /api/production-orders/by-po/17: 200
+ ✅ API Response from /api/production-orders/by-po/18: 200
+ ✅ API Response from /api/pos/16/items: 200
+ ✅ API Response from /api/production-orders/by-po/8: 200
+ ✅ API Response from /api/production-orders/by-po/16: 200
+ ✅ API Response from /api/pos/15/items: 200
+ ✅ API Response from /api/production-orders/by-po/15: 200
+ ✅ API Response from /api/pos/13/items: 200
+ ✅ API Response from /api/production-orders/by-po/14: 200
+ ✅ API Response from /api/pos/14/items: 200
+ ✅ API Response from /api/production-orders/by-po/13: 200
+ ✅ API Response from /api/production-orders/by-po/12: 200
+ ✅ API Response from /api/pos/12/items: 200
+ ✅ API Response from /api/pos/10/items: 200
+ ✅ API Response from /api/production-orders/by-po/11: 200
+ ✅ API Response from /api/pos/11/items: 200
+ ✅ API Response from /api/production-orders/by-po/10: 200
+ ✅ API Response from /api/pos/9/items: 200
+ ✅ API Response from /api/production-orders/by-po/9: 200
+ ✅ API Response from /api/pos/5/items: 200
+ ✅ API Response from /api/production-orders/by-po/7: 200
+ ✅ API Response from /api/production-orders/by-po/5: 200
+ ✅ API Response from /api/pos/7/items: 200
+ ✅ API Response from /api/pos/4/items: 200
+ ✅ API Response from /api/production-orders/by-po/4: 200
+ 🌐 API Request to /api/po-products (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/features (timeout: 120000ms, deployment: false)
+ ✅ API Response from /api/features: 200
+ ✅ API Response from /api/po-products: 200
+ 🌐 API Request to /api/pos/8/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/8 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/40/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/39/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/39 (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/pos/38/items (timeout: 120000ms, deployment: false)
+ 🌐 API Request to /api/production-orders/by-po/38 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/18/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/18 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/17/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/17 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/16/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/16 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/15/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/15 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/14/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/14 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/13/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/13 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/12/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/12 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/11/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/11 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/10/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/10 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/9/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/9 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/7/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/7 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/5/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/5 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos/4/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/production-orders/by-po/4 (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/pos (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/customers (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/stock-models (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/pos/40/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/40: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/8: 200
+injected.js:37 ✅ API Response from /api/pos/39/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/39: 200
+injected.js:37 ✅ API Response from /api/pos/8/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/38: 200
+injected.js:37 ✅ API Response from /api/pos/38/items: 200
+injected.js:37 ✅ API Response from /api/pos/18/items: 200
+injected.js:37 ✅ API Response from /api/pos/17/items: 200
+injected.js:37 ✅ API Response from /api/pos/15/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/16: 200
+injected.js:37 ✅ API Response from /api/pos/16/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/17: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/18: 200
+injected.js:37 ✅ API Response from /api/pos/14/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/15: 200
+injected.js:37 ✅ API Response from /api/pos/13/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/13: 200
+injected.js:37 ✅ API Response from /api/pos/12/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/14: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/12: 200
+injected.js:37 ✅ API Response from /api/pos/9/items: 200
+injected.js:37 ✅ API Response from /api/pos/11/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/10: 200
+injected.js:37 ✅ API Response from /api/pos/10/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/11: 200
+injected.js:37 ✅ API Response from /api/pos/4/items: 200
+injected.js:37 ✅ API Response from /api/pos/7/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/9: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/7: 200
+injected.js:37 ✅ API Response from /api/pos/5/items: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/5: 200
+injected.js:37 ✅ API Response from /api/pos: 200
+injected.js:37 ✅ API Response from /api/production-orders/by-po/4: 200
+injected.js:37 ✅ API Response from /api/stock-models: 200
+injected.js:37 ✅ API Response from /api/customers: 200
+injected.js:37 🔵 Dialog onOpenChange called, open: true
+injected.js:37 🔵 Dialog opening, resetting form...
+injected.js:37 🔵 Dialog state set to: true
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 🟢 Form submitted with formData: Object
+injected.js:37 Submitting PO data: Object
+injected.js:37 createPO called with data: Object
+injected.js:37 🌐 API Request to /api/pos (timeout: 120000ms, deployment: false)
+96386dd4-936c-41a0-bc91-797d37a40ef7-00-nrurtv19bry8.janeway.replit.dev/api/pos:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 ✅ API Response from /api/pos: 500
+injected.js:37 API error raw body: {"_error":"duplicate key value violates unique constraint \"purchase_orders_pkey\""}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/pos: Error: {"_error":"duplicate key value violates unique constraint \"purchase_orders_pkey\""}
+    at apiRequest (queryClient.ts:135:13)
+    at async Object.createPO [as mutationFn] (poUtils.ts:116:20)
+(anonymous) @ injected.js:37

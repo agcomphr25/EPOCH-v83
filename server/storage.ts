@@ -9019,6 +9019,7 @@ export class DatabaseStorage implements IStorage {
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
         poi.item_type as "itemType",
+        poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
         prod.production_status as "productionStatus"
@@ -9079,6 +9080,7 @@ export class DatabaseStorage implements IStorage {
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
+          stockStatus: (row as any).stockStatus || null,
           productionOrders: [],
         });
       }
@@ -9090,15 +9092,19 @@ export class DatabaseStorage implements IStorage {
         const unitMatch = row.orderId.match(/-(\d+)$/);
         const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
 
+        // Don't mark as ready to ship if already shipped
+        const isShipped = row.productionStatus === 'SHIPPED' || (row as any).stockStatus === 'SHIPPED';
+        const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
+
         poItem.productionOrders.push({
           orderId: row.orderId,
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled: false,
+          isFulfilled: isShipped,
           fulfilledDate: null,
           fulfilledBy: null,
-          isReadyToShip: row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping',
+          isReadyToShip: isInShippingDept && !isShipped,
         });
       }
     }
@@ -9124,10 +9130,13 @@ export class DatabaseStorage implements IStorage {
               return;
             }
             
+            // Check if this item has already been shipped (stockStatus = 'SHIPPED')
+            const isShipped = poItem.stockStatus === 'SHIPPED';
+            
             // Only non-stock items (metal accessories) should proceed to Shipping QC without production
-            const department = 'Shipping QC';
-            const status = 'IN_SHIPPING_QC';
-            const readyToShip = true;
+            const department = isShipped ? 'Shipped' : 'Shipping QC';
+            const status = isShipped ? 'SHIPPED' : 'IN_SHIPPING_QC';
+            const readyToShip = !isShipped;
             
             for (let i = 1; i <= poItem.quantity; i++) {
               allItems.push({
@@ -9146,7 +9155,7 @@ export class DatabaseStorage implements IStorage {
                 itemType: poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
-                isFulfilled: false,
+                isFulfilled: isShipped,
                 fulfilledDate: null,
                 fulfilledBy: null,
                 isReadyToShip: readyToShip,

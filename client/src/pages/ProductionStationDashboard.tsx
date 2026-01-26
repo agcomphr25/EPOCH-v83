@@ -104,10 +104,41 @@ function getStatusLabel(status: string): string {
   }
 }
 
+function playAlertSound() {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 880;
+    oscillator.type = 'sine';
+    gainNode.gain.value = 0.5;
+    
+    oscillator.start();
+    
+    setTimeout(() => {
+      oscillator.frequency.value = 1100;
+    }, 200);
+    setTimeout(() => {
+      oscillator.frequency.value = 880;
+    }, 400);
+    setTimeout(() => {
+      oscillator.stop();
+      audioContext.close();
+    }, 600);
+  } catch (e) {
+    console.error('Failed to play alert sound:', e);
+  }
+}
+
 function TimerCard({ run }: { run: RunWithDetails }) {
   const { toast } = useToast();
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
+  const [hasTriggeredTimeout, setHasTriggeredTimeout] = useState(false);
 
   const currentStep = run.steps?.find(s => s.stepIndex === run.currentStepIndex);
   const totalSteps = run.steps?.length || 0;
@@ -186,9 +217,24 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       toast({ title: 'Advanced to next step' });
+      setHasTriggeredTimeout(false);
     },
     onError: (error: any) => {
       toast({ title: 'Failed to advance', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const stepTimeoutMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/production/timers/runs/${run.id}/step-timeout`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
+      playAlertSound();
+      toast({ title: 'Step time completed!', description: 'Press Next Step to continue' });
+    },
+    onError: (error: any) => {
+      console.error('Step timeout error:', error);
     },
   });
 
@@ -208,6 +254,21 @@ function TimerCard({ run }: { run: RunWithDetails }) {
   const stepTimeRemaining = currentStep 
     ? Math.max(0, currentStep.durationSeconds - (elapsedTime % (currentStep.durationSeconds || 1)))
     : 0;
+
+  // Auto-trigger step timeout when time runs out
+  useEffect(() => {
+    if (run.status === 'running' && currentStep && stepTimeRemaining === 0 && !hasTriggeredTimeout) {
+      setHasTriggeredTimeout(true);
+      stepTimeoutMutation.mutate();
+    }
+  }, [run.status, stepTimeRemaining, hasTriggeredTimeout, currentStep]);
+
+  // Reset timeout flag when step changes or run status changes
+  useEffect(() => {
+    if (run.status !== 'awaiting_next') {
+      setHasTriggeredTimeout(false);
+    }
+  }, [run.currentStepIndex, run.status]);
 
   // Estimated completion shifts forward by cumulative pause time (updates while paused)
   const estimatedCompletion = totalProgramDuration > 0

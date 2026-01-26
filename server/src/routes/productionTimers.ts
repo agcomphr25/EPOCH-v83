@@ -139,6 +139,49 @@ router.post('/runs/:id/pause', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const [run] = await db
+      .select()
+      .from(productionProgramRuns)
+      .where(eq(productionProgramRuns.id, id))
+      .limit(1);
+
+    if (!run) {
+      return res.status(404).json({ error: 'Run not found' });
+    }
+
+    if (run.status !== 'running') {
+      return res.status(400).json({ error: `Cannot timeout run with status: ${run.status}` });
+    }
+
+    const [updated] = await db
+      .update(productionProgramRuns)
+      .set({ 
+        status: 'awaiting_next', 
+        updatedAt: new Date() 
+      })
+      .where(eq(productionProgramRuns.id, id))
+      .returning();
+
+    await db.insert(productionProgramRunEvents).values({
+      runId: id,
+      eventType: 'step_timeout',
+      stepIndex: run.currentStepIndex,
+      occurredAt: new Date(),
+    });
+
+    console.log(`[ProductionTimer] Step timed out, awaiting next: ${id}`);
+
+    return res.json(updated);
+  } catch (error) {
+    console.error('[ProductionTimer] Error on step timeout:', error);
+    return res.status(500).json({ error: 'Failed to handle step timeout' });
+  }
+});
+
 router.post('/runs/:id/resume', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;

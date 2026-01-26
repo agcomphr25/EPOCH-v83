@@ -15046,9 +15046,30 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+    // Also get PO items with custom_model type (metal accessories from POs)
+    // These are items that bypass production and need to be tracked as demand
+    const poMetalAccessories = await db.execute(sql`
+      SELECT 
+        poi.id as "poItemId",
+        poi.item_name as "itemName",
+        poi.stock_model_name as "stockModelName",
+        poi.quantity,
+        poi.due_date as "dueDate",
+        poi.stock_status as "stockStatus",
+        po.customer_id as "customerId",
+        po.po_number as "poNumber"
+      FROM purchase_order_items poi
+      JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE po.status = 'OPEN'
+        AND poi.item_type = 'custom_model'
+        AND (poi.stock_status IS NULL OR poi.stock_status != 'SHIPPED')
+    `);
+
     console.log(
       '🔍 Metal Accessories Demands - Total FINALIZED orders:',
-      ordersFinalized.length
+      ordersFinalized.length,
+      'PO metal accessories:',
+      poMetalAccessories.rows?.length || 0
     );
 
     const demands = items.map((item) => {
@@ -15132,6 +15153,73 @@ export class DatabaseStorage implements IStorage {
               quantity,
               customerId: order.customerId,
               status: order.status,
+            });
+          }
+        }
+      });
+
+      // Also check PO metal accessories (custom_model items)
+      const poRows = poMetalAccessories.rows || [];
+      poRows.forEach((poItem: any) => {
+        // Skip if already matched to prevent double-counting
+        const poItemId = poItem.poItemId;
+        
+        // Normalize to canonical SKU - remove known prefixes to get core identifier
+        // AG-M5-LA should match AG-BM-M5-LA (both normalize to M5LA)
+        const normalizeToCanonical = (name: string): string => {
+          if (!name || name.length < 3) return '';
+          return name.toUpperCase()
+            .replace(/^AG-?/i, '')     // Remove AG- or AG prefix
+            .replace(/^BM-?/i, '')     // Remove BM- or BM prefix  
+            .replace(/[-_\s]/g, '');   // Remove separators
+        };
+        
+        const canonicalItemName = normalizeToCanonical(item.name);
+        const rawPoName = poItem.itemName || poItem.stockModelName || '';
+        const canonicalPoName = normalizeToCanonical(rawPoName);
+        
+        // Skip empty or too short names
+        if (!canonicalItemName || canonicalItemName.length < 3 || !canonicalPoName || canonicalPoName.length < 3) {
+          return;
+        }
+        
+        // Exact canonical match only - no fuzzy matching to prevent false positives
+        // M5LA matches M5LA, M5BDLLA matches M5BDLLA, etc.
+        const match = canonicalItemName === canonicalPoName;
+        
+        if (match) {
+          const quantity = poItem.quantity || 1;
+          const dueDate = poItem.dueDate ? new Date(poItem.dueDate) : null;
+          const now = new Date();
+          
+          if (dueDate) {
+            const daysUntilDue = Math.ceil(
+              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            const weekIndex = Math.min(
+              Math.max(Math.floor(daysUntilDue / 7), 0),
+              3
+            );
+
+            weeklyDemand[weekIndex] += quantity;
+            weeklyOrders[weekIndex].push({
+              orderId: `PO-${poItem.poNumber}`,
+              dueDate: poItem.dueDate,
+              quantity,
+              customerId: poItem.customerId,
+              status: 'PO_ITEM',
+              poItemId: poItem.poItemId,
+            });
+          } else {
+            // No due date - add to first week
+            weeklyDemand[0] += quantity;
+            weeklyOrders[0].push({
+              orderId: `PO-${poItem.poNumber}`,
+              dueDate: null,
+              quantity,
+              customerId: poItem.customerId,
+              status: 'PO_ITEM',
+              poItemId: poItem.poItemId,
             });
           }
         }

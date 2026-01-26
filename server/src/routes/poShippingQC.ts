@@ -1060,8 +1060,12 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             throw new Error(`Order ${item.orderId} not found`);
           }
           // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
-          if (order.productionStatus === 'SHIPPED') {
+          const isDevMode = process.env.NODE_ENV === 'development';
+          if (order.productionStatus === 'SHIPPED' && !isDevMode) {
             throw new Error(`Order ${item.orderId} has already been shipped`);
+          }
+          if (order.productionStatus === 'SHIPPED' && isDevMode) {
+            console.log(`🧪 DEV MODE: Allowing re-shipment of already shipped order ${item.orderId}`);
           }
 
           // Get PO item details

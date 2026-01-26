@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 
 interface ProductionProgramRun {
   id: string;
@@ -297,6 +298,8 @@ function TimerCard({ run }: { run: RunWithDetails }) {
 }
 
 export default function ProductionStationDashboard() {
+  const [startModalOpen, setStartModalOpen] = useState(false);
+  
   const { data: runs, isLoading, error } = useQuery<ProductionProgramRun[]>({
     queryKey: ['/api/production/timers/runs'],
     refetchInterval: 2000,
@@ -376,15 +379,30 @@ export default function ProductionStationDashboard() {
               Live production timer dashboard
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-mono font-bold">
-              {new Date().toLocaleTimeString()}
-            </p>
-            <p className="text-muted-foreground">
-              {activeRuns.length} active timer{activeRuns.length !== 1 ? 's' : ''}
-            </p>
+          <div className="flex items-center gap-4">
+            <Button
+              size="lg"
+              className="bg-green-600 hover:bg-green-700 text-lg h-14 px-6"
+              onClick={() => setStartModalOpen(true)}
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Start Production Timer
+            </Button>
+            <div className="text-right">
+              <p className="text-3xl font-mono font-bold">
+                {new Date().toLocaleTimeString()}
+              </p>
+              <p className="text-muted-foreground">
+                {activeRuns.length} active timer{activeRuns.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
         </div>
+
+        <StartProductionTimerModal
+          open={startModalOpen}
+          onOpenChange={setStartModalOpen}
+        />
 
         {detailedRuns.length === 0 ? (
           <Card className="border-dashed border-2">

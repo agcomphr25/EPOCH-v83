@@ -8509,11 +8509,17 @@ export class DatabaseStorage implements IStorage {
     if (isNaN(numericId)) {
       return [];
     }
-    return await db
-      .select()
-      .from(customerAddresses)
-      .where(eq(customerAddresses.customerId, numericId))
-      .orderBy(customerAddresses.isDefault, customerAddresses.id);
+    try {
+      const result = await db
+        .select()
+        .from(customerAddresses)
+        .where(eq(customerAddresses.customerId, numericId))
+        .orderBy(customerAddresses.isDefault, customerAddresses.id);
+      return result || [];
+    } catch (error) {
+      console.error('Error fetching customer addresses:', error);
+      return [];
+    }
   }
 
   async createCustomerAddress(

@@ -159,20 +159,20 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return;
     }
 
-    // When paused, elapsed time is frozen but we track growing pause time for est. completion
-    if (run.status === 'paused') {
+    // When paused or awaiting_next, elapsed time is frozen but we track growing delay for est. completion
+    if (run.status === 'paused' || run.status === 'awaiting_next') {
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
       setElapsedTime(elapsed);
       
-      // Update current pause seconds every second (for estimated completion to progress)
-      const updatePause = () => {
+      // Update current pause/delay seconds every second (for estimated completion to shift forward)
+      const updateDelay = () => {
         const currentNow = Date.now();
-        const totalPause = Math.floor((currentNow - startTime) / 1000) - elapsed;
-        setCurrentPauseSeconds(totalPause);
+        const totalDelay = Math.floor((currentNow - startTime) / 1000) - elapsed;
+        setCurrentPauseSeconds(totalDelay);
       };
-      updatePause();
-      const interval = setInterval(updatePause, 1000);
+      updateDelay();
+      const interval = setInterval(updateDelay, 1000);
       return () => clearInterval(interval);
     }
 
@@ -377,7 +377,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
             <div>
               <p className="text-sm text-muted-foreground">Overall Time</p>
               <p className="text-xl font-mono font-semibold">
-                {formatTime(elapsedTime)}
+                {formatTime(Math.min(elapsedTime, totalProgramDuration))}
               </p>
             </div>
           </div>

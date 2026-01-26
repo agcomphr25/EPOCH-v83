@@ -1285,6 +1285,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // 10. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
     const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
 
+    // In development mode, skip packing slip generation due to missing tables
+    if (isDevelopment) {
+      console.log(`🧪 DEV MODE: Skipping packing slip generation`);
+    } else {
     for (const [poNumber, items] of poGroups.entries()) {
       const pdfDoc = await PDFDocument.create();
       let currentPage = pdfDoc.addPage([612, 792]); // US Letter
@@ -1519,6 +1523,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         data: Buffer.from(pdfBytes).toString('base64'),
       });
     }
+    } // end else (production mode packing slip generation)
 
     console.log(`📄 Generated ${packingSlips.length} packing slip(s)`);
 

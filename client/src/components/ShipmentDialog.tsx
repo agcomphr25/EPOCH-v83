@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck, Printer, FileText, X } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck, Printer, FileText, X, CheckCircle } from 'lucide-react';
 import { z } from 'zod';
 
 type ShipmentDialogState = {
@@ -767,6 +767,41 @@ function PrintShipmentPopup({
   }>;
   onClose: () => void;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isFulfilled, setIsFulfilled] = useState(false);
+
+  const fulfillMutation = useMutation({
+    mutationFn: async () => {
+      if (!items || items.length === 0) {
+        throw new Error('No items to mark as fulfilled');
+      }
+      const orderIds = items.map(item => item.orderId);
+      const response = await apiRequest('/api/po-orders/toggle-fulfilled', {
+        method: 'POST',
+        body: JSON.stringify({ orderIds, fulfilled: true }),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setIsFulfilled(true);
+      toast({
+        title: 'Items Marked as Fulfilled',
+        description: `${items.length} item(s) have been moved to OEM Shipments.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to Mark as Fulfilled',
+        description: error.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    },
+  });
   const handlePrintPackingSlip = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (!printWindow) {
@@ -963,6 +998,20 @@ function PrintShipmentPopup({
           >
             <Printer className="w-4 h-4 mr-2" />
             Print Shipping Label
+          </Button>
+
+          <Button
+            onClick={() => fulfillMutation.mutate()}
+            disabled={isFulfilled || fulfillMutation.isPending}
+            className={`w-full ${isFulfilled ? 'bg-green-600 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+            size="lg"
+          >
+            {fulfillMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle className="w-4 h-4 mr-2" />
+            )}
+            {isFulfilled ? 'Marked as Fulfilled' : 'Mark as Fulfilled'}
           </Button>
 
           <Button

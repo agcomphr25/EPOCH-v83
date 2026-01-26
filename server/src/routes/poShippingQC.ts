@@ -1183,104 +1183,106 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       }
     }
 
-    // 8. PERSIST SHIPMENT TO DATABASE
+    // 8. PERSIST SHIPMENT TO DATABASE (skip in development mode)
     let shipmentId: string;
     const shippedAt = new Date();
-    try {
-      const crypto = await import('crypto');
-      shipmentId = crypto.randomUUID();
+    const crypto = await import('crypto');
+    shipmentId = crypto.randomUUID();
+    
+    if (isDevelopment) {
+      console.log(`🧪 DEV MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`);
+    } else {
+      try {
+        // Map billingOption to billType enum
+        const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' = 
+          billingOption === 'prepaid' ? 'SENDER' :
+          billingOption === 'collect' ? 'RECEIVER' :
+          'THIRD_PARTY';
 
-      // Map billingOption to billType enum
-      const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' = 
-        billingOption === 'prepaid' ? 'SENDER' :
-        billingOption === 'collect' ? 'RECEIVER' :
-        'THIRD_PARTY';
+        const shipmentRecord = {
+          id: shipmentId,
+          createdBy: req.user?.username || 'system',
+          reference: referenceNumber,
+          poNumbers: poNumbers.join(', '),
+          shippedAt,
+          carrier: 'UPS',
+          serviceLevel: serviceCode,
+          billType,
+          masterTrackingNumber: trackingNumber,
+          packageCount: 1,
+          thirdPartyAccount: thirdPartyAccountNumber || null,
+          shipFromSnapshot: {
+            name: process.env.SHIP_FROM_NAME || 'AG Composites',
+            street: process.env.SHIP_FROM_ADDRESS1 || '',
+            city: process.env.SHIP_FROM_CITY || '',
+            state: process.env.SHIP_FROM_STATE || '',
+            postalCode: process.env.SHIP_FROM_POSTAL || '',
+            country: process.env.SHIP_FROM_COUNTRY || 'US',
+          },
+          shipToSnapshot: {
+            name: shipTo.name,
+            street: shipTo.address1,
+            street2: shipTo.address2 || null,
+            city: shipTo.city,
+            state: shipTo.state,
+            postalCode: shipTo.postalCode,
+            country: shipTo.country || 'US',
+          },
+          totalWeightLbs: String(totalWeight),
+          documents: [
+            labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, mime: 'image/gif', storagePath: '', bytes: labelBase64.length } : null,
+          ].filter(Boolean),
+          notificationMetadata: {},
+        };
 
-      const shipmentRecord = {
-        id: shipmentId,
-        createdBy: req.user?.username || 'system',
-        reference: referenceNumber,
-        poNumbers: poNumbers.join(', '),
-        shippedAt,
-        carrier: 'UPS',
-        serviceLevel: serviceCode,
-        billType,
-        masterTrackingNumber: trackingNumber,
-        packageCount: 1,
-        thirdPartyAccount: thirdPartyAccountNumber || null,
-        shipFromSnapshot: {
-          name: process.env.SHIP_FROM_NAME || 'AG Composites',
-          street: process.env.SHIP_FROM_ADDRESS1 || '',
-          city: process.env.SHIP_FROM_CITY || '',
-          state: process.env.SHIP_FROM_STATE || '',
-          postalCode: process.env.SHIP_FROM_POSTAL || '',
-          country: process.env.SHIP_FROM_COUNTRY || 'US',
-        },
-        shipToSnapshot: {
-          name: shipTo.name,
-          street: shipTo.address1,
-          street2: shipTo.address2 || null,
-          city: shipTo.city,
-          state: shipTo.state,
-          postalCode: shipTo.postalCode,
-          country: shipTo.country || 'US',
-        },
-        totalWeightLbs: String(totalWeight),
-        documents: [
-          labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, mime: 'image/gif', storagePath: '', bytes: labelBase64.length } : null,
-        ].filter(Boolean),
-        notificationMetadata: {},
-      };
+        const shipmentItemsData = orderDetails.map((detail) => ({
+          poItemId: detail.order.poItemId!,
+          orderId: detail.order.orderId,
+          quantity: detail.quantity,
+          weightLbs: weightPerItemLbs * detail.quantity,
+        }));
 
-      const shipmentItemsData = orderDetails.map((detail) => ({
-        poItemId: detail.order.poItemId!,
-        orderId: detail.order.orderId,
-        quantity: detail.quantity,
-        weightLbs: weightPerItemLbs * detail.quantity,
-      }));
+        await storage.createShipment({
+          shipment: shipmentRecord,
+          items: shipmentItemsData,
+        });
 
-      await storage.createShipment({
-        shipment: shipmentRecord,
-        items: shipmentItemsData,
-      });
-
-      console.log(`✅ Shipment persisted to database: ${shipmentId}`);
-
-      // Update order/item statuses to SHIPPED
-      for (const detail of orderDetails) {
-        try {
-          if (detail.order.isNonStock) {
-            // Non-stock item: update PO item stockStatus directly
-            await storage.updatePurchaseOrderItem(detail.order.poItemId, {
-              stockStatus: 'SHIPPED',
-            });
-            console.log(`✅ PO Item ${detail.order.poItemId} marked as SHIPPED (non-stock)`);
-          } else if (detail.order.id) {
-            // Regular production order
-            await storage.updateProductionOrder(detail.order.id, {
-              productionStatus: 'SHIPPED',
-              shippedAt,
-            });
-            console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
-          }
-        } catch (updateError: any) {
-          console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
-        }
+        console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+      } catch (dbError: any) {
+        console.error(`❌ Shipment persistence failed: ${dbError.message}`);
+        return res.status(500).json({
+          _error: 'Shipment created but failed to save to database',
+          details: dbError.message,
+          suggestion: 'UPS label was generated successfully. IMPORTANT: The tracking number below must be manually recorded or the UPS label should be voided to prevent orphaned shipments.',
+          trackingNumber,
+          shipmentId: null,
+          requiresManualAction: true,
+          upsLabelGenerated: true,
+        });
       }
-    } catch (persistError: any) {
-      console.error('❌ Shipment persistence failed:', persistError.message);
-      return res.status(500).json({
-        _error: 'Shipment created but failed to save to database',
-        details: persistError.message,
-        suggestion: 'UPS label was generated successfully. IMPORTANT: The tracking number below must be manually recorded or the UPS label should be voided to prevent orphaned shipments.',
-        trackingNumber,
-        shipmentId: null,
-        requiresManualAction: true,
-        upsLabelGenerated: true,
-      });
     }
 
-    // 8. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
+    // 9. UPDATE ORDER/ITEM STATUSES TO SHIPPED
+    for (const detail of orderDetails) {
+      try {
+        if (detail.order.isNonStock) {
+          await storage.updatePurchaseOrderItem(detail.order.poItemId, {
+            stockStatus: 'SHIPPED',
+          });
+          console.log(`✅ PO Item ${detail.order.poItemId} marked as SHIPPED (non-stock)`);
+        } else if (detail.order.id) {
+          await storage.updateProductionOrder(detail.order.id, {
+            productionStatus: 'SHIPPED',
+            shippedAt,
+          });
+          console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+        }
+      } catch (updateError: any) {
+        console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
+      }
+    }
+
+    // 10. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
     const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
 
     for (const [poNumber, items] of poGroups.entries()) {

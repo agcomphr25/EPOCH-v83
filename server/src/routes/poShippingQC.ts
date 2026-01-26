@@ -1201,14 +1201,19 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     let trackingNumber: string;
     let labelBase64: string;
     
-    const isDevelopment = process.env.NODE_ENV === 'development';
+    // Use UPS_ENV to determine whether to call UPS API
+    // If UPS_ENV is set to 'production' or 'sandbox', use real UPS
+    // Otherwise, generate test tracking numbers
+    const useRealUps = process.env.UPS_ENV === 'production' || process.env.UPS_ENV === 'sandbox';
+    const hasUpsCredentials = process.env.UPS_CLIENT_ID && process.env.UPS_CLIENT_SECRET && process.env.UPS_ACCOUNT_NUMBER;
     
-    if (isDevelopment) {
-      // In development, generate a test tracking number and skip UPS API
+    if (!useRealUps || !hasUpsCredentials) {
+      // Generate test tracking number when UPS is not configured
       const crypto = await import('crypto');
       trackingNumber = `TEST-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
       labelBase64 = '';
-      console.log(`🧪 DEV MODE: Generated test tracking number: ${trackingNumber}`);
+      console.log(`🧪 TEST MODE: Generated test tracking number: ${trackingNumber}`);
+      console.log(`   UPS_ENV=${process.env.UPS_ENV || 'not set'}, hasCredentials=${hasUpsCredentials}`);
     } else {
       // In production, use real UPS API
       try {
@@ -1241,14 +1246,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       }
     }
 
-    // 8. PERSIST SHIPMENT TO DATABASE (skip in development mode)
+    // 8. PERSIST SHIPMENT TO DATABASE (skip when using test tracking numbers)
     let shipmentId: string;
     const shippedAt = new Date();
     const crypto = await import('crypto');
     shipmentId = crypto.randomUUID();
     
-    if (isDevelopment) {
-      console.log(`🧪 DEV MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`);
+    // Skip database persistence if using test mode (no real UPS)
+    const skipDbPersistence = !useRealUps || !hasUpsCredentials;
+    
+    if (skipDbPersistence) {
+      console.log(`🧪 TEST MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`);
     } else {
       try {
         // Map billingOption to billType enum
@@ -1343,9 +1351,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // 10. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
     const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
 
-    // In development mode, skip packing slip generation due to missing tables
-    if (isDevelopment) {
-      console.log(`🧪 DEV MODE: Skipping packing slip generation`);
+    // In test mode, skip packing slip generation due to missing tables
+    if (skipDbPersistence) {
+      console.log(`🧪 TEST MODE: Skipping packing slip generation`);
     } else {
     for (const [poNumber, items] of poGroups.entries()) {
       const pdfDoc = await PDFDocument.create();

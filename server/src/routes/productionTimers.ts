@@ -7,9 +7,33 @@ import {
   productionProgramRunEvents,
   insertProductionProgramRunSchema,
 } from '../../schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken } from '../../middleware/auth';
+
+function calculateElapsedSeconds(startedAt: Date, events: Array<{ eventType: string; occurredAt: Date }>): number {
+  let totalSeconds = 0;
+  let lastResumeTime = startedAt;
+  let isPaused = false;
+
+  for (const event of events) {
+    if (event.eventType === 'paused') {
+      if (!isPaused) {
+        totalSeconds += Math.floor((event.occurredAt.getTime() - lastResumeTime.getTime()) / 1000);
+        isPaused = true;
+      }
+    } else if (event.eventType === 'resumed' || event.eventType === 'started') {
+      lastResumeTime = event.occurredAt;
+      isPaused = false;
+    }
+  }
+
+  if (!isPaused) {
+    totalSeconds += Math.floor((new Date().getTime() - lastResumeTime.getTime()) / 1000);
+  }
+
+  return totalSeconds;
+}
 
 const router = Router();
 
@@ -216,11 +240,21 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
     });
 
     if (nextStepIndex >= totalSteps) {
+      const events = await db
+        .select()
+        .from(productionProgramRunEvents)
+        .where(eq(productionProgramRunEvents.runId, id))
+        .orderBy(productionProgramRunEvents.occurredAt);
+
+      const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, events);
+      const completedAt = new Date();
+
       const [updated] = await db
         .update(productionProgramRuns)
         .set({ 
           status: 'completed',
-          completedAt: new Date(),
+          completedAt,
+          totalElapsedSeconds,
           updatedAt: new Date(),
         })
         .where(eq(productionProgramRuns.id, id))
@@ -228,13 +262,13 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
 
       await db.insert(productionProgramRunEvents).values({
         runId: id,
-        eventType: 'completed',
+        eventType: 'program_completed',
         stepIndex: run.currentStepIndex,
         userId,
-        occurredAt: new Date(),
+        occurredAt: completedAt,
       });
 
-      console.log(`[ProductionTimer] Run completed: ${id}`);
+      console.log(`[ProductionTimer] Run completed: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
       return res.json({ ...updated, message: 'Run completed' });
     }
@@ -289,11 +323,21 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Run already ${run.status}` });
     }
 
+    const events = await db
+      .select()
+      .from(productionProgramRunEvents)
+      .where(eq(productionProgramRunEvents.runId, id))
+      .orderBy(productionProgramRunEvents.occurredAt);
+
+    const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, events);
+    const completedAt = new Date();
+
     const [updated] = await db
       .update(productionProgramRuns)
       .set({ 
         status: 'stopped',
-        completedAt: new Date(),
+        completedAt,
+        totalElapsedSeconds,
         updatedAt: new Date(),
       })
       .where(eq(productionProgramRuns.id, id))
@@ -304,10 +348,10 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
       eventType: 'stopped',
       stepIndex: run.currentStepIndex,
       userId,
-      occurredAt: new Date(),
+      occurredAt: completedAt,
     });
 
-    console.log(`[ProductionTimer] Run stopped: ${id}`);
+    console.log(`[ProductionTimer] Run stopped: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
     return res.json(updated);
   } catch (error) {
@@ -328,6 +372,40 @@ router.get('/runs', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[ProductionTimer] Error fetching runs:', error);
     return res.status(500).json({ error: 'Failed to fetch runs' });
+  }
+});
+
+router.get('/runs/history', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+
+    const runs = await db
+      .select({
+        id: productionProgramRuns.id,
+        programId: productionProgramRuns.programId,
+        instanceName: productionProgramRuns.instanceName,
+        sku: productionProgramRuns.sku,
+        status: productionProgramRuns.status,
+        startedAt: productionProgramRuns.startedAt,
+        completedAt: productionProgramRuns.completedAt,
+        totalElapsedSeconds: productionProgramRuns.totalElapsedSeconds,
+        programName: productionPrograms.name,
+      })
+      .from(productionProgramRuns)
+      .leftJoin(productionPrograms, eq(productionProgramRuns.programId, productionPrograms.id))
+      .where(
+        or(
+          eq(productionProgramRuns.status, 'completed'),
+          eq(productionProgramRuns.status, 'stopped')
+        )
+      )
+      .orderBy(desc(productionProgramRuns.completedAt))
+      .limit(limit);
+
+    return res.json(runs);
+  } catch (error) {
+    console.error('[ProductionTimer] Error fetching history:', error);
+    return res.status(500).json({ error: 'Failed to fetch run history' });
   }
 });
 

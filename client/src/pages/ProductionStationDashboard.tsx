@@ -1,9 +1,10 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -380,6 +381,12 @@ export default function ProductionStationDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/app/production/timer-history">
+              <Button variant="outline" size="lg" className="text-lg h-14 px-6">
+                <History className="w-5 h-5 mr-2" />
+                Timer History
+              </Button>
+            </Link>
             <Button
               size="lg"
               className="bg-green-600 hover:bg-green-700 text-lg h-14 px-6"

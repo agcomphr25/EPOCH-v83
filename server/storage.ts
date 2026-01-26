@@ -9088,8 +9088,13 @@ export class DatabaseStorage implements IStorage {
         Array.from(po.itemsMap.values()).forEach((poItem) => {
           if (poItem.productionOrders.length === 0) {
             // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
-            // Business rule: PO items WITHOUT stock models go straight to Shipping QC (no production needed)
-            const hasStockModel = poItem.stockModel && poItem.stockModel !== 'no stock' && poItem.stockModel.trim() !== '';
+            // Business rule: PO items WITHOUT stock models (metal accessories) go straight to Shipping QC (no production needed)
+            const stockModelLower = (poItem.stockModel || '').toLowerCase().trim();
+            const hasStockModel = poItem.stockModel && 
+              stockModelLower !== 'no stock' && 
+              stockModelLower !== 'none' && 
+              stockModelLower !== '' &&
+              stockModelLower !== 'n/a';
             
             // CRITICAL FIX: Skip items with stock models that haven't entered production yet
             // They should NOT appear in Shipping QC until they're scheduled to production

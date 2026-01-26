@@ -113,11 +113,13 @@ router.post('/runs/:id/pause', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Cannot pause run with status: ${run.status}` });
     }
 
+    const now = new Date();
     const [updated] = await db
       .update(productionProgramRuns)
       .set({ 
         status: 'paused', 
-        updatedAt: new Date() 
+        lastPausedAt: now,
+        updatedAt: now 
       })
       .where(eq(productionProgramRuns.id, id))
       .returning();
@@ -127,7 +129,7 @@ router.post('/runs/:id/pause', async (req: Request, res: Response) => {
       eventType: 'paused',
       stepIndex: run.currentStepIndex,
       userId,
-      occurredAt: new Date(),
+      occurredAt: now,
     });
 
     console.log(`[ProductionTimer] Run paused: ${id}`);
@@ -157,11 +159,13 @@ router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Cannot timeout run with status: ${run.status}` });
     }
 
+    const now = new Date();
     const [updated] = await db
       .update(productionProgramRuns)
       .set({ 
         status: 'awaiting_next', 
-        updatedAt: new Date() 
+        lastPausedAt: now,
+        updatedAt: now 
       })
       .where(eq(productionProgramRuns.id, id))
       .returning();
@@ -170,7 +174,7 @@ router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
       runId: id,
       eventType: 'step_timeout',
       stepIndex: run.currentStepIndex,
-      occurredAt: new Date(),
+      occurredAt: now,
     });
 
     console.log(`[ProductionTimer] Step timed out, awaiting next: ${id}`);

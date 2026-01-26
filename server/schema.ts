@@ -11841,6 +11841,7 @@ export const productionProgramRuns = pgTable('production_program_runs', {
   currentStepIndex: integer('current_step_index').default(0).notNull(),
   startedAt: timestamp('started_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
+  lastPausedAt: timestamp('last_paused_at'),
   totalElapsedSeconds: integer('total_elapsed_seconds').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

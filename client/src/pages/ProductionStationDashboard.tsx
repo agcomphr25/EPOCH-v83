@@ -58,6 +58,7 @@ interface RunWithDetails extends ProductionProgramRun {
     durationSeconds: number;
   }[];
   cumulativePauseSeconds?: number;
+  lastPausedAt?: string | null;
 }
 
 function formatTime(seconds: number): string {
@@ -159,16 +160,17 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return;
     }
 
-    // When paused or awaiting_next, elapsed time is frozen but we track growing delay for est. completion
+    // When paused or awaiting_next, elapsed time is frozen at the moment of pause
     if (run.status === 'paused' || run.status === 'awaiting_next') {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
-      setElapsedTime(elapsed);
+      // Use lastPausedAt to calculate frozen elapsed time
+      const pausedAtTime = run.lastPausedAt ? new Date(run.lastPausedAt).getTime() : Date.now();
+      const frozenElapsed = Math.floor((pausedAtTime - startTime) / 1000) - pauseSeconds;
+      setElapsedTime(frozenElapsed);
       
-      // Update current pause/delay seconds every second (for estimated completion to shift forward)
+      // Update current delay seconds every second (for estimated completion to shift forward)
       const updateDelay = () => {
         const currentNow = Date.now();
-        const totalDelay = Math.floor((currentNow - startTime) / 1000) - elapsed;
+        const totalDelay = Math.floor((currentNow - startTime) / 1000) - frozenElapsed;
         setCurrentPauseSeconds(totalDelay);
       };
       updateDelay();
@@ -187,7 +189,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [run.startedAt, run.status, run.totalElapsedSeconds, run.cumulativePauseSeconds]);
+  }, [run.startedAt, run.status, run.totalElapsedSeconds, run.cumulativePauseSeconds, run.lastPausedAt]);
 
   const pauseMutation = useMutation({
     mutationFn: async () => {

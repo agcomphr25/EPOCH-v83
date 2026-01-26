@@ -8997,10 +8997,7 @@ export class DatabaseStorage implements IStorage {
         poi.due_date as "dueDate",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
-        prod.production_status as "productionStatus",
-        prod.is_fulfilled as "isFulfilled",
-        prod.fulfilled_date as "fulfilledDate",
-        prod.fulfilled_by as "fulfilledBy"
+        prod.production_status as "productionStatus"
       FROM purchase_orders po
       INNER JOIN purchase_order_items poi ON po.id = poi.po_id
       LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
@@ -9067,18 +9064,16 @@ export class DatabaseStorage implements IStorage {
       if (row.orderId) {
         const unitMatch = row.orderId.match(/-(\d+)$/);
         const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
-        const isFulfilled = row.isFulfilled || false;
 
         poItem.productionOrders.push({
           orderId: row.orderId,
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled,
-          fulfilledDate: row.fulfilledDate?.toString() || null,
-          fulfilledBy: row.fulfilledBy || null,
-          // Fulfilled items are NEVER ready to ship (already shipped externally)
-          isReadyToShip: !isFulfilled && (row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping'),
+          isFulfilled: false,
+          fulfilledDate: null,
+          fulfilledBy: null,
+          isReadyToShip: row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping',
         });
       }
     }

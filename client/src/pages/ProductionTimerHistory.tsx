@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,29 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Loader2, Clock, History, ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Loader2, Clock, History, ArrowLeft, CheckCircle2, XCircle, Pencil, Trash2 } from 'lucide-react';
 
 interface HistoryRun {
   id: string;
@@ -19,6 +42,10 @@ interface HistoryRun {
   programName: string | null;
   instanceName: string | null;
   sku: string | null;
+  serialNumber: string | null;
+  mandrelNumber: number | null;
+  ovenNumber: number | null;
+  ovenSlot: string | null;
   status: 'completed' | 'stopped';
   startedAt: string;
   completedAt: string | null;
@@ -51,9 +78,78 @@ function formatDateTime(dateStr: string): string {
 }
 
 export default function ProductionTimerHistory() {
+  const { toast } = useToast();
+  const [editingRun, setEditingRun] = useState<HistoryRun | null>(null);
+  const [deletingRun, setDeletingRun] = useState<HistoryRun | null>(null);
+  const [editForm, setEditForm] = useState({
+    instanceName: '',
+    sku: '',
+    serialNumber: '',
+    mandrelNumber: '',
+    ovenNumber: '',
+    ovenSlot: '',
+  });
+
   const { data: runs, isLoading, error } = useQuery<HistoryRun[]>({
     queryKey: ['/api/production/timers/runs/history'],
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { id: string; updates: typeof editForm }) => {
+      return apiRequest(`/api/production/timers/runs/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          instanceName: data.updates.instanceName || null,
+          sku: data.updates.sku || null,
+          serialNumber: data.updates.serialNumber || null,
+          mandrelNumber: data.updates.mandrelNumber ? parseInt(data.updates.mandrelNumber) : null,
+          ovenNumber: data.updates.ovenNumber ? parseInt(data.updates.ovenNumber) : null,
+          ovenSlot: data.updates.ovenSlot || null,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs/history'] });
+      toast({ title: 'Run updated successfully' });
+      setEditingRun(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Failed to update run', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/production/timers/runs/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs/history'] });
+      toast({ title: 'Run deleted successfully' });
+      setDeletingRun(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Failed to delete run', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleEditClick = (run: HistoryRun) => {
+    setEditForm({
+      instanceName: run.instanceName || '',
+      sku: run.sku || '',
+      serialNumber: run.serialNumber || '',
+      mandrelNumber: run.mandrelNumber?.toString() || '',
+      ovenNumber: run.ovenNumber?.toString() || '',
+      ovenSlot: run.ovenSlot || '',
+    });
+    setEditingRun(run);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingRun) {
+      updateMutation.mutate({ id: editingRun.id, updates: editForm });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -119,10 +215,12 @@ export default function ProductionTimerHistory() {
                   <TableHead>Program</TableHead>
                   <TableHead>Instance Name</TableHead>
                   <TableHead>SKU</TableHead>
+                  <TableHead>Serial #</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Completed</TableHead>
                   <TableHead>Total Time</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -141,6 +239,7 @@ export default function ProductionTimerHistory() {
                         '-'
                       )}
                     </TableCell>
+                    <TableCell>{run.serialNumber || '-'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDateTime(run.startedAt)}
                     </TableCell>
@@ -165,6 +264,25 @@ export default function ProductionTimerHistory() {
                         </Badge>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditClick(run)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeletingRun(run)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -172,6 +290,108 @@ export default function ProductionTimerHistory() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!editingRun} onOpenChange={(open) => !open && setEditingRun(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Timer Run</DialogTitle>
+            <DialogDescription>
+              Update the details of this completed timer run.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="instanceName">Instance Name</Label>
+              <Input
+                id="instanceName"
+                value={editForm.instanceName}
+                onChange={(e) => setEditForm({ ...editForm, instanceName: e.target.value })}
+                placeholder="e.g., Batch #1"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="sku">SKU</Label>
+              <Input
+                id="sku"
+                value={editForm.sku}
+                onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                placeholder="e.g., PROD-001"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="serialNumber">Serial Number</Label>
+              <Input
+                id="serialNumber"
+                value={editForm.serialNumber}
+                onChange={(e) => setEditForm({ ...editForm, serialNumber: e.target.value })}
+                placeholder="e.g., SN-12345"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="mandrelNumber">Mandrel #</Label>
+                <Input
+                  id="mandrelNumber"
+                  type="number"
+                  value={editForm.mandrelNumber}
+                  onChange={(e) => setEditForm({ ...editForm, mandrelNumber: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ovenNumber">Oven #</Label>
+                <Input
+                  id="ovenNumber"
+                  type="number"
+                  value={editForm.ovenNumber}
+                  onChange={(e) => setEditForm({ ...editForm, ovenNumber: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ovenSlot">Oven Slot</Label>
+                <Input
+                  id="ovenSlot"
+                  value={editForm.ovenSlot}
+                  onChange={(e) => setEditForm({ ...editForm, ovenSlot: e.target.value })}
+                  placeholder="e.g., A1"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRun(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletingRun} onOpenChange={(open) => !open && setDeletingRun(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Timer Run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the timer run record for "{deletingRun?.programName}" 
+              {deletingRun?.instanceName && ` (${deletingRun.instanceName})`}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingRun && deleteMutation.mutate(deletingRun.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

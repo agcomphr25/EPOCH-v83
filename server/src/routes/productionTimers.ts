@@ -534,6 +534,68 @@ router.get('/runs/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.patch('/runs/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { instanceName, sku, serialNumber, mandrelNumber, ovenNumber, ovenSlot } = req.body;
+
+    const [run] = await db
+      .select()
+      .from(productionProgramRuns)
+      .where(eq(productionProgramRuns.id, id))
+      .limit(1);
+
+    if (!run) {
+      return res.status(404).json({ error: 'Run not found' });
+    }
+
+    const [updated] = await db
+      .update(productionProgramRuns)
+      .set({
+        instanceName: instanceName !== undefined ? instanceName : run.instanceName,
+        sku: sku !== undefined ? sku : run.sku,
+        serialNumber: serialNumber !== undefined ? serialNumber : run.serialNumber,
+        mandrelNumber: mandrelNumber !== undefined ? mandrelNumber : run.mandrelNumber,
+        ovenNumber: ovenNumber !== undefined ? ovenNumber : run.ovenNumber,
+        ovenSlot: ovenSlot !== undefined ? ovenSlot : run.ovenSlot,
+        updatedAt: new Date(),
+      })
+      .where(eq(productionProgramRuns.id, id))
+      .returning();
+
+    console.log(`[ProductionTimer] Run updated: ${id}`);
+    return res.json(updated);
+  } catch (error) {
+    console.error('[ProductionTimer] Error updating run:', error);
+    return res.status(500).json({ error: 'Failed to update run' });
+  }
+});
+
+router.delete('/runs/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const [run] = await db
+      .select()
+      .from(productionProgramRuns)
+      .where(eq(productionProgramRuns.id, id))
+      .limit(1);
+
+    if (!run) {
+      return res.status(404).json({ error: 'Run not found' });
+    }
+
+    await db.delete(productionProgramRunEvents).where(eq(productionProgramRunEvents.runId, id));
+    await db.delete(productionProgramRuns).where(eq(productionProgramRuns.id, id));
+
+    console.log(`[ProductionTimer] Run deleted: ${id}`);
+    return res.json({ success: true, message: 'Run deleted successfully' });
+  } catch (error) {
+    console.error('[ProductionTimer] Error deleting run:', error);
+    return res.status(500).json({ error: 'Failed to delete run' });
+  }
+});
+
 router.get('/programs', async (req: Request, res: Response) => {
   try {
     const includeInactive = req.query.includeInactive === 'true';

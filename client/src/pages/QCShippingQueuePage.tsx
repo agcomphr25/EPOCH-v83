@@ -231,7 +231,7 @@ export default function QCShippingQueuePage() {
           poItemId: item.poItemId,
           orderId: item.orderId || `PO-${item.poItemId}-${item.unitNumber}`, // Use composite ID if no orderId
           quantity: item.quantity ?? 1,
-          description: item.itemName || item.stockModelName || 'Unknown Item',
+          description: item.itemName || item.stockModel || item.stockModelName || item.description || 'Unknown Item',
           customerName,
           poNumber,
         });

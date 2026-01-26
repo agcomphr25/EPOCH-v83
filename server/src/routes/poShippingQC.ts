@@ -1021,7 +1021,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             throw new Error(`PO ${poItem.poId} not found`);
           }
           
-          const customer = await storage.getCustomer(parseInt(po.customerId));
+          const customerId = parseInt(po.customerId);
+          if (isNaN(customerId)) {
+            throw new Error(`Invalid customer ID: ${po.customerId}`);
+          }
+          let customer;
+          try {
+            customer = await storage.getCustomer(customerId);
+          } catch (dbError: any) {
+            console.error(`Database error fetching customer ${customerId}:`, dbError.message);
+            throw new Error(`Failed to fetch customer ${po.customerId}: ${dbError.message}`);
+          }
           if (!customer) {
             throw new Error(`Customer ${po.customerId} not found`);
           }
@@ -1067,7 +1077,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           }
 
           // Get customer details
-          const customer = await storage.getCustomer(parseInt(order.customerId));
+          const customerId = parseInt(order.customerId);
+          if (isNaN(customerId)) {
+            throw new Error(`Invalid customer ID: ${order.customerId}`);
+          }
+          let customer;
+          try {
+            customer = await storage.getCustomer(customerId);
+          } catch (dbError: any) {
+            console.error(`Database error fetching customer ${customerId}:`, dbError.message);
+            throw new Error(`Failed to fetch customer ${order.customerId}: ${dbError.message}`);
+          }
           if (!customer) {
             throw new Error(`Customer ${order.customerId} not found`);
           }

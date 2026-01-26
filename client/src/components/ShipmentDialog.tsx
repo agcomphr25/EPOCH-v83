@@ -781,7 +781,7 @@ function PrintShipmentPopup({
         method: 'POST',
         body: JSON.stringify({ orderIds, fulfilled: true }),
       });
-      return response.json();
+      return response;
     },
     onSuccess: () => {
       setIsFulfilled(true);

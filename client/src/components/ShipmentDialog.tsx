@@ -18,6 +18,8 @@ type ShipmentDialogState = {
   thirdPartyAccountNumber: string;
   thirdPartyPostalCode: string;
   thirdPartyCountryCode: string;
+  weightLbs: string;
+  boxSize: string;
   validationErrors: Record<string, string>;
   previewData: {
     trackingNumber?: string;
@@ -34,6 +36,8 @@ type ShipmentDialogAction =
   | { type: 'SET_THIRD_PARTY_ACCOUNT'; value: string }
   | { type: 'SET_THIRD_PARTY_POSTAL'; value: string }
   | { type: 'SET_THIRD_PARTY_COUNTRY'; value: string }
+  | { type: 'SET_WEIGHT_LBS'; value: string }
+  | { type: 'SET_BOX_SIZE'; value: string }
   | { type: 'SET_VALIDATION_ERRORS'; errors: Record<string, string> }
   | { type: 'SET_PREVIEW_DATA'; data: ShipmentDialogState['previewData'] }
   | { type: 'RESET' };
@@ -45,6 +49,8 @@ const initialState: ShipmentDialogState = {
   thirdPartyAccountNumber: '',
   thirdPartyPostalCode: '',
   thirdPartyCountryCode: 'US',
+  weightLbs: '',
+  boxSize: 'medium',
   validationErrors: {},
   previewData: null,
 };
@@ -65,6 +71,10 @@ function shipmentReducer(state: ShipmentDialogState, action: ShipmentDialogActio
       return { ...state, thirdPartyPostalCode: action.value };
     case 'SET_THIRD_PARTY_COUNTRY':
       return { ...state, thirdPartyCountryCode: action.value };
+    case 'SET_WEIGHT_LBS':
+      return { ...state, weightLbs: action.value };
+    case 'SET_BOX_SIZE':
+      return { ...state, boxSize: action.value };
     case 'SET_VALIDATION_ERRORS':
       return { ...state, validationErrors: action.errors };
     case 'SET_PREVIEW_DATA':
@@ -160,6 +170,12 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       if (selectedItems.length === 0) {
         errors.items = 'No items selected';
       }
+      if (!state.weightLbs || parseFloat(state.weightLbs) <= 0) {
+        errors.weightLbs = 'Weight is required';
+      }
+      if (!state.boxSize) {
+        errors.boxSize = 'Box size is required';
+      }
     }
 
     if (step === 2) {
@@ -206,6 +222,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       thirdPartyAccountNumber: state.thirdPartyAccountNumber || undefined,
       thirdPartyPostalCode: state.thirdPartyPostalCode || undefined,
       thirdPartyCountryCode: state.thirdPartyCountryCode || undefined,
+      weightLbs: parseFloat(state.weightLbs) || 5,
+      boxSize: state.boxSize || 'medium',
     };
 
     processShipmentMutation.mutate(payload);
@@ -243,6 +261,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
             itemsByCustomer={itemsByCustomer}
             selectedItems={selectedItems}
             errors={state.validationErrors}
+            state={state}
+            dispatch={dispatch}
           />
         )}
 
@@ -328,10 +348,14 @@ function StepSelectionRecap({
   itemsByCustomer,
   selectedItems,
   errors,
+  state,
+  dispatch,
 }: {
   itemsByCustomer: Record<string, Record<string, any[]>>;
   selectedItems: any[];
   errors: Record<string, string>;
+  state: ShipmentDialogState;
+  dispatch: React.Dispatch<ShipmentDialogAction>;
 }) {
   return (
     <div className="space-y-4">
@@ -344,7 +368,7 @@ function StepSelectionRecap({
         <div className="text-sm text-destructive">{errors.items}</div>
       )}
 
-      <div className="space-y-4 max-h-96 overflow-y-auto">
+      <div className="space-y-4 max-h-60 overflow-y-auto">
         {Object.entries(itemsByCustomer).map(([customerName, pos]) => (
           <div key={customerName} className="border rounded-lg p-4 space-y-3">
             <h4 className="font-semibold text-sm">{customerName}</h4>
@@ -363,6 +387,52 @@ function StepSelectionRecap({
             ))}
           </div>
         ))}
+      </div>
+
+      {/* Weight and Box Size Inputs */}
+      <div className="border-t pt-4 space-y-4">
+        <h4 className="font-semibold text-sm text-muted-foreground">Package Details</h4>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="weightLbs">Total Weight (lbs) *</Label>
+            <Input
+              id="weightLbs"
+              type="number"
+              step="0.1"
+              min="0.1"
+              placeholder="Enter weight"
+              value={state.weightLbs}
+              onChange={(e) => dispatch({ type: 'SET_WEIGHT_LBS', value: e.target.value })}
+              className={errors.weightLbs ? 'border-destructive' : ''}
+            />
+            {errors.weightLbs && (
+              <div className="text-sm text-destructive">{errors.weightLbs}</div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="boxSize">Box Size *</Label>
+            <Select
+              value={state.boxSize}
+              onValueChange={(value) => dispatch({ type: 'SET_BOX_SIZE', value })}
+            >
+              <SelectTrigger id="boxSize" className={errors.boxSize ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Select box size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="small">Small (10x8x6)</SelectItem>
+                <SelectItem value="medium">Medium (14x10x8)</SelectItem>
+                <SelectItem value="large">Large (18x14x10)</SelectItem>
+                <SelectItem value="xlarge">X-Large (24x18x12)</SelectItem>
+                <SelectItem value="custom">Custom Size</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.boxSize && (
+              <div className="text-sm text-destructive">{errors.boxSize}</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

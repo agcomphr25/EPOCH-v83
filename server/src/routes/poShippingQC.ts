@@ -938,11 +938,16 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       items,
       serviceCode = '03',
       weightPerItemLbs = 5,
+      weightLbs,
+      boxSize = 'medium',
       billingOption = 'sender',
       thirdPartyAccountNumber,
       thirdPartyPostalCode,
       thirdPartyCountryCode,
     } = req.body;
+    
+    // Use weightLbs from frontend if provided, otherwise fall back to weightPerItemLbs
+    const totalPackageWeight = weightLbs ? parseFloat(weightLbs) : weightPerItemLbs;
 
     // Validate billing third-party requirements
     if (billingOption === 'third-party') {
@@ -1094,13 +1099,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     console.log(`📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`);
     console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
 
-    // 4. CALCULATE TOTAL WEIGHT (multiply by quantity)
-    // Note: purchaseOrderItems don't have a weight field, so use default
-    let totalWeight = 0;
-    for (const detail of orderDetails) {
-      totalWeight += weightPerItemLbs * detail.quantity;
+    // 4. USE TOTAL WEIGHT FROM FRONTEND (or calculate from default)
+    // If frontend provides totalPackageWeight, use that; otherwise calculate from default per-item weight
+    let totalWeight = totalPackageWeight;
+    if (!weightLbs) {
+      // Legacy fallback: calculate from per-item weight
+      totalWeight = 0;
+      for (const detail of orderDetails) {
+        totalWeight += weightPerItemLbs * detail.quantity;
+      }
     }
-    console.log(`⚖️  Total weight: ${totalWeight} lbs (${orderDetails.length} items)`);
+    console.log(`⚖️  Total weight: ${totalWeight} lbs (box size: ${boxSize})`);
 
     // 5. GET CUSTOMER SHIPPING ADDRESS
     const firstCustomer = orderDetails[0].customer;

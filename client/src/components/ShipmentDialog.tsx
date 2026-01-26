@@ -763,6 +763,7 @@ function PrintShipmentPopup({
     orderId: string;
     quantity: number;
     description: string;
+    poNumber?: string;
   }>;
   onClose: () => void;
 }) {
@@ -781,6 +782,7 @@ function PrintShipmentPopup({
 
     const itemsHtml = items.map(item => `
       <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.poNumber || '-'}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.orderId}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.description || 'Item'}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
@@ -836,8 +838,9 @@ function PrintShipmentPopup({
         <table>
           <thead>
             <tr>
+              <th>PO Number</th>
               <th>Order ID</th>
-              <th>Description</th>
+              <th>Item Name</th>
               <th style="text-align: center;">Qty</th>
             </tr>
           </thead>

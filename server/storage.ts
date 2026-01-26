@@ -487,6 +487,7 @@ import {
   sum,
   max,
   notInArray,
+  desc,
 } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt';

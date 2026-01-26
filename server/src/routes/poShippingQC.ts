@@ -345,8 +345,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
         }
 
         // Use explicit unitNumber from order object if available, otherwise try regex extraction
-        const unitNumber = item.order.unitNumber || 
+        const unitNumber = item.order?.unitNumber || 
           (() => {
+            if (!item.order?.orderId) return 1;
             const unitMatch = item.order.orderId.match(/-(\d+)$/);
             return unitMatch ? parseInt(unitMatch[1]) : 1;
           })();
@@ -997,12 +998,15 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       normalizedItems.map(async (item) => {
         // Check if this is a synthetic orderId (format: PO-{poItemId}-{unitNumber})
         // These are non-stock items that bypass production
-        const syntheticMatch = item.orderId.match(/^PO-(\d+)-(\d+)$/);
+        const syntheticMatch = item.orderId?.match(/^PO-(\d+)-(\d+)$/);
         
-        if (syntheticMatch) {
+        // Also handle case where there's no orderId but we have a poItemId
+        const hasNoOrderId = !item.orderId && item.poItemId;
+        
+        if (syntheticMatch || hasNoOrderId) {
           // Non-stock item: lookup directly by poItemId
-          const poItemId = parseInt(syntheticMatch[1]);
-          const unitNumber = parseInt(syntheticMatch[2]);
+          const poItemId = syntheticMatch ? parseInt(syntheticMatch[1]) : item.poItemId;
+          const unitNumber = syntheticMatch ? parseInt(syntheticMatch[2]) : 1;
           
           console.log(`📦 Processing non-stock item: poItemId=${poItemId}, unit=${unitNumber}`);
           

@@ -75,7 +75,12 @@ export default function TimerProgramsPage() {
   const [steps, setSteps] = useState<StepInput[]>([{ stepName: 'Step 1', durationMinutes: 5 }]);
 
   const { data: programs, isLoading } = useQuery<TimerProgram[]>({
-    queryKey: ['/api/production/timers/programs', { includeInactive: true }],
+    queryKey: ['/api/production/timers/programs'],
+    queryFn: async () => {
+      const res = await fetch('/api/production/timers/programs?includeInactive=true');
+      if (!res.ok) throw new Error('Failed to fetch programs');
+      return res.json();
+    },
   });
 
   const createMutation = useMutation({

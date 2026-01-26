@@ -9234,8 +9234,13 @@ export class DatabaseStorage implements IStorage {
   async createPurchaseOrderItem(
     data: InsertPurchaseOrderItem
   ): Promise<PurchaseOrderItem> {
-    const [item] = await db.insert(purchaseOrderItems).values(data).returning();
-    return item;
+    console.log('📦 Creating purchase order item with data:', JSON.stringify(data));
+    const result = await db.insert(purchaseOrderItems).values(data).returning();
+    console.log('📦 Insert result:', JSON.stringify(result));
+    if (!result || result.length === 0) {
+      throw new Error('Failed to create purchase order item - no result returned from database');
+    }
+    return result[0];
   }
 
   async updatePurchaseOrderItem(

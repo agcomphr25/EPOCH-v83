@@ -232,6 +232,12 @@ function TimerCard({ run }: { run: RunWithDetails }) {
               <span className="font-semibold">{run.ovenNumber}{run.ovenSlot ? `-${run.ovenSlot}` : ''}</span>
             </div>
           )}
+          {run.inventoryItemId && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Item ID:</span>
+              <span className="font-semibold">{run.inventoryItemId}</span>
+            </div>
+          )}
           {run.sku && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">SKU:</span>

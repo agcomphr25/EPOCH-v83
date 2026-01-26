@@ -11,28 +11,9 @@ import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken } from '../../middleware/auth';
 
-function calculateElapsedSeconds(startedAt: Date, events: Array<{ eventType: string; occurredAt: Date }>): number {
-  let totalSeconds = 0;
-  let lastResumeTime = startedAt;
-  let isPaused = false;
-
-  for (const event of events) {
-    if (event.eventType === 'paused') {
-      if (!isPaused) {
-        totalSeconds += Math.floor((event.occurredAt.getTime() - lastResumeTime.getTime()) / 1000);
-        isPaused = true;
-      }
-    } else if (event.eventType === 'resumed' || event.eventType === 'started') {
-      lastResumeTime = event.occurredAt;
-      isPaused = false;
-    }
-  }
-
-  if (!isPaused) {
-    totalSeconds += Math.floor((new Date().getTime() - lastResumeTime.getTime()) / 1000);
-  }
-
-  return totalSeconds;
+function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
+  const end = endTime || new Date();
+  return Math.floor((end.getTime() - startedAt.getTime()) / 1000);
 }
 
 const router = Router();
@@ -250,14 +231,8 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
     });
 
     if (nextStepIndex >= totalSteps) {
-      const events = await db
-        .select()
-        .from(productionProgramRunEvents)
-        .where(eq(productionProgramRunEvents.runId, id))
-        .orderBy(productionProgramRunEvents.occurredAt);
-
-      const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, events);
       const completedAt = new Date();
+      const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, completedAt);
 
       const [updated] = await db
         .update(productionProgramRuns)
@@ -333,14 +308,8 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Run already ${run.status}` });
     }
 
-    const events = await db
-      .select()
-      .from(productionProgramRunEvents)
-      .where(eq(productionProgramRunEvents.runId, id))
-      .orderBy(productionProgramRunEvents.occurredAt);
-
-    const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, events);
     const completedAt = new Date();
+    const totalElapsedSeconds = calculateElapsedSeconds(run.startedAt, completedAt);
 
     const [updated] = await db
       .update(productionProgramRuns)
@@ -395,6 +364,11 @@ router.get('/runs/history', async (req: Request, res: Response) => {
         programId: productionProgramRuns.programId,
         instanceName: productionProgramRuns.instanceName,
         sku: productionProgramRuns.sku,
+        serialNumber: productionProgramRuns.serialNumber,
+        inventoryItemId: productionProgramRuns.inventoryItemId,
+        mandrelNumber: productionProgramRuns.mandrelNumber,
+        ovenNumber: productionProgramRuns.ovenNumber,
+        ovenSlot: productionProgramRuns.ovenSlot,
         status: productionProgramRuns.status,
         startedAt: productionProgramRuns.startedAt,
         completedAt: productionProgramRuns.completedAt,

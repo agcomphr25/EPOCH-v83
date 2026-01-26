@@ -1,0 +1,85 @@
+PROMPT EPOCH-T6 — Timer Station Program Builder (Create Programs)
+
+Goal:
+Rename the timer module to "Timer Station" and add the ability to CREATE timer programs directly inside EPOCH.
+
+This must be usable immediately for demos without relying on any external Timer app.
+
+Rename / Terminology:
+
+1) Rename all UI references:
+- "Process Runner" → "Timer Station"
+- "Programs" → "Timer Programs"
+
+Navigation label:
+- Timer Station
+
+Program Creation Requirements:
+
+2) Add Program Manager UI
+Create a new page or section within Timer Station:
+- "Timer Programs"
+
+This page allows users to CREATE, VIEW, and EDIT timer programs.
+
+3) Program Definition Fields
+Each Timer Program must support:
+
+Required:
+- Program Name (text)
+- Description (optional text)
+
+Program Type (required selection):
+- Single-Step Program
+- Multi-Step Program
+
+4) Single-Step Program Behavior
+If Single-Step is selected:
+- Show field:
+  - Step Duration (minutes)
+- Internally store as:
+  - steps = [{ stepName: "Step 1", durationMinutes: X }]
+
+5) Multi-Step Program Behavior
+If Multi-Step is selected:
+- Show a dynamic step builder UI:
+
+For each step:
+- Step Name (text, default: "Step 1", "Step 2", etc.)
+- Step Duration (minutes)
+
+Controls:
+- "Add Step" button
+- "Remove Step" button (except Step 1)
+
+Steps must be ordered and editable.
+
+6) Validation Rules
+- Program Name required
+- At least 1 step required
+- Step duration must be > 0 minutes
+- Multi-step programs must have at least 2 steps
+
+7) Persistence
+- Save programs to the existing programs table (or create if missing)
+- Steps stored as structured JSON:
+  [{ stepName, durationSeconds }]
+
+Timer Station Integration:
+
+8) Start Run Dropdown
+- The Timer Station "Start Program" dropdown must now use these newly created programs.
+- No hardcoded or placeholder programs.
+
+Non-Goals (Do NOT implement yet):
+- SKU validation
+- Order linking
+- Serialized item capture
+- Proteus extraction
+- Analytics
+
+Outcome:
+- Timer Station is fully usable on its own
+- Users can create real oven programs
+- Programs immediately usable in live runs
+- No dependency on external apps

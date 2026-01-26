@@ -455,16 +455,167 @@ router.get('/runs/:id', async (req: Request, res: Response) => {
 
 router.get('/programs', async (req: Request, res: Response) => {
   try {
-    const programs = await db
-      .select()
-      .from(productionPrograms)
-      .where(eq(productionPrograms.isActive, true))
-      .orderBy(productionPrograms.name);
+    const includeInactive = req.query.includeInactive === 'true';
+    
+    const programs = includeInactive
+      ? await db.select().from(productionPrograms).orderBy(productionPrograms.name)
+      : await db.select().from(productionPrograms).where(eq(productionPrograms.isActive, true)).orderBy(productionPrograms.name);
 
-    return res.json(programs);
+    const programsWithSteps = await Promise.all(
+      programs.map(async (program) => {
+        const steps = await db
+          .select()
+          .from(productionProgramSteps)
+          .where(eq(productionProgramSteps.programId, program.id))
+          .orderBy(productionProgramSteps.stepIndex);
+        return { ...program, steps };
+      })
+    );
+
+    return res.json(programsWithSteps);
   } catch (error) {
     console.error('[ProductionTimer] Error fetching programs:', error);
     return res.status(500).json({ error: 'Failed to fetch programs' });
+  }
+});
+
+const createProgramSchema = z.object({
+  name: z.string().min(1, 'Program name is required'),
+  description: z.string().optional(),
+  programType: z.enum(['single', 'multi']),
+  steps: z.array(z.object({
+    stepName: z.string().min(1),
+    durationMinutes: z.number().positive('Duration must be greater than 0'),
+  })).min(1, 'At least one step is required'),
+});
+
+router.post('/programs', async (req: Request, res: Response) => {
+  try {
+    const parseResult = createProgramSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
+    }
+
+    const { name, description, programType, steps } = parseResult.data;
+
+    if (programType === 'multi' && steps.length < 2) {
+      return res.status(400).json({ error: 'Multi-step programs must have at least 2 steps' });
+    }
+
+    const [program] = await db.insert(productionPrograms).values({
+      name,
+      description: description || null,
+      isActive: true,
+    }).returning();
+
+    const stepsToInsert = steps.map((step, index) => ({
+      programId: program.id,
+      stepIndex: index,
+      stepName: step.stepName,
+      durationSeconds: Math.round(step.durationMinutes * 60),
+    }));
+
+    await db.insert(productionProgramSteps).values(stepsToInsert);
+
+    const insertedSteps = await db
+      .select()
+      .from(productionProgramSteps)
+      .where(eq(productionProgramSteps.programId, program.id))
+      .orderBy(productionProgramSteps.stepIndex);
+
+    console.log(`[ProductionTimer] Program created: ${program.id} - ${name}`);
+
+    return res.status(201).json({ ...program, steps: insertedSteps });
+  } catch (error) {
+    console.error('[ProductionTimer] Error creating program:', error);
+    return res.status(500).json({ error: 'Failed to create program' });
+  }
+});
+
+router.put('/programs/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parseResult = createProgramSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
+    }
+
+    const { name, description, programType, steps } = parseResult.data;
+
+    if (programType === 'multi' && steps.length < 2) {
+      return res.status(400).json({ error: 'Multi-step programs must have at least 2 steps' });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(productionPrograms)
+      .where(eq(productionPrograms.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Program not found' });
+    }
+
+    const [program] = await db.update(productionPrograms)
+      .set({
+        name,
+        description: description || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(productionPrograms.id, id))
+      .returning();
+
+    await db.delete(productionProgramSteps).where(eq(productionProgramSteps.programId, id));
+
+    const stepsToInsert = steps.map((step, index) => ({
+      programId: id,
+      stepIndex: index,
+      stepName: step.stepName,
+      durationSeconds: Math.round(step.durationMinutes * 60),
+    }));
+
+    await db.insert(productionProgramSteps).values(stepsToInsert);
+
+    const updatedSteps = await db
+      .select()
+      .from(productionProgramSteps)
+      .where(eq(productionProgramSteps.programId, id))
+      .orderBy(productionProgramSteps.stepIndex);
+
+    console.log(`[ProductionTimer] Program updated: ${id} - ${name}`);
+
+    return res.json({ ...program, steps: updatedSteps });
+  } catch (error) {
+    console.error('[ProductionTimer] Error updating program:', error);
+    return res.status(500).json({ error: 'Failed to update program' });
+  }
+});
+
+router.delete('/programs/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const [existing] = await db
+      .select()
+      .from(productionPrograms)
+      .where(eq(productionPrograms.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Program not found' });
+    }
+
+    const [updated] = await db.update(productionPrograms)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(productionPrograms.id, id))
+      .returning();
+
+    console.log(`[ProductionTimer] Program deactivated: ${id}`);
+
+    return res.json({ message: 'Program deactivated', program: updated });
+  } catch (error) {
+    console.error('[ProductionTimer] Error deleting program:', error);
+    return res.status(500).json({ error: 'Failed to delete program' });
   }
 });
 

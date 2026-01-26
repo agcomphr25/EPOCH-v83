@@ -43,6 +43,7 @@ import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
 import ProductionStationDashboard from './pages/ProductionStationDashboard';
 import ProductionTimerHistory from './pages/ProductionTimerHistory';
+import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
 import TicketsPage from './pages/TicketsPage';
 import PDFSignatureTool from './pages/PDFSignatureTool';
@@ -404,6 +405,7 @@ function App() {
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
                   <Route path="/app/production/timer-history" component={ProductionTimerHistory} />
+                  <Route path="/app/production/timer-programs" component={TimerProgramsPage} />
                   
                   {/* Field - Calm thinking surface (single user: admin_glennj) */}
                   <Route path="/field" component={FieldPage} />

@@ -4,7 +4,7 @@ import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History, Settings } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -374,17 +374,23 @@ export default function ProductionStationDashboard() {
           <div>
             <h1 className="text-4xl font-bold flex items-center gap-3">
               <Timer className="w-10 h-10" />
-              Production Stations
+              Timer Station
             </h1>
             <p className="text-xl text-muted-foreground mt-2">
-              Live production timer dashboard
+              Live timer dashboard for production processes
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/app/production/timer-programs">
+              <Button variant="outline" size="lg" className="text-lg h-14 px-6">
+                <Settings className="w-5 h-5 mr-2" />
+                Programs
+              </Button>
+            </Link>
             <Link href="/app/production/timer-history">
               <Button variant="outline" size="lg" className="text-lg h-14 px-6">
                 <History className="w-5 h-5 mr-2" />
-                Timer History
+                History
               </Button>
             </Link>
             <Button
@@ -393,7 +399,7 @@ export default function ProductionStationDashboard() {
               onClick={() => setStartModalOpen(true)}
             >
               <Plus className="w-5 h-5 mr-2" />
-              Start Production Timer
+              Start Timer
             </Button>
             <div className="text-right">
               <p className="text-3xl font-mono font-bold">

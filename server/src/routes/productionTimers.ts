@@ -43,6 +43,11 @@ const startRunSchema = z.object({
   programId: z.string().uuid(),
   instanceName: z.string().optional(),
   sku: z.string().optional(),
+  serialNumber: z.string().min(1, 'Serial # is required'),
+  inventoryItemId: z.number().int().positive('Inventory Item is required'),
+  mandrelNumber: z.number().int().min(1).max(3),
+  ovenNumber: z.number().int().min(1).max(2),
+  ovenSlot: z.enum(['A', 'B']),
 });
 
 router.post('/runs/start', async (req: Request, res: Response) => {
@@ -57,7 +62,7 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { programId, instanceName, sku } = parseResult.data;
+    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot } = parseResult.data;
 
     const [program] = await db
       .select()
@@ -78,6 +83,11 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       startedByUserId: userId,
       instanceName: instanceName || null,
       sku: sku || null,
+      serialNumber,
+      inventoryItemId,
+      mandrelNumber,
+      ovenNumber,
+      ovenSlot,
       status: 'running',
       currentStepIndex: 0,
       startedAt: new Date(),

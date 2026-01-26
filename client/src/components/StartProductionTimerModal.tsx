@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Camera, Play, ScanBarcode, X } from 'lucide-react';
+import { Loader2, Play, ScanBarcode, X } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,6 +29,12 @@ interface ProductionProgram {
   name: string;
   description: string | null;
   isActive: boolean;
+}
+
+interface InventoryItem {
+  id: number;
+  sku: string;
+  name: string;
 }
 
 interface StartProductionTimerModalProps {
@@ -45,7 +52,11 @@ export default function StartProductionTimerModal({
   const streamRef = useRef<MediaStream | null>(null);
 
   const [programId, setProgramId] = useState('');
-  const [instanceName, setInstanceName] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
+  const [inventoryItemId, setInventoryItemId] = useState('');
+  const [mandrelNumber, setMandrelNumber] = useState('');
+  const [ovenNumber, setOvenNumber] = useState('');
+  const [ovenSlot, setOvenSlot] = useState('');
   const [sku, setSku] = useState('');
   const [notes, setNotes] = useState('');
   const [isScanning, setIsScanning] = useState(false);
@@ -53,6 +64,21 @@ export default function StartProductionTimerModal({
 
   const { data: programs, isLoading: programsLoading } = useQuery<ProductionProgram[]>({
     queryKey: ['/api/production/timers/programs'],
+    enabled: open,
+  });
+
+  const { data: inventoryItems, isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
+    queryFn: async () => {
+      const res = await fetch('/api/enhanced/inventory/items');
+      if (!res.ok) throw new Error('Failed to fetch inventory');
+      const data = await res.json();
+      return data.map((item: any) => ({
+        id: item.id,
+        sku: item.sku || '',
+        name: item.name || item.description || '',
+      }));
+    },
     enabled: open,
   });
 
@@ -66,7 +92,11 @@ export default function StartProductionTimerModal({
     if (!open) {
       stopScanning();
       setProgramId('');
-      setInstanceName('');
+      setSerialNumber('');
+      setInventoryItemId('');
+      setMandrelNumber('');
+      setOvenNumber('');
+      setOvenSlot('');
       setSku('');
       setNotes('');
     }
@@ -78,7 +108,11 @@ export default function StartProductionTimerModal({
         method: 'POST',
         body: JSON.stringify({
           programId,
-          instanceName: instanceName.trim(),
+          serialNumber: serialNumber.trim(),
+          inventoryItemId: parseInt(inventoryItemId, 10),
+          mandrelNumber: parseInt(mandrelNumber, 10),
+          ovenNumber: parseInt(ovenNumber, 10),
+          ovenSlot,
           sku: sku.trim() || undefined,
         }),
       });
@@ -124,7 +158,7 @@ export default function StartProductionTimerModal({
             const barcodes = await detector.detect(videoRef.current);
             if (barcodes.length > 0) {
               const scannedValue = barcodes[0].rawValue;
-              setSku(scannedValue);
+              setSerialNumber(scannedValue);
               toast({ title: 'Barcode scanned', description: scannedValue });
               stopScanning();
               return;
@@ -164,10 +198,10 @@ export default function StartProductionTimerModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!programId || !instanceName.trim()) {
+    if (!isValid) {
       toast({
         title: 'Missing required fields',
-        description: 'Please select a program and enter an instance name',
+        description: 'Please fill in all required fields',
         variant: 'destructive',
       });
       return;
@@ -175,16 +209,19 @@ export default function StartProductionTimerModal({
     startMutation.mutate();
   };
 
-  const isValid = programId && instanceName.trim();
+  const isValid = programId && serialNumber.trim() && inventoryItemId && mandrelNumber && ovenNumber && ovenSlot;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Play className="w-5 h-5" />
-            Start Production Timer
+            Start Timer
           </DialogTitle>
+          <DialogDescription>
+            Configure production run parameters
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -215,25 +252,15 @@ export default function StartProductionTimerModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="instanceName">Instance Name *</Label>
-            <Input
-              id="instanceName"
-              value={instanceName}
-              onChange={(e) => setInstanceName(e.target.value)}
-              placeholder="e.g., Batch #123, Station A, etc."
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sku">SKU</Label>
+            <Label htmlFor="serialNumber">Serial # *</Label>
             <div className="flex gap-2">
               <Input
-                id="sku"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                placeholder="Enter SKU or scan barcode"
+                id="serialNumber"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="Enter serial number"
                 className="flex-1"
+                required
               />
               {barcodeSupported && (
                 <Button
@@ -269,6 +296,84 @@ export default function StartProductionTimerModal({
               </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="inventoryItem">Inventory Item *</Label>
+            <Select value={inventoryItemId} onValueChange={setInventoryItemId}>
+              <SelectTrigger id="inventoryItem">
+                <SelectValue placeholder="Select inventory item..." />
+              </SelectTrigger>
+              <SelectContent>
+                {inventoryLoading ? (
+                  <div className="p-2 text-center text-muted-foreground">
+                    Loading inventory...
+                  </div>
+                ) : inventoryItems?.length === 0 ? (
+                  <div className="p-2 text-center text-muted-foreground">
+                    No inventory items found
+                  </div>
+                ) : (
+                  inventoryItems?.map((item) => (
+                    <SelectItem key={item.id} value={String(item.id)}>
+                      {item.sku} — {item.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="mandrel">Mandrel # *</Label>
+              <Select value={mandrelNumber} onValueChange={setMandrelNumber}>
+                <SelectTrigger id="mandrel">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1</SelectItem>
+                  <SelectItem value="2">2</SelectItem>
+                  <SelectItem value="3">3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="oven">Oven # *</Label>
+              <Select value={ovenNumber} onValueChange={setOvenNumber}>
+                <SelectTrigger id="oven">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1</SelectItem>
+                  <SelectItem value="2">2</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ovenSlot">Oven Slot *</Label>
+              <Select value={ovenSlot} onValueChange={setOvenSlot}>
+                <SelectTrigger id="ovenSlot">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="A">A</SelectItem>
+                  <SelectItem value="B">B</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sku">SKU (optional)</Label>
+            <Input
+              id="sku"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="Enter SKU"
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes (optional)</Label>

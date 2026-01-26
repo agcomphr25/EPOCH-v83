@@ -15,6 +15,11 @@ interface ProductionProgramRun {
   startedByUserId: number;
   instanceName: string | null;
   sku: string | null;
+  serialNumber: string | null;
+  inventoryItemId: number | null;
+  mandrelNumber: number | null;
+  ovenNumber: number | null;
+  ovenSlot: string | null;
   status: 'running' | 'paused' | 'awaiting_next' | 'completed' | 'stopped';
   currentStepIndex: number;
   startedAt: string;
@@ -33,6 +38,11 @@ interface ProductionProgramRun {
     stepName: string;
     durationSeconds: number;
   }[];
+  inventoryItem?: {
+    id: number;
+    sku: string;
+    name: string;
+  };
 }
 
 interface RunWithDetails extends ProductionProgramRun {
@@ -102,9 +112,13 @@ function TimerCard({ run }: { run: RunWithDetails }) {
   const totalProgramDuration = run.steps?.reduce((sum, s) => sum + s.durationSeconds, 0) || 0;
 
   useEffect(() => {
-    if (run.status !== 'running') return;
-
     const startTime = new Date(run.startedAt).getTime();
+    
+    if (run.status === 'completed' || run.status === 'stopped') {
+      setElapsedTime(run.totalElapsedSeconds);
+      return;
+    }
+
     const updateElapsed = () => {
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000);
@@ -114,7 +128,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [run.startedAt, run.status]);
+  }, [run.startedAt, run.status, run.totalElapsedSeconds]);
 
   const pauseMutation = useMutation({
     mutationFn: async () => {
@@ -192,12 +206,39 @@ function TimerCard({ run }: { run: RunWithDetails }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {run.sku && (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">SKU:</span>
-            <span className="font-mono text-lg font-semibold">{run.sku}</span>
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Started:</span>
+            <span className="font-semibold">
+              {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </span>
           </div>
-        )}
+          {run.serialNumber && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Serial #:</span>
+              <span className="font-mono font-semibold">{run.serialNumber}</span>
+            </div>
+          )}
+          {run.mandrelNumber && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Mandrel:</span>
+              <span className="font-semibold">{run.mandrelNumber}</span>
+            </div>
+          )}
+          {run.ovenNumber && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Oven:</span>
+              <span className="font-semibold">{run.ovenNumber}{run.ovenSlot ? `-${run.ovenSlot}` : ''}</span>
+            </div>
+          )}
+          {run.sku && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">SKU:</span>
+              <span className="font-mono font-semibold">{run.sku}</span>
+            </div>
+          )}
+        </div>
 
         <div className="bg-muted rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -226,9 +267,9 @@ function TimerCard({ run }: { run: RunWithDetails }) {
           <div className="flex items-center gap-2">
             <Timer className="w-5 h-5 text-muted-foreground" />
             <div>
-              <p className="text-sm text-muted-foreground">Total Elapsed</p>
+              <p className="text-sm text-muted-foreground">Overall Time</p>
               <p className="text-xl font-mono font-semibold">
-                {formatTime(run.status === 'running' ? elapsedTime : run.totalElapsedSeconds)}
+                {formatTime(elapsedTime)}
               </p>
             </div>
           </div>

@@ -57,7 +57,6 @@ export default function StartProductionTimerModal({
   const [mandrelNumber, setMandrelNumber] = useState('');
   const [ovenNumber, setOvenNumber] = useState('');
   const [ovenSlot, setOvenSlot] = useState('');
-  const [sku, setSku] = useState('');
   const [notes, setNotes] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
@@ -97,7 +96,6 @@ export default function StartProductionTimerModal({
       setMandrelNumber('');
       setOvenNumber('');
       setOvenSlot('');
-      setSku('');
       setNotes('');
     }
   }, [open]);
@@ -113,7 +111,6 @@ export default function StartProductionTimerModal({
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
-          sku: sku.trim() || undefined,
         }),
       });
     },
@@ -363,16 +360,6 @@ export default function StartProductionTimerModal({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sku">SKU (optional)</Label>
-            <Input
-              id="sku"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              placeholder="Enter SKU"
-            />
           </div>
 
           <div className="space-y-2">

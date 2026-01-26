@@ -27,6 +27,10 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/sign-order',  // Customer signature page - no auth required
   '/p2-traveler', // P2 traveler viewer - public access for customers/vendors
   '/employee-portal/', // Employee portal with portalId - public access for employees
+  '/app/production/stations', // Timer Station - public access for production floor
+  '/app/production/timer-history', // Timer History - public access for production floor
+  '/app/production/timer-programs', // Timer Programs - public access for production floor
+  '/fill-and-sign/', // Fill and sign PDF forms - public access for customers
 ];
 
 function isDeploymentEnvironment(): boolean {

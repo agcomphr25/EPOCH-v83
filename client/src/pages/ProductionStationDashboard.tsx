@@ -219,6 +219,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div>
+            <p className="text-sm text-muted-foreground">Program</p>
             <CardTitle className="text-2xl font-bold">{run.program?.name || 'Unknown Program'}</CardTitle>
             {run.instanceName && (
               <p className="text-lg text-muted-foreground mt-1">{run.instanceName}</p>
@@ -282,10 +283,10 @@ function TimerCard({ run }: { run: RunWithDetails }) {
               Step {run.currentStepIndex + 1} of {totalSteps}
             </span>
           </div>
-          {run.status === 'running' && currentStep && (
+          {(run.status === 'running' || run.status === 'paused') && currentStep && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Step Time Remaining:</span>
-              <span className="text-2xl font-mono font-bold text-blue-600">
+              <span className={`text-2xl font-mono font-bold ${run.status === 'paused' ? 'text-yellow-600' : 'text-blue-600'}`}>
                 {formatTime(stepTimeRemaining)}
               </span>
             </div>

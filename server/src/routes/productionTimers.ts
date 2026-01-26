@@ -18,8 +18,6 @@ function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
 
 const router = Router();
 
-router.use(authenticateToken);
-
 const startRunSchema = z.object({
   programId: z.string().uuid(),
   instanceName: z.string().optional(),

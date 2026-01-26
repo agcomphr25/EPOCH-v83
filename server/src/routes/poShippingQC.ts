@@ -1011,9 +1011,13 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             throw new Error(`PO item ${poItemId} not found`);
           }
           
-          // Check if already shipped
-          if (poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') {
+          // Check if already shipped (skip in dev mode)
+          const isDevModeItem = process.env.NODE_ENV === 'development';
+          if ((poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') && !isDevModeItem) {
             throw new Error(`PO item ${poItemId} has already been shipped`);
+          }
+          if ((poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') && isDevModeItem) {
+            console.log(`🧪 DEV MODE: Allowing re-shipment of already shipped PO item ${poItemId}`);
           }
           
           const po = await storage.getPurchaseOrder(poItem.poId);

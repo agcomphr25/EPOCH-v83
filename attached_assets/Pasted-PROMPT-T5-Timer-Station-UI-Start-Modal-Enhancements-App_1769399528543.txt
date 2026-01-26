@@ -1,0 +1,136 @@
+PROMPT T5 — Timer Station UI & Start Modal Enhancements
+
+App: EPOCH
+Where to paste: EPOCH Replit agent (main chat)
+
+GOAL
+
+Update the Timer Station module so it reflects real production needs and captures the correct metadata at start time.
+
+REQUIRED CHANGES
+1️⃣ Program Widget — Timing Behavior
+
+Update the active timer card so that:
+
+Start Time is displayed
+
+Show:
+Started: HH:MM AM/PM
+
+Source: run.startedAt
+
+Overall Time (Stopwatch) behavior
+
+Overall elapsed time must continue running when:
+
+A step completes
+
+The timer is paused
+
+The run is awaiting “Next Step”
+
+Overall elapsed time only stops when:
+
+The run is fully completed or stopped
+
+This is a true run-level stopwatch, not step-bound.
+
+2️⃣ Rename & Rework “Start Production Timer” Modal
+
+Replace the existing fields and labels as follows:
+
+A) Rename Field
+
+“Instance Name” → “Serial #”
+
+Required field
+
+Free-text input
+
+B) Inventory Item Dropdown (NEW)
+
+Add a required dropdown field:
+
+Label: Inventory Item
+
+Source:
+Fetch from:
+/inventory/enhanced-mrp
+
+Display:
+item.sku — item.name
+
+Stored value:
+inventoryItemId
+
+C) Mandrel / Oven Fields (NEW)
+
+Add the following required fields:
+
+Mandrel #
+
+Dropdown
+
+Options: 1, 2, 3
+
+Oven #
+
+Dropdown
+
+Options: 1, 2
+
+Oven Slot
+
+Dropdown
+
+Options: A, B
+
+D) Existing Fields
+
+Keep Program selector
+
+Keep Notes (optional)
+
+SKU field can remain optional for now
+
+3️⃣ Data Handling
+
+When starting a timer run:
+
+Persist the following on the run record:
+
+serialNumber
+
+inventoryItemId
+
+mandrelNumber
+
+ovenNumber
+
+ovenSlot
+
+startedAt (already exists)
+
+Ensure these values are:
+
+Visible on the Timer Station card
+
+Included in run payloads/events for future analytics
+
+ACCEPTANCE CRITERIA
+
+Timer Station card shows Started Time
+
+Overall elapsed time keeps running across pauses and step transitions
+
+Start modal matches production reality (Serial + Inventory + Mandrel/Oven context)
+
+No demo-only or placeholder fields remain
+
+OUT OF SCOPE (DO NOT DO)
+
+No SKU validation logic
+
+No inventory mutation
+
+No analytics/export work

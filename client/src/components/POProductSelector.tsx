@@ -28,6 +28,7 @@ interface POProduct {
   customerName: string;
   productName: string;
   customerProductNumber: string;
+  productType: string;
   material: string;
   handedness: string;
   stockModel: string;
@@ -174,9 +175,14 @@ export default function POProductSelector({
     try {
       // Save each selected product as a PO item
       for (const sp of selectedProducts) {
+        // Determine itemType based on productType:
+        // - 'stock' products are stock_model items that need production
+        // - Other products (metal accessories, etc.) are custom_model items
+        const itemType = sp.product.productType === 'stock' ? 'stock_model' : 'custom_model';
+        
         const poItemData = {
           poId: poId,
-          itemType: 'custom_model',
+          itemType: itemType,
           itemId: sp.product.id.toString(),
           itemName: sp.product.productName,
           stockModelId: sp.product.stockModel || 'mesa_universal',

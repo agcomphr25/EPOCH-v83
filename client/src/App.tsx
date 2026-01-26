@@ -41,6 +41,7 @@ import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
+import ProductionStationDashboard from './pages/ProductionStationDashboard';
 import FieldPage from './pages/FieldPage';
 import TicketsPage from './pages/TicketsPage';
 import PDFSignatureTool from './pages/PDFSignatureTool';
@@ -400,6 +401,7 @@ function App() {
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
+                  <Route path="/app/production/stations" component={ProductionStationDashboard} />
                   
                   {/* Field - Calm thinking surface (single user: admin_glennj) */}
                   <Route path="/field" component={FieldPage} />

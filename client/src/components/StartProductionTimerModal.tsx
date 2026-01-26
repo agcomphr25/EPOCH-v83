@@ -298,7 +298,7 @@ export default function StartProductionTimerModal({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="inventoryItem">Inventory Item *</Label>
+            <Label htmlFor="inventoryItem">SKU *</Label>
             <Select value={inventoryItemId} onValueChange={setInventoryItemId}>
               <SelectTrigger id="inventoryItem">
                 <SelectValue placeholder="Select inventory item..." />

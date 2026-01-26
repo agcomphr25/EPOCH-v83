@@ -57,6 +57,7 @@ interface RunWithDetails extends ProductionProgramRun {
     stepName: string;
     durationSeconds: number;
   }[];
+  cumulativePauseSeconds?: number;
 }
 
 function formatTime(seconds: number): string {
@@ -113,22 +114,32 @@ function TimerCard({ run }: { run: RunWithDetails }) {
 
   useEffect(() => {
     const startTime = new Date(run.startedAt).getTime();
+    const pauseSeconds = run.cumulativePauseSeconds || 0;
     
     if (run.status === 'completed' || run.status === 'stopped') {
       setElapsedTime(run.totalElapsedSeconds);
       return;
     }
 
+    // When paused, elapsed time is frozen (wall-clock minus pause time, but no live update)
+    if (run.status === 'paused') {
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
+      setElapsedTime(elapsed);
+      return;
+    }
+
+    // When running, update elapsed time every second (excluding pause time)
     const updateElapsed = () => {
       const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000);
+      const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
       setElapsedTime(elapsed);
     };
 
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [run.startedAt, run.status, run.totalElapsedSeconds]);
+  }, [run.startedAt, run.status, run.totalElapsedSeconds, run.cumulativePauseSeconds]);
 
   const pauseMutation = useMutation({
     mutationFn: async () => {
@@ -186,8 +197,10 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     ? Math.max(0, currentStep.durationSeconds - (elapsedTime % (currentStep.durationSeconds || 1)))
     : 0;
 
+  // Estimated completion shifts forward by cumulative pause time
+  const pauseSeconds = run.cumulativePauseSeconds || 0;
   const estimatedCompletion = totalProgramDuration > 0
-    ? new Date(new Date(run.startedAt).getTime() + totalProgramDuration * 1000)
+    ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + pauseSeconds) * 1000)
     : null;
 
   return (

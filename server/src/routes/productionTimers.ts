@@ -339,6 +339,28 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
   }
 });
 
+function calculateCumulativePauseSeconds(events: any[]): number {
+  let totalPauseSeconds = 0;
+  let lastPauseTime: Date | null = null;
+
+  for (const event of events) {
+    if (event.eventType === 'paused') {
+      lastPauseTime = new Date(event.occurredAt);
+    } else if (event.eventType === 'resumed' && lastPauseTime) {
+      const resumeTime = new Date(event.occurredAt);
+      totalPauseSeconds += Math.floor((resumeTime.getTime() - lastPauseTime.getTime()) / 1000);
+      lastPauseTime = null;
+    }
+  }
+
+  // If still paused, add time from last pause to now
+  if (lastPauseTime) {
+    totalPauseSeconds += Math.floor((Date.now() - lastPauseTime.getTime()) / 1000);
+  }
+
+  return totalPauseSeconds;
+}
+
 router.get('/runs', async (req: Request, res: Response) => {
   try {
     const runs = await db
@@ -347,7 +369,37 @@ router.get('/runs', async (req: Request, res: Response) => {
       .orderBy(desc(productionProgramRuns.startedAt))
       .limit(100);
 
-    return res.json(runs);
+    // Fetch events, programs, and steps for each run
+    const runsWithDetails = await Promise.all(runs.map(async (run) => {
+      const events = await db
+        .select()
+        .from(productionProgramRunEvents)
+        .where(eq(productionProgramRunEvents.runId, run.id))
+        .orderBy(productionProgramRunEvents.occurredAt);
+
+      const [program] = await db
+        .select()
+        .from(productionPrograms)
+        .where(eq(productionPrograms.id, run.programId))
+        .limit(1);
+
+      const steps = await db
+        .select()
+        .from(productionProgramSteps)
+        .where(eq(productionProgramSteps.programId, run.programId))
+        .orderBy(productionProgramSteps.stepIndex);
+
+      const cumulativePauseSeconds = calculateCumulativePauseSeconds(events);
+
+      return {
+        ...run,
+        program,
+        steps,
+        cumulativePauseSeconds,
+      };
+    }));
+
+    return res.json(runsWithDetails);
   } catch (error) {
     console.error('[ProductionTimer] Error fetching runs:', error);
     return res.status(500).json({ error: 'Failed to fetch runs' });

@@ -143,6 +143,11 @@ function TimerCard({ run }: { run: RunWithDetails }) {
   const currentStep = run.steps?.find(s => s.stepIndex === run.currentStepIndex);
   const totalSteps = run.steps?.length || 0;
   const totalProgramDuration = run.steps?.reduce((sum, s) => sum + s.durationSeconds, 0) || 0;
+  
+  // Calculate cumulative duration of all steps before current step
+  const priorStepsDuration = run.steps
+    ?.filter(s => s.stepIndex < run.currentStepIndex)
+    .reduce((sum, s) => sum + s.durationSeconds, 0) || 0;
 
   useEffect(() => {
     const startTime = new Date(run.startedAt).getTime();
@@ -251,8 +256,11 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     },
   });
 
+  // Calculate step time remaining: step duration minus time elapsed within this step
+  // elapsedTime already freezes when paused, so this will freeze too
+  const elapsedInCurrentStep = Math.max(0, elapsedTime - priorStepsDuration);
   const stepTimeRemaining = currentStep 
-    ? Math.max(0, currentStep.durationSeconds - (elapsedTime % (currentStep.durationSeconds || 1)))
+    ? Math.max(0, currentStep.durationSeconds - elapsedInCurrentStep)
     : 0;
 
   // Auto-trigger step timeout when time runs out

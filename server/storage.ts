@@ -9000,6 +9000,7 @@ export class DatabaseStorage implements IStorage {
         poi.specifications,
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
+        poi.item_type as "itemType",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
         prod.production_status as "productionStatus"
@@ -9056,6 +9057,7 @@ export class DatabaseStorage implements IStorage {
           material: specs.material || null,
           finishType: specs.finishType || null,
           stockModel: row.stockModelId,
+          itemType: (row as any).itemType || null,
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
@@ -9093,22 +9095,18 @@ export class DatabaseStorage implements IStorage {
         Array.from(po.itemsMap.values()).forEach((poItem) => {
           if (poItem.productionOrders.length === 0) {
             // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
-            // Business rule: PO items WITHOUT stock models (metal accessories) go straight to Shipping QC (no production needed)
-            const stockModelLower = (poItem.stockModel || '').toLowerCase().trim();
-            const hasStockModel = poItem.stockModel && 
-              stockModelLower !== 'no stock' && 
-              stockModelLower !== 'unknown' && 
-              stockModelLower !== '' &&
-              stockModelLower !== 'n/a';
+            // Business rule: PO items with itemType NOT equal to "stock_model" are metal accessories
+            // Metal accessories go straight to Shipping QC (no production needed)
+            const isMetalAccessory = poItem.itemType && poItem.itemType.toLowerCase() !== 'stock_model';
             
-            // CRITICAL FIX: Skip items with stock models that haven't entered production yet
+            // CRITICAL FIX: Skip stock_model items that haven't entered production yet
             // They should NOT appear in Shipping QC until they're scheduled to production
-            if (hasStockModel) {
+            if (!isMetalAccessory) {
               // This item needs production but hasn't been scheduled yet - skip it entirely
               return;
             }
             
-            // Only non-stock items (ready-to-sell) should proceed to Shipping QC without production
+            // Only non-stock items (metal accessories) should proceed to Shipping QC without production
             const department = 'Shipping QC';
             const status = 'IN_SHIPPING_QC';
             const readyToShip = true;
@@ -9127,6 +9125,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
+                itemType: poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: false,
@@ -9151,6 +9150,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
+                itemType: poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: prodOrder.isFulfilled,

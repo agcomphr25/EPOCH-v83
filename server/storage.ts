@@ -9209,11 +9209,17 @@ export class DatabaseStorage implements IStorage {
   // Purchase Order Items CRUD
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]> {
-    return await db
-      .select()
-      .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.poId, poId))
-      .orderBy(purchaseOrderItems.createdAt);
+    try {
+      const result = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.poId, poId))
+        .orderBy(purchaseOrderItems.createdAt);
+      return result || [];
+    } catch (error: any) {
+      console.error('Error in getPurchaseOrderItems for poId', poId, ':', error?.message || error);
+      return [];
+    }
   }
 
   async getPurchaseOrderItem(id: number): Promise<PurchaseOrderItem | undefined> {
@@ -9300,12 +9306,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProductionOrdersByPoId(poId: number): Promise<ProductionOrder[]> {
-    const orders = await db
-      .select(productionOrdersColumns)
-      .from(productionOrders)
-      .where(eq(productionOrders.poId, poId))
-      .orderBy(productionOrders.createdAt);
-    return orders;
+    try {
+      const orders = await db
+        .select(productionOrdersColumns)
+        .from(productionOrders)
+        .where(eq(productionOrders.poId, poId))
+        .orderBy(productionOrders.createdAt);
+      return orders || [];
+    } catch (error: any) {
+      console.error('Error in getProductionOrdersByPoId for poId', poId, ':', error?.message || error);
+      return [];
+    }
   }
 
   async createProductionOrder(

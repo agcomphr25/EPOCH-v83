@@ -8526,9 +8526,13 @@ export class DatabaseStorage implements IStorage {
   async createCustomerAddress(
     data: InsertCustomerAddress
   ): Promise<CustomerAddress> {
+    const insertData = {
+      ...data,
+      customerId: typeof data.customerId === 'string' ? parseInt(data.customerId, 10) : data.customerId,
+    };
     const [address] = await db
       .insert(customerAddresses)
-      .values(data)
+      .values(insertData)
       .returning();
     return address;
   }

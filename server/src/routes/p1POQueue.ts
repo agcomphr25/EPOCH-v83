@@ -105,8 +105,19 @@ router.get('/selections/:batchId', async (req: Request, res: Response) => {
 });
 
 // Generate weekly layup schedule from selections
-router.post('/schedule', async (req: Request, res: Response) => {
+// Uses idempotency middleware to prevent duplicate order creation on retries
+router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Response) => {
   try {
+    // Check if this is a replay of a previously completed request
+    if (req.idempotency?.isReplay && req.idempotency.existingResponse) {
+      logIdempotencyEvent('REPLAY_RETURNED', {
+        endpoint: '/api/p1-po-queue/schedule',
+        idempotencyKey: req.idempotency.idempotencyKey,
+        existingOrderId: req.idempotency.existingOrderId
+      });
+      return res.status(req.idempotency.existingResponse.status).json(req.idempotency.existingResponse.body);
+    }
+
     const { batchId, targetWeek } = req.body;
 
     if (!batchId) {
@@ -286,7 +297,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
     console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`);
 
-    res.json({
+    const responseBody = {
       success: true,
       batchId,
       targetWeek: targetWeek || 'Current Week',
@@ -297,7 +308,21 @@ router.post('/schedule', async (req: Request, res: Response) => {
       orderIds: scheduledOrders,
       errors: errors.length > 0 ? errors : undefined,
       message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`,
-    });
+    };
+
+    // Record idempotency for successful request (if idempotency key was provided)
+    if (req.idempotency?.idempotencyKey && scheduledOrders.length > 0) {
+      const { storeIdempotencyKey } = await import('../../middleware/idempotency');
+      await storeIdempotencyKey(
+        req.idempotency.idempotencyKey,
+        '/api/p1-po-queue/schedule',
+        scheduledOrders[0],
+        200,
+        responseBody
+      );
+    }
+
+    res.json(responseBody);
   } catch (error) {
     console.error('Error generating schedule:', error);
     res.status(500).json({

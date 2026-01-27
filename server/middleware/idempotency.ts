@@ -43,8 +43,8 @@ export async function checkIdempotencyKey(
     const result = await pool.query(
       `SELECT order_id, response_status, response_body 
        FROM idempotency_keys 
-       WHERE idempotency_key = $1 AND endpoint = $2 AND expires_at > NOW()`,
-      [idempotencyKey, endpoint]
+       WHERE idempotency_key = $1 AND expires_at > NOW()`,
+      [idempotencyKey]
     );
 
     if (result.rows.length > 0) {

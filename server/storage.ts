@@ -9018,7 +9018,7 @@ export class DatabaseStorage implements IStorage {
         poi.specifications,
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
-        COALESCE(prod.item_type, poi.item_type) as "itemType",
+        poi.item_type as "itemType",
         poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",

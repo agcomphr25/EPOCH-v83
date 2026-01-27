@@ -494,10 +494,48 @@ export interface OrderConfirmationResult {
   method?: string;
 }
 
+// PAUSE FLAG: Set PAUSE_ORDER_CONFIRMATION_EMAILS=true to temporarily pause all order confirmation emails
+// This includes initial, resend, and all contexts (initial_order, followup, etc.)
+const isOrderConfirmationEmailsPaused = () => process.env.PAUSE_ORDER_CONFIRMATION_EMAILS === 'true';
+
 export async function sendOrderConfirmationNotification(
   data: OrderConfirmationData
 ): Promise<OrderConfirmationResult> {
   console.log('📧 [ORDER-CONFIRM] Starting order confirmation notification:', data.orderId);
+
+  // ============================================================
+  // GLOBAL PAUSE CHECK: Skip all order confirmation emails when paused
+  // ============================================================
+  if (isOrderConfirmationEmailsPaused()) {
+    console.log('⏸️ [ORDER-CONFIRM] Order confirmation emails are PAUSED (PAUSE_ORDER_CONFIRMATION_EMAILS=true)');
+    
+    // Log the skip in communication_logs for audit trail
+    try {
+      await db.insert(communicationLogs).values({
+        orderId: data.orderId,
+        customerId: data.customerId,
+        messageType: 'transactional',
+        method: 'email',
+        type: 'order-confirmation',
+        context: data.context,
+        recipient: data.customerEmail,
+        status: 'skipped',
+        skipReason: 'paused',
+        signatureToken: data.signatureToken,
+        publicSignatureId: data.publicSignatureId,
+        message: `Order confirmation email paused by PAUSE_ORDER_CONFIRMATION_EMAILS flag`,
+        sentAt: new Date(),
+      });
+    } catch (logError) {
+      console.error('[ORDER-CONFIRM] Error logging paused email:', logError);
+    }
+    
+    return {
+      outcome: 'skipped',
+      reason: 'paused',
+      method: 'email',
+    };
+  }
 
   // ============================================================
   // DEDUPLICATION GUARD: Check if confirmation already sent for this order

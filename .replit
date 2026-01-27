@@ -64,6 +64,7 @@ APP_URL = "https://agcompepoch.xyz"
 PRODUCTION_DOMAIN = "agcompepoch.xyz"
 PAUSE_ORDER_REMINDERS = "true"
 UPS_ENV = "production"
+PAUSE_ORDER_CONFIRMATION_EMAILS = "true"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"

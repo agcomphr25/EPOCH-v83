@@ -918,6 +918,12 @@ export default function Navigation() {
       icon: Package,
       description: 'Track metal accessories inventory and production demands',
     },
+    {
+      path: '/app/production/stations',
+      label: 'Timer Station',
+      icon: Clock,
+      description: 'Step-based timing programs for production processes',
+    },
   ];
 
   const productionSchedulingItems = [

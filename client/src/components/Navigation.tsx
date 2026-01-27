@@ -851,7 +851,7 @@ export default function Navigation() {
     },
     {
       path: '/po-products',
-      label: 'PO Products',
+      label: 'PO Product Items',
       icon: Package,
       description: 'Product configuration for purchase orders',
     },

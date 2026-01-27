@@ -9018,6 +9018,7 @@ export class DatabaseStorage implements IStorage {
         poi.specifications,
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
+        poi.item_type as "itemType",
         CASE 
           WHEN poi.item_name LIKE '%BM-%' OR poi.item_name LIKE '%-BM-%'
                OR poi.stock_model_name LIKE '%BM-%' OR poi.stock_model_name LIKE '%-BM-%'
@@ -9025,7 +9026,7 @@ export class DatabaseStorage implements IStorage {
                OR poi.item_name LIKE '%pic%rail%' OR poi.stock_model_name LIKE '%pic%rail%'
                THEN 'custom_model'
           ELSE 'stock_model'
-        END as "itemType",
+        END as "displayItemType",
         poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
@@ -9084,6 +9085,7 @@ export class DatabaseStorage implements IStorage {
           finishType: specs.finishType || null,
           stockModel: row.stockModelId,
           itemType: (row as any).itemType || null,
+          displayItemType: (row as any).displayItemType || 'stock_model',
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
@@ -9159,7 +9161,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
-                itemType: poItem.itemType,
+                itemType: poItem.displayItemType || poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: isShipped,
@@ -9184,7 +9186,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
-                itemType: poItem.itemType,
+                itemType: poItem.displayItemType || poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: prodOrder.isFulfilled,

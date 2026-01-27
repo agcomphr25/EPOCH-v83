@@ -9020,11 +9020,19 @@ export class DatabaseStorage implements IStorage {
         poi.due_date as "dueDate",
         poi.item_type as "itemType",
         CASE 
+          WHEN LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal', 'privateer', 'cf_adj_alp_hunter', 'cf_alpine_hunter')
+               OR UPPER(poi.item_name) LIKE 'AG-FG-%' OR UPPER(poi.item_name) LIKE 'AG-CRB-%'
+               OR UPPER(poi.item_name) LIKE 'AGFG%' OR UPPER(poi.item_name) LIKE 'AGCRB%'
+               OR UPPER(poi.item_name) LIKE 'AGARCA%' OR UPPER(poi.item_name) LIKE 'AGAH%'
+               OR UPPER(poi.item_name) LIKE 'AGADH%' OR UPPER(poi.item_name) LIKE 'AGM5%'
+               OR UPPER(poi.item_name) LIKE 'AGBDL%'
+               THEN 'stock_model'
           WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
                OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
                OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
                OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
                OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
+               OR UPPER(poi.item_name) LIKE 'AGPIC%'
                THEN 'custom_model'
           ELSE 'stock_model'
         END as "displayItemType",

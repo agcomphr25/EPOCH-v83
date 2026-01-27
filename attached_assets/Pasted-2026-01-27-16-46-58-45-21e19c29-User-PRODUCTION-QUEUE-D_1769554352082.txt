@@ -1,0 +1,140 @@
+2026-01-27 16:46:58.45
+21e19c29
+User
+🔍 PRODUCTION QUEUE DIAGNOSTICS: {"total_in_dept":"95","valid_status":"51","not_cancelled":"53","has_model":"95","has_action_length":"60","passes_all_filters":"46"}
+2026-01-27 16:46:59.01
+21e19c29
+User
+✅ getAllOrders: Returning 1643 regular orders + 75 P1 PO items = 1718 total orders
+2026-01-27 16:46:59.02
+21e19c29
+User
+🧹 Found 0 orders to move to Shipping QC and 4 orders needing attention
+2026-01-27 16:46:59.02
+21e19c29
+User
+⚠️ ORDER NEEDS ATTENTION: Order EK066 missing: action length
+2026-01-27 16:46:59.02
+21e19c29
+User
+⚠️ ORDER NEEDS ATTENTION: Order EK300 missing: action length
+2026-01-27 16:46:59.02
+21e19c29
+User
+⚠️ ORDER NEEDS ATTENTION: Order EL077 missing: action length
+2026-01-27 16:46:59.02
+21e19c29
+User
+⚠️ ORDER NEEDS ATTENTION: Order FA241 missing: action length
+2026-01-27 16:46:59.02
+21e19c29
+User
+🧹 AUTO-CLEANUP COMPLETE: Moved 0 orders to Shipping QC, identified 4 orders needing attention
+2026-01-27 16:46:59.08
+21e19c29
+User
+🏭 PRIORITIZED QUEUE: Raw result type: object, isArray: true
+2026-01-27 16:46:59.08
+21e19c29
+User
+🏭 PRIORITIZED QUEUE: Raw result length/rows: 46
+2026-01-27 16:46:59.08
+21e19c29
+User
+🏭 PRIORITIZED QUEUE: Processed queue length: 46
+2026-01-27 16:46:59.08
+21e19c29
+User
+📋 Fetched 46 orders from prioritized production queue
+2026-01-27 16:46:59.09
+21e19c29
+User
+10:46:59 PM [express] GET /api/production-queue/prioritized 304 in 860ms :: [{"orderId":"FA030","fbOr…
+2026-01-27 16:46:59.41
+21e19c29
+User
+📦 P1 PO Queue: Returning 0 customers with 0 total items
+2026-01-27 16:46:59.41
+21e19c29
+User
+10:46:59 PM [express] GET /api/p1-po-queue/purchase-orders/open 304 in 1249ms :: []
+2026-01-27 16:47:04.93
+21e19c29
+User
+10:47:04 PM [express] GET /api/internal-messages/unread/count/14 304 in 95ms :: {"userId":14,"unreadC…
+2026-01-27 16:47:06.37
+21e19c29
+User
+10:47:06 PM [express] GET /api/production/timers/runs 304 in 32ms :: []
+2026-01-27 16:47:06.56
+21e19c29
+User
+10:47:06 PM [express] GET /api/enhanced/inventory/items 200 in 190ms :: [{"id":1235,"agPartNumber":"5…
+2026-01-27 16:47:08.57
+21e19c29
+User
+10:47:08 PM [express] GET /api/production/timers/runs 304 in 35ms :: []
+2026-01-27 16:47:10.78
+21e19c29
+User
+10:47:10 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:12.99
+21e19c29
+User
+10:47:12 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:15.20
+21e19c29
+User
+10:47:15 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:17.40
+21e19c29
+User
+10:47:17 PM [express] GET /api/production/timers/runs 304 in 32ms :: []
+2026-01-27 16:47:19.62
+21e19c29
+User
+10:47:19 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:21.82
+21e19c29
+User
+10:47:21 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:24.04
+21e19c29
+User
+10:47:24 PM [express] GET /api/production/timers/runs 304 in 33ms :: []
+2026-01-27 16:47:26.25
+21e19c29
+User
+10:47:26 PM [express] GET /api/production/timers/runs 304 in 34ms :: []
+2026-01-27 16:47:28.47
+21e19c29
+User
+10:47:28 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:28.76
+21e19c29
+User
+10:47:28 PM [express] GET /api/internal-messages/unread/count/19 304 in 189ms :: {"userId":19,"unread…
+2026-01-27 16:47:30.67
+21e19c29
+User
+10:47:30 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:32.92
+21e19c29
+User
+10:47:32 PM [express] GET /api/production/timers/runs 304 in 31ms :: []
+2026-01-27 16:47:35.19
+21e19c29
+User
+10:47:35 PM [express] GET /api/production/timers/runs 304 in 32ms :: []
+2026-01-27 16:47:35.22
+21e19c29
+User
+10:47:35 PM [express] GET /api/internal-messages/unread/count/14 304 in 94ms :: {"userId":14,"unreadC…
+2026-01-27 16:47:37.42
+21e19c29
+User
+10:47:37 PM [express] GET /api/production/timers/runs 304 in 32ms :: []
+2026-01-27 16:47:38.23
+21e19c29
+User
+10:47:38 PM [express] GET /api/internal-messages/unread/count/13 304 i

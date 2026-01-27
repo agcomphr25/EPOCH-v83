@@ -8679,7 +8679,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(purchaseOrders.status, 'OPEN'))
       .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
 
+    console.log(`📦 P1 PO Query: Found ${openPOs.length} purchase orders with status 'OPEN'`);
+    
     if (openPOs.length === 0) {
+      // Debug: Check what statuses exist
+      const allPOs = await db.select({ status: purchaseOrders.status }).from(purchaseOrders);
+      const statusCounts: Record<string, number> = {};
+      allPOs.forEach(po => {
+        const status = po.status || 'null';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      console.log(`📦 P1 PO Debug: All PO statuses in database:`, statusCounts);
       return [];
     }
 

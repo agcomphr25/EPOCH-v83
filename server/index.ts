@@ -9,6 +9,10 @@ import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
 import { authenticateToken } from './middleware/auth';
 
+// Build version marker - change this to verify deployment updates
+const BUILD_VERSION = '2026-01-27-v2';
+console.log(`🚀 EPOCH Server Starting - Build Version: ${BUILD_VERSION}`);
+
 // Validate required environment variables
 const requiredEnvVars = ['DATABASE_URL'];
 

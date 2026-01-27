@@ -9020,10 +9020,11 @@ export class DatabaseStorage implements IStorage {
         poi.due_date as "dueDate",
         poi.item_type as "itemType",
         CASE 
-          WHEN poi.item_name LIKE '%BM-%' OR poi.item_name LIKE '%-BM-%'
-               OR poi.stock_model_name LIKE '%BM-%' OR poi.stock_model_name LIKE '%-BM-%'
-               OR poi.item_name LIKE '%bottom%metal%' OR poi.stock_model_name LIKE '%bottom%metal%'
-               OR poi.item_name LIKE '%pic%rail%' OR poi.stock_model_name LIKE '%pic%rail%'
+          WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
+               OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
+               OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
+               OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
+               OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
                THEN 'custom_model'
           ELSE 'stock_model'
         END as "displayItemType",

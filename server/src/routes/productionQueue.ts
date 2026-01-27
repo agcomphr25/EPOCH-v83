@@ -4,6 +4,15 @@ import { storage } from '../../storage';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { computeEffectivePriority, getEffectivePriorityScore, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
 
+function logDuplicatePrevention(event: string, details: Record<string, any>) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    type: 'DUPLICATE_PREVENTION',
+    event,
+    ...details
+  }));
+}
+
 const router = Router();
 
 // Helper function to automatically handle orders that need attention or movement

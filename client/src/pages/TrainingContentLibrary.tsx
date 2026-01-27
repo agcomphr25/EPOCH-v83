@@ -202,7 +202,7 @@ export default function TrainingContentLibrary() {
 
   // Import from Reference Documents state
   const [importRefDocsOpen, setImportRefDocsOpen] = useState(false);
-  const [selectedRefDocs, setSelectedRefDocs] = useState<number[]>([]);
+  const [selectedRefDocs, setSelectedRefDocs] = useState<string[]>([]);
   const [selectedRefDocCategories, setSelectedRefDocCategories] = useState<number[]>([]);
 
   const handleFileSelect = async (file: File) => {
@@ -287,7 +287,7 @@ export default function TrainingContentLibrary() {
 
   // Query for Reference Documents (from media library)
   interface RefDocument {
-    id: number;
+    id: string;
     filename: string;
     originalFilename: string;
     fileType: string;
@@ -302,7 +302,21 @@ export default function TrainingContentLibrary() {
     queryKey: ['/api/media', { category: 'document' }],
     queryFn: async () => {
       const response = await fetch('/api/media?category=document', { credentials: 'include' });
-      return response.json();
+      const data = await response.json();
+      // API may return rows array directly or wrapped in { rows: [...] }
+      const rows = Array.isArray(data) ? data : (data.rows || []);
+      // Transform API response to RefDocument format
+      return rows.map((item: any) => ({
+        id: item.id,
+        filename: item.filename,
+        originalFilename: item.title || item.filename,
+        fileType: item.mimeType || 'document',
+        fileSize: item.fileSize || 0,
+        url: item.storagePath || `/api/media/file/${item.filename}`,
+        category: item.category || 'document',
+        createdAt: item.createdAt,
+        folderId: item.folderId,
+      }));
     },
     enabled: importRefDocsOpen,
   });

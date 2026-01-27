@@ -1,0 +1,233 @@
+ React initialized: Object
+ React hooks: Object
+ App component is rendering...
+ Environment: production
+ Base URL: /
+qc-shipping:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+/api/po-orders/all-p1-with-status:1  Failed to load resource: the server responded with a status of 403 ()
+/api/features:1  Failed to load resource: the server responded with a status of 403 ()
+/api/kickbacks:1  Failed to load resource: the server responded with a status of 403 ()
+/api/stock-models:1  Failed to load resource: the server responded with a status of 403 ()
+/api/orders/all:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ Failed to fetch session for redirect: 
+console.error @ index-Cjd0ftEN.js:4243
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/po-orders/oem-shipments?limit=20&offset=0:1  Failed to load resource: the server responded with a status of 500 ()
+/api/po-orders/oem-shipments?limit=20&offset=0:1  Failed to load resource: the server responded with a status of 500 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🔍 Fetching production queue...
+ 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/production-queue/attention: 200
+ ✅ API Response from /api/production-queue/prioritized: 200
+ 🔍 Production queue result: 39 orders
+ ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+ 📊 Generating barcode: LAYUP20260125
+ ✅ Barcode generated successfully
+ 🔍 Fetching production queue...
+ 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/production-queue/attention: 200
+ ✅ API Response from /api/production-queue/prioritized: 200
+ 🔍 Production queue result: 39 orders
+ ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/po-orders/process-shipment (timeout: 15000ms, deployment: true)
+/api/po-orders/process-shipment:1  Failed to load resource: the server responded with a status of 400 ()
+ ✅ API Response from /api/po-orders/process-shipment: 400
+ API error raw body: {"_error":"No shipping address found for customer MidwayUSA Inc"}
+console.error @ index-Cjd0ftEN.js:4243
+ 💥 API Request failed for /api/po-orders/process-shipment: 
+console.error @ index-Cjd0ftEN.js:4243
+ 🌐 API Request to /api/auth/session (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/customers/bypass (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/addresses/all (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/marketing/customer-types (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/auth/session: 200
+ ✅ API Response from /api/marketing/customer-types: 200
+ ✅ API Response from /api/addresses/all: 200
+ ✅ API Response from /api/customers/bypass: 200
+ 🌐 API Request to /api/addresses?customerId=1476 (timeout: 15000ms, deployment: true)
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+ore @ index-Cjd0ftEN.js:40
+HO @ index-Cjd0ftEN.js:40
+yNt @ index-Cjd0ftEN.js:40
+gk @ index-Cjd0ftEN.js:40
+o5e @ index-Cjd0ftEN.js:40
+_I @ index-Cjd0ftEN.js:38
+(anonymous) @ index-Cjd0ftEN.js:40
+ ✅ API Response from /api/addresses?customerId=1476: 200
+ 🌐 API Request to /api/pos (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/stock-models: 200
+ ✅ API Response from /api/pos: 200
+ 🌐 API Request to /api/pos/58/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/58 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/56/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/56 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/55/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/55 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/54/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/54 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/52/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/52 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/51/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/51 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/50/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/50 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/49/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/49 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/48/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/48 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/47/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/47 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/46/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/46 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/45/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/45 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/44/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/44 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/43/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/43 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/42/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/42 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/41/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/41 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/40/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/39/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/39 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/38/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/38 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/18/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/18 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/17/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/17 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/16/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/16 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/15/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/15 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/14/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/14 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/13/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/13 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/12/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/12 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/11/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/11 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/10/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/10 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/9/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/9 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/7/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/7 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/5/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/5 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/4/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/4 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/customers: 200
+ ✅ API Response from /api/pos/51/items: 200
+ ✅ API Response from /api/production-orders/by-po/58: 200
+ ✅ API Response from /api/pos/58/items: 200
+ ✅ API Response from /api/pos/44/items: 200
+ ✅ API Response from /api/pos/56/items: 200
+ ✅ API Response from /api/production-orders/by-po/48: 200
+ ✅ API Response from /api/production-orders/by-po/50: 200
+ ✅ API Response from /api/pos/52/items: 200
+ ✅ API Response from /api/pos/50/items: 200
+ ✅ API Response from /api/pos/47/items: 200
+ ✅ API Response from /api/pos/55/items: 200
+ ✅ API Response from /api/production-orders/by-po/56: 200
+ ✅ API Response from /api/production-orders/by-po/38: 200
+ ✅ API Response from /api/production-orders/by-po/45: 200
+ ✅ API Response from /api/production-orders/by-po/43: 200
+ ✅ API Response from /api/production-orders/by-po/42: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/47: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/45/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/46/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/42/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/43/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/54/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/49: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/51: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/49/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/46: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/54: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/48/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/52: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/55: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/38/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/41/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/7/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/10/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/40/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/17/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/44: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/12/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/41: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/9: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/18: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/39/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/18/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/39: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/16/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/40: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/17: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/15: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/11/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/12: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/15/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/16: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/4: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/14: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/10: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/13/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/14/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/9/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/11: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/5/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/5: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/pos/4/items: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/13: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-orders/by-po/7: 200
+index-Cjd0ftEN.js:1761 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-Cjd0ftEN.js:235 🌐 API Request to /api/po-orders/process-shipment (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 ✅ API Response from /api/po-orders/process-shipment: 200
+index-Cjd0ftEN.js:3437 📦 handleShipmentDocuments called with: Object
+index-Cjd0ftEN.js:3437 📄 Documents data prepared: Object
+index-Cjd0ftEN.js:1399 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+index-Cjd0ftEN.js:235 🌐 API Request to /api/po-orders/toggle-fulfilled (timeout: 15000ms, deployment: true)
+/api/po-orders/toggle-fulfilled:1  Failed to load resource: the server responded with a status of 500 ()
+index-Cjd0ftEN.js:235 ✅ API Response from /api/po-orders/toggle-fulfilled: 500
+index-Cjd0ftEN.js:4243 API error raw body: Internal Server Error
+console.error @ index-Cjd0ftEN.js:4243
+index-Cjd0ftEN.js:4243 💥 API Request failed for /api/po-orders/toggle-fulfilled: Error: Internal Server Error
+    at Ge (index-Cjd0ftEN.js:235:6188)
+    at async Object.mutationFn (index-Cjd0ftEN.js:3324:75257)
+console.error @ index-Cjd0ftEN.js:4243

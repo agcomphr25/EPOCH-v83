@@ -160,6 +160,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
           // Insert into all_orders table with P1 Production Queue department
           // order_source = 'PO_RELEASE' marks this as a Production-Only Order (non-invoiceable)
+          // ON CONFLICT protects against duplicate order_id (idempotent insert)
           const insertOrderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -181,6 +182,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
               $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb, 
               'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
             )
+            ON CONFLICT (order_id) DO NOTHING
             RETURNING id
           `;
           const allOrderResult = await pool.query(insertOrderQuery, [

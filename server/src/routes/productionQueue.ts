@@ -657,7 +657,9 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
-        ) RETURNING order_id, model_id, current_department
+        )
+        ON CONFLICT (order_id) DO NOTHING
+        RETURNING order_id, model_id, current_department
       `;
 
       // CENTRALIZED: Use atomic order ID generator instead of inline pattern
@@ -801,7 +803,9 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
             updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
-          ) RETURNING order_id, model_id, current_department
+          )
+          ON CONFLICT (order_id) DO NOTHING
+          RETURNING order_id, model_id, current_department
         `;
 
         // CENTRALIZED: Use atomic order ID generator instead of inline pattern
@@ -981,7 +985,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
           // CENTRALIZED: Use atomic order ID generator instead of inline MAX() query
           const orderId = await storage.generateNextOrderId();
 
-          // Create order in all_orders table
+          // Create order in all_orders table with ON CONFLICT protection
           const orderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -999,6 +1003,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
               po_reference,
               po_item_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (order_id) DO NOTHING
             RETURNING *
           `;
 

@@ -14131,10 +14131,28 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    const [finalizedOrder] = await db
+    // ON CONFLICT (order_id) DO NOTHING provides idempotent insert protection
+    const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
+      .onConflictDoNothing({ target: allOrders.orderId })
       .returning();
+    
+    // If conflict occurred (no rows returned), fetch the existing order
+    let finalizedOrder;
+    if (result.length === 0) {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'DUPLICATE_PREVENTION',
+        event: 'ORDER_CONFLICT_IGNORED',
+        orderId: orderData.orderId,
+        message: 'Order already exists, returning existing record'
+      }));
+      const existing = await db.select().from(allOrders).where(eq(allOrders.orderId, orderData.orderId)).limit(1);
+      finalizedOrder = existing[0];
+    } else {
+      finalizedOrder = result[0];
+    }
 
     // Log the auto-addition to Production Queue
     console.log(
@@ -14269,11 +14287,28 @@ export class DatabaseStorage implements IStorage {
       finalizedBy: finalizedBy || 'System',
     };
 
-    // Insert into all_orders table
-    const [finalizedOrder] = await db
+    // Insert into all_orders table with ON CONFLICT protection
+    const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
+      .onConflictDoNothing({ target: allOrders.orderId })
       .returning();
+    
+    // If conflict occurred (no rows returned), fetch the existing order
+    let finalizedOrder;
+    if (result.length === 0) {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'DUPLICATE_PREVENTION',
+        event: 'ORDER_CONFLICT_IGNORED',
+        orderId: orderId,
+        message: 'Order already exists, returning existing record'
+      }));
+      const existing = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId)).limit(1);
+      finalizedOrder = existing[0];
+    } else {
+      finalizedOrder = result[0];
+    }
 
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));

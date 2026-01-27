@@ -77,11 +77,11 @@ interface TicketMetrics {
   totalOpen: number;
 }
 
-interface User {
+interface Employee {
   id: number;
-  username: string;
-  firstName?: string;
-  lastName?: string;
+  name: string;
+  email?: string;
+  department?: string;
 }
 
 const TICKET_STATUSES = [
@@ -168,8 +168,8 @@ export default function TicketsPage() {
     queryKey: ['/api/tickets/metrics'],
   });
 
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ['/api/users'],
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
   });
 
   const { data: selectedTicket, isLoading: isLoadingSelectedTicket } = useQuery<Ticket>({
@@ -317,11 +317,9 @@ export default function TicketsPage() {
   };
 
   const getUserName = (userId: number) => {
-    const user = users.find(u => u.id === userId);
-    if (!user) return `User ${userId}`;
-    return user.firstName && user.lastName 
-      ? `${user.firstName} ${user.lastName}` 
-      : user.username;
+    const employee = employees.find(e => e.id === userId);
+    if (!employee) return `Employee ${userId}`;
+    return employee.name;
   };
 
   return (
@@ -432,14 +430,11 @@ export default function TicketsPage() {
                   <PopoverContent className="w-64 p-0" align="start">
                     <ScrollArea className="h-64">
                       <div className="p-2 space-y-1">
-                        {users.map(u => {
-                          const isSelected = newTicket.assignedUserIds.includes(u.id);
-                          const displayName = u.firstName && u.lastName 
-                            ? `${u.firstName} ${u.lastName}` 
-                            : u.username;
+                        {employees.map(emp => {
+                          const isSelected = newTicket.assignedUserIds.includes(emp.id);
                           return (
                             <div 
-                              key={u.id} 
+                              key={emp.id} 
                               className={cn(
                                 "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800",
                                 isSelected && "bg-blue-50 dark:bg-blue-900/20"
@@ -448,18 +443,18 @@ export default function TicketsPage() {
                                 if (isSelected) {
                                   setNewTicket({
                                     ...newTicket,
-                                    assignedUserIds: newTicket.assignedUserIds.filter(id => id !== u.id)
+                                    assignedUserIds: newTicket.assignedUserIds.filter(id => id !== emp.id)
                                   });
                                 } else {
                                   setNewTicket({
                                     ...newTicket,
-                                    assignedUserIds: [...newTicket.assignedUserIds, u.id]
+                                    assignedUserIds: [...newTicket.assignedUserIds, emp.id]
                                   });
                                 }
                               }}
                             >
                               <Checkbox checked={isSelected} />
-                              <span className="text-sm">{displayName}</span>
+                              <span className="text-sm">{emp.name}</span>
                             </div>
                           );
                         })}
@@ -470,13 +465,10 @@ export default function TicketsPage() {
                 {newTicket.assignedUserIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {newTicket.assignedUserIds.map(userId => {
-                      const user = users.find(u => u.id === userId);
-                      const displayName = user?.firstName && user?.lastName 
-                        ? `${user.firstName} ${user.lastName}` 
-                        : user?.username || 'Unknown';
+                      const emp = employees.find(e => e.id === userId);
                       return (
                         <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
-                          {displayName}
+                          {emp?.name || 'Unknown'}
                           <button
                             type="button"
                             onClick={() => setNewTicket({
@@ -845,9 +837,9 @@ export default function TicketsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {users.map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                        {employees.map(emp => (
+                          <SelectItem key={emp.id} value={String(emp.id)}>
+                            {emp.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -871,23 +863,20 @@ export default function TicketsPage() {
                       <PopoverContent className="w-64 p-0" align="start">
                         <ScrollArea className="h-64">
                           <div className="p-2 space-y-1">
-                            {users.map(u => {
+                            {employees.map(emp => {
                               const currentIds = selectedTicket.assignedUserIds || [];
-                              const isSelected = currentIds.includes(u.id);
-                              const displayName = u.firstName && u.lastName 
-                                ? `${u.firstName} ${u.lastName}` 
-                                : u.username;
+                              const isSelected = currentIds.includes(emp.id);
                               return (
                                 <div 
-                                  key={u.id} 
+                                  key={emp.id} 
                                   className={cn(
                                     "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800",
                                     isSelected && "bg-blue-50 dark:bg-blue-900/20"
                                   )}
                                   onClick={() => {
                                     const newIds = isSelected 
-                                      ? currentIds.filter(id => id !== u.id)
-                                      : [...currentIds, u.id];
+                                      ? currentIds.filter(id => id !== emp.id)
+                                      : [...currentIds, emp.id];
                                     updateTicketMutation.mutate({ 
                                       id: selectedTicket.id, 
                                       data: { assignedUserIds: newIds } 
@@ -895,7 +884,7 @@ export default function TicketsPage() {
                                   }}
                                 >
                                   <Checkbox checked={isSelected} />
-                                  <span className="text-sm">{displayName}</span>
+                                  <span className="text-sm">{emp.name}</span>
                                 </div>
                               );
                             })}
@@ -906,13 +895,10 @@ export default function TicketsPage() {
                     {(selectedTicket.assignedUserIds?.length || 0) > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {selectedTicket.assignedUserIds?.map(userId => {
-                          const user = users.find(u => u.id === userId);
-                          const displayName = user?.firstName && user?.lastName 
-                            ? `${user.firstName} ${user.lastName}` 
-                            : user?.username || 'Unknown';
+                          const emp = employees.find(e => e.id === userId);
                           return (
                             <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
-                              {displayName}
+                              {emp?.name || 'Unknown'}
                               <button
                                 type="button"
                                 onClick={() => {

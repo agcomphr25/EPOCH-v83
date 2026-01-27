@@ -204,7 +204,7 @@ export default function POProductSelector({
             texture: sp.product.texture,
             flatTop: sp.product.flatTop,
           },
-          notes: `Product from PO Products: ${sp.product.customerName}`,
+          notes: `Product from PO Product Items: ${sp.product.customerName}`,
           orderCount: 0,
         };
 
@@ -280,7 +280,7 @@ export default function POProductSelector({
                   </h3>
                   <p className="text-gray-500">
                     No PO products have been created for customer "
-                    {customerName}". Products must be created on the PO Products
+                    {customerName}". Products must be created on the PO Product Items
                     page first.
                   </p>
                 </div>

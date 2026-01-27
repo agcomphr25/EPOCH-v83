@@ -9018,7 +9018,11 @@ export class DatabaseStorage implements IStorage {
         poi.specifications,
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
-        poi.item_type as "itemType",
+        CASE 
+          WHEN poi.item_name LIKE 'AG-FG-%' OR poi.item_name LIKE 'AG-CRB-%' THEN 'stock_model'
+          WHEN poi.item_name LIKE 'AG-BM-%' THEN 'custom_model'
+          ELSE poi.item_type
+        END as "itemType",
         poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",

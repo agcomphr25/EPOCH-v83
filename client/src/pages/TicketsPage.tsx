@@ -986,7 +986,7 @@ export default function TicketsPage() {
                   {ticketActivity.length === 0 ? (
                     <p className="text-sm text-gray-500 italic">No notes yet. Add a note below.</p>
                   ) : (
-                    ticketActivity.map(activity => (
+                    [...ticketActivity].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(activity => (
                       <div key={activity.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                           <User className="h-4 w-4 text-gray-500" />

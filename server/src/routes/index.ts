@@ -5226,8 +5226,10 @@ export function registerRoutes(app: Express): Server {
         for (let i = 0; i < item.quantity; i++) {
           // Use stockModelId for proper mold/schedule matching, fallback to itemId
           const stockModelForOrder = item.stockModelId || item.itemId || '';
+          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+          const orderId = await storage.generateNextOrderId();
           const productionOrderData = {
-            orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
+            orderId,
             customerId: purchaseOrder.customerId.toString(),
             customerName: purchaseOrder.customerName,
             poNumber: purchaseOrder.poNumber,

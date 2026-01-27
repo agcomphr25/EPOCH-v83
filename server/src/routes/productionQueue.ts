@@ -660,8 +660,8 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
         ) RETURNING order_id, model_id, current_department
       `;
 
-      // Generate unique order ID for each unit
-      const orderId = `PO${poItem.poNumber}-${String(i).padStart(3, '0')}`;
+      // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+      const orderId = await storage.generateNextOrderId();
 
       const orderResult = await pool.query(orderQuery, [
         orderId,
@@ -804,9 +804,8 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           ) RETURNING order_id, model_id, current_department
         `;
 
-        // Generate unique order ID for this week and unit
-        const orderIndex = totalUnitsCreated + i;
-        const orderId = `PO${poItem.ponumber}-W${weekNumber}-${String(orderIndex).padStart(3, '0')}`;
+        // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+        const orderId = await storage.generateNextOrderId();
 
         const orderResult = await pool.query(orderQuery, [
           orderId,
@@ -979,16 +978,8 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
       // Create individual orders for each quantity unit
       for (let i = 1; i <= quantity; i++) {
         try {
-          // Generate unique order ID
-          const orderIdQuery = `
-            SELECT COALESCE(MAX(CAST(SUBSTRING(order_id FROM 3) AS INTEGER)), 0) + 1 as next_id
-            FROM all_orders 
-            WHERE order_id ~ '^AG[0-9]+$'
-          `;
-
-          const orderIdResult = await pool.query(orderIdQuery);
-          const nextOrderNumber = orderIdResult.rows?.[0]?.next_id || 1;
-          const orderId = `AG${nextOrderNumber}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline MAX() query
+          const orderId = await storage.generateNextOrderId();
 
           // Create order in all_orders table
           const orderQuery = `

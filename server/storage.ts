@@ -9457,26 +9457,15 @@ export class DatabaseStorage implements IStorage {
       items
     );
 
-    // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
-    const customerPrefix = customer.name
-      .replace(/[^A-Za-z]/g, '')
-      .substring(0, 3)
-      .toUpperCase();
-    const poNumberDigits = po.poNumber
-      .replace(/[^0-9]/g, '')
-      .slice(-5)
-      .padStart(5, '0');
-    const baseOrderId = `${customerPrefix}${poNumberDigits}`;
-
     const orders: ProductionOrder[] = [];
-    let sequentialNumber = 1;
 
     // Create production orders for each item with distributed due dates
     for (const item of items) {
       const itemSchedule = productionSchedule[item.id];
 
       for (let i = 0; i < item.quantity; i++) {
-        const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+        // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+        const orderId = await this.generateNextOrderId();
 
         // Get due date for this specific item instance
         const weekIndex = Math.floor(i / itemSchedule.itemsPerWeek);
@@ -9504,7 +9493,6 @@ export class DatabaseStorage implements IStorage {
 
         const order = await this.createProductionOrder(orderData);
         orders.push(order);
-        sequentialNumber++;
       }
 
       // Update the PO item's order count
@@ -11758,11 +11746,8 @@ export class DatabaseStorage implements IStorage {
 
           // Create individual production orders (1 unit each) for manufactured items
           for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-            // Generate unique order ID: P2-{PO#}-{item#}-{level}-{line#}-{unit#}
-            const levelPrefix = level > 0 ? `L${level}-` : '';
-            const orderIdSuffix = String(i + 1).padStart(3, '0');
-            const unitSuffix = String(unitIndex).padStart(3, '0');
-            const orderId = `P2-${po.poNumber}-${poItem.id}-${levelPrefix}${orderIdSuffix}-${unitSuffix}`;
+            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+            const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
               orderId,
@@ -11821,8 +11806,8 @@ export class DatabaseStorage implements IStorage {
           
           // Create individual production orders for the top-level manufactured item
           for (let unitIndex = 1; unitIndex <= poItem.quantity; unitIndex++) {
-            const unitSuffix = String(unitIndex).padStart(3, '0');
-            const orderId = `P2-${po.poNumber}-${poItem.id}-TOP-${unitSuffix}`;
+            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+            const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
               orderId,

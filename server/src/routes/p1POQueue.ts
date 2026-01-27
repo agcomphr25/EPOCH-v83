@@ -147,9 +147,9 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
         // Create orders in all_orders table with Layup/Plugging department
         for (let i = 0; i < quantity; i++) {
-          const currentOrderCount = (item.order_count || 0) + i + 1;
-          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
-          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+          const orderId = await storage.generateNextOrderId();
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
           const features = JSON.stringify({
             po_item_id: poItemId,
             po_number: item.po_number,
@@ -359,8 +359,8 @@ router.post('/progress', async (req: Request, res: Response) => {
         
         // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
-          const currentOrderCount = (item.order_count || 0) + i + 1;
-          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+          const orderId = await storage.generateNextOrderId();
           
           const insertProdQuery = `
             INSERT INTO production_orders (

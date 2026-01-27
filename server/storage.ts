@@ -1393,7 +1393,7 @@ export interface IStorage {
   // Shipment Records CRUD
   createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord>;
   getShipment(id: string): Promise<ShipmentRecord | undefined>;
   getAllShipments(filters?: {
@@ -12935,7 +12935,7 @@ export class DatabaseStorage implements IStorage {
   // Shipment Records CRUD
   async createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord> {
     // Create the shipment record first (without transaction - neon-http doesn't support transactions)
     const [shipment] = await db
@@ -12951,6 +12951,8 @@ export class DatabaseStorage implements IStorage {
         orderId: item.orderId,
         quantity: item.quantity,
         weightLbs: item.weightLbs,
+        description: item.description || null,
+        poNumber: item.poNumber || null,
       }));
 
       await db.insert(shipmentItems).values(shipmentItemsData);

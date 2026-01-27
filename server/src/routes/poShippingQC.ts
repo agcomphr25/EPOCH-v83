@@ -1380,10 +1380,18 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           shippedAt,
           carrier: 'UPS',
           serviceLevel: serviceCode,
+          serviceCode: serviceCode,
           billType,
           masterTrackingNumber: trackingNumber,
           packageCount: 1,
           thirdPartyAccount: thirdPartyAccountNumber || null,
+          customerId: orderDetails[0].order.customerId,
+          customerName: firstCustomer?.name || '',
+          customerAddress: primaryAddress?.street || shipTo.address1 || '',
+          customerCity: primaryAddress?.city || shipTo.city || '',
+          customerState: primaryAddress?.state || shipTo.state || '',
+          customerZip: primaryAddress?.zipCode || shipTo.postalCode || '',
+          shippingLabelBase64: labelBase64 || null,
           shipFromSnapshot: {
             name: process.env.SHIP_FROM_NAME || 'AG Composites',
             street: process.env.SHIP_FROM_ADDRESS1 || '',
@@ -1413,6 +1421,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           orderId: detail.order.orderId,
           quantity: detail.quantity,
           weightLbs: weightPerItemLbs * detail.quantity,
+          description: detail.order.itemName || detail.poItem?.itemName || '',
+          poNumber: detail.po?.poNumber || '',
         }));
 
         await storage.createShipment({

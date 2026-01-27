@@ -6132,6 +6132,30 @@ export const insertOrderIdSequenceSchema = createInsertSchema(
 export type InsertOrderIdSequence = z.infer<typeof insertOrderIdSequenceSchema>;
 export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 
+// Idempotency Keys - Prevents duplicate order creation from retried requests
+// Stores a mapping of client-provided idempotency keys to created order IDs
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  id: serial('id').primaryKey(),
+  idempotencyKey: text('idempotency_key').notNull().unique(), // Client-provided unique key (x-idempotency-key header)
+  endpoint: text('endpoint').notNull(), // API endpoint that was called
+  orderId: text('order_id'), // The order ID that was created (null if request failed)
+  responseStatus: integer('response_status'), // HTTP status code of original response
+  responseBody: jsonb('response_body'), // Cached response to return on replay
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(), // Auto-cleanup after expiration (24 hours default)
+}, (table) => ({
+  keyEndpointIdx: index('idempotency_keys_key_endpoint_idx').on(table.idempotencyKey, table.endpoint),
+  expiresAtIdx: index('idempotency_keys_expires_at_idx').on(table.expiresAt),
+}));
+
+export const insertIdempotencyKeySchema = createInsertSchema(idempotencyKeys).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertIdempotencyKey = z.infer<typeof insertIdempotencyKeySchema>;
+export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
+
 // P2 Production Orders - Generated from P2 Purchase Orders based on BOM
 export const p2ProductionOrders = pgTable('p2_production_orders', {
   id: serial('id').primaryKey(),

@@ -256,11 +256,11 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         due_date,
         date,
         current_department,
-        status,
+        production_status,
         po_number
       FROM production_orders
       WHERE current_department = 'P1 Production Queue'
-        AND status = 'IN_PROGRESS'
+        AND production_status IN ('PENDING', 'IN_PROGRESS')
         AND (is_cancelled IS NULL OR is_cancelled = false)
       ORDER BY due_date ASC, created_at ASC
     `);
@@ -284,7 +284,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         dueDate: order.due_date,
         orderDate: order.date,
         currentDepartment: order.current_department,
-        status: order.status,
+        status: order.production_status,
         poNumber: order.po_number,
         daysToDue,
         isOverdue: daysToDue < 0,

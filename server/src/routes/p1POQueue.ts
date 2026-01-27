@@ -4,6 +4,7 @@ import { pool } from '../../db';
 import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
 
 const router = Router();
 

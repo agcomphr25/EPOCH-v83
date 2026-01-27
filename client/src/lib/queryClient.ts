@@ -34,6 +34,11 @@ async function throwIfResNotOk(res: Response) {
 interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: any;
   timeout?: number; // Custom timeout in milliseconds
+  idempotencyKey?: string; // Optional idempotency key for order creation endpoints
+}
+
+export function generateIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
 export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
@@ -63,6 +68,11 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         'Content-Type': 'application/json',
         ...options.headers,
       };
+  
+  // Add idempotency key header if provided (for order creation endpoints)
+  if (options.idempotencyKey) {
+    (defaultHeaders as any)['x-idempotency-key'] = options.idempotencyKey;
+  }
 
   // Add timeout protection
   const controller = new AbortController();

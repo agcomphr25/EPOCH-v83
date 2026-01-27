@@ -13,7 +13,12 @@ router.use(authorizeApiRoute());
 // Get all open P1 Purchase Orders grouped by customer
 router.get('/purchase-orders/open', async (req: Request, res: Response) => {
   try {
+    console.log('📦 P1 PO Queue: Fetching open purchase orders...');
     const openPOs = await storage.getOpenP1PurchaseOrders();
+    const totalItems = openPOs.reduce((sum, c) => 
+      sum + c.purchaseOrders.reduce((poSum, po) => 
+        poSum + po.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0), 0);
+    console.log(`📦 P1 PO Queue: Returning ${openPOs.length} customers with ${totalItems} total items`);
     res.json(openPOs);
   } catch (error) {
     console.error('Error retrieving open P1 purchase orders:', error);

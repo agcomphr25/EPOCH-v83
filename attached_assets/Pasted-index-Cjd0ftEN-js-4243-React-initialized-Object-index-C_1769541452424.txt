@@ -1,0 +1,67 @@
+index-Cjd0ftEN.js:4243 React initialized: Object
+index-Cjd0ftEN.js:4243 React hooks: Object
+index-Cjd0ftEN.js:4240 App component is rendering...
+index-Cjd0ftEN.js:4240 Environment: production
+index-Cjd0ftEN.js:4240 Base URL: /
+qc-shipping:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-Cjd0ftEN.js:1761 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+/api/po-orders/all-p1-with-status:1  Failed to load resource: the server responded with a status of 403 ()
+/api/features:1  Failed to load resource: the server responded with a status of 403 ()
+/api/kickbacks:1  Failed to load resource: the server responded with a status of 403 ()
+/api/stock-models:1  Failed to load resource: the server responded with a status of 403 ()
+/api/orders/all:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-Cjd0ftEN.js:4243 Failed to fetch session for redirect: Error: Not authenticated
+    at index-Cjd0ftEN.js:4240:167649
+console.error @ index-Cjd0ftEN.js:4243
+index-Cjd0ftEN.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-Cjd0ftEN.js:1761 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/po-orders/oem-shipments?limit=20&offset=0:1  Failed to load resource: the server responded with a status of 500 ()
+/api/po-orders/oem-shipments?limit=20&offset=0:1  Failed to load resource: the server responded with a status of 500 ()
+index-Cjd0ftEN.js:1761 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-Cjd0ftEN.js:3838 🔍 Fetching production queue...
+index-Cjd0ftEN.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-Cjd0ftEN.js:3838 🔍 Production queue result: 39 orders
+index-Cjd0ftEN.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-Cjd0ftEN.js:1399 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+index-Cjd0ftEN.js:1399 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-Cjd0ftEN.js:1399
+index-Cjd0ftEN.js:3550 📊 Generating barcode: LAYUP20260125
+index-Cjd0ftEN.js:3550 ✅ Barcode generated successfully
+index-Cjd0ftEN.js:3838 🔍 Fetching production queue...
+index-Cjd0ftEN.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-Cjd0ftEN.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-Cjd0ftEN.js:3838 🔍 Production queue result: 39 orders
+index-Cjd0ftEN.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-Cjd0ftEN.js:1761 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-Cjd0ftEN.js:235 🌐 API Request to /api/po-orders/process-shipment (timeout: 15000ms, deployment: true)
+/api/po-orders/process-shipment:1  Failed to load resource: the server responded with a status of 400 ()
+index-Cjd0ftEN.js:235 ✅ API Response from /api/po-orders/process-shipment: 400
+index-Cjd0ftEN.js:4243 API error raw body: {"_error":"No shipping address found for customer MidwayUSA Inc"}
+console.error @ index-Cjd0ftEN.js:4243
+index-Cjd0ftEN.js:4243 💥 API Request failed for /api/po-orders/process-shipment: Error: {"_error":"No shipping address found for customer MidwayUSA Inc"}
+    at Ge (index-Cjd0ftEN.js:235:6188)
+    at async Object.mutationFn (index-Cjd0ftEN.js:3324:61759)
+console.error @ index-Cjd0ftEN.js:4243

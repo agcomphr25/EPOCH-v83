@@ -1,0 +1,137 @@
+EPOCH Duplicate order_id Forensic Investigation Prompt
+
+Objective: Diagnose and permanently prevent duplicate order_id records (e.g., FA227) in EPOCH.
+
+Please perform a full forensic analysis of how duplicate order_id values can be created in the database. I am seeing multiple rows in all_orders with the same order_id but different internal ids.
+
+1️⃣ Order Creation Inventory (MANDATORY)
+
+Identify every backend code path that can insert a row into the orders table (all_orders or its base table).
+
+Produce a table with:
+
+File path
+
+Function name
+
+API endpoint (if applicable)
+
+Trigger source (Sales Order, PO Release, Import, Admin Tool, Migration, Retry, etc.)
+
+Whether order_id is generated or passed in
+
+Notes / assumptions
+
+2️⃣ order_id Generation Logic
+
+Show the exact code responsible for generating order_id values (e.g., FA227).
+
+Include:
+
+File + line numbers
+
+Whether generation uses MAX(), counters, sequences, or lookups
+
+Whether it runs inside a transaction
+
+Whether the value is generated before or during insert
+
+3️⃣ Transaction & Isolation Audit
+
+For each order-creation path, indicate:
+
+Whether a DB transaction is used
+
+Isolation level (if applicable)
+
+Whether inserts are retried on failure
+
+Flag any paths that can insert without transactional protection.
+
+4️⃣ Retry & Idempotency Behavior
+
+Search for retry logic that could cause duplicate inserts, including:
+
+React Query retries
+
+Backend retry loops
+
+Error handling that re-runs inserts
+
+Timeout recovery logic
+
+Explain what happens if:
+
+The insert succeeds
+
+The response fails or times out
+
+The client retries
+
+5️⃣ Historical Record Comparison (FA227)
+
+Pull full metadata for all rows with order_id = 'FA227', including:
+
+id
+
+created_at
+
+created_by
+
+order_source
+
+Any audit or metadata fields
+
+Compare timestamps and attributes to infer whether this was:
+
+A race condition
+
+A retry
+
+Multiple creation paths
+
+6️⃣ Schema Constraint Review
+
+Inspect the database schema and report:
+
+Whether order_id has a UNIQUE constraint
+
+Any partial or composite indexes involving order_id
+
+Why duplicates are currently allowed
+
+7️⃣ Intentional vs Accidental Duplication
+
+Search for any logic that:
+
+Clones orders
+
+Reissues orders
+
+Creates “shadow” or production-only orders
+
+If duplicates are intentional, explain:
+
+The business reason
+
+Why a separate identifier was not used
+
+8️⃣ Guardrail Recommendations (REQUIRED)
+
+Based on findings, propose concrete, layered fixes, including:
+
+Database constraints
+
+Transactional ID generation
+
+Idempotency protections
+
+API-level safeguards
+
+Data model changes if needed
+
+Be explicit and actionable.
+
+Output format:
+Structured sections with tables, file references, and clear conclusions.
+Do not summarize until all evidence is presented.

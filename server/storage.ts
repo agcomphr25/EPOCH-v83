@@ -9019,17 +9019,12 @@ export class DatabaseStorage implements IStorage {
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
         CASE 
-          WHEN poi.item_name LIKE 'AG-FG-%' OR poi.item_name LIKE 'AG-CRB-%' 
-               OR poi.item_name LIKE 'AGFG-%' OR poi.item_name LIKE 'AGCRB-%'
-               OR poi.stock_model_name LIKE 'AG-FG-%' OR poi.stock_model_name LIKE 'AG-CRB-%'
-               OR poi.stock_model_name LIKE '%fiberglass%' OR poi.stock_model_name LIKE '%carbon%'
-               OR poi.item_name LIKE '%fiberglass%' OR poi.item_name LIKE '%carbon%'
-               OR poi.item_name LIKE 'Mesa%' OR poi.item_name LIKE 'Privateer%'
-               THEN 'stock_model'
-          WHEN poi.item_name LIKE 'AG-BM-%' OR poi.item_name LIKE 'AGBM-%'
-               OR poi.stock_model_name LIKE 'AG-BM-%'
+          WHEN poi.item_name LIKE '%BM-%' OR poi.item_name LIKE '%-BM-%'
+               OR poi.stock_model_name LIKE '%BM-%' OR poi.stock_model_name LIKE '%-BM-%'
+               OR poi.item_name LIKE '%bottom%metal%' OR poi.stock_model_name LIKE '%bottom%metal%'
+               OR poi.item_name LIKE '%pic%rail%' OR poi.stock_model_name LIKE '%pic%rail%'
                THEN 'custom_model'
-          ELSE COALESCE(poi.item_type, 'stock_model')
+          ELSE 'stock_model'
         END as "itemType",
         poi.stock_status as "stockStatus",
         prod.order_id as "orderId",

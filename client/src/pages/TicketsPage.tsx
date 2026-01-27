@@ -782,7 +782,7 @@ export default function TicketsPage() {
                         <Badge 
                           key={to.id} 
                           className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 cursor-pointer hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
-                          onClick={() => navigate(`/order-entry/${to.orderId}`)}
+                          onClick={() => navigate(`/order-entry?draft=${to.orderId}`)}
                         >
                           <Link2 className="h-3 w-3 mr-1" />
                           {to.orderId}
@@ -952,7 +952,7 @@ export default function TicketsPage() {
                     {ticketOrders.map(to => (
                       <Badge key={to.id} variant="outline" className="flex items-center gap-1">
                         <button
-                          onClick={() => navigate(`/order-entry/${to.orderId}`)}
+                          onClick={() => navigate(`/order-entry?draft=${to.orderId}`)}
                           className="hover:underline hover:text-blue-600 cursor-pointer"
                         >
                           {to.orderId}

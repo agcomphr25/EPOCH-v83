@@ -9025,15 +9025,22 @@ export class DatabaseStorage implements IStorage {
                OR UPPER(poi.item_name) LIKE 'AGFG%' OR UPPER(poi.item_name) LIKE 'AGCRB%'
                OR UPPER(poi.item_name) LIKE 'AGAH%' OR UPPER(poi.item_name) LIKE 'AGADH%'
                THEN 'stock_model'
-          WHEN LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
-               OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal')
-               OR UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
+          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+               AND (poi.specifications::jsonb->>'flatTop')::boolean = true
+               THEN 'stock_model'
+          WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
                OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
                OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
                OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
                OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
                OR UPPER(poi.item_name) LIKE 'AGPIC%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
                OR UPPER(poi.item_name) LIKE 'AGM5%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
+               THEN 'custom_model'
+          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+               AND ((poi.specifications::jsonb->>'flatTop')::boolean IS NULL 
+                    OR (poi.specifications::jsonb->>'flatTop')::boolean = false)
                THEN 'custom_model'
           ELSE 'stock_model'
         END as "displayItemType",

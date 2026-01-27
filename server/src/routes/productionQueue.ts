@@ -254,14 +254,13 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customer_name,
         item_name,
         due_date,
-        date,
+        order_date,
         current_department,
         production_status,
         po_number
       FROM production_orders
       WHERE current_department = 'P1 Production Queue'
         AND production_status IN ('PENDING', 'IN_PROGRESS')
-        AND (is_cancelled IS NULL OR is_cancelled = false)
       ORDER BY due_date ASC, created_at ASC
     `);
 
@@ -282,7 +281,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customerName: order.customer_name,
         itemName: order.item_name,
         dueDate: order.due_date,
-        orderDate: order.date,
+        orderDate: order.order_date,
         currentDepartment: order.current_department,
         status: order.production_status,
         poNumber: order.po_number,

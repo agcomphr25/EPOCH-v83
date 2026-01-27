@@ -200,6 +200,11 @@ export default function TrainingContentLibrary() {
     categoryId: '',
   });
 
+  // Import from Reference Documents state
+  const [importRefDocsOpen, setImportRefDocsOpen] = useState(false);
+  const [selectedRefDocs, setSelectedRefDocs] = useState<number[]>([]);
+  const [selectedRefDocCategories, setSelectedRefDocCategories] = useState<number[]>([]);
+
   const handleFileSelect = async (file: File) => {
     setIsExtractingFile(true);
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -278,6 +283,60 @@ export default function TrainingContentLibrary() {
 
   const { data: trainingPlans = [] } = useQuery<TrainingPlan[]>({
     queryKey: ['/api/training/content-library/training-plans'],
+  });
+
+  // Query for Reference Documents (from media library)
+  interface RefDocument {
+    id: number;
+    filename: string;
+    originalFilename: string;
+    fileType: string;
+    fileSize: number;
+    url: string;
+    category: string;
+    createdAt: string;
+    folderId: string | null;
+  }
+
+  const { data: referenceDocuments = [] } = useQuery<RefDocument[]>({
+    queryKey: ['/api/media', { category: 'document' }],
+    queryFn: async () => {
+      const response = await fetch('/api/media?category=document', { credentials: 'include' });
+      return response.json();
+    },
+    enabled: importRefDocsOpen,
+  });
+
+  // Mutation to import reference documents into training library
+  const importRefDocsMutation = useMutation({
+    mutationFn: async (docs: { title: string; originalFilename: string; fileUrl: string; fileType: string; categoryIds: number[] }[]) => {
+      const results = await Promise.all(
+        docs.map(doc => 
+          apiRequest('/api/training/content-library/documents', {
+            method: 'POST',
+            body: JSON.stringify({
+              title: doc.title,
+              originalFilename: doc.originalFilename,
+              fileUrl: doc.fileUrl,
+              fileType: doc.fileType,
+              extractedText: `Imported from Reference Documents. View original: ${doc.fileUrl}`,
+              categoryIds: doc.categoryIds,
+            }),
+          })
+        )
+      );
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/documents'] });
+      setImportRefDocsOpen(false);
+      setSelectedRefDocs([]);
+      setSelectedRefDocCategories([]);
+      toast({ title: 'Documents imported successfully', description: 'Reference documents have been added to your training library.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error importing documents', description: error.message, variant: 'destructive' });
+    },
   });
 
   const createCategoryMutation = useMutation({
@@ -816,6 +875,122 @@ export default function TrainingContentLibrary() {
             <DialogFooter>
               <Button onClick={() => uploadDocumentMutation.mutate()} disabled={!newDoc.title || !newDoc.extractedText || uploadDocumentMutation.isPending || isExtractingFile}>
                 {uploadDocumentMutation.isPending ? 'Processing with AI...' : 'Import & Process'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Import from Reference Documents Button and Dialog */}
+        <Dialog open={importRefDocsOpen} onOpenChange={setImportRefDocsOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Import from Reference Docs
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Import from Reference Documents</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Select documents from your Reference Documents library to import into your Training Content Library.
+              </p>
+              
+              {/* Category Selection */}
+              <div>
+                <Label>Assign to Categories</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {categories.map(cat => (
+                    <Badge 
+                      key={cat.id}
+                      variant={selectedRefDocCategories.includes(cat.id) ? 'default' : 'outline'}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSelectedRefDocCategories(prev => 
+                          prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                        );
+                      }}
+                    >
+                      {cat.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference Documents List */}
+              <div>
+                <Label>Available Reference Documents ({referenceDocuments.length})</Label>
+                <div className="mt-2 border rounded-lg max-h-[300px] overflow-y-auto">
+                  {referenceDocuments.length === 0 ? (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No reference documents found</p>
+                      <p className="text-sm">Upload documents to Reference Docs first</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {referenceDocuments.map(doc => (
+                        <div 
+                          key={doc.id}
+                          className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/50 ${
+                            selectedRefDocs.includes(doc.id) ? 'bg-primary/10' : ''
+                          }`}
+                          onClick={() => {
+                            setSelectedRefDocs(prev => 
+                              prev.includes(doc.id) ? prev.filter(id => id !== doc.id) : [...prev, doc.id]
+                            );
+                          }}
+                        >
+                          <Checkbox 
+                            checked={selectedRefDocs.includes(doc.id)}
+                            onCheckedChange={() => {
+                              setSelectedRefDocs(prev => 
+                                prev.includes(doc.id) ? prev.filter(id => id !== doc.id) : [...prev, doc.id]
+                              );
+                            }}
+                          />
+                          <FileText className="h-5 w-5 text-blue-600" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{doc.originalFilename}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.fileType} • {new Date(doc.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setImportRefDocsOpen(false);
+                  setSelectedRefDocs([]);
+                  setSelectedRefDocCategories([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  const docsToImport = referenceDocuments
+                    .filter(doc => selectedRefDocs.includes(doc.id))
+                    .map(doc => ({
+                      title: doc.originalFilename.replace(/\.[^/.]+$/, ''),
+                      originalFilename: doc.originalFilename,
+                      fileUrl: doc.url,
+                      fileType: doc.fileType || 'document',
+                      categoryIds: selectedRefDocCategories,
+                    }));
+                  importRefDocsMutation.mutate(docsToImport);
+                }}
+                disabled={selectedRefDocs.length === 0 || importRefDocsMutation.isPending}
+              >
+                {importRefDocsMutation.isPending ? 'Importing...' : `Import ${selectedRefDocs.length} Document${selectedRefDocs.length !== 1 ? 's' : ''}`}
               </Button>
             </DialogFooter>
           </DialogContent>

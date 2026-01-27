@@ -744,6 +744,14 @@ export default function ProductionQueueManager() {
 
   // Ensure p1PurchaseOrders is always an array
   const safePurchaseOrders = Array.isArray(p1PurchaseOrders) ? p1PurchaseOrders : [];
+  
+  // Debug: Log what's being received from API
+  console.log('🛒 P1 Purchase Orders received:', {
+    isArray: Array.isArray(p1PurchaseOrders),
+    length: safePurchaseOrders.length,
+    isLoading: isLoadingPOs,
+    data: safePurchaseOrders.slice(0, 2)
+  });
 
   // Filter out "no stock" items and calculate total items needing layup
   const totalPOItemsNeedingLayup = safePurchaseOrders.reduce(

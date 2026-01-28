@@ -1,13 +1,24 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History, Settings } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History, Settings, Volume2, VolumeX } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
+import { emitTimerEvent, subscribeToTimerEvents, type TimerEvent } from '@/lib/timerEvents';
+import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive } from '@/lib/timerNotificationEffects';
+import { 
+  getTimerNotificationPreferences, 
+  setTimerNotificationPreferences,
+  shouldPlayAudibleAlert,
+  shouldStopLoopingAlert,
+  type TimerNotificationPreferences 
+} from '@/lib/timerNotificationPolicy';
+import { initAuditSink } from '@/lib/timerAuditSink';
 
 interface ProductionProgramRun {
   id: string;
@@ -105,74 +116,7 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function playAlertSound() {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 880;
-    oscillator.type = 'sine';
-    gainNode.gain.value = 0.5;
-    
-    oscillator.start();
-    
-    setTimeout(() => {
-      oscillator.frequency.value = 1100;
-    }, 200);
-    setTimeout(() => {
-      oscillator.frequency.value = 880;
-    }, 400);
-    setTimeout(() => {
-      oscillator.stop();
-      audioContext.close();
-    }, 600);
-  } catch (e) {
-    console.error('Failed to play alert sound:', e);
-  }
-}
-
-let alertIntervalId: NodeJS.Timeout | null = null;
-
-function startLoopingAlert(stepName: string) {
-  if (alertIntervalId) return;
-  
-  playAlertSound();
-  
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('Step Time Complete!', {
-      body: `${stepName} - Press Next Step to continue`,
-      icon: '/favicon.ico',
-      requireInteraction: true,
-    });
-  } else if ('Notification' in window && Notification.permission !== 'denied') {
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        new Notification('Step Time Complete!', {
-          body: `${stepName} - Press Next Step to continue`,
-          icon: '/favicon.ico',
-          requireInteraction: true,
-        });
-      }
-    });
-  }
-  
-  alertIntervalId = setInterval(() => {
-    playAlertSound();
-  }, 4000);
-}
-
-function stopLoopingAlert() {
-  if (alertIntervalId) {
-    clearInterval(alertIntervalId);
-    alertIntervalId = null;
-  }
-}
-
-function TimerCard({ run }: { run: RunWithDetails }) {
+function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void }) {
   const { toast } = useToast();
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
@@ -234,6 +178,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
+      onTimerEvent({ eventType: 'paused', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
       toast({ title: 'Timer paused' });
     },
     onError: (error: any) => {
@@ -246,8 +191,8 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/resume`, { method: 'POST' });
     },
     onSuccess: () => {
-      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
+      onTimerEvent({ eventType: 'resumed', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
       toast({ title: 'Timer resumed' });
     },
     onError: (error: any) => {
@@ -260,8 +205,8 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/advance`, { method: 'POST' });
     },
     onSuccess: () => {
-      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
+      onTimerEvent({ eventType: 'advanced', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
       toast({ title: 'Advanced to next step' });
       setHasTriggeredTimeout(false);
     },
@@ -276,7 +221,7 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
-      startLoopingAlert(currentStep?.stepName || `Step ${run.currentStepIndex + 1}`);
+      onTimerEvent({ eventType: 'step_timeout', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName || `Step ${run.currentStepIndex + 1}`, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
       toast({ title: 'Step time completed!', description: 'Press Next Step to continue' });
     },
     onError: (error: any) => {
@@ -289,8 +234,8 @@ function TimerCard({ run }: { run: RunWithDetails }) {
       return apiRequest(`/api/production/timers/runs/${run.id}/stop`, { method: 'POST' });
     },
     onSuccess: () => {
-      stopLoopingAlert();
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
+      onTimerEvent({ eventType: 'stopped', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
       toast({ title: 'Timer stopped' });
     },
     onError: (error: any) => {
@@ -482,11 +427,11 @@ function TimerCard({ run }: { run: RunWithDetails }) {
 
 export default function ProductionStationDashboard() {
   const [startModalOpen, setStartModalOpen] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] = useState<TimerNotificationPreferences>(() => getTimerNotificationPreferences());
   
   const { data: runs, isLoading, error } = useQuery<ProductionProgramRun[]>({
     queryKey: ['/api/production/timers/runs'],
     queryFn: async () => {
-      // Custom fetch that doesn't require auth - this is a public endpoint
       const response = await fetch('/api/production/timers/runs');
       if (!response.ok) {
         throw new Error('Failed to load timer data');
@@ -501,6 +446,46 @@ export default function ProductionStationDashboard() {
   const activeRuns = runs?.filter(r => 
     r.status === 'running' || r.status === 'paused' || r.status === 'awaiting_next'
   ) || [];
+
+  useEffect(() => {
+    const unsubscribe = initAuditSink();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToTimerEvents((event) => {
+      const prefs = getTimerNotificationPreferences();
+      
+      if (shouldStopLoopingAlert(event.eventType)) {
+        stopLoopingAlert();
+      }
+      
+      if (shouldPlayAudibleAlert(event, prefs)) {
+        startLoopingAlert(event.stepName || 'Step');
+      }
+    });
+    
+    return unsubscribe;
+  }, []);
+
+  const handleTimerEvent = useCallback((eventData: Omit<TimerEvent, 'timestamp'>) => {
+    const event: TimerEvent = {
+      ...eventData,
+      timestamp: new Date().toISOString(),
+    };
+    emitTimerEvent(event);
+  }, []);
+
+  const toggleAudibleAlerts = useCallback(() => {
+    const newPrefs = setTimerNotificationPreferences({ 
+      audibleAlertsEnabled: !notificationPrefs.audibleAlertsEnabled 
+    });
+    setNotificationPrefs(newPrefs);
+    
+    if (!newPrefs.audibleAlertsEnabled && isLoopingAlertActive()) {
+      stopLoopingAlert();
+    }
+  }, [notificationPrefs.audibleAlertsEnabled]);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -591,6 +576,19 @@ export default function ProductionStationDashboard() {
               <Plus className="w-4 h-4 mr-1.5" />
               Start Timer
             </Button>
+            <Button
+              size="sm"
+              variant={notificationPrefs.audibleAlertsEnabled ? "outline" : "secondary"}
+              className={`h-9 ${notificationPrefs.audibleAlertsEnabled ? '' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              onClick={toggleAudibleAlerts}
+            >
+              {notificationPrefs.audibleAlertsEnabled ? (
+                <Volume2 className="w-4 h-4 mr-1.5" />
+              ) : (
+                <VolumeX className="w-4 h-4 mr-1.5" />
+              )}
+              {notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}
+            </Button>
             <div className="text-right border-l pl-3 ml-1">
               <p className="text-lg font-mono font-semibold text-slate-700 dark:text-slate-200">
                 {new Date().toLocaleTimeString()}
@@ -622,7 +620,7 @@ export default function ProductionStationDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {detailedRuns.map((run) => (
-              <TimerCard key={run.id} run={run} />
+              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} />
             ))}
           </div>
         )}

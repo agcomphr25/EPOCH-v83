@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, History, Settings, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, Volume2, VolumeX } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -310,7 +310,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
               {run.ovenSlot && (
                 <>
                   <span className="text-xs text-muted-foreground ml-1">Slot:</span>
-                  <span className="text-sm font-medium">{run.ovenSlot}</span>
+                  <span className="text-sm font-medium">{run.ovenSlot === 'A' ? 'R' : run.ovenSlot === 'B' ? 'L' : run.ovenSlot}</span>
                 </>
               )}
             </div>
@@ -563,16 +563,10 @@ export default function ProductionStationDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/app/production/timer-programs">
+            <Link href="/app/dashboard">
               <Button variant="outline" size="sm" className="h-9">
-                <Settings className="w-4 h-4 mr-1.5" />
-                Programs
-              </Button>
-            </Link>
-            <Link href="/app/production/timer-history">
-              <Button variant="outline" size="sm" className="h-9">
-                <History className="w-4 h-4 mr-1.5" />
-                History
+                <Home className="w-4 h-4 mr-1.5" />
+                Dashboard
               </Button>
             </Link>
             <Button

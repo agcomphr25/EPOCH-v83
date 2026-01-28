@@ -16,6 +16,9 @@ import {
   setTimerNotificationPreferences,
   shouldPlayAudibleAlert,
   shouldStopLoopingAlert,
+  shouldShowBrowserNotification,
+  shouldShowToast,
+  getToastMessage,
   type TimerNotificationPreferences 
 } from '@/lib/timerNotificationPolicy';
 import { initAuditSink } from '@/lib/timerAuditSink';
@@ -116,8 +119,7 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void }) {
-  const { toast } = useToast();
+function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void; toast: ReturnType<typeof useToast>['toast'] }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const [hasTriggeredTimeout, setHasTriggeredTimeout] = useState(false);
@@ -179,7 +181,6 @@ function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       onTimerEvent({ eventType: 'paused', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
-      toast({ title: 'Timer paused' });
     },
     onError: (error: any) => {
       toast({ title: 'Failed to pause', description: error.message, variant: 'destructive' });
@@ -193,7 +194,6 @@ function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       onTimerEvent({ eventType: 'resumed', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
-      toast({ title: 'Timer resumed' });
     },
     onError: (error: any) => {
       toast({ title: 'Failed to resume', description: error.message, variant: 'destructive' });
@@ -207,7 +207,6 @@ function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       onTimerEvent({ eventType: 'advanced', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
-      toast({ title: 'Advanced to next step' });
       setHasTriggeredTimeout(false);
     },
     onError: (error: any) => {
@@ -222,7 +221,6 @@ function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       onTimerEvent({ eventType: 'step_timeout', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName || `Step ${run.currentStepIndex + 1}`, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
-      toast({ title: 'Step time completed!', description: 'Press Next Step to continue' });
     },
     onError: (error: any) => {
       console.error('Step timeout error:', error);
@@ -236,7 +234,6 @@ function TimerCard({ run, onTimerEvent }: { run: RunWithDetails; onTimerEvent: (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       onTimerEvent({ eventType: 'stopped', runId: run.id, programName: run.program?.name || 'Unknown', stepName: currentStep?.stepName, stepIndex: run.currentStepIndex, serialNumber: run.serialNumber || undefined, inventoryItemId: run.inventoryItemId || undefined });
-      toast({ title: 'Timer stopped' });
     },
     onError: (error: any) => {
       toast({ title: 'Failed to stop', description: error.message, variant: 'destructive' });
@@ -452,6 +449,8 @@ export default function ProductionStationDashboard() {
     return unsubscribe;
   }, []);
 
+  const { toast } = useToast();
+  
   useEffect(() => {
     const unsubscribe = subscribeToTimerEvents((event) => {
       const prefs = getTimerNotificationPreferences();
@@ -461,12 +460,20 @@ export default function ProductionStationDashboard() {
       }
       
       if (shouldPlayAudibleAlert(event, prefs)) {
-        startLoopingAlert(event.stepName || 'Step');
+        const showBrowserNotif = shouldShowBrowserNotification(event, prefs);
+        startLoopingAlert(event.stepName || 'Step', showBrowserNotif);
+      }
+      
+      if (shouldShowToast(event, prefs)) {
+        const toastMsg = getToastMessage(event);
+        if (toastMsg) {
+          toast(toastMsg);
+        }
       }
     });
     
     return unsubscribe;
-  }, []);
+  }, [toast]);
 
   const handleTimerEvent = useCallback((eventData: Omit<TimerEvent, 'timestamp'>) => {
     const event: TimerEvent = {
@@ -620,7 +627,7 @@ export default function ProductionStationDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {detailedRuns.map((run) => (
-              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} />
+              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} toast={toast} />
             ))}
           </div>
         )}

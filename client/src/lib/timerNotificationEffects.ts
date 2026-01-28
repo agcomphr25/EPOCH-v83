@@ -30,12 +30,14 @@ export function playAlertSound(): void {
   }
 }
 
-export function startLoopingAlert(stepName: string): void {
+export function startLoopingAlert(stepName: string, showBrowserNotif: boolean = true): void {
   if (alertIntervalId) return;
   
   playAlertSound();
   
-  showBrowserNotification(stepName);
+  if (showBrowserNotif) {
+    showBrowserNotification(stepName);
+  }
   
   alertIntervalId = setInterval(() => {
     playAlertSound();

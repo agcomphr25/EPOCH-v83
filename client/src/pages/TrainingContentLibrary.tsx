@@ -958,6 +958,7 @@ export default function TrainingContentLibrary() {
                         >
                           <Checkbox 
                             checked={selectedRefDocs.includes(doc.id)}
+                            onClick={(e) => e.stopPropagation()}
                             onCheckedChange={() => {
                               setSelectedRefDocs(prev => 
                                 prev.includes(doc.id) ? prev.filter(id => id !== doc.id) : [...prev, doc.id]

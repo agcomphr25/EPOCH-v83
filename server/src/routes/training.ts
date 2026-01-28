@@ -5460,7 +5460,11 @@ router.put('/content-library/documents/:id/categories', async (req, res) => {
 router.delete('/content-library/documents/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    // Delete topic links first (foreign key constraint)
+    await db.delete(topicDocumentLinks).where(eq(topicDocumentLinks.documentId, id));
+    // Delete category assignments
     await db.delete(documentCategoryAssignments).where(eq(documentCategoryAssignments.documentId, id));
+    // Finally delete the document itself
     await db.delete(trainingLibraryDocuments).where(eq(trainingLibraryDocuments.id, id));
     res.json({ success: true });
   } catch (error: any) {

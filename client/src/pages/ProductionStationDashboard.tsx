@@ -74,17 +74,17 @@ function formatTime(seconds: number): string {
 function getStatusColor(status: string): string {
   switch (status) {
     case 'running':
-      return 'bg-green-500 text-white';
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'paused':
-      return 'bg-yellow-500 text-black';
+      return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'awaiting_next':
-      return 'bg-blue-500 text-white';
+      return 'bg-sky-100 text-sky-700 border-sky-200';
     case 'completed':
-      return 'bg-emerald-600 text-white';
+      return 'bg-slate-100 text-slate-700 border-slate-200';
     case 'stopped':
-      return 'bg-red-500 text-white';
+      return 'bg-rose-100 text-rose-700 border-rose-200';
     default:
-      return 'bg-gray-500 text-white';
+      return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 }
 
@@ -326,162 +326,153 @@ function TimerCard({ run }: { run: RunWithDetails }) {
     : null;
 
   return (
-    <Card className="border-2 shadow-lg">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Program</p>
-            <CardTitle className="text-3xl font-bold">{run.program?.name || 'Unknown Program'}</CardTitle>
+    <Card className="border shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Program</p>
+            <CardTitle className="text-xl font-semibold truncate">{run.program?.name || 'Unknown Program'}</CardTitle>
             {run.instanceName && (
-              <p className="text-xl text-muted-foreground mt-1">{run.instanceName}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 truncate">{run.instanceName}</p>
             )}
           </div>
-          <Badge className={`text-lg px-4 py-2 ${getStatusColor(run.status)}`}>
+          <Badge className={`text-xs font-medium px-2.5 py-1 border ${getStatusColor(run.status)}`}>
             {getStatusLabel(run.status)}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-base">
+      <CardContent className="space-y-3 pt-0">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
           {run.serialNumber && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Serial #:</span>
-              <span className="font-mono font-semibold">{run.serialNumber}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Serial:</span>
+              <span className="font-mono text-sm">{run.serialNumber}</span>
             </div>
           )}
           {run.mandrelNumber && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Mandrel:</span>
-              <span className="font-semibold">{run.mandrelNumber}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Mandrel:</span>
+              <span className="text-sm font-medium">{run.mandrelNumber}</span>
             </div>
           )}
           {run.inventoryItemId && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Item ID:</span>
-              <span className="font-semibold">{run.inventoryItemId}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Item ID:</span>
+              <span className="text-sm font-medium">{run.inventoryItemId}</span>
             </div>
           )}
           {run.ovenNumber && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Oven:</span>
-              <span className="font-semibold">{run.ovenNumber}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Oven:</span>
+              <span className="text-sm font-medium">{run.ovenNumber}</span>
               {run.ovenSlot && (
                 <>
-                  <span className="text-sm text-muted-foreground ml-2">Slot:</span>
-                  <span className="font-semibold">{run.ovenSlot}</span>
+                  <span className="text-xs text-muted-foreground ml-1">Slot:</span>
+                  <span className="text-sm font-medium">{run.ovenSlot}</span>
                 </>
               )}
             </div>
           )}
           {run.sku && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">SKU:</span>
-              <span className="font-mono font-semibold">{run.sku}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">SKU:</span>
+              <span className="font-mono text-sm">{run.sku}</span>
             </div>
           )}
         </div>
 
-        <div className="bg-muted rounded-lg p-4 space-y-3">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-md p-3 space-y-2 border border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Current Step:</span>
-            <span className="text-2xl font-semibold">
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">Current Step</span>
+            <span className="text-base font-semibold">
               {currentStep?.stepName || `Step ${run.currentStepIndex + 1}`}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Progress:</span>
-            <span className="text-xl font-medium">
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">Progress</span>
+            <span className="text-sm font-medium text-muted-foreground">
               Step {run.currentStepIndex + 1} of {totalSteps}
             </span>
           </div>
           {(run.status === 'running' || run.status === 'paused') && currentStep && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Step Time Remaining:</span>
-              <span className={`text-3xl font-mono font-bold ${run.status === 'paused' ? 'text-yellow-600' : 'text-blue-600'}`}>
+            <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">Time Remaining</span>
+              <span className={`text-xl font-mono font-semibold ${run.status === 'paused' ? 'text-amber-600' : 'text-sky-600'}`}>
                 {formatTime(stepTimeRemaining)}
               </span>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-muted-foreground" />
-            <div>
-              <p className="text-sm text-muted-foreground">Started</p>
-              <p className="text-xl font-semibold">
-                {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-              </p>
-            </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Started</p>
+            <p className="text-sm font-medium">
+              {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Timer className="w-5 h-5 text-muted-foreground" />
-            <div>
-              <p className="text-sm text-muted-foreground">Overall Time</p>
-              <p className="text-2xl font-mono font-semibold">
-                {formatTime(Math.min(elapsedTime, totalProgramDuration))}
-              </p>
-            </div>
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Elapsed</p>
+            <p className="text-base font-mono font-semibold">
+              {formatTime(Math.min(elapsedTime, totalProgramDuration))}
+            </p>
           </div>
           {estimatedCompletion && (
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Est. Completion</p>
-                <p className="text-xl font-semibold">
-                  {estimatedCompletion.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Est. Done</p>
+              <p className="text-sm font-medium">
+                {estimatedCompletion.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
           )}
         </div>
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-1">
           {run.status === 'running' && (
             <Button
-              size="lg"
+              size="sm"
               variant="outline"
-              className="flex-1 text-lg h-14"
+              className="flex-1 h-9 text-sm font-medium"
               onClick={() => pauseMutation.mutate()}
               disabled={pauseMutation.isPending}
             >
-              {pauseMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Pause className="w-5 h-5 mr-2" />}
+              {pauseMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
               Pause
             </Button>
           )}
 
           {(run.status === 'paused' || run.status === 'awaiting_next') && (
             <Button
-              size="lg"
-              className="flex-1 text-lg h-14 bg-green-600 hover:bg-green-700"
+              size="sm"
+              className="flex-1 h-9 text-sm font-medium bg-emerald-600 hover:bg-emerald-700"
               onClick={() => resumeMutation.mutate()}
               disabled={resumeMutation.isPending}
             >
-              {resumeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 mr-2" />}
+              {resumeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
               Resume
             </Button>
           )}
 
           {run.status === 'awaiting_next' && (
             <Button
-              size="lg"
-              className="flex-1 text-lg h-14 bg-blue-600 hover:bg-blue-700"
+              size="sm"
+              className="flex-1 h-9 text-sm font-medium bg-sky-600 hover:bg-sky-700"
               onClick={() => advanceMutation.mutate()}
               disabled={advanceMutation.isPending}
             >
-              {advanceMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <SkipForward className="w-5 h-5 mr-2" />}
+              {advanceMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SkipForward className="w-3.5 h-3.5 mr-1.5" />}
               Next Step
             </Button>
           )}
 
           <Button
-            size="lg"
-            variant="destructive"
-            className="text-lg h-14 px-6"
+            size="sm"
+            variant="outline"
+            className="h-9 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
             onClick={() => stopMutation.mutate()}
             disabled={stopMutation.isPending}
           >
-            {stopMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Square className="w-5 h-5" />}
+            {stopMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
           </Button>
         </div>
       </CardContent>
@@ -559,45 +550,45 @@ export default function ProductionStationDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-4xl font-bold flex items-center gap-3">
-              <Timer className="w-10 h-10" />
+            <h1 className="text-2xl font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-100">
+              <Timer className="w-6 h-6" />
               Timer Station
             </h1>
-            <p className="text-xl text-muted-foreground mt-2">
-              Live timer dashboard for production processes
+            <p className="text-sm text-muted-foreground mt-1">
+              Production process timers
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/app/production/timer-programs">
-              <Button variant="outline" size="lg" className="text-lg h-14 px-6">
-                <Settings className="w-5 h-5 mr-2" />
+              <Button variant="outline" size="sm" className="h-9">
+                <Settings className="w-4 h-4 mr-1.5" />
                 Programs
               </Button>
             </Link>
             <Link href="/app/production/timer-history">
-              <Button variant="outline" size="lg" className="text-lg h-14 px-6">
-                <History className="w-5 h-5 mr-2" />
+              <Button variant="outline" size="sm" className="h-9">
+                <History className="w-4 h-4 mr-1.5" />
                 History
               </Button>
             </Link>
             <Button
-              size="lg"
-              className="bg-green-600 hover:bg-green-700 text-lg h-14 px-6"
+              size="sm"
+              className="h-9 bg-emerald-600 hover:bg-emerald-700"
               onClick={() => setStartModalOpen(true)}
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 mr-1.5" />
               Start Timer
             </Button>
-            <div className="text-right">
-              <p className="text-3xl font-mono font-bold">
+            <div className="text-right border-l pl-3 ml-1">
+              <p className="text-lg font-mono font-semibold text-slate-700 dark:text-slate-200">
                 {new Date().toLocaleTimeString()}
               </p>
-              <p className="text-muted-foreground">
-                {activeRuns.length} active timer{activeRuns.length !== 1 ? 's' : ''}
+              <p className="text-xs text-muted-foreground">
+                {activeRuns.length} active
               </p>
             </div>
           </div>
@@ -609,14 +600,14 @@ export default function ProductionStationDashboard() {
         />
 
         {detailedRuns.length === 0 ? (
-          <Card className="border-dashed border-2">
-            <CardContent className="py-16 text-center">
-              <Timer className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-semibold text-muted-foreground">
+          <Card className="border-dashed border-2 bg-white dark:bg-slate-900">
+            <CardContent className="py-12 text-center">
+              <Timer className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+              <h2 className="text-lg font-medium text-muted-foreground">
                 No Active Timers
               </h2>
-              <p className="text-lg text-muted-foreground mt-2">
-                Start a production timer to see it here
+              <p className="text-sm text-muted-foreground mt-1">
+                Start a timer to track production
               </p>
             </CardContent>
           </Card>

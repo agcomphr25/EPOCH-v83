@@ -11921,3 +11921,87 @@ export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
 export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
 export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
 export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;
+
+// ============================================================================
+// QR CODE REGISTRY - Central QR Code Generation & Resolver System
+// ============================================================================
+
+// Entity types that can be referenced by QR codes
+export const qrEntityTypeEnum = pgEnum('qr_entity_type', [
+  'order',
+  'inventory_item',
+  'employee',
+  'mandrel',
+  'oven',
+  'timer_program',
+  'document',
+  'equipment',
+  'material_lot',
+  'custom',
+]);
+
+// QR Codes Registry - Central table for all QR codes in the system
+export const qrCodes = pgTable('qr_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  publicCode: text('public_code').notNull().unique(), // Format: qr_XXXXXXXX
+  entityType: qrEntityTypeEnum('entity_type').notNull(),
+  entityIdentifier: text('entity_identifier').notNull(), // Stable ID (orderId, agPartNumber, employeeCode, etc.)
+  label: text('label'), // Human-readable label for the QR code
+  description: text('description'), // Optional description
+  isActive: boolean('is_active').default(true).notNull(),
+  expiresAt: timestamp('expires_at'), // Optional expiration
+  environment: text('environment').default('dev').notNull(), // 'dev' or 'prod'
+  resolveUrl: text('resolve_url'), // Optional custom resolve URL override
+  metadata: jsonb('metadata'), // Additional context data
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  disabledAt: timestamp('disabled_at'), // When the QR code was disabled
+  disabledByUserId: integer('disabled_by_user_id').references(() => users.id),
+  disabledReason: text('disabled_reason'),
+}, (table) => ({
+  publicCodeIdx: index('qr_codes_public_code_idx').on(table.publicCode),
+  entityTypeIdx: index('qr_codes_entity_type_idx').on(table.entityType),
+  entityIdentifierIdx: index('qr_codes_entity_identifier_idx').on(table.entityIdentifier),
+  isActiveIdx: index('qr_codes_is_active_idx').on(table.isActive),
+  environmentIdx: index('qr_codes_environment_idx').on(table.environment),
+}));
+
+// QR Code Scan Audit Log - Track all QR code scan events
+export const qrCodeScanLog = pgTable('qr_code_scan_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  qrCodeId: uuid('qr_code_id').references(() => qrCodes.id).notNull(),
+  publicCode: text('public_code').notNull(), // Denormalized for query performance
+  scannedByUserId: integer('scanned_by_user_id').references(() => users.id),
+  scannedByEmployeeId: integer('scanned_by_employee_id').references(() => employees.id),
+  scanResult: text('scan_result').notNull(), // 'success', 'expired', 'disabled', 'not_found', 'environment_mismatch'
+  resolvedUrl: text('resolved_url'), // Where the user was redirected
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
+}, (table) => ({
+  qrCodeIdIdx: index('qr_code_scan_log_qr_code_id_idx').on(table.qrCodeId),
+  scannedAtIdx: index('qr_code_scan_log_scanned_at_idx').on(table.scannedAt),
+  scanResultIdx: index('qr_code_scan_log_scan_result_idx').on(table.scanResult),
+}));
+
+// Insert schemas for QR Code module
+export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  disabledAt: true,
+  disabledByUserId: true,
+  disabledReason: true,
+});
+
+export const insertQrCodeScanLogSchema = createInsertSchema(qrCodeScanLog).omit({
+  id: true,
+  scannedAt: true,
+});
+
+// Types for QR Code module
+export type QrCode = typeof qrCodes.$inferSelect;
+export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
+export type QrCodeScanLog = typeof qrCodeScanLog.$inferSelect;
+export type InsertQrCodeScanLog = z.infer<typeof insertQrCodeScanLogSchema>;

@@ -119,6 +119,7 @@ import laborRoutes from './labor';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import accountingPrepRoutes from './accountingPrep';
+import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -126,6 +127,10 @@ export function registerRoutes(app: Express): Server {
 
   // Admin routes
   app.use('/api/admin', adminRoutes);
+
+  // QR Code routes - Separate routers for security
+  app.use('/api/qr-codes', qrAdminRouter); // Admin CRUD (protected)
+  app.use('/qr', qrResolverRouter); // Public QR code resolver (GET /qr/:code only)
 
   // Magic Link routes
   app.use('/api/magic-link', magicLinkRoutes);

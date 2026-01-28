@@ -1,0 +1,166 @@
+I want to add user-level customization for Timer Station notifications
+AND ensure all timer events are captured for audit purposes,
+WITHOUT changing timer behavior, accuracy, routes, or APIs.
+
+Please IMPLEMENT the following, keeping changes minimal and isolated.
+
+GOALS
+1) Allow the user to turn audible alerts ON/OFF independently of the timer
+   (i.e., stopping the sound should NOT require stopping the timer).
+2) Ensure ALL timer lifecycle events are captured in a neutral event stream
+   suitable for future auditing, analytics, and kiosk mode.
+3) Preserve current behavior as the default (audible alerts ON unless disabled).
+
+CONSTRAINTS
+- Do NOT redesign the Timer Station UI
+- Do NOT change timer logic or state transitions
+- Do NOT change API routes or DB writes
+- Do NOT add kiosk mode yet
+- Do NOT require authentication (preferences may be local for now)
+
+---
+
+IMPLEMENTATION TASKS
+
+1) CREATE A NEUTRAL TIMER EVENT LAYER
+
+Create:
+client/src/lib/timerEvents.ts
+
+This should define:
+- A TimerEvent type representing FACTS ONLY
+- An emitTimerEvent(event) function
+- A simple subscribe/unsubscribe mechanism
+
+Each event should include at minimum:
+- eventType (paused, resumed, step_timeout, advanced, stopped, completed)
+- runId
+- programName
+- stepName (if applicable)
+- timestamp (ISO string)
+- customerId if already available (do not add new API calls)
+
+IMPORTANT:
+- This layer must NOT trigger sounds, toasts, or UI effects.
+- It exists purely to record and broadcast what happened.
+
+Insert emitTimerEvent(...) calls in ProductionStationDashboard.tsx
+at each existing mutation onSuccess handler:
+- start
+- pause
+- resume
+- advance
+- step timeout
+- stop
+
+These should be one-line additions.
+
+---
+
+2) ADD AN AUDIT SINK (NON-BLOCKING)
+
+Add a lightweight audit capture mechanism that:
+- Subscribes to all TimerEvents
+- Logs them in a centralized place for now
+
+Acceptable options:
+- console.info with a clear [TIMER_EVENT] prefix
+- OR a simple in-memory array
+- OR localStorage append (preferred if simple)
+
+DO NOT send to the server yet.
+This is preparation for future auditing.
+
+The key requirement:
+- Every timer event must be captured even if notifications are disabled.
+
+---
+
+3) EXTRACT NOTIFICATION EFFECTS
+
+Move the following out of ProductionStationDashboard.tsx into:
+client/src/lib/timerNotificationEffects.ts
+
+- playAlertSound
+- startLoopingAlert
+- stopLoopingAlert
+- browser notification logic
+
+These functions should ONLY perform effects.
+They should not decide whether to run.
+
+---
+
+4) ADD A NOTIFICATION POLICY LAYER
+
+Create:
+client/src/lib/timerNotificationPolicy.ts
+
+This layer decides WHETHER an effect should run based on:
+- user preferences
+- event type
+
+Example responsibilities:
+- Should this event produce an audible alert?
+- Should looping audio continue?
+- Should a browser notification fire?
+
+This logic must:
+- Be pure (no side effects)
+- Be reusable later for kiosk mode and push notifications
+
+---
+
+5) ADD USER-CONTROLLED AUDIBLE OFF SWITCH
+
+Add a user-visible control in the Timer Station UI:
+- A toggle or button labeled clearly (e.g., “Audible Alerts”)
+- ON by default
+- OFF immediately silences current looping audio
+- OFF prevents future audible alerts
+- Does NOT stop the timer
+- Does NOT affect toasts or visual indicators
+
+Store this preference in:
+- localStorage (for now)
+
+Example preference:
+{
+  audibleAlertsEnabled: boolean
+}
+
+IMPORTANT:
+- If audible alerts are turned OFF while a looping alert is active,
+  stopLoopingAlert() must be called immediately.
+
+---
+
+6) WIRE EVENTS → POLICY → EFFECTS
+
+Update the Timer Station so that:
+- All timer lifecycle events emit TimerEvents
+- A notification handler subscribes to TimerEvents
+- The handler:
+    - always forwards events to the audit sink
+    - checks notification policy
+    - conditionally triggers effects
+
+NO existing onSuccess handlers should directly call:
+- startLoopingAlert
+- playAlertSound
+- browser notifications
+
+Those must flow through the event system.
+
+---
+
+DELIVERABLE
+When complete:
+- Timer behavior is unchanged
+- Users can silence audible alerts without stopping timers
+- All timer events are captured for audit purposes
+- Code is clearly structured so this can later be wrapped in a mini-app
+  with kiosk mode and authenticated preferences
+
+Please explain briefly where each new file is used and
+which lines were modified in ProductionStationDashboard.tsx.

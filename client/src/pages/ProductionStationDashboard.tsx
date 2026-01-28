@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -567,6 +567,18 @@ export default function ProductionStationDashboard() {
               <Button variant="outline" size="sm" className="h-9">
                 <Home className="w-4 h-4 mr-1.5" />
                 Dashboard
+              </Button>
+            </Link>
+            <Link href="/app/production/timer-programs">
+              <Button variant="outline" size="sm" className="h-9">
+                <Settings className="w-4 h-4 mr-1.5" />
+                Programs
+              </Button>
+            </Link>
+            <Link href="/app/production/timer-history">
+              <Button variant="outline" size="sm" className="h-9">
+                <History className="w-4 h-4 mr-1.5" />
+                History
               </Button>
             </Link>
             <Button

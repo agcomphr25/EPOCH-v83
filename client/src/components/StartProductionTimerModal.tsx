@@ -355,8 +355,8 @@ export default function StartProductionTimerModal({
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="A">A</SelectItem>
-                  <SelectItem value="B">B</SelectItem>
+                  <SelectItem value="A">R</SelectItem>
+                  <SelectItem value="B">L</SelectItem>
                 </SelectContent>
               </Select>
             </div>

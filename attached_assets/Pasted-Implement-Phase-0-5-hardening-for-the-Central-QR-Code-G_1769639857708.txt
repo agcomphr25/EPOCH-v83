@@ -1,0 +1,81 @@
+Implement Phase 0.5 hardening for the Central QR Code Generation & Resolver system.
+
+GOAL:
+Unify QR scan auditing into the existing auditEvents system (Option A) and add the agreed guardrails.
+
+CHANGES REQUIRED:
+
+1) REMOVE standalone QR scan logging
+   - Remove or deprecate qr_code_scan_log as a system of record
+   - All QR scan events must be logged via auditService.logEvent
+   - Use:
+     entityType: 'qr_code'
+     action: 'QR_SCANNED'
+
+   Include meta:
+     {
+       qrCode,
+       entityType,
+       entityIdentifier,
+       resolvedRoute,
+       userRole,
+       wasAuthenticated,
+     }
+
+2) ADD disable reason tracking
+   - Add nullable column to qr_codes:
+     disabled_reason TEXT
+   - Populate when disabling a QR code
+   - Include reason in audit log:
+     action: 'QR_DISABLED'
+
+3) CREATE explicit resolver map
+   - Refactor QR resolution logic to use a resolver map pattern:
+
+     const QR_RESOLVERS = {
+       order,
+       inventory_item,
+       employee,
+       mandrel,
+       oven,
+       timer_program,
+       document,
+       equipment,
+       material_lot,
+       custom,
+     };
+
+   - Each resolver:
+     - Receives (qrCode, entityIdentifier, user)
+     - Returns resolved route
+   - Default resolver must fail hard with clear error + audit entry
+
+4) ADD environment guard test
+   - Add at least one integration-level test or runtime assertion that:
+     - A prod-generated QR cannot resolve in dev
+     - A dev-generated QR cannot resolve in prod
+   - Failure must:
+     - Block redirect
+     - Log audit event:
+       action: 'QR_ENV_MISMATCH'
+
+5) ADD QR SVG helper (no UI usage yet)
+   - Create helper:
+     generateQrSvg(code: string): Buffer
+   - Use a standard QR library
+   - Do not expose via UI yet
+   - Intended for future PDF/label embedding
+
+CONSTRAINTS:
+- Do not introduce new audit tables
+- Do not change public QR ID format (qr_XXXXXXXX)
+- Follow existing auditService patterns
+- Preserve existing admin UI behavior
+
+DELIVERABLES:
+- Schema migration (disabled_reason)
+- Refactored resolver logic
+- Updated audit logging
+- Environment guard validation
+- QR SVG helper utility
+- Brief summary of changes

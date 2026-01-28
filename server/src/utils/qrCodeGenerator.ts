@@ -5,6 +5,12 @@
  * following the established EPOCH pattern (similar to sig_XXXXXXXX for signatures).
  */
 
+import QRCode from 'qrcode';
+
+// ============================================================================
+// PUBLIC ID GENERATION
+// ============================================================================
+
 /**
  * Generate a public QR code ID
  * Format: qr_XXXXXXXX (8 uppercase alphanumeric characters)
@@ -26,39 +32,129 @@ export function isValidQRPublicCode(code: string): boolean {
   return /^qr_[A-HJ-NP-Z2-9]{8}$/.test(code);
 }
 
+// ============================================================================
+// EXPLICIT RESOLVER MAP - Phase 0.5 Hardening
+// ============================================================================
+
 /**
- * QR Code entity type to frontend route mapping
- * Maps entity types to their corresponding frontend pages
+ * Resolver function interface
+ * Each resolver receives the entity identifier and user role, returns the resolved route
  */
-export const QR_ENTITY_ROUTES: Record<string, (identifier: string, userRole?: string) => string> = {
-  order: (identifier) => `/orders-management?orderId=${encodeURIComponent(identifier)}`,
-  inventory_item: (identifier) => `/inventory/parts?partNumber=${encodeURIComponent(identifier)}`,
-  employee: (identifier) => `/employees/${encodeURIComponent(identifier)}`,
-  mandrel: (identifier) => `/p2-layup-schedules?mandrel=${encodeURIComponent(identifier)}`,
-  oven: (identifier) => `/p2-layup-schedules?oven=${encodeURIComponent(identifier)}`,
-  timer_program: (identifier) => `/timer-programs/${encodeURIComponent(identifier)}`,
-  document: (identifier) => `/documents/${encodeURIComponent(identifier)}`,
-  equipment: (identifier) => `/maintenance?equipment=${encodeURIComponent(identifier)}`,
-  material_lot: (identifier) => `/material-lots/${encodeURIComponent(identifier)}`,
-  custom: (identifier) => identifier, // For custom entity types, identifier IS the URL
+export interface QRResolverContext {
+  entityIdentifier: string;
+  userRole?: string;
+  customResolveUrl?: string | null;
+}
+
+export interface QRResolverResult {
+  success: boolean;
+  route?: string;
+  error?: string;
+}
+
+/**
+ * Explicit resolver map for each entity type
+ * Each resolver function handles resolution for its entity type
+ * Default resolver MUST fail hard with clear error
+ */
+export const QR_RESOLVERS: Record<string, (ctx: QRResolverContext) => QRResolverResult> = {
+  order: (ctx) => {
+    // Admin/Owner see admin view, others see management view
+    if (ctx.userRole === 'ADMIN' || ctx.userRole === 'OWNER') {
+      return { success: true, route: `/admin/orders?orderId=${encodeURIComponent(ctx.entityIdentifier)}` };
+    }
+    return { success: true, route: `/orders-management?orderId=${encodeURIComponent(ctx.entityIdentifier)}` };
+  },
+
+  inventory_item: (ctx) => ({
+    success: true,
+    route: `/inventory/parts?partNumber=${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  employee: (ctx) => {
+    // Employees see their own portal, admins see employee details
+    if (ctx.userRole === 'EMPLOYEE') {
+      return { success: true, route: `/employee-portal` };
+    }
+    return { success: true, route: `/employees/${encodeURIComponent(ctx.entityIdentifier)}` };
+  },
+
+  mandrel: (ctx) => ({
+    success: true,
+    route: `/p2-layup-schedules?mandrel=${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  oven: (ctx) => ({
+    success: true,
+    route: `/p2-layup-schedules?oven=${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  timer_program: (ctx) => ({
+    success: true,
+    route: `/timer-programs/${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  document: (ctx) => ({
+    success: true,
+    route: `/documents/${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  equipment: (ctx) => ({
+    success: true,
+    route: `/maintenance?equipment=${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  material_lot: (ctx) => ({
+    success: true,
+    route: `/material-lots/${encodeURIComponent(ctx.entityIdentifier)}`,
+  }),
+
+  custom: (ctx) => {
+    // For custom entity types, the identifier IS the URL
+    if (!ctx.entityIdentifier.startsWith('/')) {
+      return { success: false, error: 'Custom QR code must have a valid URL path as identifier' };
+    }
+    return { success: true, route: ctx.entityIdentifier };
+  },
 };
 
 /**
- * Role-based route override mapping
- * Some entity types may have different views based on user role
+ * Resolve a QR code to its destination route
+ * Uses explicit resolver map with fail-hard default
  */
-export const QR_ROLE_ROUTE_OVERRIDES: Record<string, Record<string, (identifier: string) => string>> = {
-  order: {
-    ADMIN: (identifier) => `/admin/orders?orderId=${encodeURIComponent(identifier)}`,
-    OWNER: (identifier) => `/admin/orders?orderId=${encodeURIComponent(identifier)}`,
-  },
-  employee: {
-    EMPLOYEE: (identifier) => `/employee-portal`, // Employees see their own portal
-  },
-};
+export function resolveQRCode(
+  entityType: string,
+  entityIdentifier: string,
+  userRole?: string,
+  customResolveUrl?: string | null
+): QRResolverResult {
+  // If custom URL is provided, use it directly
+  if (customResolveUrl) {
+    return { success: true, route: customResolveUrl };
+  }
+
+  // Look up resolver in explicit map
+  const resolver = QR_RESOLVERS[entityType];
+  
+  // FAIL HARD: Unknown entity type must not silently redirect
+  if (!resolver) {
+    return {
+      success: false,
+      error: `Unknown entity type: ${entityType}. No resolver configured.`,
+    };
+  }
+
+  // Execute resolver
+  return resolver({
+    entityIdentifier,
+    userRole,
+    customResolveUrl,
+  });
+}
 
 /**
- * Get the resolve URL for a QR code based on entity type, identifier, and user role
+ * Legacy compatibility wrapper - returns URL string or error page
+ * @deprecated Use resolveQRCode for new code
  */
 export function getResolveUrl(
   entityType: string,
@@ -66,24 +162,12 @@ export function getResolveUrl(
   userRole?: string,
   customResolveUrl?: string | null
 ): string {
-  // If custom URL is provided, use it
-  if (customResolveUrl) {
-    return customResolveUrl;
+  const result = resolveQRCode(entityType, entityIdentifier, userRole, customResolveUrl);
+  if (result.success && result.route) {
+    return result.route;
   }
-
-  // Check for role-specific override
-  if (userRole && QR_ROLE_ROUTE_OVERRIDES[entityType]?.[userRole]) {
-    return QR_ROLE_ROUTE_OVERRIDES[entityType][userRole](entityIdentifier);
-  }
-
-  // Fall back to default route for entity type
-  const routeGenerator = QR_ENTITY_ROUTES[entityType];
-  if (routeGenerator) {
-    return routeGenerator(entityIdentifier, userRole);
-  }
-
-  // Unknown entity type - return 404-style page
-  return `/qr-not-found?code=${encodeURIComponent(entityIdentifier)}`;
+  // Return error page with context
+  return `/qr-error?reason=resolver_failed&code=${encodeURIComponent(entityIdentifier)}&error=${encodeURIComponent(result.error || 'Unknown error')}`;
 }
 
 /**
@@ -128,4 +212,68 @@ export function getQRBaseUrl(env: 'dev' | 'prod'): string {
 export function generateQRCodeUrl(publicCode: string, env: 'dev' | 'prod'): string {
   const baseUrl = getQRBaseUrl(env);
   return `${baseUrl}/qr/${publicCode}`;
+}
+
+// ============================================================================
+// QR SVG HELPER - Phase 0.5 Hardening
+// ============================================================================
+
+/**
+ * Generate a QR code as SVG buffer
+ * Intended for future PDF/label embedding - no UI usage yet
+ * 
+ * @param content - The content to encode in the QR code (usually the full URL)
+ * @param options - Optional settings for QR code generation
+ * @returns Promise<Buffer> - SVG content as a buffer
+ */
+export async function generateQrSvg(
+  content: string,
+  options?: {
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+    margin?: number;
+    width?: number;
+    color?: { dark?: string; light?: string };
+  }
+): Promise<Buffer> {
+  const svgString = await QRCode.toString(content, {
+    type: 'svg',
+    errorCorrectionLevel: options?.errorCorrectionLevel || 'M',
+    margin: options?.margin ?? 2,
+    width: options?.width || 200,
+    color: {
+      dark: options?.color?.dark || '#000000',
+      light: options?.color?.light || '#ffffff',
+    },
+  });
+  
+  return Buffer.from(svgString, 'utf-8');
+}
+
+/**
+ * Generate a QR code as PNG buffer
+ * Alternative format for embedding in documents
+ * 
+ * @param content - The content to encode in the QR code
+ * @param options - Optional settings for QR code generation
+ * @returns Promise<Buffer> - PNG image as a buffer
+ */
+export async function generateQrPng(
+  content: string,
+  options?: {
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+    margin?: number;
+    width?: number;
+    color?: { dark?: string; light?: string };
+  }
+): Promise<Buffer> {
+  return await QRCode.toBuffer(content, {
+    type: 'png',
+    errorCorrectionLevel: options?.errorCorrectionLevel || 'M',
+    margin: options?.margin ?? 2,
+    width: options?.width || 200,
+    color: {
+      dark: options?.color?.dark || '#000000',
+      light: options?.color?.light || '#ffffff',
+    },
+  });
 }

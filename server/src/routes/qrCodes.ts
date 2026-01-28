@@ -17,7 +17,7 @@ import { auditService } from '../services/auditService';
 import {
   generateQRPublicId,
   isValidQRPublicCode,
-  getResolveUrl,
+  resolveQRCode,
   isValidEntityType,
   generateQRCodeUrl,
   VALID_ENTITY_TYPES,
@@ -43,18 +43,23 @@ function getCurrentEnvironment(): 'dev' | 'prod' {
 /**
  * GET /qr/:code - Resolve a QR code and redirect to appropriate destination
  * 
- * This is the main entry point for QR code scanning.
- * - Validates existence, active state, expiration, and environment
- * - Hydrates user session if present
- * - Resolves destination based on entity_type and user role
- * - Logs QR_SCAN events
- * - Redirects to appropriate internal route
+ * Phase 0.5 Hardened:
+ * - All QR scan events logged via auditService (entityType: 'qr_code')
+ * - Environment guard with QR_ENV_MISMATCH audit event
+ * - Explicit resolver map with fail-hard default
  */
 resolverRouter.get('/:code', sessionAwareAuth, async (req: Request, res: Response) => {
   const { code } = req.params;
   const currentEnv = getCurrentEnvironment();
   const ipAddress = req.ip || req.connection.remoteAddress || null;
   const userAgent = req.get('user-agent') || null;
+
+  // Helper to build audit actor
+  const getActor = () => req.user ? {
+    id: req.user.id,
+    username: req.user.username,
+    role: req.user.role,
+  } : undefined;
 
   try {
     // Validate code format
@@ -69,57 +74,128 @@ resolverRouter.get('/:code', sessionAwareAuth, async (req: Request, res: Respons
       .where(eq(qrCodes.publicCode, code));
 
     if (!qrCode) {
-      // Log failed scan attempt
       console.log(`[QR] Not found: ${code}`);
       return res.redirect(`/qr-error?reason=not_found&code=${encodeURIComponent(code)}`);
     }
 
     // Check if QR code is active
     if (!qrCode.isActive) {
-      await logScanEvent(qrCode.id, code, 'disabled', null, req.user?.id, null, ipAddress, userAgent);
+      await auditService.logEvent({
+        entityType: 'qr_code',
+        entityId: qrCode.id,
+        action: 'QR_SCANNED',
+        actor: getActor(),
+        meta: {
+          qrCode: code,
+          entityType: qrCode.entityType,
+          entityIdentifier: qrCode.entityIdentifier,
+          resolvedRoute: null,
+          userRole: req.user?.role || null,
+          wasAuthenticated: !!req.user,
+          scanResult: 'disabled',
+          disabledReason: qrCode.disabledReason,
+        },
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
+      });
       return res.redirect(`/qr-error?reason=disabled&code=${encodeURIComponent(code)}`);
     }
 
-    // Check environment match
+    // ENVIRONMENT GUARD - Phase 0.5: Block and audit environment mismatch
     if (qrCode.environment !== currentEnv) {
-      await logScanEvent(qrCode.id, code, 'environment_mismatch', null, req.user?.id, null, ipAddress, userAgent);
       console.warn(`[QR] Environment mismatch: QR is for ${qrCode.environment}, current is ${currentEnv}`);
+      await auditService.logEvent({
+        entityType: 'qr_code',
+        entityId: qrCode.id,
+        action: 'QR_ENV_MISMATCH',
+        actor: getActor(),
+        meta: {
+          qrCode: code,
+          entityType: qrCode.entityType,
+          entityIdentifier: qrCode.entityIdentifier,
+          qrEnvironment: qrCode.environment,
+          currentEnvironment: currentEnv,
+          userRole: req.user?.role || null,
+          wasAuthenticated: !!req.user,
+        },
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
+      });
       return res.redirect(`/qr-error?reason=environment_mismatch&code=${encodeURIComponent(code)}`);
     }
 
     // Check expiration
     if (qrCode.expiresAt && new Date(qrCode.expiresAt) < new Date()) {
-      await logScanEvent(qrCode.id, code, 'expired', null, req.user?.id, null, ipAddress, userAgent);
+      await auditService.logEvent({
+        entityType: 'qr_code',
+        entityId: qrCode.id,
+        action: 'QR_SCANNED',
+        actor: getActor(),
+        meta: {
+          qrCode: code,
+          entityType: qrCode.entityType,
+          entityIdentifier: qrCode.entityIdentifier,
+          resolvedRoute: null,
+          userRole: req.user?.role || null,
+          wasAuthenticated: !!req.user,
+          scanResult: 'expired',
+          expiresAt: qrCode.expiresAt,
+        },
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
+      });
       return res.redirect(`/qr-error?reason=expired&code=${encodeURIComponent(code)}`);
     }
 
-    // Resolve the destination URL
+    // Resolve using explicit resolver map (fail-hard on unknown entity type)
     const userRole = req.user?.role;
-    const resolvedUrl = getResolveUrl(
+    const resolverResult = resolveQRCode(
       qrCode.entityType,
       qrCode.entityIdentifier,
       userRole,
       qrCode.resolveUrl
     );
 
-    // Log successful scan
-    await logScanEvent(qrCode.id, code, 'success', resolvedUrl, req.user?.id, null, ipAddress, userAgent);
+    // Handle resolver failure
+    if (!resolverResult.success || !resolverResult.route) {
+      console.error(`[QR] Resolver failed for ${code}: ${resolverResult.error}`);
+      await auditService.logEvent({
+        entityType: 'qr_code',
+        entityId: qrCode.id,
+        action: 'QR_SCANNED',
+        actor: getActor(),
+        meta: {
+          qrCode: code,
+          entityType: qrCode.entityType,
+          entityIdentifier: qrCode.entityIdentifier,
+          resolvedRoute: null,
+          userRole: req.user?.role || null,
+          wasAuthenticated: !!req.user,
+          scanResult: 'resolver_failed',
+          resolverError: resolverResult.error,
+        },
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
+      });
+      return res.redirect(`/qr-error?reason=resolver_failed&code=${encodeURIComponent(code)}&error=${encodeURIComponent(resolverResult.error || '')}`);
+    }
 
-    // Log audit event
+    const resolvedUrl = resolverResult.route;
+
+    // Log successful scan via auditService
     await auditService.logEvent({
-      entityType: 'p1_order', // Use p1_order as generic entity for QR scans
-      entityId: qrCode.entityIdentifier,
+      entityType: 'qr_code',
+      entityId: qrCode.id,
       action: 'QR_SCANNED',
-      actor: req.user ? {
-        id: req.user.id,
-        username: req.user.username,
-        role: req.user.role,
-      } : undefined,
+      actor: getActor(),
       meta: {
-        qrCodeId: qrCode.id,
-        publicCode: code,
+        qrCode: code,
         entityType: qrCode.entityType,
-        resolvedUrl,
+        entityIdentifier: qrCode.entityIdentifier,
+        resolvedRoute: resolvedUrl,
+        userRole: req.user?.role || null,
+        wasAuthenticated: !!req.user,
+        scanResult: 'success',
         environment: currentEnv,
       },
       ipAddress: ipAddress || undefined,
@@ -136,8 +212,8 @@ resolverRouter.get('/:code', sessionAwareAuth, async (req: Request, res: Respons
   }
 });
 
-// Helper to log scan events
-async function logScanEvent(
+// Legacy helper to log scan events to qr_code_scan_log (kept for backward compatibility, will be deprecated)
+async function logScanEventLegacy(
   qrCodeId: string,
   publicCode: string,
   scanResult: string,
@@ -380,10 +456,10 @@ adminRouter.post('/', authenticateToken, requireRole('ADMIN', 'OWNER'), async (r
       isActive: true,
     }).returning();
 
-    // Log audit event
+    // Log audit event via auditService (Phase 0.5: use qr_code entityType)
     await auditService.logEvent({
-      entityType: 'p1_order',
-      entityId: validatedData.entityIdentifier,
+      entityType: 'qr_code',
+      entityId: newQrCode.id,
       action: 'QR_GENERATED',
       actor: {
         id: req.user?.id,
@@ -391,9 +467,9 @@ adminRouter.post('/', authenticateToken, requireRole('ADMIN', 'OWNER'), async (r
         role: req.user?.role,
       },
       meta: {
-        qrCodeId: newQrCode.id,
-        publicCode,
+        qrCode: publicCode,
         entityType: validatedData.entityType,
+        entityIdentifier: validatedData.entityIdentifier,
         environment: currentEnv,
       },
       ipAddress: req.ip || undefined,
@@ -491,10 +567,10 @@ adminRouter.post('/:id/disable', authenticateToken, requireRole('ADMIN', 'OWNER'
       .where(eq(qrCodes.id, id))
       .returning();
 
-    // Log audit event
+    // Log audit event via auditService (Phase 0.5: use qr_code entityType)
     await auditService.logEvent({
-      entityType: 'p1_order',
-      entityId: existingQrCode.entityIdentifier,
+      entityType: 'qr_code',
+      entityId: id,
       action: 'QR_DISABLED',
       actor: {
         id: req.user?.id,
@@ -503,9 +579,10 @@ adminRouter.post('/:id/disable', authenticateToken, requireRole('ADMIN', 'OWNER'
       },
       reason,
       meta: {
-        qrCodeId: id,
-        publicCode: existingQrCode.publicCode,
+        qrCode: existingQrCode.publicCode,
         entityType: existingQrCode.entityType,
+        entityIdentifier: existingQrCode.entityIdentifier,
+        disabledReason: reason,
       },
       ipAddress: req.ip || undefined,
       userAgent: req.get('user-agent') || undefined,

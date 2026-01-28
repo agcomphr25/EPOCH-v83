@@ -9969,6 +9969,7 @@ export const tickets = pgTable('tickets', {
   lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented
   reminderCount: integer('reminder_count').default(0), // Number of stale reminders sent
   lastReminderAt: timestamp('last_reminder_at'), // When last reminder was sent
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp } - tracks who viewed and when
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
@@ -9988,6 +9989,7 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   lastActivityAt: true,
   reminderCount: true,
   lastReminderAt: true,
+  viewedBy: true,
 });
 
 export type Ticket = typeof tickets.$inferSelect;

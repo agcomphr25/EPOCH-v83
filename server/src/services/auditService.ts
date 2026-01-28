@@ -20,7 +20,7 @@ export interface AuditActor {
 }
 
 export interface AuditEventInput {
-  entityType: 'p1_order' | 'p2_order' | 'p2_serialized_item' | 'p2_project' | 'qr_code';
+  entityType: 'p1_order' | 'p2_order' | 'p2_serialized_item' | 'p2_project' | 'qr_code' | 'ticket';
   entityId: string;
   action: string;
   actor?: AuditActor;

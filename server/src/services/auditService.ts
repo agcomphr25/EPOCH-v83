@@ -19,8 +19,29 @@ export interface AuditActor {
   role?: string;
 }
 
+// Entity types for audit events - Attention & State-Confidence system entities included
+export type AuditEntityType = 
+  | 'p1_order' 
+  | 'p2_order' 
+  | 'p2_serialized_item' 
+  | 'p2_project' 
+  | 'qr_code' 
+  | 'ticket'
+  | 'order'           // For order attention tracking
+  | 'qc_item'         // For QC nonconformance/kickback attention tracking
+  | 'production_delay'; // For production delay attention tracking
+
+// Standard audit actions for Attention & State-Confidence system
+export type AttentionAuditAction = 
+  | 'ENTITY_VIEWED'           // User viewed the entity
+  | 'ENTITY_CONFIRMED'        // User confirmed state is still accurate
+  | 'ENTITY_STATE_STALE'      // State has become stale (exceeded threshold)
+  | 'ATTENTION_RISK_ESCALATED' // Risk level increased
+  | 'TICKET_VIEWED'           // Legacy - kept for backwards compatibility
+  | 'TICKET_ACKNOWLEDGED';    // Legacy - kept for backwards compatibility
+
 export interface AuditEventInput {
-  entityType: 'p1_order' | 'p2_order' | 'p2_serialized_item' | 'p2_project' | 'qr_code' | 'ticket';
+  entityType: AuditEntityType;
   entityId: string;
   action: string;
   actor?: AuditActor;

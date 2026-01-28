@@ -109,6 +109,7 @@ import fieldRoutes from './field';
 import timerRoutes from './timer';
 import productionTimersRoutes from './productionTimers';
 import ticketsRoutes from './tickets';
+import attentionRoutes from './attention';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
@@ -292,6 +293,9 @@ export function registerRoutes(app: Express): Server {
 
   // Ticketing System - Internal CSR Tool for complaints, order status, internal issues
   app.use('/api/tickets', ticketsRoutes);
+  
+  // Attention & State-Confidence System - Admin dashboard for awareness/staleness tracking
+  app.use('/api/attention', attentionRoutes);
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);

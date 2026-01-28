@@ -240,6 +240,69 @@ router.post('/:id/acknowledge', sessionAwareAuth, async (req, res) => {
   }
 });
 
+/**
+ * POST /:id/confirm-state - Confirm ticket state is still accurate
+ * Low-friction action: "Confirm Status" / "Still Waiting / No Change"
+ * Updates lastConfirmedAt without requiring comments
+ */
+router.post('/:id/confirm-state', sessionAwareAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!hasAccess(user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const ticketId = req.params.id;
+    const ticket = await storage.getTicketById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const userId = user.id;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const { confirmationNote } = req.body;
+
+    // Update confirmation fields
+    await db.update(tickets)
+      .set({ 
+        lastConfirmedAt: now,
+        lastConfirmedByUserId: userId,
+        confirmationNote: confirmationNote || null,
+        attentionRisk: null, // Reset risk on confirmation
+      })
+      .where(eq(tickets.id, ticketId));
+
+    // Log ENTITY_CONFIRMED audit event
+    await auditService.logEvent({
+      entityType: 'ticket',
+      entityId: ticketId,
+      action: 'ENTITY_CONFIRMED',
+      actor: {
+        id: userId,
+        username: user.username,
+        role: user.role,
+      },
+      meta: {
+        ticketStatus: ticket.status,
+        confirmedAt: nowIso,
+        confirmationNote,
+      },
+      ipAddress: req.ip || undefined,
+      userAgent: req.get('user-agent') || undefined,
+    });
+
+    res.json({ 
+      success: true, 
+      confirmedAt: nowIso,
+      message: 'Ticket state confirmed successfully',
+    });
+  } catch (error) {
+    console.error('Error confirming ticket state:', error);
+    res.status(500).json({ error: 'Failed to confirm ticket state' });
+  }
+});
+
 router.post('/', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;

@@ -52,6 +52,14 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement, project manager assignments, reminders, activity logging, and automatic notifications.
 - **Ticket Assignment System**: Separate owner (creator) and assignee tracking for tickets, with internal message notifications and automated stale ticket reminders.
 - **Ticket Engagement Tracking**: Non-invasive engagement auditing for tickets using `TICKET_VIEWED` and `TICKET_ACKNOWLEDGED` events via `auditService`. Tracks `viewedBy` JSONB field for determining `hasSeenLatestUpdate`. Session-based deduplication prevents excessive logging. Engagement metrics are exposed in ticket responses for admin visibility.
+- **Attention & State-Confidence System**: Cross-domain system for tracking confidence in the current state of work without surveillance-style metrics. Answers "Do we have confidence in the current state of work?" through:
+  - **Shared Engagement Primitives**: All applicable entities (tickets, orders, QC items, production delays) track `lastConfirmedAt`, `lastConfirmedByUserId`, `confirmationNote`, and `attentionRisk` fields.
+  - **State Confirmation**: Low-friction "Confirm Status" action marks state as still accurate without requiring comments, resets `attentionRisk`.
+  - **Staleness Rules**: Configurable thresholds per entity type and status (via `stalenessConfig` table). Computes risk levels (low/medium/high) based on time since last confirmation.
+  - **Audit Events**: `ENTITY_VIEWED`, `ENTITY_CONFIRMED`, `ENTITY_STATE_STALE`, `ATTENTION_RISK_ESCALATED` logged via auditService.
+  - **Production Delays Table**: New `productionDelays` table for active blockers requiring periodic confirmation with delay type, department, and resolution tracking.
+  - **Admin Attention Dashboard**: Unified dashboard (`/admin/attention`) showing risk levels across all domains with confirm actions. Explicitly does NOT show page clicks, mouse activity, or time-on-page.
+  - **Core Principle**: Measures awareness, confirmation, and staleness of state. Does NOT measure effort.
 - **PDF Signature Tool**: Internal utility for signing PDFs with drag-and-drop signature positioning.
 - **Fillable PDF Templates System**: MVP for customer fill-and-sign workflow. Admin uploads PDF templates with field definitions, creates instances for customers via public signature links. Customer fills form fields and signs via signature canvas. Uses `pdf-lib` for PDF manipulation.
 - **Central QR Code System**: Generates QR codes with public identifiers, resolves them to entity-specific routes based on user role, logs all scan events via audit service, and provides admin CRUD UI. Supports 10 entity types. Enforces environment safety with QR_ENV_MISMATCH audit events.

@@ -192,6 +192,7 @@ import SignOrderPage from './pages/SignOrderPage';
 import FillAndSignPage from './pages/FillAndSignPage';
 import QRCodeAdminPage from './pages/QRCodeAdminPage';
 import QRErrorPage from './pages/QRErrorPage';
+import AttentionDashboard from './pages/AttentionDashboard';
 import FillablePdfTemplatesAdmin from './pages/FillablePdfTemplatesAdmin';
 import VisualFieldEditor from './pages/VisualFieldEditor';
 import PDFSettings from './pages/PDFSettings';
@@ -397,6 +398,7 @@ function App() {
                   <Route path="/admin/communication-logs" component={CommunicationLogsPage} />
                   <Route path="/admin/accounting-prep" component={AccountingPrepPage} />
                   <Route path="/admin/qr-codes" component={QRCodeAdminPage} />
+                  <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />

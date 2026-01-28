@@ -220,6 +220,12 @@ export const orders = pgTable('orders', {
   scrapAuthorization: text('scrap_authorization'),
   isReplacement: boolean('is_replacement').default(false),
   replacedOrderId: text('replaced_order_id'),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3820,6 +3826,12 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   shippingCarrier: text('shipping_carrier'),
   shippedDate: date('shipped_date'),
   customerNotified: boolean('customer_notified').default(false),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6392,6 +6404,12 @@ export const kickbacks = pgTable('kickbacks', {
   impactedDepartments: text('impacted_departments').array(), // Other departments affected
   rootCause: text('root_cause'), // Identified root cause
   correctiveAction: text('corrective_action'), // Actions taken to prevent recurrence
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6432,6 +6450,72 @@ export const insertKickbackSchema = createInsertSchema(kickbacks)
 
 export type InsertKickback = z.infer<typeof insertKickbackSchema>;
 export type Kickback = typeof kickbacks.$inferSelect;
+
+// Production Delays - Active blockers requiring periodic confirmation
+export const productionDelays = pgTable('production_delays', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: text('order_id').notNull(),
+  delayType: text('delay_type').notNull(), // MATERIAL, EQUIPMENT, LABOR, VENDOR, CUSTOMER, OTHER
+  description: text('description').notNull(),
+  department: text('department').notNull(),
+  estimatedResolutionDate: timestamp('estimated_resolution_date'),
+  actualResolutionDate: timestamp('actual_resolution_date'),
+  delayOwnerUserId: integer('delay_owner_user_id'), // Person responsible for resolving
+  status: text('status').default('ACTIVE').notNull(), // ACTIVE, RESOLVED, CANCELLED
+  priority: text('priority').default('MEDIUM').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
+  blockerDetails: text('blocker_details'), // What specifically is blocking
+  resolutionNotes: text('resolution_notes'),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`),
+  lastConfirmedAt: timestamp('last_confirmed_at'), // "Delay still valid / blocker remains"
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'),
+  confirmationNote: text('confirmation_note'),
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  orderIdx: index('production_delays_order_idx').on(table.orderId),
+  statusIdx: index('production_delays_status_idx').on(table.status),
+  ownerIdx: index('production_delays_owner_idx').on(table.delayOwnerUserId),
+  riskIdx: index('production_delays_risk_idx').on(table.attentionRisk),
+}));
+
+export const insertProductionDelaySchema = createInsertSchema(productionDelays).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewedBy: true,
+  lastConfirmedAt: true,
+  lastConfirmedByUserId: true,
+  attentionRisk: true,
+});
+
+export type InsertProductionDelay = z.infer<typeof insertProductionDelaySchema>;
+export type ProductionDelay = typeof productionDelays.$inferSelect;
+
+// Staleness Configuration - Defines thresholds for attention risk escalation
+export const stalenessConfig = pgTable('staleness_config', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'ticket', 'order', 'qc_item', 'production_delay'
+  statusValue: text('status_value').notNull(), // The specific status (e.g., 'waiting_on_vendor', 'escalated')
+  hoursUntilLow: integer('hours_until_low').notNull().default(24), // Hours before LOW risk
+  hoursUntilMedium: integer('hours_until_medium').notNull().default(48), // Hours before MEDIUM risk
+  hoursUntilHigh: integer('hours_until_high').notNull().default(72), // Hours before HIGH risk
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  entityStatusIdx: index('staleness_config_entity_status_idx').on(table.entityType, table.statusValue),
+}));
+
+export const insertStalenessConfigSchema = createInsertSchema(stalenessConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertStalenessConfig = z.infer<typeof insertStalenessConfigSchema>;
+export type StalenessConfig = typeof stalenessConfig.$inferSelect;
 
 // Document Management System Tables
 export const documents = pgTable('documents', {
@@ -9970,6 +10054,11 @@ export const tickets = pgTable('tickets', {
   reminderCount: integer('reminder_count').default(0), // Number of stale reminders sent
   lastReminderAt: timestamp('last_reminder_at'), // When last reminder was sent
   viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp } - tracks who viewed and when
+  // State confirmation fields for Attention & State-Confidence system
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
@@ -9980,6 +10069,7 @@ export const tickets = pgTable('tickets', {
   assignedIdx: index('tickets_assigned_idx').on(table.assignedUserId),
   slaIdx: index('tickets_sla_idx').on(table.slaDueAt),
   typeIdx: index('tickets_type_idx').on(table.ticketType),
+  attentionRiskIdx: index('tickets_attention_risk_idx').on(table.attentionRisk),
 }));
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({
@@ -9990,6 +10080,9 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   reminderCount: true,
   lastReminderAt: true,
   viewedBy: true,
+  lastConfirmedAt: true,
+  lastConfirmedByUserId: true,
+  attentionRisk: true,
 });
 
 export type Ticket = typeof tickets.$inferSelect;

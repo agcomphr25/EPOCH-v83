@@ -4,6 +4,7 @@ import { pool } from '../../db';
 import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
 
 const router = Router();
 
@@ -104,8 +105,19 @@ router.get('/selections/:batchId', async (req: Request, res: Response) => {
 });
 
 // Generate weekly layup schedule from selections
-router.post('/schedule', async (req: Request, res: Response) => {
+// Uses idempotency middleware to prevent duplicate order creation on retries
+router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Response) => {
   try {
+    // Check if this is a replay of a previously completed request
+    if (req.idempotency?.isReplay && req.idempotency.existingResponse) {
+      logIdempotencyEvent('REPLAY_RETURNED', {
+        endpoint: '/api/p1-po-queue/schedule',
+        idempotencyKey: req.idempotency.idempotencyKey,
+        existingOrderId: req.idempotency.existingOrderId
+      });
+      return res.status(req.idempotency.existingResponse.status).json(req.idempotency.existingResponse.body);
+    }
+
     const { batchId, targetWeek } = req.body;
 
     if (!batchId) {
@@ -147,9 +159,9 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
         // Create orders in all_orders table with Layup/Plugging department
         for (let i = 0; i < quantity; i++) {
-          const currentOrderCount = (item.order_count || 0) + i + 1;
-          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
-          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+          const orderId = await storage.generateNextOrderId();
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
           const features = JSON.stringify({
             po_item_id: poItemId,
             po_number: item.po_number,
@@ -160,6 +172,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
           // Insert into all_orders table with P1 Production Queue department
           // order_source = 'PO_RELEASE' marks this as a Production-Only Order (non-invoiceable)
+          // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
           const insertOrderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -283,7 +296,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
 
     console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`);
 
-    res.json({
+    const responseBody = {
       success: true,
       batchId,
       targetWeek: targetWeek || 'Current Week',
@@ -294,7 +307,21 @@ router.post('/schedule', async (req: Request, res: Response) => {
       orderIds: scheduledOrders,
       errors: errors.length > 0 ? errors : undefined,
       message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`,
-    });
+    };
+
+    // Record idempotency for successful request (if idempotency key was provided)
+    if (req.idempotency?.idempotencyKey && scheduledOrders.length > 0) {
+      const { storeIdempotencyKey } = await import('../../middleware/idempotency');
+      await storeIdempotencyKey(
+        req.idempotency.idempotencyKey,
+        '/api/p1-po-queue/schedule',
+        scheduledOrders[0],
+        200,
+        responseBody
+      );
+    }
+
+    res.json(responseBody);
   } catch (error) {
     console.error('Error generating schedule:', error);
     res.status(500).json({
@@ -359,8 +386,8 @@ router.post('/progress', async (req: Request, res: Response) => {
         
         // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
-          const currentOrderCount = (item.order_count || 0) + i + 1;
-          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+          const orderId = await storage.generateNextOrderId();
           
           const insertProdQuery = `
             INSERT INTO production_orders (

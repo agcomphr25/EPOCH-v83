@@ -4,6 +4,15 @@ import { storage } from '../../storage';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { computeEffectivePriority, getEffectivePriorityScore, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
 
+function logDuplicatePrevention(event: string, details: Record<string, any>) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    type: 'DUPLICATE_PREVENTION',
+    event,
+    ...details
+  }));
+}
+
 const router = Router();
 
 // Helper function to automatically handle orders that need attention or movement
@@ -245,14 +254,13 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customer_name,
         item_name,
         due_date,
-        date,
+        order_date,
         current_department,
-        status,
+        production_status,
         po_number
       FROM production_orders
       WHERE current_department = 'P1 Production Queue'
-        AND status = 'IN_PROGRESS'
-        AND (is_cancelled IS NULL OR is_cancelled = false)
+        AND production_status IN ('PENDING', 'IN_PROGRESS')
       ORDER BY due_date ASC, created_at ASC
     `);
 
@@ -273,9 +281,9 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customerName: order.customer_name,
         itemName: order.item_name,
         dueDate: order.due_date,
-        orderDate: order.date,
+        orderDate: order.order_date,
         currentDepartment: order.current_department,
-        status: order.status,
+        status: order.production_status,
         poNumber: order.po_number,
         daysToDue,
         isOverdue: daysToDue < 0,
@@ -343,6 +351,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
 
     // Schema-safe query: avoid referencing columns that may not exist in all environments
     // UNIFIED PRIORITY MODEL: Include all priority-related fields for computeEffectivePriority()
+    // UNION query to include both regular orders (all_orders) AND PO orders (production_orders)
     const queueQuery = `
       SELECT 
         o.order_id as orderId,
@@ -362,7 +371,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         'ready' as productionReadinessStatus,
         0 as queuePosition,
         o.created_at as createdAt,
-        c.name as customerName
+        c.name as customerName,
+        'SALES' as orderSource
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
@@ -375,9 +385,37 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND LOWER(o.model_id) != 'no_stock'
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
       
+      UNION ALL
+      
+      SELECT 
+        po.order_id as orderId,
+        NULL as fbOrderNumber,
+        po.item_id as modelId,
+        po.item_id as stockModelId,
+        po.due_date as dueDate,
+        po.order_date as orderDate,
+        po.current_department as currentDepartment,
+        po.production_status as status,
+        po.customer_id as customerId,
+        po.specifications as features,
+        NULL as urgency,
+        false as isManualUrgency,
+        NULL as manual_priority_override,
+        NULL as prioritySource,
+        'ready' as productionReadinessStatus,
+        0 as queuePosition,
+        po.created_at as createdAt,
+        po.customer_name as customerName,
+        'PO_RELEASE' as orderSource
+      FROM production_orders po
+      WHERE po.current_department = 'P1 Production Queue'
+        AND po.production_status IN ('PENDING', 'IN_PROGRESS')
+        AND po.item_id IS NOT NULL 
+        AND po.item_id != ''
+      
       ORDER BY 
-        o.due_date ASC,
-        o.created_at ASC
+        dueDate ASC,
+        createdAt ASC
     `;
 
     const queueResult = await pool.query(queueQuery);
@@ -642,6 +680,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
     const createdOrders = [];
 
     for (let i = 1; i <= poItem.quantity; i++) {
+      // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
       const orderQuery = `
         INSERT INTO all_orders (
           order_id,
@@ -657,11 +696,12 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
-        ) RETURNING order_id, model_id, current_department
+        )
+        RETURNING order_id, model_id, current_department
       `;
 
-      // Generate unique order ID for each unit
-      const orderId = `PO${poItem.poNumber}-${String(i).padStart(3, '0')}`;
+      // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+      const orderId = await storage.generateNextOrderId();
 
       const orderResult = await pool.query(orderQuery, [
         orderId,
@@ -786,6 +826,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
 
       // Create individual orders for this week's quantity
       for (let i = 1; i <= unitsThisWeek; i++) {
+        // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
         const orderQuery = `
           INSERT INTO all_orders (
             order_id,
@@ -801,12 +842,12 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
             updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
-          ) RETURNING order_id, model_id, current_department
+          )
+          RETURNING order_id, model_id, current_department
         `;
 
-        // Generate unique order ID for this week and unit
-        const orderIndex = totalUnitsCreated + i;
-        const orderId = `PO${poItem.ponumber}-W${weekNumber}-${String(orderIndex).padStart(3, '0')}`;
+        // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+        const orderId = await storage.generateNextOrderId();
 
         const orderResult = await pool.query(orderQuery, [
           orderId,
@@ -979,18 +1020,11 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
       // Create individual orders for each quantity unit
       for (let i = 1; i <= quantity; i++) {
         try {
-          // Generate unique order ID
-          const orderIdQuery = `
-            SELECT COALESCE(MAX(CAST(SUBSTRING(order_id FROM 3) AS INTEGER)), 0) + 1 as next_id
-            FROM all_orders 
-            WHERE order_id ~ '^AG[0-9]+$'
-          `;
-
-          const orderIdResult = await pool.query(orderIdQuery);
-          const nextOrderNumber = orderIdResult.rows?.[0]?.next_id || 1;
-          const orderId = `AG${nextOrderNumber}`;
+          // CENTRALIZED: Use atomic order ID generator instead of inline MAX() query
+          const orderId = await storage.generateNextOrderId();
 
           // Create order in all_orders table
+          // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
           const orderQuery = `
             INSERT INTO all_orders (
               order_id,

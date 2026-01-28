@@ -1393,7 +1393,7 @@ export interface IStorage {
   // Shipment Records CRUD
   createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord>;
   getShipment(id: string): Promise<ShipmentRecord | undefined>;
   getAllShipments(filters?: {
@@ -9019,6 +9019,31 @@ export class DatabaseStorage implements IStorage {
         poi.stock_model_id as "stockModelId",
         poi.due_date as "dueDate",
         poi.item_type as "itemType",
+        CASE 
+          WHEN LOWER(poi.stock_model_name) IN ('cf_adj_alp_hunter', 'cf_alpine_hunter', 'privateer')
+               OR UPPER(poi.item_name) LIKE 'AG-FG-%' OR UPPER(poi.item_name) LIKE 'AG-CRB-%'
+               OR UPPER(poi.item_name) LIKE 'AGFG%' OR UPPER(poi.item_name) LIKE 'AGCRB%'
+               OR UPPER(poi.item_name) LIKE 'AGAH%' OR UPPER(poi.item_name) LIKE 'AGADH%'
+               THEN 'stock_model'
+          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+               AND (poi.specifications::jsonb->>'flatTop')::boolean = true
+               THEN 'stock_model'
+          WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
+               OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
+               OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
+               OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
+               OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
+               OR UPPER(poi.item_name) LIKE 'AGPIC%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
+               OR UPPER(poi.item_name) LIKE 'AGM5%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
+               THEN 'custom_model'
+          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+               AND ((poi.specifications::jsonb->>'flatTop')::boolean IS NULL 
+                    OR (poi.specifications::jsonb->>'flatTop')::boolean = false)
+               THEN 'custom_model'
+          ELSE 'stock_model'
+        END as "displayItemType",
         poi.stock_status as "stockStatus",
         prod.order_id as "orderId",
         prod.current_department as "currentDepartment",
@@ -9077,6 +9102,7 @@ export class DatabaseStorage implements IStorage {
           finishType: specs.finishType || null,
           stockModel: row.stockModelId,
           itemType: (row as any).itemType || null,
+          displayItemType: (row as any).displayItemType || 'stock_model',
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
@@ -9120,7 +9146,7 @@ export class DatabaseStorage implements IStorage {
           if (poItem.productionOrders.length === 0) {
             // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
             // Business rule: PO items with itemType NOT equal to "stock_model" are metal accessories
-            // Metal accessories go straight to Shipping QC (no production needed)
+            // Metal accessories (custom_model, feature_item, etc.) go straight to Shipping QC (no production needed)
             const isMetalAccessory = poItem.itemType && poItem.itemType.toLowerCase() !== 'stock_model';
             
             // CRITICAL FIX: Skip stock_model items that haven't entered production yet
@@ -9152,7 +9178,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
-                itemType: poItem.itemType,
+                itemType: poItem.displayItemType || poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: isShipped,
@@ -9177,7 +9203,7 @@ export class DatabaseStorage implements IStorage {
                 material: poItem.material,
                 finishType: poItem.finishType,
                 stockModel: poItem.stockModel,
-                itemType: poItem.itemType,
+                itemType: poItem.displayItemType || poItem.itemType,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
                 isFulfilled: prodOrder.isFulfilled,
@@ -9431,26 +9457,15 @@ export class DatabaseStorage implements IStorage {
       items
     );
 
-    // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
-    const customerPrefix = customer.name
-      .replace(/[^A-Za-z]/g, '')
-      .substring(0, 3)
-      .toUpperCase();
-    const poNumberDigits = po.poNumber
-      .replace(/[^0-9]/g, '')
-      .slice(-5)
-      .padStart(5, '0');
-    const baseOrderId = `${customerPrefix}${poNumberDigits}`;
-
     const orders: ProductionOrder[] = [];
-    let sequentialNumber = 1;
 
     // Create production orders for each item with distributed due dates
     for (const item of items) {
       const itemSchedule = productionSchedule[item.id];
 
       for (let i = 0; i < item.quantity; i++) {
-        const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+        // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+        const orderId = await this.generateNextOrderId();
 
         // Get due date for this specific item instance
         const weekIndex = Math.floor(i / itemSchedule.itemsPerWeek);
@@ -9478,7 +9493,6 @@ export class DatabaseStorage implements IStorage {
 
         const order = await this.createProductionOrder(orderData);
         orders.push(order);
-        sequentialNumber++;
       }
 
       // Update the PO item's order count
@@ -11732,11 +11746,8 @@ export class DatabaseStorage implements IStorage {
 
           // Create individual production orders (1 unit each) for manufactured items
           for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-            // Generate unique order ID: P2-{PO#}-{item#}-{level}-{line#}-{unit#}
-            const levelPrefix = level > 0 ? `L${level}-` : '';
-            const orderIdSuffix = String(i + 1).padStart(3, '0');
-            const unitSuffix = String(unitIndex).padStart(3, '0');
-            const orderId = `P2-${po.poNumber}-${poItem.id}-${levelPrefix}${orderIdSuffix}-${unitSuffix}`;
+            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+            const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
               orderId,
@@ -11795,8 +11806,8 @@ export class DatabaseStorage implements IStorage {
           
           // Create individual production orders for the top-level manufactured item
           for (let unitIndex = 1; unitIndex <= poItem.quantity; unitIndex++) {
-            const unitSuffix = String(unitIndex).padStart(3, '0');
-            const orderId = `P2-${po.poNumber}-${poItem.id}-TOP-${unitSuffix}`;
+            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
+            const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
               orderId,
@@ -12924,7 +12935,7 @@ export class DatabaseStorage implements IStorage {
   // Shipment Records CRUD
   async createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord> {
     // Create the shipment record first (without transaction - neon-http doesn't support transactions)
     const [shipment] = await db
@@ -12940,6 +12951,8 @@ export class DatabaseStorage implements IStorage {
         orderId: item.orderId,
         quantity: item.quantity,
         weightLbs: item.weightLbs,
+        description: item.description || null,
+        poNumber: item.poNumber || null,
       }));
 
       await db.insert(shipmentItems).values(shipmentItemsData);
@@ -14120,10 +14133,13 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    const [finalizedOrder] = await db
+    // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
+    const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
       .returning();
+    
+    const finalizedOrder = result[0];
 
     // Log the auto-addition to Production Queue
     console.log(
@@ -14259,10 +14275,13 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Insert into all_orders table
-    const [finalizedOrder] = await db
+    // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
+    const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
       .returning();
+    
+    const finalizedOrder = result[0];
 
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
@@ -15046,9 +15065,30 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+    // Also get PO items with custom_model type (metal accessories from POs)
+    // These are items that bypass production and need to be tracked as demand
+    const poMetalAccessories = await db.execute(sql`
+      SELECT 
+        poi.id as "poItemId",
+        poi.item_name as "itemName",
+        poi.stock_model_name as "stockModelName",
+        poi.quantity,
+        poi.due_date as "dueDate",
+        poi.stock_status as "stockStatus",
+        po.customer_id as "customerId",
+        po.po_number as "poNumber"
+      FROM purchase_order_items poi
+      JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE po.status = 'OPEN'
+        AND poi.item_type = 'custom_model'
+        AND (poi.stock_status IS NULL OR poi.stock_status != 'SHIPPED')
+    `);
+
     console.log(
       '🔍 Metal Accessories Demands - Total FINALIZED orders:',
-      ordersFinalized.length
+      ordersFinalized.length,
+      'PO metal accessories:',
+      poMetalAccessories.rows?.length || 0
     );
 
     const demands = items.map((item) => {
@@ -15132,6 +15172,73 @@ export class DatabaseStorage implements IStorage {
               quantity,
               customerId: order.customerId,
               status: order.status,
+            });
+          }
+        }
+      });
+
+      // Also check PO metal accessories (custom_model items)
+      const poRows = poMetalAccessories.rows || [];
+      poRows.forEach((poItem: any) => {
+        // Skip if already matched to prevent double-counting
+        const poItemId = poItem.poItemId;
+        
+        // Normalize to canonical SKU - remove known prefixes to get core identifier
+        // AG-M5-LA should match AG-BM-M5-LA (both normalize to M5LA)
+        const normalizeToCanonical = (name: string): string => {
+          if (!name || name.length < 3) return '';
+          return name.toUpperCase()
+            .replace(/^AG-?/i, '')     // Remove AG- or AG prefix
+            .replace(/^BM-?/i, '')     // Remove BM- or BM prefix  
+            .replace(/[-_\s]/g, '');   // Remove separators
+        };
+        
+        const canonicalItemName = normalizeToCanonical(item.name);
+        const rawPoName = poItem.itemName || poItem.stockModelName || '';
+        const canonicalPoName = normalizeToCanonical(rawPoName);
+        
+        // Skip empty or too short names
+        if (!canonicalItemName || canonicalItemName.length < 3 || !canonicalPoName || canonicalPoName.length < 3) {
+          return;
+        }
+        
+        // Exact canonical match only - no fuzzy matching to prevent false positives
+        // M5LA matches M5LA, M5BDLLA matches M5BDLLA, etc.
+        const match = canonicalItemName === canonicalPoName;
+        
+        if (match) {
+          const quantity = poItem.quantity || 1;
+          const dueDate = poItem.dueDate ? new Date(poItem.dueDate) : null;
+          const now = new Date();
+          
+          if (dueDate) {
+            const daysUntilDue = Math.ceil(
+              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            const weekIndex = Math.min(
+              Math.max(Math.floor(daysUntilDue / 7), 0),
+              3
+            );
+
+            weeklyDemand[weekIndex] += quantity;
+            weeklyOrders[weekIndex].push({
+              orderId: `PO-${poItem.poNumber}`,
+              dueDate: poItem.dueDate,
+              quantity,
+              customerId: poItem.customerId,
+              status: 'PO_ITEM',
+              poItemId: poItem.poItemId,
+            });
+          } else {
+            // No due date - add to first week
+            weeklyDemand[0] += quantity;
+            weeklyOrders[0].push({
+              orderId: `PO-${poItem.poNumber}`,
+              dueDate: null,
+              quantity,
+              customerId: poItem.customerId,
+              status: 'PO_ITEM',
+              poItemId: poItem.poItemId,
             });
           }
         }

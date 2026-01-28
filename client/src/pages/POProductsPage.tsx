@@ -187,7 +187,7 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: 'Success',
-        description: 'PO Product created successfully',
+        description: 'PO Product Item created successfully',
       });
       handleReset();
       setShowCreateForm(false);
@@ -195,7 +195,7 @@ export default function POProductsPage() {
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create PO Product',
+        description: error.message || 'Failed to create PO Product Item',
         variant: 'destructive',
       });
     },
@@ -218,7 +218,7 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: 'Success',
-        description: 'PO Product updated successfully',
+        description: 'PO Product Item updated successfully',
       });
       setEditingProduct(null);
       handleReset();
@@ -226,7 +226,7 @@ export default function POProductsPage() {
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update PO Product',
+        description: error.message || 'Failed to update PO Product Item',
         variant: 'destructive',
       });
     },
@@ -242,13 +242,13 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: 'Success',
-        description: 'PO Product deleted successfully',
+        description: 'PO Product Item deleted successfully',
       });
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete PO Product',
+        description: error.message || 'Failed to delete PO Product Item',
         variant: 'destructive',
       });
     },
@@ -339,7 +339,7 @@ export default function POProductsPage() {
   };
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this PO Product?')) {
+    if (window.confirm('Are you sure you want to delete this PO Product Item?')) {
       deleteMutation.mutate(id);
     }
   };
@@ -349,7 +349,7 @@ export default function POProductsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Package className="h-6 w-6 text-primary" />
-          <h1 className="text-3xl font-bold text-gray-900">PO Products</h1>
+          <h1 className="text-3xl font-bold text-gray-900">PO Product Items</h1>
         </div>
         <Button
           onClick={() => {
@@ -366,7 +366,7 @@ export default function POProductsPage() {
       {/* Products Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All PO Products</CardTitle>
+          <CardTitle>All PO Product Items</CardTitle>
         </CardHeader>
         <CardContent>
           {productsLoading ? (
@@ -374,7 +374,7 @@ export default function POProductsPage() {
           ) : poProducts.length === 0 ? (
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No PO Products found</p>
+              <p className="text-gray-500">No PO Product Items found</p>
               <Button
                 className="mt-4"
                 onClick={() => setShowCreateForm(true)}
@@ -458,12 +458,12 @@ export default function POProductsPage() {
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingProduct ? 'Edit PO Product' : 'Create New PO Product'}
+              {editingProduct ? 'Edit PO Product Item' : 'Create New PO Product Item'}
             </DialogTitle>
             <DialogDescription>
               {editingProduct
                 ? 'Update the product details below.'
-                : 'Fill in the product details below to create a new PO Product.'}
+                : 'Fill in the product details below to create a new PO Product Item.'}
             </DialogDescription>
           </DialogHeader>
 

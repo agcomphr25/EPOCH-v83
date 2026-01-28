@@ -1,0 +1,122 @@
+VM173107:8 [Coframe] Replit Enterprise watcher loaded
+472ddc5acc26e8d4.js:sourcemap:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+472ddc5acc26e8d4.js:sourcemap:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+472ddc5acc26e8d4.js:sourcemap:2 [LaunchDarkly] LaunchDarkly client initialized
+472ddc5acc26e8d4.js:sourcemap:2 [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:2d93882b-697d-4597-9231-e0568b040ebd"},{"__ref":"OrgPresenceSession:22ab9586-b74e-47ad-94c7-0b1089515c33"},{"__ref":"OrgPresenceSession:a139d15f-43cf-4dce-86f8-1cc55c9370ac"},{"__ref":"OrgPresenceSession:2a81f9a0-9957-4b05-86c2-ee3a29728886"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:22ab9586-b74e-47ad-94c7-0b1089515c33"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'thinkingEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'modelProfile' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'enableAutomatedTesting' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'webSearchEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'imageGenerationEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'autonomyLevel' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Missing field 'maxAutonomyEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+472ddc5acc26e8d4.js:sourcemap:2 Cache data may be lost when replacing the currentUserReplAgentStatuses field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), define a custom merge function for the Subscription.currentUserReplAgentStatuses field, so InMemoryCache can safely merge these objects:
+
+  existing: [{"__typename":"AgentStatusUpdate","replId":"96386dd4-936c-41a0-bc91-797d37a40ef7","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-26T23:30:45.449Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/96386dd4-936c-41a0-bc91-797d37a40ef7/3599ad61-5af4-408c-b33b-b940aa5e7199/Lb61jnr"},{"__typename":"AgentStatusUpdate","replId":"0ce1429f-ab65-4d48-bef3-611aab96e0df","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-27T22:55:17.776Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/0ce1429f-ab65-4d48-bef3-611aab96e0df/617f808b-e04f-47e5-80b5-7b42994d4062/5Y1IRU6"},{"__typename":"AgentStatusUpdate","replId":"f3c70d83-6562-4259-aa45-4ab71642fdc6","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-27T20:18:26.815Z","appImageUrl":null},{"__typename":"AgentStatusUpdate","replId":"74cb738b-d7a2-4afc-9574-fea2c9c1166a","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-2
+  incoming: [{"__typename":"AgentStatusUpdate","replId":"0ce1429f-ab65-4d48-bef3-611aab96e0df","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-27T22:55:17.776Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/0ce1429f-ab65-4d48-bef3-611aab96e0df/617f808b-e04f-47e5-80b5-7b42994d4062/5Y1IRU6"},{"__typename":"AgentStatusUpdate","replId":"f3c70d83-6562-4259-aa45-4ab71642fdc6","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-27T20:18:26.815Z","appImageUrl":null},{"__typename":"AgentStatusUpdate","replId":"74cb738b-d7a2-4afc-9574-fea2c9c1166a","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-01-27T22:38:16.488Z","appImageUrl":null}]
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 472ddc5acc26e8d4.js:sourcemap:2
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37

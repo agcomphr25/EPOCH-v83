@@ -425,6 +425,56 @@ const DraggableOrderItem = React.memo(
             ) : null;
           })()}
 
+          {/* Show "Stiller" note for MA action length with specific action inlets */}
+          {(() => {
+            const orderFeatures = order.features;
+            if (!orderFeatures) return null;
+            
+            const actionInlet = (orderFeatures.action_inlet || '').toString().toLowerCase().trim();
+            
+            // Resolve action length - use direct value or derive from action_inlet
+            let resolvedActionLength = (orderFeatures.action_length || '').toString().toLowerCase().trim();
+            
+            // If action_length is empty or 'none', try to derive from action_inlet (matches existing logic)
+            if (!resolvedActionLength || resolvedActionLength === 'none') {
+              const inletToLengthMap: { [key: string]: string } = {
+                carbon_six_medium: 'ma',
+                xm_plus: 'ma',
+                xm_plus_med: 'ma',
+                lone_peak: 'ma',
+                lone_peak_med: 'ma',
+                stiller: 'ma',
+                stiller_med: 'ma',
+                bighorn: 'ma',
+                bighorn_med: 'ma',
+              };
+              resolvedActionLength = inletToLengthMap[actionInlet] || '';
+            }
+            
+            // Only show Stiller for MA action length
+            if (resolvedActionLength !== 'ma' && resolvedActionLength !== 'medium') return null;
+            
+            // Check if action_inlet includes XM+, Lone Peak, Stiller, or Bighorn
+            // Match against normalized keys and common display values
+            const stillerInletPatterns = [
+              'xm+', 'xm_plus', 'xmplus',
+              'lone peak', 'lone_peak', 'lonepeak',
+              'stiller',
+              'bighorn', 'big_horn', 'big horn'
+            ];
+            const hasStillerInlet = stillerInletPatterns.some(pattern => 
+              actionInlet.includes(pattern)
+            );
+            
+            if (!hasStillerInlet) return null;
+            
+            return (
+              <div className="text-xs text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+                Stiller
+              </div>
+            );
+          })()}
+
           {/* Show Mold Name with Action Length prefix from mold configuration */}
           {moldInfo && (
             <div className="text-xs font-semibold opacity-80 mt-0.5">

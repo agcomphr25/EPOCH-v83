@@ -485,6 +485,14 @@ export default function ProductionStationDashboard() {
   
   const { data: runs, isLoading, error } = useQuery<ProductionProgramRun[]>({
     queryKey: ['/api/production/timers/runs'],
+    queryFn: async () => {
+      // Custom fetch that doesn't require auth - this is a public endpoint
+      const response = await fetch('/api/production/timers/runs');
+      if (!response.ok) {
+        throw new Error('Failed to load timer data');
+      }
+      return response.json();
+    },
     refetchInterval: 2000,
   });
 

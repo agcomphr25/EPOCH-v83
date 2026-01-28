@@ -138,6 +138,7 @@ const publicRoutes = [
   '/api/calendar/webhook', // Google Calendar webhooks
   '/api/integrations/process-runner', // External timer app integration (uses own token auth)
   '/api/p2-traveler',    // Production floor traveler system (uses badge authentication)
+  '/api/production/timers', // Production Timer Station - public for floor displays
 ];
 
 app.use('/api', (req, res, next) => {

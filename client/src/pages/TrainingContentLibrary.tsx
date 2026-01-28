@@ -305,17 +305,17 @@ export default function TrainingContentLibrary() {
       const data = await response.json();
       // API may return rows array directly or wrapped in { rows: [...] }
       const rows = Array.isArray(data) ? data : (data.rows || []);
-      // Transform API response to RefDocument format
+      // Transform API response to RefDocument format (handle both snake_case and camelCase)
       return rows.map((item: any) => ({
         id: item.id,
         filename: item.filename,
-        originalFilename: item.title || item.filename,
-        fileType: item.mimeType || 'document',
-        fileSize: item.fileSize || 0,
-        url: item.storagePath || `/api/media/file/${item.filename}`,
+        originalFilename: item.title || item.filename || 'Untitled Document',
+        fileType: item.mimeType || item.mime_type || 'document',
+        fileSize: item.fileSize || item.file_size || 0,
+        url: item.storagePath || item.storage_path || `/api/media/file/${item.filename}`,
         category: item.category || 'document',
-        createdAt: item.createdAt,
-        folderId: item.folderId,
+        createdAt: item.createdAt || item.created_at || item.captureDate || item.capture_date,
+        folderId: item.folderId || item.folder_id,
       }));
     },
     enabled: importRefDocsOpen,

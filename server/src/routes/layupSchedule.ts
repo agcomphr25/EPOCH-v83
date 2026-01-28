@@ -448,6 +448,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         return {
           ...order,
           actionLength,
+          actionInlet: features.action_inlet || null,
           material,
           hasLOP,
           lopValue,
@@ -517,6 +518,7 @@ router.post('/generate', async (req: Request, res: Response) => {
             dueDate: null,
             quantity: 1,
             actionLength,
+            actionInlet: poProductData?.actionInlet || null,
             material,
             hasLOP: false,
             hasADL: false,
@@ -663,6 +665,7 @@ router.post('/generate', async (req: Request, res: Response) => {
               dayName: ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][day],
               // Additional fields
               actionLength: item.actionLength || null,
+              actionInlet: item.actionInlet || null,
               material: item.material || null,
               // Badge information
               hasLOP: item.hasLOP || false,

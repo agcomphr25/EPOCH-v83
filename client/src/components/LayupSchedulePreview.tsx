@@ -18,6 +18,7 @@ interface ScheduledItem {
   dayOfWeek: number;
   dayName: string;
   actionLength?: string | null;
+  actionInlet?: string | null;
   material?: string | null;
   hasLOP?: boolean;
   lopValue?: string | null;
@@ -587,7 +588,25 @@ export function LayupSchedulePreview({
                                 Heavy Fill
                               </Badge>
                             )}
-                            {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && (
+                            {(() => {
+                              const actionLength = (item.actionLength || '').toLowerCase().trim();
+                              const actionInlet = (item.actionInlet || '').toLowerCase().trim();
+                              const isMA = actionLength === 'ma' || actionLength === 'medium';
+                              const stillerInlets = ['xm+', 'xm_plus', 'xmplus', 'lone peak', 'lone_peak', 'lonepeak', 'stiller', 'bighorn', 'big_horn', 'big horn'];
+                              const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
+                              if (isMA && hasStillerInlet) {
+                                return (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                                    Stiller
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
+                            {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && !(
+                              ((item.actionLength || '').toLowerCase() === 'ma' || (item.actionLength || '').toLowerCase() === 'medium') &&
+                              ['xm+', 'xm_plus', 'lone_peak', 'stiller', 'bighorn'].some(p => (item.actionInlet || '').toLowerCase().includes(p))
+                            ) && (
                               <span className="text-gray-400 text-xs">-</span>
                             )}
                           </div>

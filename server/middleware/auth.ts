@@ -350,3 +350,67 @@ export async function sessionAwareAuth(
     return res.status(500).json({ error: 'Authentication failed' });
   }
 }
+
+/**
+ * Optional authentication middleware for public routes that benefit from user context.
+ * This middleware:
+ * 1. Attempts to authenticate the user if they have a session/token
+ * 2. Sets req.user if authentication succeeds
+ * 3. ALWAYS calls next() - never blocks the request
+ * 
+ * Use this for public routes where authenticated users get extra functionality
+ * (e.g., starting a timer requires login, but viewing timers is public).
+ */
+export async function optionalAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    // Check for dev bypass first
+    if (isAuthBypassEnabled()) {
+      req.user = {
+        id: 2,
+        username: 'admin',
+        role: 'ADMIN',
+        employeeId: null,
+        canOverridePrices: true,
+        isActive: true,
+      };
+      return next();
+    }
+
+    // Try token-based authentication
+    const authHeader = req.headers['authorization'];
+    const bearerToken = authHeader && authHeader.split(' ')[1];
+    const cookieToken = req.cookies?.sessionToken;
+
+    // Try JWT authentication first (for Bearer tokens)
+    if (bearerToken) {
+      const jwtPayload = AuthService.verifyJWT(bearerToken);
+      if (jwtPayload) {
+        const dbUser = await AuthService.getUserById(jwtPayload.userId);
+        if (dbUser && dbUser.isActive) {
+          req.user = dbUser;
+          return next();
+        }
+      }
+    }
+
+    // Fallback to session-based authentication (for cookies)
+    if (cookieToken) {
+      const user = await AuthService.getUserBySession(cookieToken);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    }
+
+    // No authentication found - that's okay, just continue without user
+    return next();
+  } catch (error) {
+    console.error('Optional auth error:', error);
+    // Don't block the request on errors - just continue without user
+    return next();
+  }
+}

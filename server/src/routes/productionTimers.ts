@@ -9,7 +9,7 @@ import {
 } from '../../schema';
 import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { authenticateToken } from '../../middleware/auth';
+import { authenticateToken, optionalAuth } from '../../middleware/auth';
 
 function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
   const end = endTime || new Date();
@@ -17,6 +17,10 @@ function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
 }
 
 const router = Router();
+
+// Apply optional auth to all routes - this allows public access for viewing
+// while still setting req.user for authenticated users who want to start timers
+router.use(optionalAuth);
 
 const startRunSchema = z.object({
   programId: z.string().uuid(),

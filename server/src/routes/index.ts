@@ -1557,8 +1557,8 @@ export function registerRoutes(app: Express): Server {
         assignedToId, assignedToName, productionLeadId, productionLeadName 
       } = req.body;
       
-      // Get customer info
-      const customer = await storage.getP2Customer(customerId);
+      // Get customer info by customer ID (text field like "STR-001")
+      const customer = await storage.getP2CustomerByCustomerId(customerId);
       if (!customer) {
         return res.status(400).json({ error: 'Customer not found' });
       }

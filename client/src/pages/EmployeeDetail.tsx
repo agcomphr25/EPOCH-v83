@@ -22,6 +22,10 @@ import {
   Download,
   Trash2,
   File,
+  Briefcase,
+  Clock,
+  Building2,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -144,6 +148,26 @@ interface TrainingMatrixEntry {
   lastCompleted: string | null;
   status: string;
   notes: string | null;
+}
+
+interface EmploymentPeriod {
+  id: string;
+  employeeId: number;
+  startDate: string;
+  endDate: string | null;
+  employmentType: string;
+  department: string | null;
+  jobTitle: string | null;
+  status: 'ACTIVE' | 'ENDED';
+  startedViaSessionId: string | null;
+  endedViaSessionId: string | null;
+  createdAt: string;
+  startedViaPathName: string | null;
+  startedViaPathPurpose: string | null;
+  endedViaPathName: string | null;
+  endedViaPathPurpose: string | null;
+  startBundlePath: string | null;
+  endBundlePath: string | null;
 }
 
 function CertificationCard({ 
@@ -492,6 +516,16 @@ export default function EmployeeDetail() {
     queryFn: async () => {
       const response = await fetch('/api/training/matrix');
       if (!response.ok) throw new Error('Failed to fetch training matrix');
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: employmentPeriods = [], isLoading: isLoadingPeriods } = useQuery<EmploymentPeriod[]>({
+    queryKey: ['/api/employees', id, 'employment-periods'],
+    queryFn: async () => {
+      const response = await fetch(`/api/employees/${id}/employment-periods`);
+      if (!response.ok) throw new Error('Failed to fetch employment periods');
       return response.json();
     },
     enabled: !!id,
@@ -971,7 +1005,7 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-8">
+            <TabsList className="grid w-full grid-cols-9">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="certifications">Certifications</TabsTrigger>
@@ -980,6 +1014,7 @@ export default function EmployeeDetail() {
               <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="badge">Badge</TabsTrigger>
               <TabsTrigger value="journal">Journal</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details">
@@ -1711,6 +1746,141 @@ export default function EmployeeDetail() {
                       Journal entries coming soon
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="history">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Employment History
+                  </CardTitle>
+                  <CardDescription>
+                    Timeline of employment periods for this employee
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingPeriods ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-gray-500">Loading employment history...</p>
+                    </div>
+                  ) : employmentPeriods.length === 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <Briefcase className="w-5 h-5 text-amber-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-amber-800">Legacy Employee</h4>
+                          <p className="text-sm text-amber-700 mt-1">
+                            Employment history not yet recorded. This employee was added before the employment tracking system was implemented.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {employmentPeriods.map((period, index) => (
+                        <div 
+                          key={period.id} 
+                          className={`relative pl-8 pb-4 ${index !== employmentPeriods.length - 1 ? 'border-l-2 border-gray-200 ml-2' : ''}`}
+                        >
+                          <div className={`absolute left-0 top-0 w-4 h-4 rounded-full ${period.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-400'} -translate-x-1/2`}></div>
+                          
+                          <div className={`rounded-lg border p-4 ${period.status === 'ACTIVE' ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-lg">
+                                    {period.jobTitle || 'Position Not Specified'}
+                                  </span>
+                                  <Badge variant={period.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                                    {period.status}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Calendar className="w-4 h-4" />
+                                  <span>
+                                    {new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {' → '}
+                                    {period.endDate 
+                                      ? new Date(period.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                      : 'Present'
+                                    }
+                                  </span>
+                                </div>
+                              </div>
+                              <Badge variant="outline">{period.employmentType}</Badge>
+                            </div>
+                            
+                            {period.department && (
+                              <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                                <Building2 className="w-4 h-4" />
+                                <span>{period.department}</span>
+                              </div>
+                            )}
+                            
+                            <div className="space-y-2 text-sm">
+                              {period.startedViaSessionId && (
+                                <div className="flex items-center gap-2 text-blue-600">
+                                  <Link2 className="w-4 h-4" />
+                                  <span>
+                                    Started via {period.startedViaPathPurpose === 'REHIRE' ? 'Re-Hire' : 'Onboarding'}
+                                    {period.startedViaPathName && ` (${period.startedViaPathName})`}
+                                  </span>
+                                  <Link to={`/admin/onboarding/sessions/${period.startedViaSessionId}`}>
+                                    <Button variant="link" size="sm" className="h-auto p-0 text-blue-600">
+                                      View Session
+                                    </Button>
+                                  </Link>
+                                  {period.startBundlePath && (
+                                    <a 
+                                      href={`/api/object-storage/download?path=${encodeURIComponent(period.startBundlePath)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <Button variant="link" size="sm" className="h-auto p-0 text-blue-600">
+                                        <Download className="w-3 h-3 mr-1" />
+                                        Bundle PDF
+                                      </Button>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {period.endedViaSessionId && (
+                                <div className="flex items-center gap-2 text-orange-600">
+                                  <Link2 className="w-4 h-4" />
+                                  <span>
+                                    Ended via {period.endedViaPathPurpose === 'REHIRE' ? 'Re-Hire' : 'Transition'}
+                                    {period.endedViaPathName && ` (${period.endedViaPathName})`}
+                                  </span>
+                                  <Link to={`/admin/onboarding/sessions/${period.endedViaSessionId}`}>
+                                    <Button variant="link" size="sm" className="h-auto p-0 text-orange-600">
+                                      View Session
+                                    </Button>
+                                  </Link>
+                                  {period.endBundlePath && (
+                                    <a 
+                                      href={`/api/object-storage/download?path=${encodeURIComponent(period.endBundlePath)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <Button variant="link" size="sm" className="h-auto p-0 text-orange-600">
+                                        <Download className="w-3 h-3 mr-1" />
+                                        Bundle PDF
+                                      </Button>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

@@ -555,6 +555,82 @@ router.get('/finish-technicians', async (req: Request, res: Response) => {
   }
 });
 
+// Employment Periods - must be before /:id to avoid route collision
+router.get('/:id/employment-periods', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+    
+    const periods = await pool.query(`
+      SELECT 
+        ep.id,
+        ep.employee_id as "employeeId",
+        ep.start_date as "startDate",
+        ep.end_date as "endDate",
+        ep.employment_type as "employmentType",
+        ep.department,
+        ep.job_title as "jobTitle",
+        ep.status,
+        ep.started_via_session_id as "startedViaSessionId",
+        ep.ended_via_session_id as "endedViaSessionId",
+        ep.created_at as "createdAt",
+        start_session.path_name as "startedViaPathName",
+        start_session.path_purpose as "startedViaPathPurpose",
+        end_session.path_name as "endedViaPathName",
+        end_session.path_purpose as "endedViaPathPurpose"
+      FROM employment_periods ep
+      LEFT JOIN onboarding_sessions start_session ON ep.started_via_session_id = start_session.id
+      LEFT JOIN onboarding_sessions end_session ON ep.ended_via_session_id = end_session.id
+      WHERE ep.employee_id = $1
+      ORDER BY ep.start_date ASC
+    `, [employeeId]);
+    
+    // For each period with a session, check if a bundle exists
+    const periodsWithBundleInfo = await Promise.all(
+      periods.map(async (period: any) => {
+        let startBundlePath = null;
+        let endBundlePath = null;
+        
+        if (period.startedViaSessionId) {
+          const bundleResult = await pool.query(`
+            SELECT bundle_path as "bundlePath" 
+            FROM onboarding_sessions 
+            WHERE id = $1 AND bundle_path IS NOT NULL
+          `, [period.startedViaSessionId]);
+          if (bundleResult.length > 0) {
+            startBundlePath = bundleResult[0].bundlePath;
+          }
+        }
+        
+        if (period.endedViaSessionId) {
+          const bundleResult = await pool.query(`
+            SELECT bundle_path as "bundlePath" 
+            FROM onboarding_sessions 
+            WHERE id = $1 AND bundle_path IS NOT NULL
+          `, [period.endedViaSessionId]);
+          if (bundleResult.length > 0) {
+            endBundlePath = bundleResult[0].bundlePath;
+          }
+        }
+        
+        return {
+          ...period,
+          startBundlePath,
+          endBundlePath,
+        };
+      })
+    );
+    
+    res.json(periodsWithBundleInfo);
+  } catch (error) {
+    console.error('Error fetching employment periods:', error);
+    res.status(500).json({ error: 'Failed to fetch employment periods' });
+  }
+});
+
 // Parametric routes MUST come after all specific routes
 router.get('/:id', async (req: Request, res: Response) => {
   try {

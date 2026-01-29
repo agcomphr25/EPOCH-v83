@@ -1,0 +1,145 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 3B of the Employee Onboarding System:
+Introduce first-class Employment Periods to support re-hire, history, and active status derivation.
+
+This phase MUST NOT break existing onboarding or employee flows.
+
+---
+
+CORE PRINCIPLES:
+• Employee represents a PERSON
+• Employment represents a TIME-BOUNDED ENGAGEMENT
+• Employment periods are immutable once ended
+• Active status is DERIVED, not toggled
+• All employment changes are auditable
+
+---
+
+SCOPE (STRICT):
+
+1) NEW TABLE: employment_periods
+
+Create table:
+employment_periods
+
+Columns:
+- id (UUID PK)
+- employeeId (FK → employees.id)
+- startDate (DATE, not nullable)
+- endDate (DATE, nullable)
+- employmentType (ENUM or string)
+- department (string or FK, match existing pattern)
+- jobTitle (string)
+- status ENUM('ACTIVE', 'ENDED')
+- startedViaSessionId (FK → onboarding_sessions.id)
+- endedViaSessionId (FK → onboarding_sessions.id, nullable)
+- createdAt (timestamp)
+
+Constraints:
+• Only ONE ACTIVE employment_period per employee
+• endDate must be NULL when status = 'ACTIVE'
+• status must be 'ENDED' when endDate is set
+
+---
+
+2) FINALIZATION HOOK (ONBOARDING)
+
+Update onboarding finalization logic (Phase 1D):
+
+WHEN onboarding_session is finalized AND pathPurpose = 'ONBOARDING':
+
+• Create new employment_period:
+  - employeeId
+  - startDate = hireDate
+  - endDate = NULL
+  - status = 'ACTIVE'
+  - employmentType, department, jobTitle
+  - startedViaSessionId = onboarding_session.id
+
+• Do NOT close any prior employment periods (new hire case)
+
+Audit:
+• EMPLOYMENT_STARTED
+
+---
+
+3) FINALIZATION HOOK (RE-HIRE)
+
+WHEN onboarding_session is finalized AND pathPurpose = 'REHIRE':
+
+• Find existing ACTIVE employment_period for employee
+• Close it:
+  - endDate = new hireDate - 1 day (or same day, consistent rule)
+  - status = 'ENDED'
+  - endedViaSessionId = onboarding_session.id
+
+• Create NEW employment_period:
+  - startDate = new hireDate
+  - status = 'ACTIVE'
+  - startedViaSessionId = onboarding_session.id
+  - employmentType, department, jobTitle updated
+
+Audit:
+• EMPLOYMENT_ENDED
+• EMPLOYEE_REHIRED
+• EMPLOYMENT_STARTED
+
+---
+
+4) DERIVED ACTIVE STATUS (NO FLAGS)
+
+Do NOT add new isActive flags to employees.
+
+Instead:
+• Create helper function:
+  isEmployeeActive(employeeId)
+
+Logic:
+• Returns true if exactly one ACTIVE employment_period exists
+
+This helper may be used by:
+• User activation logic
+• Admin views
+• Future UI
+
+---
+
+5) SAFETY & BACKWARD COMPATIBILITY
+
+• Existing employees without employment_periods are assumed legacy
+• Do NOT retroactively create periods yet
+• Do NOT block existing features
+
+(Optional but recommended)
+• Add a console warning when employee has no employment_periods
+
+---
+
+6) NO UI CHANGES (YET)
+
+• Do NOT add Employment History UI
+• Do NOT modify Employee Detail page yet
+• This phase is data correctness only
+
+---
+
+7) MIGRATIONS & SUMMARY
+
+• Add migration safely
+• Ensure constraints are enforced
+• Output summary:
+  - Table added
+  - Finalization behavior updated
+  - Audit events emitted
+  - No breaking changes
+
+---
+
+IMPORTANT RULES:
+• Do NOT modify onboarding session schemas
+• Do NOT duplicate employee records
+• Do NOT introduce new status flags on employees
+• Employment periods must be the single source of truth
+• All writes must be auditable

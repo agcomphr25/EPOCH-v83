@@ -129,8 +129,8 @@ export default function QRCodeAdminPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('');
-  const [activeFilter, setActiveFilter] = useState<string>('');
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
+  const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedQRCode, setSelectedQRCode] = useState<QRCode | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -153,8 +153,8 @@ export default function QRCodeAdminPage() {
 
   const buildQRCodesUrl = () => {
     const params = new URLSearchParams();
-    if (entityTypeFilter) params.append('entityType', entityTypeFilter);
-    if (activeFilter) params.append('isActive', activeFilter);
+    if (entityTypeFilter && entityTypeFilter !== 'all') params.append('entityType', entityTypeFilter);
+    if (activeFilter && activeFilter !== 'all') params.append('isActive', activeFilter);
     if (globalFilter) params.append('search', globalFilter);
     const queryString = params.toString();
     return queryString ? `/api/qr-codes?${queryString}` : '/api/qr-codes';
@@ -515,7 +515,7 @@ export default function QRCodeAdminPage() {
                   <SelectValue placeholder="Entity Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   {ENTITY_TYPES.map(type => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
@@ -528,7 +528,7 @@ export default function QRCodeAdminPage() {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   <SelectItem value="true">Active</SelectItem>
                   <SelectItem value="false">Disabled</SelectItem>
                 </SelectContent>

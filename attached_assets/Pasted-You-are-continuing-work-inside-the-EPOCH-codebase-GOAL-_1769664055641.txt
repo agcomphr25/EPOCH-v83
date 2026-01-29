@@ -1,0 +1,163 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 1D of the Employee Onboarding System: FINALIZATION.
+This phase commits onboarding data into live system records.
+
+This is a one-time, irreversible operation per session.
+Proceed carefully.
+
+---
+
+CORE PRINCIPLE:
+Finalization must behave like a database transaction:
+• Validate everything first
+• Commit atomically
+• Lock all onboarding data afterward
+• Emit a full audit trail
+
+---
+
+SCOPE (STRICT):
+
+1) FINALIZATION ENDPOINT
+
+Implement:
+POST /api/onboarding/sessions/:id/finalize
+
+Admin-only.
+
+---
+
+2) PREFLIGHT VALIDATION (NO WRITES)
+
+Before any database writes, validate:
+
+✔ onboarding_session.status = 'in_progress'
+✔ Intake form marked complete
+✔ All REQUIRED documents signed
+✔ All REQUIRED camera captures completed
+✔ User account configuration exists (but not active yet)
+
+If ANY check fails:
+• Return 400 with a detailed validation report
+• DO NOT write anything
+• DO NOT change session state
+• Log audit event: ONBOARDING_FINALIZATION_BLOCKED
+
+---
+
+3) EMPLOYEE RECORD WRITE (ATOMIC)
+
+If validation passes:
+
+A) Resolve employee data from:
+• onboarding_sessions.intakeData
+• Admin-configured overrides (jobTitle, department, hireDate)
+
+B) Behavior:
+• If onboarding_session.employeeId exists → UPDATE employee
+• Else → CREATE new employee
+
+C) Store resulting employeeId on onboarding_session
+
+IMPORTANT:
+• This is the FIRST time the employees table is written during onboarding
+• Do NOT partially write employee data
+
+Audit:
+• EMPLOYEE_CREATED or EMPLOYEE_UPDATED
+
+---
+
+4) ATTACH SIGNED DOCUMENTS TO EMPLOYEE
+
+For each signed onboarding_session_document:
+• Link signedPdfPath to employee documents
+• Preserve immutability (do NOT duplicate files)
+
+This enables:
+Employee Detail → Documents tab visibility
+
+Audit:
+• EMPLOYEE_DOCUMENT_ATTACHED
+
+---
+
+5) USER ACCOUNT ACTIVATION
+
+If a user account was configured during onboarding:
+
+• Create or update users record
+• Set users.employeeId
+• Set isActive = true
+• Apply role and permissions exactly as configured
+• DO NOT auto-login
+
+Audit:
+• USER_ACTIVATED
+
+---
+
+6) FINALIZE SESSION (LOCK)
+
+Once all writes succeed:
+
+• onboarding_sessions.status = 'completed'
+• onboarding_sessions.completedAt = NOW()
+
+After this:
+• Intake data becomes read-only
+• Documents remain locked
+• Captures remain locked
+• Wizard becomes view-only permanently
+
+Audit:
+• ONBOARDING_COMPLETED
+
+---
+
+7) FAILURE SAFETY
+
+If ANY step fails after validation:
+• Abort finalization
+• Do NOT partially activate user
+• Do NOT partially attach documents
+• Return a clear error response
+• Log audit event: ONBOARDING_FINALIZATION_FAILED
+
+No silent failures.
+
+---
+
+8) UI INTEGRATION
+
+Wizard Review Step:
+• Show validation checklist
+• Disable "Finalize Onboarding" button until valid
+• On success:
+  - Redirect to Employee Detail page
+  - Show success confirmation
+• On failure:
+  - Show validation or system error clearly
+
+---
+
+IMPORTANT RULES:
+• Do NOT generate PDF bundles yet
+• Do NOT send emails yet
+• Do NOT trigger payroll, benefits, or scheduling
+• Do NOT allow re-finalization
+• No schema changes unless absolutely required
+• All writes must be traceable via audit logs
+
+---
+
+DELIVERABLE:
+• Finalization endpoint
+• Validation logic
+• Employee write mapping
+• User activation logic
+• Audit events
+• UI wiring in wizard review step
+• Summary of commit behavior

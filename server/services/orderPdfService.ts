@@ -43,6 +43,13 @@ interface CoreOrderData {
   handedness: string | null;
   status: string | null;
   barcode: string | null;
+  hasAltShipTo: boolean | null;
+  altShipToName: string | null;
+  altShipToCompany: string | null;
+  altShipToEmail: string | null;
+  altShipToPhone: string | null;
+  altShipToAddress: Record<string, any> | null;
+  altShipToCustomerId: string | null;
 }
 
 /**
@@ -72,7 +79,14 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         shipping,
         handedness,
         status,
-        barcode
+        barcode,
+        has_alt_ship_to as "hasAltShipTo",
+        alt_ship_to_name as "altShipToName",
+        alt_ship_to_company as "altShipToCompany",
+        alt_ship_to_email as "altShipToEmail",
+        alt_ship_to_phone as "altShipToPhone",
+        alt_ship_to_address as "altShipToAddress",
+        alt_ship_to_customer_id as "altShipToCustomerId"
       FROM all_orders 
       WHERE order_id = ${orderId}
       LIMIT 1
@@ -95,6 +109,13 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         handedness: row.handedness,
         status: row.status,
         barcode: row.barcode,
+        hasAltShipTo: row.hasAltShipTo || false,
+        altShipToName: row.altShipToName,
+        altShipToCompany: row.altShipToCompany,
+        altShipToEmail: row.altShipToEmail,
+        altShipToPhone: row.altShipToPhone,
+        altShipToAddress: row.altShipToAddress,
+        altShipToCustomerId: row.altShipToCustomerId,
       };
     }
     
@@ -114,7 +135,14 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         shipping,
         handedness,
         status,
-        barcode
+        barcode,
+        has_alt_ship_to as "hasAltShipTo",
+        alt_ship_to_name as "altShipToName",
+        alt_ship_to_company as "altShipToCompany",
+        alt_ship_to_email as "altShipToEmail",
+        alt_ship_to_phone as "altShipToPhone",
+        alt_ship_to_address as "altShipToAddress",
+        alt_ship_to_customer_id as "altShipToCustomerId"
       FROM order_drafts 
       WHERE order_id = ${orderId}
       LIMIT 1
@@ -137,6 +165,13 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         handedness: row.handedness,
         status: row.status,
         barcode: row.barcode,
+        hasAltShipTo: row.hasAltShipTo || false,
+        altShipToName: row.altShipToName,
+        altShipToCompany: row.altShipToCompany,
+        altShipToEmail: row.altShipToEmail,
+        altShipToPhone: row.altShipToPhone,
+        altShipToAddress: row.altShipToAddress,
+        altShipToCustomerId: row.altShipToCustomerId,
       };
     }
     
@@ -156,7 +191,14 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         shipping,
         handedness,
         status,
-        barcode
+        barcode,
+        has_alt_ship_to as "hasAltShipTo",
+        alt_ship_to_name as "altShipToName",
+        alt_ship_to_company as "altShipToCompany",
+        alt_ship_to_email as "altShipToEmail",
+        alt_ship_to_phone as "altShipToPhone",
+        alt_ship_to_address as "altShipToAddress",
+        alt_ship_to_customer_id as "altShipToCustomerId"
       FROM all_orders 
       WHERE fb_order_number = ${orderId}
       LIMIT 1
@@ -179,6 +221,13 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         handedness: row.handedness,
         status: row.status,
         barcode: row.barcode,
+        hasAltShipTo: row.hasAltShipTo || false,
+        altShipToName: row.altShipToName,
+        altShipToCompany: row.altShipToCompany,
+        altShipToEmail: row.altShipToEmail,
+        altShipToPhone: row.altShipToPhone,
+        altShipToAddress: row.altShipToAddress,
+        altShipToCustomerId: row.altShipToCustomerId,
       };
     }
     
@@ -527,6 +576,48 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     }
   }
 
+  // Resolve Ship-To Address with proper precedence:
+  // Priority 1: Order-level alt ship-to override (highest priority)
+  // Priority 2: Customer's default address (fallback)
+  // NOTE: Sales Order PDFs must never pull ship-to data directly from customer profiles 
+  // without checking order overrides first.
+  let resolvedShipToAddress: OrderSnapshot['customerAddress'];
+  let shipToSource: 'order_override' | 'customer_default' = 'customer_default';
+  
+  if (order.hasAltShipTo && order.altShipToAddress) {
+    // Order-level override takes priority
+    const altAddr = order.altShipToAddress as any;
+    resolvedShipToAddress = {
+      street: altAddr?.street || '',
+      street2: altAddr?.street2 || undefined,
+      city: altAddr?.city || '',
+      state: altAddr?.state || '',
+      zipCode: altAddr?.zip || altAddr?.zipCode || '',
+      country: altAddr?.country || undefined,
+    };
+    shipToSource = 'order_override';
+    console.log(`📬 [PDF-SERVICE] Using ORDER-LEVEL ship-to override for ${orderId}:`, {
+      name: order.altShipToName,
+      company: order.altShipToCompany,
+      city: resolvedShipToAddress.city,
+      state: resolvedShipToAddress.state,
+    });
+  } else if (defaultAddress) {
+    // Fall back to customer's default address
+    resolvedShipToAddress = {
+      street: defaultAddress.street,
+      street2: defaultAddress.street2 || undefined,
+      city: defaultAddress.city,
+      state: defaultAddress.state,
+      zipCode: defaultAddress.zipCode,
+      country: defaultAddress.country || undefined,
+    };
+    console.log(`📬 [PDF-SERVICE] Using CUSTOMER DEFAULT address for ${orderId}:`, {
+      city: resolvedShipToAddress.city,
+      state: resolvedShipToAddress.state,
+    });
+  }
+
   // Build snapshot using only data from core columns and features JSONB
   // This is schema-safe and won't fail due to missing columns
   const snapshot: OrderSnapshot = {
@@ -535,18 +626,12 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     dueDate: order.dueDate ? new Date(order.dueDate).toISOString() : new Date().toISOString(),
     customerId: order.customerId || '',
     customerPO: order.customerPO || undefined,
-    customerName: customer.name,
-    customerEmail: customer.email || undefined,
-    customerPhone: customer.phone || undefined,
-    customerCompany: customer.company || undefined,
-    customerAddress: defaultAddress ? {
-      street: defaultAddress.street,
-      street2: defaultAddress.street2 || undefined,
-      city: defaultAddress.city,
-      state: defaultAddress.state,
-      zipCode: defaultAddress.zipCode,
-      country: defaultAddress.country || undefined,
-    } : undefined,
+    // When order has alt ship-to, use override name/company; otherwise use customer profile
+    customerName: order.hasAltShipTo && order.altShipToName ? order.altShipToName : customer.name,
+    customerEmail: order.hasAltShipTo && order.altShipToEmail ? order.altShipToEmail : (customer.email || undefined),
+    customerPhone: order.hasAltShipTo && order.altShipToPhone ? order.altShipToPhone : (customer.phone || undefined),
+    customerCompany: order.hasAltShipTo && order.altShipToCompany ? order.altShipToCompany : (customer.company || undefined),
+    customerAddress: resolvedShipToAddress,
     modelId: order.modelId || undefined,
     modelName: stockModel?.name || undefined,
     modelDisplayName: stockModel?.displayName || undefined,
@@ -574,6 +659,8 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     modelId: snapshot.modelId,
     featureCount: Object.keys(snapshot.features || {}).length,
     hasDiscount: !!snapshot.discountCode || !!snapshot.showCustomDiscount,
+    shipToSource: shipToSource,
+    hasAltShipTo: order.hasAltShipTo,
   });
 
   return snapshot;

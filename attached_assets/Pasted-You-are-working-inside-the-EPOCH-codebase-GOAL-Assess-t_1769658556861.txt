@@ -1,0 +1,153 @@
+You are working inside the EPOCH codebase.
+
+GOAL:
+Assess the current state of employee onboarding–related functionality and prepare the system for a new Admin-driven Employee Onboarding Wizard.
+
+This wizard will be used by Admin/HR during an in-person onboarding session with a new employee and must result in:
+• A completed employee profile
+• A configured user account
+• Digitally signed documents stored immutably
+• A full audit trail
+• Exportable & emailable onboarding PDF bundles
+
+---
+
+STEP 1 — INVENTORY EXISTING CAPABILITIES (DO NOT BUILD YET)
+
+Search the codebase and report on what already exists in these areas:
+
+1) EMPLOYEE DATA
+• Employee table/schema
+• Employee detail page (/employee-detail/:id)
+• Fields already supported (demographics, emergency contact, employment type, etc.)
+• How employee records are created today
+
+2) DOCUMENTS & STORAGE
+• Central document storage / media library
+• Folder support (if any)
+• PDF upload and download handling
+• Existing document permission or categorization system
+
+3) FILLABLE PDF / SIGNATURE SYSTEM
+• Fillable PDF templates
+• Signature capture (mouse/touch/typed name)
+• Checkbox agreement handling
+• IP address, timestamp capture
+• Immutable signed PDF storage
+• Audit logging for document signing
+
+4) AUDIT LOGGING
+• Audit events related to employees
+• Document-related audit events
+• Timestamp accuracy and immutability guarantees
+
+5) USER ACCOUNT CREATION
+• How user accounts are created today
+• Role assignment
+• Permission assignment
+• Employee ↔ user linkage
+
+6) NAVIGATION
+• Existing Employees navbar entry
+• Patterns for adding Admin-only sub-pages
+
+---
+
+STEP 2 — GAP ANALYSIS
+
+Based on the inventory, clearly list:
+• What is already reusable as-is
+• What is partially reusable
+• What is missing and must be built
+
+DO NOT propose speculative features — only what is required to support the onboarding wizard described below.
+
+---
+
+STEP 3 — TARGET FEATURE DEFINITION (NO IMPLEMENTATION YET)
+
+Prepare the system to support:
+
+### A) ADMIN-LAUNCHED ONBOARDING SESSION
+• Initiated by Admin/HR only
+• Conducted in-person with the employee
+• Saved progress allowed (pause and resume later)
+• Sequential but flexible (can save one form and proceed to others)
+
+### B) ONBOARDING PATHWAYS
+• Configurable onboarding “paths”
+• Separate paths for:
+  - Full-Time Employees
+  - Contractors / 1099
+• Admin can define:
+  - Intake form(s)
+  - Document sequence
+  - Required confirmations
+  - Follow-up completion rules
+
+### C) DEMOGRAPHIC INTAKE FORM BUILDER
+• Admin UI to design intake forms
+• Field types:
+  - Text, date, dropdown, checkbox
+• Fields mapped to employee profile fields
+• Reusable across onboarding paths
+
+### D) DOCUMENT SELECTION & SIGNING
+• Admin selects signable PDFs from a central storage folder
+• Ordered document sequence
+• Required digital signature agreement checkbox
+• Signature options:
+  - Mouse / touch
+  - Typed full legal name
+• Capture:
+  - IP address
+  - Timestamp
+• Signed documents:
+  - Immutable
+  - Stored with employee
+  - Included in export bundle
+
+### E) DEVICE-CAPTURED ATTACHMENTS
+• Optional steps allowing Admin to:
+  - Take photos from the device camera
+  - Attach images (e.g. driver license, bank info)
+• Admin chooses which capture steps are included per onboarding path
+
+### F) USER ACCOUNT SETUP STEP
+• Guided Admin UI for:
+  - Creating user account
+  - Assigning role(s)
+  - Assigning permissions
+• Account activation tied to onboarding completion
+
+### G) FINALIZATION
+• Mark onboarding as complete
+• Employee becomes Active
+• Ability to:
+  - Export onboarding as a single PDF bundle
+  - Email the PDF bundle
+
+---
+
+STEP 4 — ADMIN NAVIGATION
+
+Plan to expose this under:
+Employees → Onboarding (Admin-only)
+
+Follow existing navbar and permission patterns.
+
+---
+
+DELIVERABLE FORMAT:
+
+Produce:
+1) A clear INVENTORY REPORT
+2) A GAP ANALYSIS
+3) A PROPOSED MODULE MAP (pages, services, tables — no code)
+4) A RECOMMENDED BUILD ORDER (Phase 0 / Phase 1)
+
+DO NOT write implementation code yet.
+DO NOT define schemas unless necessary to explain gaps.
+DO NOT skip the inventory step.
+
+This output will be used as the authoritative onboarding design plan.

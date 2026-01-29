@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
+import InlineCredentialModal from '@/components/auth/InlineCredentialModal';
+import { useActionAuth } from '@/hooks/useActionAuth';
 import { emitTimerEvent, subscribeToTimerEvents, type TimerEvent } from '@/lib/timerEvents';
 import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive } from '@/lib/timerNotificationEffects';
 import { 
@@ -119,7 +121,7 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void; toast: ReturnType<typeof useToast>['toast'] }) {
+function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void; toast: ReturnType<typeof useToast>['toast']; requireAuth: (action: () => void, description?: string) => void; getAuthHeaders: () => Record<string, string> }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const [hasTriggeredTimeout, setHasTriggeredTimeout] = useState(false);
@@ -176,7 +178,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
 
   const pauseMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/production/timers/runs/${run.id}/pause`, { method: 'POST' });
+      return apiRequest(`/api/production/timers/runs/${run.id}/pause`, { method: 'POST', headers: getAuthHeaders() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
@@ -189,7 +191,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
 
   const resumeMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/production/timers/runs/${run.id}/resume`, { method: 'POST' });
+      return apiRequest(`/api/production/timers/runs/${run.id}/resume`, { method: 'POST', headers: getAuthHeaders() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
@@ -202,7 +204,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
 
   const advanceMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/production/timers/runs/${run.id}/advance`, { method: 'POST' });
+      return apiRequest(`/api/production/timers/runs/${run.id}/advance`, { method: 'POST', headers: getAuthHeaders() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
@@ -229,7 +231,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
 
   const stopMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/production/timers/runs/${run.id}/stop`, { method: 'POST' });
+      return apiRequest(`/api/production/timers/runs/${run.id}/stop`, { method: 'POST', headers: getAuthHeaders() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
@@ -375,7 +377,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
               size="sm"
               variant="outline"
               className="flex-1 h-9 text-sm font-medium"
-              onClick={() => pauseMutation.mutate()}
+              onClick={() => requireAuth(() => pauseMutation.mutate(), 'pause this timer')}
               disabled={pauseMutation.isPending}
             >
               {pauseMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
@@ -387,7 +389,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
             <Button
               size="sm"
               className="flex-1 h-9 text-sm font-medium bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => resumeMutation.mutate()}
+              onClick={() => requireAuth(() => resumeMutation.mutate(), 'resume this timer')}
               disabled={resumeMutation.isPending}
             >
               {resumeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
@@ -399,7 +401,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
             <Button
               size="sm"
               className="flex-1 h-9 text-sm font-medium bg-sky-600 hover:bg-sky-700"
-              onClick={() => advanceMutation.mutate()}
+              onClick={() => requireAuth(() => advanceMutation.mutate(), 'advance to next step')}
               disabled={advanceMutation.isPending}
             >
               {advanceMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SkipForward className="w-3.5 h-3.5 mr-1.5" />}
@@ -411,7 +413,7 @@ function TimerCard({ run, onTimerEvent, toast }: { run: RunWithDetails; onTimerE
             size="sm"
             variant="outline"
             className="h-9 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-            onClick={() => stopMutation.mutate()}
+            onClick={() => requireAuth(() => stopMutation.mutate(), 'stop this timer')}
             disabled={stopMutation.isPending}
           >
             {stopMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
@@ -450,6 +452,16 @@ export default function ProductionStationDashboard() {
   }, []);
 
   const { toast } = useToast();
+  
+  const {
+    isAuthenticated,
+    user: authUser,
+    showAuthModal,
+    requireAuth,
+    handleAuthSuccess,
+    handleAuthModalClose,
+    getAuthHeaders,
+  } = useActionAuth();
   
   useEffect(() => {
     const unsubscribe = subscribeToTimerEvents((event) => {
@@ -633,11 +645,19 @@ export default function ProductionStationDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {detailedRuns.map((run) => (
-              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} toast={toast} />
+              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} toast={toast} requireAuth={requireAuth} getAuthHeaders={getAuthHeaders} />
             ))}
           </div>
         )}
       </div>
+      
+      {/* Inline Credential Modal for action authentication */}
+      <InlineCredentialModal
+        isOpen={showAuthModal}
+        onClose={handleAuthModalClose}
+        onSuccess={handleAuthSuccess}
+        actionDescription="control timers on the production floor"
+      />
     </div>
   );
 }

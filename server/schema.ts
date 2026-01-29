@@ -1447,6 +1447,18 @@ export const userSessions = pgTable('user_sessions', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Action Tokens Table - Short-lived tokens for inline credential validation
+// Used by Timer Station and other public-view pages for action-level auth
+export const actionTokens = pgTable('action_tokens', {
+  id: serial('id').primaryKey(),
+  token: text('token').notNull().unique(),
+  userId: integer('user_id')
+    .references(() => users.id)
+    .notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // User Integrations Table - OAuth connections for Google and Outlook
 export const userIntegrations = pgTable('user_integrations', {
   id: serial('id').primaryKey(),

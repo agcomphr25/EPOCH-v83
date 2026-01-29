@@ -816,4 +816,98 @@ router.get('/session', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/validate-credentials
+ * Validate credentials without creating a full login session.
+ * Returns a short-lived action token for inline credential gating.
+ * Used by Timer Station and other public-view pages that need auth for actions.
+ */
+router.post('/validate-credentials', loginRateLimiter, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Try to find user in database first
+    const dbUserResult = await db.select({
+      id: users.id,
+      username: users.username,
+      passwordHash: users.passwordHash,
+      role: users.role,
+      isActive: users.isActive,
+    }).from(users).where(sql`LOWER(${users.username}) = LOWER(${username})`);
+
+    let user: { id: number; username: string; role: string } | null = null;
+    let isValidPassword = false;
+
+    if (dbUserResult && dbUserResult.length > 0) {
+      const dbUser = dbUserResult[0];
+
+      // Check if user is active
+      if (dbUser.isActive === false) {
+        return res.status(401).json({ error: 'Account is inactive' });
+      }
+
+      // Verify password
+      isValidPassword = await bcrypt.compare(password, dbUser.passwordHash);
+
+      if (isValidPassword) {
+        user = {
+          id: dbUser.id,
+          username: dbUser.username,
+          role: dbUser.role || 'EMPLOYEE',
+        };
+      }
+    } else {
+      // Fall back to hardcoded users
+      const hardcodedUser = USERS.get(username.toLowerCase());
+
+      if (hardcodedUser) {
+        isValidPassword = await bcrypt.compare(password, hardcodedUser.password);
+        if (isValidPassword) {
+          user = {
+            id: hardcodedUser.id,
+            username: hardcodedUser.username,
+            role: hardcodedUser.role,
+          };
+        }
+      }
+    }
+
+    if (!user || !isValidPassword) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Generate a short-lived action token (15 minutes)
+    const actionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Store the action token in the database
+    await pool.query(
+      `INSERT INTO action_tokens (token, user_id, expires_at, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (token) DO UPDATE SET user_id = $2, expires_at = $3`,
+      [actionToken, user.id, expiresAt]
+    );
+
+    console.log(`[Auth] Action token issued for user ${user.username} (expires: ${expiresAt.toISOString()})`);
+
+    res.json({
+      success: true,
+      token: actionToken,
+      expiresAt: expiresAt.toISOString(),
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error('Validate credentials error:', error);
+    res.status(500).json({ error: 'Failed to validate credentials' });
+  }
+});
+
 export default router;

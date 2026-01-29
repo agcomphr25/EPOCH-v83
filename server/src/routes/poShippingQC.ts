@@ -947,6 +947,51 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
   }
 });
 
+// PATCH /api/po-orders/oem-shipments/:id/tracking
+// Update tracking number for a specific shipment
+router.patch('/oem-shipments/:id/tracking', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { trackingNumber } = req.body;
+    
+    console.log(`📝 Updating tracking number for shipment ${id} to: ${trackingNumber}`);
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ _error: 'Invalid shipment ID format' });
+    }
+
+    if (!trackingNumber || typeof trackingNumber !== 'string' || trackingNumber.trim().length === 0) {
+      return res.status(400).json({ _error: 'Tracking number is required' });
+    }
+
+    const query = `
+      UPDATE shipment_records
+      SET master_tracking_number = $1
+      WHERE id = $2
+      RETURNING id, master_tracking_number
+    `;
+
+    const result = await pool.query(query, [trackingNumber.trim(), id]);
+    const updated = (result.rows || result)[0];
+
+    if (!updated) {
+      return res.status(404).json({ _error: 'Shipment not found' });
+    }
+
+    console.log(`✅ Tracking number updated successfully for shipment ${id}`);
+    res.json({ 
+      success: true, 
+      shipmentId: updated.id,
+      trackingNumber: updated.master_tracking_number 
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating tracking number:', error);
+    res.status(500).json({ _error: 'Failed to update tracking number', details: error.message });
+  }
+});
+
 // POST /api/po-orders/toggle-fulfilled
 // Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
 // Supports both single orderId and batch orderIds array

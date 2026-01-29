@@ -12062,24 +12062,6 @@ export const qrCodes = pgTable('qr_codes', {
   environmentIdx: index('qr_codes_environment_idx').on(table.environment),
 }));
 
-// QR Code Scan Audit Log - Track all QR code scan events
-export const qrCodeScanLog = pgTable('qr_code_scan_log', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  qrCodeId: uuid('qr_code_id').references(() => qrCodes.id).notNull(),
-  publicCode: text('public_code').notNull(), // Denormalized for query performance
-  scannedByUserId: integer('scanned_by_user_id').references(() => users.id),
-  scannedByEmployeeId: integer('scanned_by_employee_id').references(() => employees.id),
-  scanResult: text('scan_result').notNull(), // 'success', 'expired', 'disabled', 'not_found', 'environment_mismatch'
-  resolvedUrl: text('resolved_url'), // Where the user was redirected
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
-}, (table) => ({
-  qrCodeIdIdx: index('qr_code_scan_log_qr_code_id_idx').on(table.qrCodeId),
-  scannedAtIdx: index('qr_code_scan_log_scanned_at_idx').on(table.scannedAt),
-  scanResultIdx: index('qr_code_scan_log_scan_result_idx').on(table.scanResult),
-}));
-
 // Insert schemas for QR Code module
 export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
   id: true,
@@ -12088,11 +12070,6 @@ export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
   disabledAt: true,
   disabledByUserId: true,
   disabledReason: true,
-});
-
-export const insertQrCodeScanLogSchema = createInsertSchema(qrCodeScanLog).omit({
-  id: true,
-  scannedAt: true,
 });
 
 // Types for QR Code module

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   Package,
@@ -13,6 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 
 interface ShipmentItem {
   id: number;
@@ -85,6 +88,8 @@ export default function OEMShipmentsPage() {
   const [viewMode, setViewMode] = useState<'date' | 'po'>('date');
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
+  const [editingTrackingId, setEditingTrackingId] = useState<number | null>(null);
+  const [editingTrackingValue, setEditingTrackingValue] = useState('');
   const limit = 20;
 
   // Fetch shipments with filters
@@ -202,6 +207,44 @@ export default function OEMShipmentsPage() {
   const copyTracking = (trackingNumber: string) => {
     navigator.clipboard.writeText(trackingNumber);
     toast({ title: 'Tracking number copied to clipboard' });
+  };
+
+  const updateTrackingMutation = useMutation({
+    mutationFn: async ({ shipmentId, trackingNumber }: { shipmentId: number; trackingNumber: string }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/tracking`, { 
+        method: 'PATCH', 
+        body: { trackingNumber } 
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Tracking number updated successfully' });
+      setEditingTrackingId(null);
+      setEditingTrackingValue('');
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Failed to update tracking number', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const startEditingTracking = (shipmentId: number, currentValue: string) => {
+    setEditingTrackingId(shipmentId);
+    setEditingTrackingValue(currentValue);
+  };
+
+  const saveTrackingNumber = (shipmentId: number) => {
+    if (editingTrackingValue.trim()) {
+      updateTrackingMutation.mutate({ shipmentId, trackingNumber: editingTrackingValue.trim() });
+    }
+  };
+
+  const cancelEditingTracking = () => {
+    setEditingTrackingId(null);
+    setEditingTrackingValue('');
   };
 
   const toggleDateExpanded = (date: string) => {
@@ -450,18 +493,57 @@ export default function OEMShipmentsPage() {
                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                                       Tracking Number
                                     </p>
-                                    <div className="flex items-center gap-2">
-                                      <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
-                                        {shipment.master_tracking_number}
-                                      </code>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => copyTracking(shipment.master_tracking_number)}
-                                      >
-                                        <Copy className="h-3 w-3" />
-                                      </Button>
-                                    </div>
+                                    {editingTrackingId === shipment.id ? (
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          value={editingTrackingValue}
+                                          onChange={(e) => setEditingTrackingValue(e.target.value)}
+                                          className="h-8 font-mono text-sm w-48"
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') saveTrackingNumber(shipment.id);
+                                            if (e.key === 'Escape') cancelEditingTracking();
+                                          }}
+                                          autoFocus
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => saveTrackingNumber(shipment.id)}
+                                          disabled={updateTrackingMutation.isPending}
+                                        >
+                                          <Check className="h-4 w-4 text-green-600" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={cancelEditingTracking}
+                                        >
+                                          <X className="h-4 w-4 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
+                                          {shipment.master_tracking_number}
+                                        </code>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => startEditingTracking(shipment.id, shipment.master_tracking_number)}
+                                          title="Edit tracking number"
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => copyTracking(shipment.master_tracking_number)}
+                                          title="Copy tracking number"
+                                        >
+                                          <Copy className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
                                   <div>
                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
@@ -604,18 +686,57 @@ export default function OEMShipmentsPage() {
                                   {format(new Date(item.shippedDate), 'MMM dd, yyyy')}
                                 </td>
                                 <td className="p-3">
-                                  <div className="flex items-center gap-2">
-                                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
-                                      {item.trackingNumber}
-                                    </code>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => copyTracking(item.trackingNumber)}
-                                    >
-                                      <Copy className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                  {editingTrackingId === item.shipmentId ? (
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        value={editingTrackingValue}
+                                        onChange={(e) => setEditingTrackingValue(e.target.value)}
+                                        className="h-7 font-mono text-xs w-36"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveTrackingNumber(item.shipmentId);
+                                          if (e.key === 'Escape') cancelEditingTracking();
+                                        }}
+                                        autoFocus
+                                      />
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => saveTrackingNumber(item.shipmentId)}
+                                        disabled={updateTrackingMutation.isPending}
+                                      >
+                                        <Check className="h-3 w-3 text-green-600" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={cancelEditingTracking}
+                                      >
+                                        <X className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                                        {item.trackingNumber}
+                                      </code>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => startEditingTracking(item.shipmentId, item.trackingNumber)}
+                                        title="Edit tracking number"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => copyTracking(item.trackingNumber)}
+                                        title="Copy tracking number"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="p-3 text-center">
                                   <div className="flex items-center gap-1 justify-center">

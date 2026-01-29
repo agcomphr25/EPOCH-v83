@@ -1,0 +1,131 @@
+Objective: Fix Sales Order PDF to display the correct Ship-To address when a CSR overrides the customer’s default shipping address for a specific order.
+
+Problem Summary:
+
+Each customer has a default ship-to address saved on their profile (used frequently and intentionally preserved).
+
+For some orders, CSRs override the ship-to address at the order level.
+
+Shipping labels are generated correctly using the overridden address.
+
+Sales Order PDF is incorrect — it pulls the customer’s default address instead of the order-specific ship-to address.
+
+🔍 REQUIRED FORENSIC ANALYSIS
+
+Identify all Ship-To address sources
+
+Customer profile address fields
+
+Order-level override fields (if present)
+
+Any derived or cached address objects
+
+Shipping label generation inputs
+
+Sales order PDF generation inputs
+
+Trace the Sales Order PDF generation flow end-to-end
+
+Frontend trigger → backend endpoint → service → data query → PDF renderer
+
+Explicitly identify which address fields are used and why
+
+Trace the Shipping Label generation flow
+
+Confirm which address source is being used (this is the correct behavior reference)
+
+Compare the two paths
+
+Identify exactly where the divergence occurs
+
+Determine whether the PDF is:
+
+Querying customer table directly
+
+Ignoring order-level overrides
+
+Using stale or pre-hydrated data
+
+🎯 REQUIRED FIX (DO NOT SHORTCUT)
+
+Implement clear address precedence rules:
+
+Order-level Ship-To (highest priority)
+
+If an order-specific ship-to address exists, the Sales Order PDF MUST use it
+
+Customer default Ship-To (fallback)
+
+Used only when no override exists on the order
+
+Never mutate customer profile data
+
+Order overrides must not overwrite customer defaults
+
+🧱 DATA MODEL REQUIREMENTS
+
+Confirm whether the order already stores:
+
+ship_to_name
+
+ship_to_address1
+
+ship_to_address2
+
+ship_to_city
+
+ship_to_state
+
+ship_to_zip
+
+ship_to_country
+
+If not, add explicit order-scoped ship_to fields
+
+Ensure they are:
+
+Persisted at order creation / edit
+
+Immutable once the order is fulfilled (audit safety)
+
+🧾 PDF RENDERING REQUIREMENTS
+
+Update the Sales Order PDF generator to:
+
+Resolve a single resolvedShipToAddress object
+
+Log which source was used (order_override vs customer_default)
+
+Render ONLY from that resolved object
+
+Add a small comment or assertion:
+
+“Sales Order PDFs must never pull ship-to data directly from customer profiles without checking order overrides.”
+
+🧪 TEST CASES TO IMPLEMENT
+
+Customer with default address → no override → PDF correct
+
+Customer with default address → order override → PDF shows override
+
+Shipping label and Sales Order PDF match exactly
+
+Re-ordering same customer later still defaults to customer profile
+
+🧠 BONUS (IF CLEANLY POSSIBLE)
+
+Add an explicit label on the PDF:
+
+“Ship To (Order-Specific)” when override is used
+
+Add audit logging when a ship-to override is applied or removed
+
+Deliverables Required:
+
+Summary of root cause
+
+Exact file paths and functions modified
+
+Schema changes (if any)
+
+Confirmation that PDFs and shipping labels now use the same resolved ship-to source

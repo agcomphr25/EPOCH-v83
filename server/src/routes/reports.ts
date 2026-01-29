@@ -753,4 +753,104 @@ router.get('/po-production-orders', async (req, res) => {
   }
 });
 
+// Due Date Capacity Report - Shows FINALIZED and IN_PROGRESS orders grouped by week
+router.get('/due-date-capacity', async (req, res) => {
+  try {
+    const pool = db.$client;
+    
+    // Query orders with FINALIZED or IN_PROGRESS status, joined with customer info
+    const ordersQuery = `
+      SELECT 
+        o.id,
+        o.order_id as "orderId",
+        o.due_date as "dueDate",
+        o.customer_id as "customerId",
+        o.current_department as "currentDepartment",
+        o.status,
+        o.order_source as "orderSource",
+        COALESCE(c.company_name, c.first_name || ' ' || c.last_name, 'Unknown Customer') as "customerName"
+      FROM all_orders o
+      LEFT JOIN customers c ON CASE 
+        WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer 
+        ELSE NULL 
+      END = c.id
+      WHERE o.status IN ('FINALIZED', 'IN_PROGRESS')
+        AND o.is_cancelled = false
+        AND o.due_date IS NOT NULL
+      ORDER BY o.due_date ASC
+    `;
+    
+    const ordersResult = await pool.query(ordersQuery);
+    const orders = Array.isArray(ordersResult) ? ordersResult : ordersResult.rows || [];
+    
+    // Group orders by week (Monday start)
+    const weekGroups: Record<string, {
+      weekStart: string;
+      weekEnd: string;
+      weekLabel: string;
+      orders: any[];
+      regularOrderCount: number;
+      poOrderCount: number;
+    }> = {};
+    
+    orders.forEach((order: any) => {
+      if (!order.dueDate) return;
+      
+      const dueDate = new Date(order.dueDate);
+      // Get Monday of the week
+      const dayOfWeek = dueDate.getDay();
+      const diff = dueDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      const weekStart = new Date(dueDate);
+      weekStart.setDate(diff);
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!weekGroups[weekKey]) {
+        weekGroups[weekKey] = {
+          weekStart: weekStart.toISOString(),
+          weekEnd: weekEnd.toISOString(),
+          weekLabel: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+          orders: [],
+          regularOrderCount: 0,
+          poOrderCount: 0,
+        };
+      }
+      
+      weekGroups[weekKey].orders.push({
+        id: order.id,
+        orderId: order.orderId,
+        dueDate: order.dueDate,
+        customerName: order.customerName,
+        currentDepartment: order.currentDepartment,
+        status: order.status,
+        orderSource: order.orderSource,
+      });
+      
+      // Count regular vs PO orders
+      if (order.orderSource === 'PO_RELEASE') {
+        weekGroups[weekKey].poOrderCount++;
+      } else {
+        weekGroups[weekKey].regularOrderCount++;
+      }
+    });
+    
+    // Convert to array and sort by week
+    const weeks = Object.entries(weekGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, data]) => data);
+    
+    res.json({
+      weeks,
+      totalOrders: orders.length,
+    });
+  } catch (error) {
+    console.error('Error fetching due date capacity report:', error);
+    res.status(500).json({ error: 'Failed to fetch due date capacity report', details: (error as any).message });
+  }
+});
+
 export default router;

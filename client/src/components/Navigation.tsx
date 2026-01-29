@@ -902,6 +902,12 @@ export default function Navigation() {
       description: 'Advanced search with AND/OR logic for filtering orders',
     },
     {
+      path: '/due-date-capacity',
+      label: 'Due Date Capacity',
+      icon: Calendar,
+      description: 'View orders grouped by due date week to identify capacity issues',
+    },
+    {
       path: '/analytics',
       label: 'Analytics Dashboard',
       icon: BarChart,

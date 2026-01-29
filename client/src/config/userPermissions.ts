@@ -80,6 +80,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/order-department-transfer',
   '/order-entry',
   '/order-reports',
+  '/due-date-capacity',
   '/orders-list',
   '/orders-management',
   '/p2-control-center',
@@ -452,6 +453,7 @@ export function hasRouteAccess(
 const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
+  '/due-date-capacity': ['ADMIN', 'OWNER'],
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],

@@ -85,6 +85,7 @@ import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
+import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
@@ -370,6 +371,7 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
+                  <Route path="/due-date-capacity" component={DueDateCapacityReport} />
                   <Route path="/filtered-orders-report" component={FilteredOrdersReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/business-review" component={BusinessReviewPresentation} />

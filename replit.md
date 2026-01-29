@@ -47,7 +47,13 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Routing Document Management System**: AI-powered document management for P2 Control Center supporting work instructions, spec sheets, and traveler templates.
 - **Training Builder Module**: Self-contained training program management using the Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, and certification workflow.
 - **Epoch 4-Step Training System**: Comprehensive training management using the 4-step methodology, with AI-generated training plans and quizzes, sequential step completion, and automatic traveler authorization.
-- **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, and session lifecycle management.
+- **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, session lifecycle management, and atomic finalization. Features include:
+  - Configurable onboarding paths with associated intake forms and document templates
+  - Multi-step wizard UI (Overview, Intake Form, Documents, Camera Captures, User Account Setup, Review)
+  - Session lifecycle (in_progress, paused, completed) with pause/resume support
+  - Transactional finalization that atomically creates/updates employee records, activates user accounts, and attaches signed documents
+  - Preflight validation with detailed error reporting
+  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED)
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

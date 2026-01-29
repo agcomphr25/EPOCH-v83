@@ -13,10 +13,12 @@ const objectStorageService = new ObjectStorageService();
 const router = express.Router();
 
 const pathTypeSchema = z.enum(['FULL_TIME', 'CONTRACT']);
+const pathPurposeSchema = z.enum(['ONBOARDING', 'REHIRE']);
 
 const createPathSchema = z.object({
   name: z.string().min(1),
   pathType: pathTypeSchema.optional().default('FULL_TIME'),
+  pathPurpose: pathPurposeSchema.optional().default('ONBOARDING'),
   intakeFormId: z.string().uuid().nullable().optional(),
   documentFolderId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().optional().default(true),
@@ -25,6 +27,7 @@ const createPathSchema = z.object({
 const updatePathSchema = z.object({
   name: z.string().min(1).optional(),
   pathType: pathTypeSchema.optional(),
+  pathPurpose: pathPurposeSchema.optional(),
   intakeFormId: z.string().uuid().nullable().optional(),
   documentFolderId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().optional(),
@@ -56,9 +59,9 @@ const updateFormSchema = z.object({
 router.get('/paths', async (_req: Request, res: Response) => {
   try {
     const paths = await pool.query(`
-      SELECT id, name, path_type as "pathType", intake_form_id as "intakeFormId", 
-             document_folder_id as "documentFolderId", is_active as "isActive",
-             created_at as "createdAt", updated_at as "updatedAt"
+      SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
+             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
       FROM onboarding_paths 
       ORDER BY created_at DESC
     `);
@@ -75,9 +78,9 @@ router.get('/paths/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     
     const paths = await pool.query(`
-      SELECT id, name, path_type as "pathType", intake_form_id as "intakeFormId", 
-             document_folder_id as "documentFolderId", is_active as "isActive",
-             created_at as "createdAt", updated_at as "updatedAt"
+      SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
+             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
       FROM onboarding_paths 
       WHERE id = $1
     `, [id]);
@@ -105,14 +108,15 @@ router.post('/paths', async (req: Request, res: Response) => {
     }
     
     const paths = await pool.query(`
-      INSERT INTO onboarding_paths (name, path_type, intake_form_id, document_folder_id, is_active)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, name, path_type as "pathType", intake_form_id as "intakeFormId", 
-                document_folder_id as "documentFolderId", is_active as "isActive",
-                created_at as "createdAt", updated_at as "updatedAt"
+      INSERT INTO onboarding_paths (name, path_type, path_purpose, intake_form_id, document_folder_id, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, name, path_type as "pathType", path_purpose as "pathPurpose",
+                intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+                is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
     `, [
       parsed.data.name,
       parsed.data.pathType,
+      parsed.data.pathPurpose,
       parsed.data.intakeFormId || null,
       parsed.data.documentFolderId || null,
       parsed.data.isActive,
@@ -158,8 +162,9 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
     }
     
     const existingPaths = await pool.query(`
-      SELECT id, name, path_type as "pathType", intake_form_id as "intakeFormId", 
-             document_folder_id as "documentFolderId", is_active as "isActive"
+      SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
+             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             is_active as "isActive"
       FROM onboarding_paths 
       WHERE id = $1
     `, [id]);
@@ -182,6 +187,10 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
       updates.push(`path_type = $${paramIndex++}`);
       values.push(parsed.data.pathType);
     }
+    if (parsed.data.pathPurpose !== undefined) {
+      updates.push(`path_purpose = $${paramIndex++}`);
+      values.push(parsed.data.pathPurpose);
+    }
     if (parsed.data.intakeFormId !== undefined) {
       updates.push(`intake_form_id = $${paramIndex++}`);
       values.push(parsed.data.intakeFormId);
@@ -201,8 +210,9 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
       UPDATE onboarding_paths 
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, name, path_type as "pathType", intake_form_id as "intakeFormId", 
-                document_folder_id as "documentFolderId", is_active as "isActive",
+      RETURNING id, name, path_type as "pathType", path_purpose as "pathPurpose",
+                intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+                is_active as "isActive",
                 created_at as "createdAt", updated_at as "updatedAt"
     `, values);
     
@@ -535,7 +545,7 @@ router.get('/sessions', async (req: Request, res: Response) => {
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
         s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
         s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
-        p.name as "pathName", p.path_type as "pathType",
+        p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
         e.name as "employeeName"
       FROM onboarding_sessions s
       LEFT JOIN onboarding_paths p ON s.path_id = p.id
@@ -597,7 +607,7 @@ router.get('/sessions/:id', async (req: Request, res: Response) => {
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
         s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
         s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
-        p.name as "pathName", p.path_type as "pathType",
+        p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
         e.name as "employeeName"
       FROM onboarding_sessions s
       LEFT JOIN onboarding_paths p ON s.path_id = p.id
@@ -652,12 +662,13 @@ router.post('/sessions', async (req: Request, res: Response) => {
     }
     
     const adminId = (req as any).user?.id || 1;
+    const adminUsername = (req as any).user?.username || 'system';
     const { onboardingPathId, employeeId } = parsed.data;
     
     // Fetch the path to get intake form and document folder
     const paths = await pool.query(`
-      SELECT id, name, path_type as "pathType", intake_form_id as "intakeFormId",
-             document_folder_id as "documentFolderId"
+      SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
+             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId"
       FROM onboarding_paths
       WHERE id = $1 AND is_active = true
     `, [onboardingPathId]);
@@ -667,8 +678,34 @@ router.post('/sessions', async (req: Request, res: Response) => {
     }
     
     const path = paths[0];
+    const isRehire = path.pathPurpose === 'REHIRE';
     
-    // Resolve intake form structure (snapshot)
+    // Validate re-hire requirements
+    if (isRehire) {
+      if (!employeeId) {
+        return res.status(400).json({ 
+          error: 'Re-hire sessions require selecting an existing employee' 
+        });
+      }
+      
+      // Check employee exists and is inactive
+      const employees = await pool.query(`
+        SELECT id, name, is_active as "isActive"
+        FROM employees WHERE id = $1
+      `, [employeeId]);
+      
+      if (employees.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+      
+      if (employees[0].isActive) {
+        return res.status(400).json({ 
+          error: 'Cannot start re-hire for active employee. Only inactive employees can be re-hired.' 
+        });
+      }
+    }
+    
+    // Resolve intake form structure (snapshot) - optional for REHIRE paths
     let intakeDataSchema = null;
     if (path.intakeFormId) {
       const forms = await pool.query(`
@@ -744,32 +781,36 @@ router.post('/sessions', async (req: Request, res: Response) => {
       WHERE session_id = $1
     `, [newSession.id]);
     
-    // Audit log
+    // Audit log - use REHIRE_STARTED for re-hire sessions
+    const auditAction = isRehire ? 'REHIRE_STARTED' : 'ONBOARDING_STARTED';
     try {
       await auditService.logEvent({
         entityType: 'employee_onboarding',
         entityId: newSession.id,
-        action: 'ONBOARDING_STARTED',
+        action: auditAction,
         actor: {
           id: adminId,
-          username: (req as any).user?.username || 'system',
+          username: adminUsername,
         },
         meta: {
           pathId: onboardingPathId,
           pathName: path.name,
+          pathPurpose: path.pathPurpose,
           employeeId: employeeId || null,
           documentsCount: documents.length,
           capturesCount: captures.length,
+          isRehire,
         },
       });
     } catch (auditError) {
-      console.warn('Audit logging failed for ONBOARDING_STARTED:', auditError);
+      console.warn(`Audit logging failed for ${auditAction}:`, auditError);
     }
     
     res.status(201).json({
       ...newSession,
       pathName: path.name,
       pathType: path.pathType,
+      pathPurpose: path.pathPurpose,
       documents,
       captures,
     });

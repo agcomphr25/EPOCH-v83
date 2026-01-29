@@ -9,7 +9,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { qrCodes, qrCodeScanLog, users, employees, insertQrCodeSchema } from '../../schema';
+import { qrCodes, users, auditEvents, insertQrCodeSchema } from '../../schema';
 import { eq, and, desc, sql, isNull, or, gt, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, requireRole, sessionAwareAuth } from '../../middleware/auth';
@@ -212,33 +212,6 @@ resolverRouter.get('/:code', sessionAwareAuth, async (req: Request, res: Respons
   }
 });
 
-// Legacy helper to log scan events to qr_code_scan_log (kept for backward compatibility, will be deprecated)
-async function logScanEventLegacy(
-  qrCodeId: string,
-  publicCode: string,
-  scanResult: string,
-  resolvedUrl: string | null,
-  userId: number | null | undefined,
-  employeeId: number | null,
-  ipAddress: string | null,
-  userAgent: string | null
-) {
-  try {
-    await db.insert(qrCodeScanLog).values({
-      qrCodeId,
-      publicCode,
-      scanResult,
-      resolvedUrl,
-      scannedByUserId: userId || null,
-      scannedByEmployeeId: employeeId,
-      ipAddress,
-      userAgent,
-    });
-  } catch (error) {
-    console.error('[QR] Failed to log scan event:', error);
-  }
-}
-
 // ============================================================================
 // ADMIN CRUD ENDPOINTS - Protected by authentication and role
 // ============================================================================
@@ -349,14 +322,23 @@ adminRouter.get('/meta/stats', authenticateToken, requireRole('ADMIN', 'OWNER'),
       .from(qrCodes)
       .where(eq(qrCodes.isActive, true));
 
+    // Query audit_events for QR scan statistics
     const [scansResult] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(qrCodeScanLog);
+      .from(auditEvents)
+      .where(and(
+        eq(auditEvents.entityType, 'qr_code'),
+        eq(auditEvents.action, 'QR_SCANNED')
+      ));
 
     const [successfulScansResult] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(qrCodeScanLog)
-      .where(eq(qrCodeScanLog.scanResult, 'success'));
+      .from(auditEvents)
+      .where(and(
+        eq(auditEvents.entityType, 'qr_code'),
+        eq(auditEvents.action, 'QR_SCANNED'),
+        sql`meta->>'scanResult' = 'success'`
+      ));
 
     res.json({
       totalQRCodes: totalResult?.count || 0,
@@ -640,29 +622,44 @@ adminRouter.get('/:id/scan-history', authenticateToken, requireRole('ADMIN', 'OW
     const limitNum = Math.min(parseInt(limit as string, 10), 100);
     const offset = (pageNum - 1) * limitNum;
 
+    // Query audit_events for QR scan history
     const scanHistory = await db
       .select({
-        scanLog: qrCodeScanLog,
+        auditEvent: auditEvents,
         scannedByUser: {
           id: users.id,
           username: users.username,
         },
       })
-      .from(qrCodeScanLog)
-      .leftJoin(users, eq(qrCodeScanLog.scannedByUserId, users.id))
-      .where(eq(qrCodeScanLog.qrCodeId, id))
-      .orderBy(desc(qrCodeScanLog.scannedAt))
+      .from(auditEvents)
+      .leftJoin(users, eq(auditEvents.actorId, users.id))
+      .where(and(
+        eq(auditEvents.entityType, 'qr_code'),
+        eq(auditEvents.entityId, id),
+        eq(auditEvents.action, 'QR_SCANNED')
+      ))
+      .orderBy(desc(auditEvents.createdAt))
       .limit(limitNum)
       .offset(offset);
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(qrCodeScanLog)
-      .where(eq(qrCodeScanLog.qrCodeId, id));
+      .from(auditEvents)
+      .where(and(
+        eq(auditEvents.entityType, 'qr_code'),
+        eq(auditEvents.entityId, id),
+        eq(auditEvents.action, 'QR_SCANNED')
+      ));
 
     res.json({
       data: scanHistory.map(r => ({
-        ...r.scanLog,
+        id: r.auditEvent.id,
+        qrCodeId: r.auditEvent.entityId,
+        scanResult: (r.auditEvent.meta as any)?.scanResult || 'unknown',
+        resolvedUrl: (r.auditEvent.meta as any)?.resolvedRoute || null,
+        ipAddress: r.auditEvent.ipAddress,
+        userAgent: r.auditEvent.userAgent,
+        scannedAt: r.auditEvent.createdAt,
         scannedByUser: r.scannedByUser,
       })),
       pagination: {

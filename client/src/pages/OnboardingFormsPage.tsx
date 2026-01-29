@@ -43,18 +43,19 @@ interface OnboardingForm {
 
 const EMPLOYEE_FIELD_OPTIONS = [
   { value: '', label: 'None' },
-  { value: 'firstName', label: 'First Name' },
-  { value: 'lastName', label: 'Last Name' },
+  { value: 'name', label: 'Full Name' },
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
   { value: 'address', label: 'Address' },
-  { value: 'city', label: 'City' },
-  { value: 'state', label: 'State' },
-  { value: 'zipCode', label: 'Zip Code' },
   { value: 'dateOfBirth', label: 'Date of Birth' },
-  { value: 'startDate', label: 'Start Date' },
+  { value: 'hireDate', label: 'Hire Date' },
   { value: 'emergencyContact', label: 'Emergency Contact' },
   { value: 'emergencyPhone', label: 'Emergency Phone' },
+  { value: 'gateCardNumber', label: 'Gate Card #' },
+  { value: 'vehicleType', label: 'Vehicle Type' },
+  { value: 'jobTitle', label: 'Job Title' },
+  { value: 'department', label: 'Department' },
+  { value: 'employmentType', label: 'Employment Type' },
 ];
 
 export default function OnboardingFormsPage() {

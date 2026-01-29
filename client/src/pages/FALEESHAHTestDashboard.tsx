@@ -185,6 +185,20 @@ export default function FALEESHAHTestDashboard() {
           </Card>
         </Link>
 
+        <Link href="/oem-shipments">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-cyan-200">
+            <CardContent className="p-4 text-center">
+              <Ship className="w-8 h-8 text-cyan-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                OEM Shipments
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Manage OEM shipments
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>

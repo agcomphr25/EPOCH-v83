@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { pool } from '../../db';
 import { z } from 'zod';
 import { auditService } from '../services/auditService';
+import { generateOnboardingBundle } from '../services/onboardingPdfBundleService';
 
 const router = express.Router();
 
@@ -1439,5 +1440,91 @@ function mapIntakeToEmployee(intakeData: Record<string, any>, schema: any[]): Re
   
   return employeeData;
 }
+
+// POST /sessions/:id/bundle - Generate or retrieve onboarding PDF bundle
+router.post('/sessions/:id/bundle', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = (req as any).user?.id || 1;
+  const adminUsername = (req as any).user?.username || 'system';
+  
+  try {
+    // Generate or retrieve the bundle
+    const result = await generateOnboardingBundle(id);
+    
+    if (!result.success) {
+      return res.status(400).json({ 
+        error: result.error || 'Failed to generate bundle' 
+      });
+    }
+    
+    // Log audit event
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_GENERATED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { 
+          mediaItemId: result.mediaItemId,
+          downloadUrl: result.downloadUrl,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for ONBOARDING_BUNDLE_GENERATED:', auditError);
+    }
+    
+    res.json({
+      success: true,
+      mediaItemId: result.mediaItemId,
+      downloadUrl: result.downloadUrl,
+    });
+  } catch (error) {
+    console.error('Error generating onboarding bundle:', error);
+    res.status(500).json({ error: 'Failed to generate onboarding bundle' });
+  }
+});
+
+// GET /sessions/:id/bundle - Get bundle status and download URL
+router.get('/sessions/:id/bundle', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  try {
+    const sessions = await pool.query(`
+      SELECT 
+        s.id, s.status, s.bundle_media_item_id as "bundleMediaItemId",
+        m.storage_path as "storagePath", m.filename
+      FROM onboarding_sessions s
+      LEFT JOIN media_library m ON s.bundle_media_item_id = m.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    if (!session.bundleMediaItemId) {
+      return res.json({
+        exists: false,
+        canGenerate: session.status === 'completed',
+      });
+    }
+    
+    const downloadUrl = session.storagePath?.startsWith('/objects/') 
+      ? session.storagePath 
+      : `/api/media/download/${session.bundleMediaItemId}`;
+    
+    res.json({
+      exists: true,
+      mediaItemId: session.bundleMediaItemId,
+      filename: session.filename,
+      downloadUrl,
+    });
+  } catch (error) {
+    console.error('Error fetching bundle status:', error);
+    res.status(500).json({ error: 'Failed to fetch bundle status' });
+  }
+});
 
 export default router;

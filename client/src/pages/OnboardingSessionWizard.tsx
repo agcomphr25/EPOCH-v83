@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   Circle,
   Lock,
+  Download,
 } from 'lucide-react';
 
 interface OnboardingSession {
@@ -876,6 +877,53 @@ function ReviewStep({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  // Check bundle status first
+  const { data: bundleStatus } = useQuery<{
+    exists: boolean;
+    canGenerate: boolean;
+    downloadUrl?: string;
+    mediaItemId?: string;
+  }>({
+    queryKey: ['/api/onboarding/sessions', session.id, 'bundle'],
+    queryFn: async () => {
+      const response = await fetch(`/api/onboarding/sessions/${session.id}/bundle`);
+      return response.json();
+    },
+    enabled: session.status === 'completed',
+  });
+
+  const generateBundleMutation = useMutation({
+    mutationFn: async () => {
+      // If bundle already exists, just return download URL
+      if (bundleStatus?.exists && bundleStatus?.downloadUrl) {
+        return { success: true, downloadUrl: bundleStatus.downloadUrl };
+      }
+      return apiRequest(`/api/onboarding/sessions/${session.id}/bundle`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: { success: boolean; downloadUrl: string }) => {
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank');
+        toast({
+          title: bundleStatus?.exists ? 'Downloading Bundle' : 'Bundle Generated',
+          description: bundleStatus?.exists 
+            ? 'Your onboarding bundle is downloading.' 
+            : 'The onboarding PDF bundle has been generated and is downloading.',
+        });
+        // Invalidate bundle status query
+        queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', session.id, 'bundle'] });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        variant: 'destructive',
+        title: 'Bundle Generation Failed',
+        description: error.message || 'Failed to generate onboarding bundle',
+      });
+    },
+  });
+
   const intakeComplete = session.intakeDataSchema?.length === 0 || 
     Object.keys(intakeFormData).length > 0;
   const docsComplete = session.documents.length === 0 || 
@@ -1036,14 +1084,35 @@ function ReviewStep({
 
       {isReadOnly && session.status === 'completed' && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <div>
-              <p className="font-medium text-green-900">Onboarding Completed</p>
-              <p className="text-sm text-green-700">
-                This onboarding session has been finalized. Employee record and user account have been created.
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="font-medium text-green-900">Onboarding Completed</p>
+                <p className="text-sm text-green-700">
+                  This onboarding session has been finalized. Employee record and user account have been created.
+                </p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateBundleMutation.mutate()}
+              disabled={generateBundleMutation.isPending}
+              className="gap-2"
+            >
+              {generateBundleMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {bundleStatus?.exists ? 'Downloading...' : 'Generating...'}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  {bundleStatus?.exists ? 'Download Bundle' : 'Generate Bundle'}
+                </>
+              )}
+            </Button>
           </div>
         </div>
       )}

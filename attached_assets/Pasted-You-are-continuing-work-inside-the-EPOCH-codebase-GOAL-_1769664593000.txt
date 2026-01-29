@@ -1,0 +1,132 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 2A of the Employee Onboarding System:
+Generate a canonical, immutable onboarding PDF bundle
+from a COMPLETED onboarding session.
+
+---
+
+CORE PRINCIPLES:
+• Bundle generation is READ-ONLY
+• Signed PDFs are NEVER altered
+• Bundle represents a point-in-time record
+• Bundle is reproducible only by reference, not re-signing
+
+---
+
+SCOPE (STRICT):
+
+1) BUNDLE GENERATION SERVICE
+
+Create:
+server/src/services/onboardingPdfBundleService.ts
+
+Function:
+generateOnboardingBundle(sessionId)
+
+Behavior:
+• Session must exist
+• Session must be status = 'completed'
+• No database writes to onboarding or employees
+
+---
+
+2) BUNDLE CONTENT (IN THIS ORDER)
+
+Page 1 — Cover Page
+• Employee legal name
+• Employment type
+• Job title
+• Hire date
+• Onboarding completed timestamp
+• Admin who finalized
+• EPOCH logo / branding
+
+Page 2 — Intake Summary
+• Read-only rendering of intakeData
+• Field labels + values
+• Exclude internal-only fields
+
+Page 3+ — Signed Documents
+• Append each signedPdfPath
+• Preserve original order
+• No modification of signatures
+
+Next — Captured Images
+• Driver license photo(s)
+• Employee photo(s)
+• Rendered cleanly on individual pages
+
+Final Page — Audit Summary
+• Document names
+• Signed timestamps
+• IP addresses
+• Finalization timestamp
+
+---
+
+3) PDF IMPLEMENTATION DETAILS
+
+• Use pdf-lib (already used elsewhere if available)
+• DO NOT rasterize signed PDFs
+• Append PDFs using page copying
+• Images scaled proportionally
+• Ensure output is printable and archival-quality
+
+---
+
+4) STORAGE
+
+Store generated bundle:
+• As a Media Library item
+• Category: onboarding_bundle
+• Linked to employeeId
+• Immutable (no overwrite)
+
+Store reference:
+• onboarding_sessions.bundleMediaItemId
+
+---
+
+5) API ENDPOINT
+
+Implement:
+POST /api/onboarding/sessions/:id/bundle
+
+Behavior:
+• Generates bundle if not already generated
+• If already generated → return existing bundle
+• Returns download URL
+
+Audit:
+• ONBOARDING_BUNDLE_GENERATED
+
+---
+
+6) UI INTEGRATION
+
+On:
+• Completed onboarding session view
+• Employee Detail → Documents tab
+
+Add:
+• "Download Onboarding Packet" button
+
+---
+
+IMPORTANT RULES:
+• Do NOT email yet
+• Do NOT regenerate signed PDFs
+• Do NOT allow regeneration if bundle exists
+• Fail clearly if session is not completed
+• No schema changes unless required
+
+---
+
+DELIVERABLE:
+• Bundle generation service
+• API endpoint
+• Media Library integration
+• UI download button
+• Summary of bundle contents

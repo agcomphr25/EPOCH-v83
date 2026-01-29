@@ -33,7 +33,16 @@ import {
   Circle,
   Lock,
   Download,
+  Mail,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface OnboardingSession {
   id: string;
@@ -924,6 +933,63 @@ function ReviewStep({
     },
   });
 
+  // Email modal state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState('');
+  const [ccAdmin, setCcAdmin] = useState(false);
+  const [ccHR, setCcHR] = useState(false);
+
+  // Fetch email info
+  const { data: emailInfo } = useQuery<{
+    canEmail: boolean;
+    employeeName: string;
+    defaultEmail: string;
+    hasEmail: boolean;
+    bundleExists: boolean;
+    blockedReason: string | null;
+  }>({
+    queryKey: ['/api/onboarding/sessions', session.id, 'email-info'],
+    queryFn: async () => {
+      const response = await fetch(`/api/onboarding/sessions/${session.id}/email-info`);
+      return response.json();
+    },
+    enabled: session.status === 'completed',
+  });
+
+  // Update recipient when email info loads
+  useEffect(() => {
+    if (emailInfo?.defaultEmail) {
+      setEmailRecipient(emailInfo.defaultEmail);
+    }
+  }, [emailInfo?.defaultEmail]);
+
+  const emailBundleMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/onboarding/sessions/${session.id}/email-bundle`, {
+        method: 'POST',
+        body: JSON.stringify({
+          recipientEmail: emailRecipient,
+          ccAdmin,
+          ccHR,
+        }),
+      });
+    },
+    onSuccess: (data: { success: boolean; recipientEmail: string }) => {
+      setShowEmailModal(false);
+      toast({
+        title: 'Email Sent',
+        description: `Onboarding bundle has been emailed to ${data.recipientEmail}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: 'destructive',
+        title: 'Email Failed',
+        description: error.message || 'Failed to send email',
+      });
+    },
+  });
+
   const intakeComplete = session.intakeDataSchema?.length === 0 || 
     Object.keys(intakeFormData).length > 0;
   const docsComplete = session.documents.length === 0 || 
@@ -1094,28 +1160,125 @@ function ReviewStep({
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => generateBundleMutation.mutate()}
-              disabled={generateBundleMutation.isPending}
-              className="gap-2"
-            >
-              {generateBundleMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {bundleStatus?.exists ? 'Downloading...' : 'Generating...'}
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  {bundleStatus?.exists ? 'Download Bundle' : 'Generate Bundle'}
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => generateBundleMutation.mutate()}
+                disabled={generateBundleMutation.isPending}
+                className="gap-2"
+              >
+                {generateBundleMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {bundleStatus?.exists ? 'Downloading...' : 'Generating...'}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    {bundleStatus?.exists ? 'Download Bundle' : 'Generate Bundle'}
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEmailModal(true)}
+                disabled={!bundleStatus?.exists}
+                className="gap-2"
+                title={!bundleStatus?.exists ? 'Generate bundle first' : 'Email bundle to employee'}
+              >
+                <Mail className="h-4 w-4" />
+                Email Bundle
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Email Bundle Modal */}
+      <Dialog open={showEmailModal} onOpenChange={setShowEmailModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email Onboarding Packet</DialogTitle>
+            <DialogDescription>
+              Send the completed onboarding bundle to the employee via email.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="emailRecipient">Recipient Email</Label>
+              <Input
+                id="emailRecipient"
+                type="email"
+                value={emailRecipient}
+                onChange={(e) => setEmailRecipient(e.target.value)}
+                placeholder="employee@example.com"
+              />
+              {!emailInfo?.hasEmail && (
+                <p className="text-sm text-amber-600">
+                  No email on file. Please enter recipient email.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <Label>CC Recipients (Optional)</Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="ccAdmin"
+                  checked={ccAdmin}
+                  onCheckedChange={(checked) => setCcAdmin(checked === true)}
+                />
+                <Label htmlFor="ccAdmin" className="text-sm font-normal">
+                  CC me (sending admin)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="ccHR"
+                  checked={ccHR}
+                  onCheckedChange={(checked) => setCcHR(checked === true)}
+                />
+                <Label htmlFor="ccHR" className="text-sm font-normal">
+                  CC HR Department
+                </Label>
+              </div>
+            </div>
+
+            {emailInfo?.blockedReason && (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <p className="text-sm text-amber-700">{emailInfo.blockedReason}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmailModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => emailBundleMutation.mutate()}
+              disabled={!emailRecipient || emailBundleMutation.isPending}
+              className="gap-2"
+            >
+              {emailBundleMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4" />
+                  Send Email
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

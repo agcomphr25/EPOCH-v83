@@ -3,6 +3,12 @@ import { pool } from '../../db';
 import { z } from 'zod';
 import { auditService } from '../services/auditService';
 import { generateOnboardingBundle } from '../services/onboardingPdfBundleService';
+import { sendEmailViaSendGrid } from '../../utils/sendgrid';
+import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const objectStorageService = new ObjectStorageService();
 
 const router = express.Router();
 
@@ -1524,6 +1530,333 @@ router.get('/sessions/:id/bundle', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching bundle status:', error);
     res.status(500).json({ error: 'Failed to fetch bundle status' });
+  }
+});
+
+// Email bundle request schema
+const emailBundleSchema = z.object({
+  recipientEmail: z.string().email().optional(), // Override email if needed
+  ccAdmin: z.boolean().optional().default(false),
+  ccHR: z.boolean().optional().default(false),
+});
+
+// POST /sessions/:id/email-bundle - Email the onboarding bundle to the employee
+router.post('/sessions/:id/email-bundle', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = (req as any).user?.id || 1;
+  const adminUsername = (req as any).user?.username || 'system';
+  const adminEmail = (req as any).user?.email;
+  
+  try {
+    // Parse request body
+    const body = emailBundleSchema.parse(req.body);
+    
+    // 1. PREFLIGHT VALIDATION
+    // Fetch session with all required data
+    const sessions = await pool.query(`
+      SELECT 
+        s.id, s.status, s.employee_id as "employeeId",
+        s.bundle_media_item_id as "bundleMediaItemId",
+        s.intake_data as "intakeData",
+        e.name as "employeeName", e.email as "employeeEmail",
+        e."firstName" as "firstName", e."lastName" as "lastName",
+        m.storage_path as "storagePath", m.filename, m.file_size as "fileSize"
+      FROM onboarding_sessions s
+      LEFT JOIN employees e ON s.employee_id = e.id
+      LEFT JOIN media_library m ON s.bundle_media_item_id = m.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'Session not found' },
+      });
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // Check session is completed
+    if (session.status !== 'completed') {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: `Session status is '${session.status}', must be 'completed'` },
+      });
+      return res.status(400).json({ 
+        error: 'Cannot email bundle: session is not completed',
+        status: session.status 
+      });
+    }
+    
+    // Check bundle exists
+    if (!session.bundleMediaItemId) {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'Bundle not generated yet' },
+      });
+      return res.status(400).json({ 
+        error: 'Cannot email bundle: bundle has not been generated. Please generate the bundle first.' 
+      });
+    }
+    
+    // Check employee exists
+    if (!session.employeeId) {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'No employee record linked' },
+      });
+      return res.status(400).json({ 
+        error: 'Cannot email bundle: no employee record is linked to this session' 
+      });
+    }
+    
+    // Determine recipient email (override, employee profile, or intake data)
+    let recipientEmail = body.recipientEmail;
+    if (!recipientEmail) {
+      recipientEmail = session.employeeEmail;
+    }
+    if (!recipientEmail && session.intakeData) {
+      const intake = typeof session.intakeData === 'string' 
+        ? JSON.parse(session.intakeData) 
+        : session.intakeData;
+      recipientEmail = intake.email || intake.emailAddress || intake.personalEmail;
+    }
+    
+    if (!recipientEmail) {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'No email address found for employee' },
+      });
+      return res.status(400).json({ 
+        error: 'Cannot email bundle: no email address found for the employee. Please provide a recipient email.' 
+      });
+    }
+    
+    // Check file size (SendGrid limit is ~30MB but we'll be conservative at 20MB)
+    const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
+    if (session.fileSize && session.fileSize > MAX_ATTACHMENT_SIZE) {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_BLOCKED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'Bundle file size exceeds email limit', fileSize: session.fileSize },
+      });
+      return res.status(400).json({ 
+        error: 'Cannot email bundle: file size exceeds email attachment limit (20MB)' 
+      });
+    }
+    
+    // 2. FETCH BUNDLE PDF
+    let pdfBuffer: Buffer;
+    try {
+      if (session.storagePath?.startsWith('/objects/')) {
+        // Download from object storage
+        const objectFile = await objectStorageService.getObjectEntityFile(session.storagePath);
+        const [buffer] = await objectFile.download();
+        pdfBuffer = buffer;
+      } else if (session.storagePath?.startsWith('uploads/')) {
+        // Read from local filesystem
+        const localPath = path.join(process.cwd(), session.storagePath);
+        pdfBuffer = fs.readFileSync(localPath);
+      } else {
+        throw new Error('Unknown storage path format');
+      }
+    } catch (fetchError) {
+      console.error('Error fetching bundle file:', fetchError);
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_FAILED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { reason: 'Failed to fetch bundle file', error: (fetchError as Error).message },
+      });
+      return res.status(500).json({ 
+        error: 'Failed to retrieve bundle file for email attachment' 
+      });
+    }
+    
+    // 3. BUILD EMAIL
+    // Construct filename: EPOCH_Onboarding_<LastName>_<FirstName>_<YYYY-MM-DD>.pdf
+    const lastName = session.lastName || session.employeeName?.split(' ').pop() || 'Employee';
+    const firstName = session.firstName || session.employeeName?.split(' ')[0] || '';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const attachmentFilename = `EPOCH_Onboarding_${lastName}_${firstName}_${dateStr}.pdf`.replace(/\s+/g, '_');
+    
+    // Build CC list
+    const ccList: string[] = [];
+    if (body.ccAdmin && adminEmail) {
+      ccList.push(adminEmail);
+    }
+    if (body.ccHR) {
+      // Use configured HR email or default
+      const hrEmail = process.env.HR_EMAIL || 'hr@agcomposites.com';
+      ccList.push(hrEmail);
+    }
+    
+    const emailSubject = 'Your EPOCH Employment Onboarding Documents';
+    const emailBody = `
+Dear ${firstName || session.employeeName || 'Team Member'},
+
+Thank you for completing your onboarding process with A G Composites!
+
+Attached to this email is your official Onboarding Completion Packet. This document contains:
+• Your completed intake information
+• All signed documents from your onboarding
+• Any captured photos or images
+• A summary of your onboarding steps
+
+Please review the attached document and keep it for your records. If you notice any errors or need to make corrections, please contact HR or your supervisor immediately.
+
+Welcome to the team!
+
+Best regards,
+A G Composites HR Team
+
+---
+This is an automated message from the EPOCH Employee Management System.
+If you have questions, please contact hr@agcomposites.com.
+    `.trim();
+    
+    // 4. SEND EMAIL
+    try {
+      const emailResult = await sendEmailViaSendGrid({
+        to: recipientEmail,
+        subject: emailSubject,
+        text: emailBody,
+        html: emailBody.replace(/\n/g, '<br>'),
+        cc: ccList.length > 0 ? ccList : undefined,
+        attachments: [{
+          content: pdfBuffer.toString('base64'),
+          filename: attachmentFilename,
+          type: 'application/pdf',
+          disposition: 'attachment',
+        }],
+      });
+      
+      if (!emailResult.success) {
+        throw new Error(emailResult.error || 'Email sending failed');
+      }
+      
+      // 5. LOG SUCCESS AUDIT
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAILED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { 
+          recipientEmail,
+          employeeId: session.employeeId,
+          ccList,
+          messageId: emailResult.messageId,
+          attachmentFilename,
+        },
+      });
+      
+      res.json({
+        success: true,
+        message: 'Onboarding bundle emailed successfully',
+        recipientEmail,
+        ccList,
+        messageId: emailResult.messageId,
+      });
+      
+    } catch (sendError) {
+      console.error('Error sending onboarding bundle email:', sendError);
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_BUNDLE_EMAIL_FAILED',
+        actor: { id: adminId, username: adminUsername },
+        meta: { 
+          reason: 'Email sending failed', 
+          error: (sendError as Error).message,
+          recipientEmail,
+        },
+      });
+      return res.status(500).json({ 
+        error: 'Failed to send email',
+        details: (sendError as Error).message 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in email-bundle endpoint:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid request', details: error.errors });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /sessions/:id/email-info - Get info needed for email modal
+router.get('/sessions/:id/email-info', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  try {
+    const sessions = await pool.query(`
+      SELECT 
+        s.id, s.status, s.employee_id as "employeeId",
+        s.bundle_media_item_id as "bundleMediaItemId",
+        s.intake_data as "intakeData",
+        e.name as "employeeName", e.email as "employeeEmail",
+        e."firstName" as "firstName", e."lastName" as "lastName",
+        m.file_size as "fileSize"
+      FROM onboarding_sessions s
+      LEFT JOIN employees e ON s.employee_id = e.id
+      LEFT JOIN media_library m ON s.bundle_media_item_id = m.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // Determine default email
+    let defaultEmail = session.employeeEmail;
+    if (!defaultEmail && session.intakeData) {
+      const intake = typeof session.intakeData === 'string' 
+        ? JSON.parse(session.intakeData) 
+        : session.intakeData;
+      defaultEmail = intake.email || intake.emailAddress || intake.personalEmail;
+    }
+    
+    res.json({
+      canEmail: session.status === 'completed' && !!session.bundleMediaItemId,
+      employeeName: session.employeeName,
+      defaultEmail,
+      hasEmail: !!defaultEmail,
+      bundleExists: !!session.bundleMediaItemId,
+      fileSize: session.fileSize,
+      blockedReason: !session.bundleMediaItemId 
+        ? 'Bundle not generated' 
+        : session.status !== 'completed' 
+          ? 'Session not completed' 
+          : !defaultEmail 
+            ? 'No email address on file' 
+            : null,
+    });
+  } catch (error) {
+    console.error('Error fetching email info:', error);
+    res.status(500).json({ error: 'Failed to fetch email info' });
   }
 });
 

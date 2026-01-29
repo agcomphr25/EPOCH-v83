@@ -24,6 +24,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/health-checks',
   '/admin/monitored-links',
   '/admin/communication-logs',
+  '/admin/qr-codes',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -493,6 +494,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/sign-pdf': ['ADMIN', 'OWNER'],
   '/signed-documents': ['ADMIN', 'OWNER'],
   '/reference-docs': ['ADMIN', 'OWNER'],
+  '/admin/qr-codes': ['ADMIN', 'OWNER'],
 };
 
 /**

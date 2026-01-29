@@ -66,6 +66,7 @@ import {
   Layers,
   Ticket,
   Database,
+  QrCode,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -330,6 +331,12 @@ export default function Navigation() {
       label: 'Watch Rules',
       icon: Eye,
       description: 'Configure rules to monitor specific customer orders through departments',
+    },
+    {
+      path: '/admin/qr-codes',
+      label: 'QR Code Management',
+      icon: QrCode,
+      description: 'Create and manage QR codes for orders, equipment, and other items',
     },
 
     // Documentation button disabled per user request - was causing problems

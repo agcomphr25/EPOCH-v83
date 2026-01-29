@@ -1195,7 +1195,11 @@ router.put('/customers/:id', async (req: Request, res: Response) => {
     
     const updatedCustomer = await storage.updateP2Customer(customerId, updates);
     
-    console.log('✅ Customer updated, rfqSequences after update:', updatedCustomer.rfqSequences);
+    if (!updatedCustomer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    console.log('✅ Customer updated, rfqSequences after update:', updatedCustomer?.rfqSequences);
     
     res.json(updatedCustomer);
   } catch (error) {

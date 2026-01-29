@@ -49,11 +49,13 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Epoch 4-Step Training System**: Comprehensive training management using the 4-step methodology, with AI-generated training plans and quizzes, sequential step completion, and automatic traveler authorization.
 - **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, session lifecycle management, and atomic finalization. Features include:
   - Configurable onboarding paths with associated intake forms and document templates
+  - Path purposes: ONBOARDING (new employees) and REHIRE (bringing back inactive employees)
   - Multi-step wizard UI (Overview, Intake Form, Documents, Camera Captures, User Account Setup, Review)
   - Session lifecycle (in_progress, paused, completed) with pause/resume support
   - Transactional finalization that atomically creates/updates employee records, activates user accounts, and attaches signed documents
+  - Re-hire workflows: Select inactive employees, reactivate employee records, auto-reactivate linked user accounts
   - Preflight validation with detailed error reporting
-  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED, ONBOARDING_BUNDLE_GENERATED, ONBOARDING_BUNDLE_EMAILED, ONBOARDING_BUNDLE_EMAIL_BLOCKED, ONBOARDING_BUNDLE_EMAIL_FAILED)
+  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED, ONBOARDING_BUNDLE_GENERATED, ONBOARDING_BUNDLE_EMAILED, ONBOARDING_BUNDLE_EMAIL_BLOCKED, ONBOARDING_BUNDLE_EMAIL_FAILED, REHIRE_STARTED, EMPLOYEE_REHIRED, USER_REACTIVATED, REHIRE_COMPLETED, REHIRE_FINALIZATION_FAILED)
   - PDF bundle generation: Combines cover page, intake summary, signed documents, captured images, and audit summary into a single downloadable PDF stored in object storage with media library reference
   - Email distribution: Controlled email delivery of PDF bundles to employees with CC options (admin, HR), preflight validation, and direct attachment (no public URLs)
 

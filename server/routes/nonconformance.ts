@@ -130,10 +130,12 @@ router.get('/ready-to-ship', async (req, res) => {
           if (originalOrder && originalOrder.customerId) {
             customerId = originalOrder.customerId;
             // Get customer addresses from the customerAddresses table
-            const custAddressList = await db
+            // Note: customerAddresses.customerId is integer, originalOrder.customerId is text
+            const customerIdInt = parseInt(originalOrder.customerId, 10);
+            const custAddressList = !isNaN(customerIdInt) ? await db
               .select()
               .from(customerAddresses)
-              .where(eq(customerAddresses.customerId, originalOrder.customerId));
+              .where(eq(customerAddresses.customerId, customerIdInt)) : [];
             
             if (originalOrder.hasAltShipTo && originalOrder.altShipToAddress) {
               const altAddr = originalOrder.altShipToAddress as any;

@@ -1046,7 +1046,7 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
         s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
         s.started_at as "startedAt", s.account_config as "accountConfig",
-        p.name as "pathName", p.path_type as "pathType"
+        p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose"
       FROM onboarding_sessions s
       LEFT JOIN onboarding_paths p ON s.path_id = p.id
       WHERE s.id = $1
@@ -1057,13 +1057,19 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     }
     
     const session = sessions[0];
+    const isRehire = session.pathPurpose === 'REHIRE';
     
     // Check 1: Session status must be in_progress
     if (session.status !== 'in_progress') {
       validationErrors.push(`Session status is '${session.status}', must be 'in_progress' to finalize`);
     }
     
-    // Check 2: Intake form marked complete
+    // Check 1a: Re-hire sessions MUST have an existing employee linked
+    if (isRehire && !session.employeeId) {
+      validationErrors.push('Re-hire session requires an existing employee to be linked');
+    }
+    
+    // Check 2: Intake form marked complete (if intake schema exists)
     const intakeData = session.intakeData || {};
     const intakeSchema = session.intakeDataSchema || [];
     const requiredIntakeFields = intakeSchema.filter((f: any) => f.required);
@@ -1101,9 +1107,9 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       validationErrors.push(`${incompleteCaptures.length} required camera capture(s) not completed`);
     }
     
-    // Check 5: User account configuration exists
+    // Check 5: User account configuration exists (optional for REHIRE - may reuse existing account)
     const accountConfig = session.accountConfig || req.body.accountConfig;
-    if (!accountConfig || !accountConfig.username) {
+    if (!isRehire && (!accountConfig || !accountConfig.username)) {
       validationErrors.push('User account configuration is missing or incomplete');
     }
     
@@ -1140,12 +1146,18 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     await pool.query('BEGIN');
     
     try {
-      // A) CREATE OR UPDATE EMPLOYEE
+      // A) CREATE OR UPDATE EMPLOYEE (RE-HIRE always updates + reactivates)
       if (employeeId) {
         // UPDATE existing employee
         const updateFields: string[] = [];
         const updateValues: any[] = [];
         let paramIndex = 1;
+        
+        // For re-hire: ALWAYS reactivate the employee
+        if (isRehire) {
+          updateFields.push(`is_active = $${paramIndex++}`);
+          updateValues.push(true);
+        }
         
         if (employeeData.name) {
           updateFields.push(`name = $${paramIndex++}`);
@@ -1200,8 +1212,12 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         }
         
         auditEvents.push({
-          action: 'EMPLOYEE_UPDATED',
-          meta: { employeeId, updatedFields: Object.keys(employeeData) },
+          action: isRehire ? 'EMPLOYEE_REHIRED' : 'EMPLOYEE_UPDATED',
+          meta: { 
+            employeeId, 
+            updatedFields: Object.keys(employeeData),
+            reactivated: isRehire,
+          },
         });
       } else {
         // CREATE new employee
@@ -1277,6 +1293,7 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       }
       
       // C) CREATE/ACTIVATE USER ACCOUNT
+      // For re-hire: Also check for existing user linked to the employee
       if (accountConfig && accountConfig.username) {
         // Check if username already exists
         const existingUsers = await pool.query(`
@@ -1293,8 +1310,8 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           `, [employeeId, accountConfig.role || 'EMPLOYEE', userId]);
           
           auditEvents.push({
-            action: 'USER_ACTIVATED',
-            meta: { userId, username: accountConfig.username, role: accountConfig.role, updated: true },
+            action: isRehire ? 'USER_REACTIVATED' : 'USER_ACTIVATED',
+            meta: { userId, username: accountConfig.username, role: accountConfig.role, updated: true, isRehire },
           });
         } else {
           // Create new user with temporary password hash
@@ -1331,6 +1348,28 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
             },
           });
         }
+      } else if (isRehire && employeeId) {
+        // For re-hire without account config: Try to reactivate existing user linked to employee
+        const existingEmployeeUsers = await pool.query(`
+          SELECT id, username FROM users WHERE employee_id = $1
+        `, [employeeId]);
+        
+        if (existingEmployeeUsers.length > 0) {
+          userId = existingEmployeeUsers[0].id;
+          await pool.query(`
+            UPDATE users SET is_active = true, updated_at = NOW() WHERE id = $1
+          `, [userId]);
+          
+          auditEvents.push({
+            action: 'USER_REACTIVATED',
+            meta: { 
+              userId, 
+              username: existingEmployeeUsers[0].username, 
+              reactivatedFromEmployee: true,
+              isRehire: true,
+            },
+          });
+        }
       }
       
       // D) FINALIZE SESSION (LOCK)
@@ -1338,15 +1377,17 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         UPDATE onboarding_sessions
         SET status = 'completed', completed_at = NOW(), account_config = $2
         WHERE id = $1
-      `, [id, JSON.stringify(accountConfig)]);
+      `, [id, JSON.stringify(accountConfig || null)]);
       
       auditEvents.push({
-        action: 'ONBOARDING_COMPLETED',
+        action: isRehire ? 'REHIRE_COMPLETED' : 'ONBOARDING_COMPLETED',
         meta: { 
           sessionId: id, 
           employeeId, 
           userId,
           pathName: session.pathName,
+          pathPurpose: session.pathPurpose,
+          isRehire,
         },
       });
       
@@ -1370,9 +1411,11 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       
       res.json({
         success: true,
-        message: 'Onboarding finalized successfully',
+        message: isRehire ? 'Re-hire finalized successfully' : 'Onboarding finalized successfully',
         employeeId,
         userId,
+        isRehire,
+        pathPurpose: session.pathPurpose,
         auditEvents: auditEvents.map(e => e.action),
       });
       
@@ -1390,7 +1433,7 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         await auditService.logEvent({
           entityType: 'employee_onboarding',
           entityId: id,
-          action: 'ONBOARDING_FINALIZATION_FAILED',
+          action: isRehire ? 'REHIRE_FINALIZATION_FAILED' : 'ONBOARDING_FINALIZATION_FAILED',
           actor: { id: adminId, username: adminUsername },
           meta: { 
             error: (commitError as Error).message,

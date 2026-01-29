@@ -17,6 +17,7 @@ interface OnboardingPath {
   id: string;
   name: string;
   pathType: string;
+  pathPurpose: string;
   intakeFormId: string | null;
   documentFolderId: string | null;
   isActive: boolean;
@@ -37,6 +38,7 @@ export default function OnboardingPathsPage() {
   const [formData, setFormData] = useState({
     name: '',
     pathType: 'FULL_TIME',
+    pathPurpose: 'ONBOARDING',
     intakeFormId: 'none',
     documentFolderId: '',
     isActive: true,
@@ -57,6 +59,7 @@ export default function OnboardingPathsPage() {
         body: JSON.stringify({
           name: data.name,
           pathType: data.pathType,
+          pathPurpose: data.pathPurpose,
           intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
           documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
           isActive: data.isActive,
@@ -84,6 +87,7 @@ export default function OnboardingPathsPage() {
         body: JSON.stringify({
           name: data.name,
           pathType: data.pathType,
+          pathPurpose: data.pathPurpose,
           intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
           documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
           isActive: data.isActive,
@@ -128,6 +132,7 @@ export default function OnboardingPathsPage() {
     setFormData({
       name: '',
       pathType: 'FULL_TIME',
+      pathPurpose: 'ONBOARDING',
       intakeFormId: 'none',
       documentFolderId: '',
       isActive: true,
@@ -140,6 +145,7 @@ export default function OnboardingPathsPage() {
     setFormData({
       name: path.name,
       pathType: path.pathType,
+      pathPurpose: path.pathPurpose || 'ONBOARDING',
       intakeFormId: path.intakeFormId || 'none',
       documentFolderId: path.documentFolderId || '',
       isActive: path.isActive,
@@ -209,9 +215,15 @@ export default function OnboardingPathsPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <CardTitle className="text-lg">{path.name}</CardTitle>
-                          <CardDescription className="mt-1">
-                            <Badge variant="outline" className="mr-2">
+                          <CardDescription className="mt-1 flex flex-wrap gap-1">
+                            <Badge variant="outline">
                               {path.pathType === 'FULL_TIME' ? 'Full-Time' : 'Contract'}
+                            </Badge>
+                            <Badge 
+                              variant={path.pathPurpose === 'REHIRE' ? 'secondary' : 'default'}
+                              className={path.pathPurpose === 'REHIRE' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}
+                            >
+                              {path.pathPurpose === 'REHIRE' ? 'Re-Hire' : 'Onboarding'}
                             </Badge>
                           </CardDescription>
                         </div>
@@ -317,7 +329,7 @@ export default function OnboardingPathsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pathType">Path Type</Label>
+                <Label htmlFor="pathType">Employment Type</Label>
                 <Select
                   value={formData.pathType}
                   onValueChange={(value) => setFormData({ ...formData, pathType: value })}
@@ -330,6 +342,27 @@ export default function OnboardingPathsPage() {
                     <SelectItem value="CONTRACT">Contractor</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pathPurpose">Path Purpose</Label>
+                <Select
+                  value={formData.pathPurpose}
+                  onValueChange={(value) => setFormData({ ...formData, pathPurpose: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ONBOARDING">New Hire Onboarding</SelectItem>
+                    <SelectItem value="REHIRE">Re-Hire (Returning Employee)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formData.pathPurpose === 'REHIRE' 
+                    ? 'Re-hire paths require selecting an existing inactive employee and will reactivate their account.' 
+                    : 'Onboarding paths create new employee records and user accounts.'}
+                </p>
               </div>
 
               <div className="space-y-2">

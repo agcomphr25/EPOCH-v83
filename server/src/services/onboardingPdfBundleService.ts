@@ -39,6 +39,7 @@ interface OnboardingSession {
   completedAt: string | null;
   pathName: string;
   pathType: string;
+  pathPurpose: string | null;
   employeeName: string | null;
   bundleMediaItemId: string | null;
 }
@@ -77,7 +78,7 @@ export async function generateOnboardingBundle(sessionId: string): Promise<Bundl
         s.intake_data_schema as "intakeDataSchema",
         s.started_at as "startedAt", s.completed_at as "completedAt",
         s.bundle_media_item_id as "bundleMediaItemId",
-        p.name as "pathName", p.path_type as "pathType",
+        p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
         e.name as "employeeName"
       FROM onboarding_sessions s
       LEFT JOIN onboarding_paths p ON s.path_id = p.id
@@ -160,7 +161,8 @@ export async function generateOnboardingBundle(sessionId: string): Promise<Bundl
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Page 1: Cover Page
+    // Page 1: Cover Page (different for REHIRE vs ONBOARDING)
+    const isRehire = session.pathPurpose === 'REHIRE';
     await addCoverPage(pdfDoc, font, boldFont, {
       employeeName: employee?.name || session.employeeName || 'New Employee',
       employmentType: employee?.employmentType || session.pathType,
@@ -170,6 +172,7 @@ export async function generateOnboardingBundle(sessionId: string): Promise<Bundl
       completedAt: session.completedAt,
       adminName,
       pathName: session.pathName,
+      isRehire,
     });
 
     // Page 2: Intake Summary
@@ -297,13 +300,15 @@ async function addCoverPage(
     completedAt: string | null;
     adminName: string;
     pathName: string;
+    isRehire?: boolean;
   }
 ): Promise<void> {
   const page = pdfDoc.addPage([612, 792]); // Letter size
   const { width, height } = page.getSize();
   
-  // Title
-  page.drawText('EMPLOYEE ONBOARDING', {
+  // Title - different for re-hire vs onboarding
+  const titleLine1 = data.isRehire ? 'EMPLOYEE RE-HIRE' : 'EMPLOYEE ONBOARDING';
+  page.drawText(titleLine1, {
     x: 50,
     y: height - 100,
     size: 28,

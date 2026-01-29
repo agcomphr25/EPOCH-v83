@@ -28,7 +28,15 @@ interface OnboardingPath {
   id: string;
   name: string;
   pathType: string;
+  pathPurpose: string;
   isActive: boolean;
+}
+
+interface InactiveEmployee {
+  id: number;
+  name: string;
+  email: string | null;
+  department: string | null;
 }
 
 interface OnboardingSession {
@@ -52,6 +60,7 @@ export default function OnboardingDashboard() {
   const [, navigate] = useLocation();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [showSessionDetail, setShowSessionDetail] = useState<OnboardingSession | null>(null);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<OnboardingSession[]>({
@@ -62,10 +71,21 @@ export default function OnboardingDashboard() {
     queryKey: ['/api/onboarding/paths'],
   });
 
+  const { data: inactiveEmployees = [] } = useQuery<InactiveEmployee[]>({
+    queryKey: ['/api/employees', { isActive: false }],
+    queryFn: async () => {
+      const res = await fetch('/api/employees?isActive=false');
+      if (!res.ok) throw new Error('Failed to fetch inactive employees');
+      return res.json();
+    },
+  });
+
   const activePaths = paths.filter(p => p.isActive);
+  const selectedPath = activePaths.find(p => p.id === selectedPathId);
+  const isRehirePath = selectedPath?.pathPurpose === 'REHIRE';
 
   const createSessionMutation = useMutation({
-    mutationFn: async (data: { onboardingPathId: string }) => {
+    mutationFn: async (data: { onboardingPathId: string; employeeId?: number }) => {
       return apiRequest('/api/onboarding/sessions', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -75,10 +95,15 @@ export default function OnboardingDashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions'] });
       setShowCreateDialog(false);
       setSelectedPathId('');
+      setSelectedEmployeeId('');
       toast({ title: 'Session started', description: 'New onboarding session created successfully' });
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to create session', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to create session', 
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -114,7 +139,26 @@ export default function OnboardingDashboard() {
 
   const handleCreateSession = () => {
     if (!selectedPathId) return;
-    createSessionMutation.mutate({ onboardingPathId: selectedPathId });
+    
+    // For REHIRE paths, require employee selection
+    if (isRehirePath && !selectedEmployeeId) {
+      toast({ 
+        title: 'Employee required', 
+        description: 'Please select an inactive employee to re-hire',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    const payload: { onboardingPathId: string; employeeId?: number } = {
+      onboardingPathId: selectedPathId,
+    };
+    
+    if (isRehirePath && selectedEmployeeId) {
+      payload.employeeId = parseInt(selectedEmployeeId, 10);
+    }
+    
+    createSessionMutation.mutate(payload);
   };
 
   const inProgressSessions = sessions.filter(s => s.status === 'in_progress');
@@ -360,28 +404,70 @@ export default function OnboardingDashboard() {
         )}
       </div>
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open);
+        if (!open) {
+          setSelectedPathId('');
+          setSelectedEmployeeId('');
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Start New Onboarding Session</DialogTitle>
+            <DialogTitle>
+              {isRehirePath ? 'Start Re-Hire Session' : 'Start New Onboarding Session'}
+            </DialogTitle>
             <DialogDescription>
-              Select an onboarding path to begin a new employee onboarding session.
+              {isRehirePath 
+                ? 'Select an inactive employee to re-hire and complete their re-onboarding process.'
+                : 'Select an onboarding path to begin a new employee onboarding session.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="path-select">Onboarding Path</Label>
-            <Select value={selectedPathId} onValueChange={setSelectedPathId}>
-              <SelectTrigger id="path-select" className="mt-2">
-                <SelectValue placeholder="Select a path..." />
-              </SelectTrigger>
-              <SelectContent>
-                {activePaths.map(path => (
-                  <SelectItem key={path.id} value={path.id}>
-                    {path.name} ({path.pathType})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="py-4 space-y-4">
+            <div>
+              <Label htmlFor="path-select">Onboarding Path</Label>
+              <Select value={selectedPathId} onValueChange={(value) => {
+                setSelectedPathId(value);
+                setSelectedEmployeeId(''); // Reset employee when path changes
+              }}>
+                <SelectTrigger id="path-select" className="mt-2">
+                  <SelectValue placeholder="Select a path..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePaths.map(path => (
+                    <SelectItem key={path.id} value={path.id}>
+                      {path.name} ({path.pathType}) {path.pathPurpose === 'REHIRE' && '- Re-Hire'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isRehirePath && (
+              <div>
+                <Label htmlFor="employee-select">Select Inactive Employee to Re-Hire</Label>
+                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                  <SelectTrigger id="employee-select" className="mt-2">
+                    <SelectValue placeholder="Select an inactive employee..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inactiveEmployees.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        No inactive employees available
+                      </div>
+                    ) : (
+                      inactiveEmployees.map(emp => (
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          {emp.name} {emp.department && `(${emp.department})`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Only inactive employees can be re-hired. This will reactivate their employee record and user account.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
@@ -389,10 +475,10 @@ export default function OnboardingDashboard() {
             </Button>
             <Button 
               onClick={handleCreateSession} 
-              disabled={!selectedPathId || createSessionMutation.isPending}
+              disabled={!selectedPathId || (isRehirePath && !selectedEmployeeId) || createSessionMutation.isPending}
             >
               {createSessionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Start Session
+              {isRehirePath ? 'Start Re-Hire' : 'Start Session'}
             </Button>
           </DialogFooter>
         </DialogContent>

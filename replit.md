@@ -53,7 +53,8 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
   - Session lifecycle (in_progress, paused, completed) with pause/resume support
   - Transactional finalization that atomically creates/updates employee records, activates user accounts, and attaches signed documents
   - Preflight validation with detailed error reporting
-  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED)
+  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED, ONBOARDING_BUNDLE_GENERATED)
+  - PDF bundle generation: Combines cover page, intake summary, signed documents, captured images, and audit summary into a single downloadable PDF stored in object storage with media library reference
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

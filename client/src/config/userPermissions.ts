@@ -50,6 +50,8 @@ export const VALID_NAVBAR_ROUTES = [
   '/employee',
   '/employee-portal',
   '/onboarding',
+  '/onboarding/paths',
+  '/onboarding/forms',
   '/feature-manager',
   '/finance/ap',
   '/finance/ar',

@@ -1,0 +1,120 @@
+2026-01-29 15:18:01.19
+e5da4557
+User
+hint: undefined,
+2026-01-29 15:18:01.19
+e5da4557
+User
+code: '42703',
+2026-01-29 15:18:01.19
+e5da4557
+User
+table: undefined,
+2026-01-29 15:18:01.19
+e5da4557
+User
+severity: 'ERROR',
+2026-01-29 15:18:01.19
+e5da4557
+User
+at execute (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1556:55)
+2026-01-29 15:18:01.19
+e5da4557
+User
+file: 'parse_relation.c',
+2026-01-29 15:18:02.43
+e5da4557
+User
+internalQuery: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+constraint: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+at async NeonHttpPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-http/session.ts:68:18)
+2026-01-29 15:18:02.43
+e5da4557
+User
+schema: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+where: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+detail: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+table: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+column: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+code: '42703',
+2026-01-29 15:18:02.43
+e5da4557
+User
+at async (/home/runner/workspace/server/src/routes/kickbacks.ts:11:23) {
+2026-01-29 15:18:02.43
+e5da4557
+User
+Get all kickbacks error: NeonDbError: column "viewed_by" does not exist
+2026-01-29 15:18:02.43
+e5da4557
+User
+severity: 'ERROR',
+2026-01-29 15:18:02.43
+e5da4557
+User
+at execute (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1556:55)
+2026-01-29 15:18:02.43
+e5da4557
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 15:18:02.43
+e5da4557
+User
+sourceError: undefined
+2026-01-29 15:18:02.43
+e5da4557
+User
+}
+2026-01-29 15:18:02.43
+e5da4557
+User
+dataType: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+at async DatabaseStorage.getAllKickbacks (/home/runner/workspace/server/storage.ts:13453:12)
+2026-01-29 15:18:02.43
+e5da4557
+User
+internalPosition: undefined,
+2026-01-29 15:18:02.43
+e5da4557
+User
+position: '236',
+2026-01-29 15:18:02.43
+e5da4557
+User
+file: 'parse_relation.c',
+2026-01-29 15:18:02.43
+e5da4557
+User
+routine: 'errorMissingColumn',
+2026-01-29 15:18:02.43
+e5da4557
+User
+line: '3722',
+2026-01-29 15:18:02.43
+e5da4557
+User
+hint: unde

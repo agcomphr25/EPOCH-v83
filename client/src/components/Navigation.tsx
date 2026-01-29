@@ -441,6 +441,12 @@ export default function Navigation() {
       icon: CheckSquare,
       description: 'Orders completed in Finish QC by technician and progression user',
     },
+    {
+      path: '/due-date-capacity',
+      label: 'Due Date Capacity Report',
+      icon: Calendar,
+      description: 'View orders grouped by due date week to identify capacity issues',
+    },
     // {
     //   path: '/ag-bottom-metal-report',
     //   label: 'AG Bottom Metal Report',

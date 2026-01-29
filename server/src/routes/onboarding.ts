@@ -981,4 +981,463 @@ router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
   }
 });
 
+// POST /sessions/:id/finalize - Finalize onboarding session (admin-only)
+router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = (req as any).user?.id || 1;
+  const adminUsername = (req as any).user?.username || 'system';
+  
+  try {
+    // ===== PREFLIGHT VALIDATION (NO WRITES) =====
+    const validationErrors: string[] = [];
+    
+    // 1. Fetch session with all related data
+    const sessions = await pool.query(`
+      SELECT 
+        s.id, s.employee_id as "employeeId", s.path_id as "pathId",
+        s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
+        s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
+        s.started_at as "startedAt", s.account_config as "accountConfig",
+        p.name as "pathName", p.path_type as "pathType"
+      FROM onboarding_sessions s
+      LEFT JOIN onboarding_paths p ON s.path_id = p.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // Check 1: Session status must be in_progress
+    if (session.status !== 'in_progress') {
+      validationErrors.push(`Session status is '${session.status}', must be 'in_progress' to finalize`);
+    }
+    
+    // Check 2: Intake form marked complete
+    const intakeData = session.intakeData || {};
+    const intakeSchema = session.intakeDataSchema || [];
+    const requiredIntakeFields = intakeSchema.filter((f: any) => f.required);
+    
+    for (const field of requiredIntakeFields) {
+      const fieldKey = field.name || field.fieldKey;
+      if (!intakeData[fieldKey] && intakeData[fieldKey] !== false && intakeData[fieldKey] !== 0) {
+        validationErrors.push(`Required intake field '${field.label || fieldKey}' is missing`);
+      }
+    }
+    
+    // Check 3: All REQUIRED documents signed
+    const documents = await pool.query(`
+      SELECT id, template_id as "templateId", status, is_required as "isRequired"
+      FROM onboarding_session_documents
+      WHERE session_id = $1
+    `, [id]);
+    
+    const requiredDocs = documents.filter((d: any) => d.isRequired !== false);
+    const unsignedRequiredDocs = requiredDocs.filter((d: any) => d.status !== 'signed');
+    if (unsignedRequiredDocs.length > 0) {
+      validationErrors.push(`${unsignedRequiredDocs.length} required document(s) not signed`);
+    }
+    
+    // Check 4: All REQUIRED camera captures completed
+    const captures = await pool.query(`
+      SELECT id, capture_type as "captureType", media_item_id as "mediaItemId", is_required as "isRequired"
+      FROM onboarding_session_captures
+      WHERE session_id = $1
+    `, [id]);
+    
+    const requiredCaptures = captures.filter((c: any) => c.isRequired !== false);
+    const incompleteCaptures = requiredCaptures.filter((c: any) => !c.mediaItemId);
+    if (incompleteCaptures.length > 0) {
+      validationErrors.push(`${incompleteCaptures.length} required camera capture(s) not completed`);
+    }
+    
+    // Check 5: User account configuration exists
+    const accountConfig = session.accountConfig || req.body.accountConfig;
+    if (!accountConfig || !accountConfig.username) {
+      validationErrors.push('User account configuration is missing or incomplete');
+    }
+    
+    // If any validation fails, return error and log audit
+    if (validationErrors.length > 0) {
+      try {
+        await auditService.logEvent({
+          entityType: 'employee_onboarding',
+          entityId: id,
+          action: 'ONBOARDING_FINALIZATION_BLOCKED',
+          actor: { id: adminId, username: adminUsername },
+          meta: { validationErrors, sessionStatus: session.status },
+        });
+      } catch (auditError) {
+        console.warn('Audit logging failed for ONBOARDING_FINALIZATION_BLOCKED:', auditError);
+      }
+      
+      return res.status(400).json({
+        error: 'Validation failed',
+        validationReport: validationErrors,
+      });
+    }
+    
+    // ===== ATOMIC COMMIT PHASE (TRANSACTIONAL) =====
+    // All writes happen within a database transaction.
+    // If anything fails, we ROLLBACK and abort.
+    
+    let employeeId = session.employeeId;
+    let userId: number | null = null;
+    const auditEvents: Array<{ action: string; meta: any }> = [];
+    const employeeData = mapIntakeToEmployee(intakeData, intakeSchema);
+    
+    // Begin transaction
+    await pool.query('BEGIN');
+    
+    try {
+      // A) CREATE OR UPDATE EMPLOYEE
+      if (employeeId) {
+        // UPDATE existing employee
+        const updateFields: string[] = [];
+        const updateValues: any[] = [];
+        let paramIndex = 1;
+        
+        if (employeeData.name) {
+          updateFields.push(`name = $${paramIndex++}`);
+          updateValues.push(employeeData.name);
+        }
+        if (employeeData.email) {
+          updateFields.push(`email = $${paramIndex++}`);
+          updateValues.push(employeeData.email);
+        }
+        if (employeeData.phone) {
+          updateFields.push(`phone = $${paramIndex++}`);
+          updateValues.push(employeeData.phone);
+        }
+        if (employeeData.jobTitle) {
+          updateFields.push(`job_title = $${paramIndex++}`);
+          updateValues.push(employeeData.jobTitle);
+        }
+        if (employeeData.department) {
+          updateFields.push(`department = $${paramIndex++}`);
+          updateValues.push(employeeData.department);
+        }
+        if (employeeData.hireDate) {
+          updateFields.push(`hire_date = $${paramIndex++}`);
+          updateValues.push(employeeData.hireDate);
+        }
+        if (employeeData.dateOfBirth) {
+          updateFields.push(`date_of_birth = $${paramIndex++}`);
+          updateValues.push(employeeData.dateOfBirth);
+        }
+        if (employeeData.address) {
+          updateFields.push(`address = $${paramIndex++}`);
+          updateValues.push(employeeData.address);
+        }
+        if (employeeData.emergencyContact) {
+          updateFields.push(`emergency_contact = $${paramIndex++}`);
+          updateValues.push(employeeData.emergencyContact);
+        }
+        if (employeeData.emergencyPhone) {
+          updateFields.push(`emergency_phone = $${paramIndex++}`);
+          updateValues.push(employeeData.emergencyPhone);
+        }
+        
+        updateFields.push(`updated_at = NOW()`);
+        updateValues.push(employeeId);
+        
+        if (updateFields.length > 1) {
+          await pool.query(`
+            UPDATE employees
+            SET ${updateFields.join(', ')}
+            WHERE id = $${paramIndex}
+          `, updateValues);
+        }
+        
+        auditEvents.push({
+          action: 'EMPLOYEE_UPDATED',
+          meta: { employeeId, updatedFields: Object.keys(employeeData) },
+        });
+      } else {
+        // CREATE new employee
+        const insertResult = await pool.query(`
+          INSERT INTO employees (
+            name, email, phone, job_title, department, hire_date, 
+            date_of_birth, address, emergency_contact, emergency_phone,
+            user_role, employment_type, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+          RETURNING id
+        `, [
+          employeeData.name || 'New Employee',
+          employeeData.email || null,
+          employeeData.phone || null,
+          employeeData.jobTitle || null,
+          employeeData.department || null,
+          employeeData.hireDate || null,
+          employeeData.dateOfBirth || null,
+          employeeData.address || null,
+          employeeData.emergencyContact || null,
+          employeeData.emergencyPhone || null,
+          accountConfig.role || 'EMPLOYEE',
+          session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME',
+        ]);
+        
+        employeeId = insertResult[0].id;
+        
+        // Update session with new employee ID
+        await pool.query(`
+          UPDATE onboarding_sessions SET employee_id = $1 WHERE id = $2
+        `, [employeeId, id]);
+        
+        auditEvents.push({
+          action: 'EMPLOYEE_CREATED',
+          meta: { employeeId, employeeName: employeeData.name },
+        });
+      }
+      
+      // B) ATTACH SIGNED DOCUMENTS TO EMPLOYEE (required docs are fatal)
+      const signedDocs = documents.filter((d: any) => d.status === 'signed');
+      for (const doc of signedDocs) {
+        // Get signed PDF path from session document
+        const docDetails = await pool.query(`
+          SELECT sd.signed_pdf_path as "signedPdfPath", t.name as "templateName"
+          FROM onboarding_session_documents sd
+          LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+          WHERE sd.id = $1
+        `, [doc.id]);
+        
+        if (docDetails.length > 0 && docDetails[0].signedPdfPath) {
+          // Link document to employee - failures are fatal for transaction integrity
+          await pool.query(`
+            INSERT INTO employee_documents (
+              employee_id, document_type, file_path, file_name, 
+              uploaded_by, is_verified, created_at
+            ) VALUES ($1, 'onboarding', $2, $3, $4, true, NOW())
+          `, [
+            employeeId,
+            docDetails[0].signedPdfPath,
+            docDetails[0].templateName || 'Onboarding Document',
+            adminId,
+          ]);
+          
+          auditEvents.push({
+            action: 'EMPLOYEE_DOCUMENT_ATTACHED',
+            meta: { 
+              employeeId, 
+              documentId: doc.id, 
+              templateName: docDetails[0].templateName,
+            },
+          });
+        }
+      }
+      
+      // C) CREATE/ACTIVATE USER ACCOUNT
+      if (accountConfig && accountConfig.username) {
+        // Check if username already exists
+        const existingUsers = await pool.query(`
+          SELECT id FROM users WHERE username = $1
+        `, [accountConfig.username]);
+        
+        if (existingUsers.length > 0) {
+          // Update existing user
+          userId = existingUsers[0].id;
+          await pool.query(`
+            UPDATE users
+            SET employee_id = $1, role = $2, is_active = true, updated_at = NOW()
+            WHERE id = $3
+          `, [employeeId, accountConfig.role || 'EMPLOYEE', userId]);
+          
+          auditEvents.push({
+            action: 'USER_ACTIVATED',
+            meta: { userId, username: accountConfig.username, role: accountConfig.role, updated: true },
+          });
+        } else {
+          // Create new user with temporary password hash
+          const bcrypt = require('bcrypt');
+          const tempPassword = Math.random().toString(36).slice(-10);
+          const passwordHash = await bcrypt.hash(tempPassword, 10);
+          
+          const newUser = await pool.query(`
+            INSERT INTO users (
+              username, password_hash, role, employee_id, 
+              first_name, last_name, email, is_active, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW())
+            RETURNING id
+          `, [
+            accountConfig.username,
+            passwordHash,
+            accountConfig.role || 'EMPLOYEE',
+            employeeId,
+            employeeData.firstName || null,
+            employeeData.lastName || null,
+            employeeData.email || null,
+          ]);
+          
+          userId = newUser[0].id;
+          
+          auditEvents.push({
+            action: 'USER_ACTIVATED',
+            meta: { 
+              userId, 
+              username: accountConfig.username, 
+              role: accountConfig.role, 
+              created: true,
+              tempPasswordSet: true,
+            },
+          });
+        }
+      }
+      
+      // D) FINALIZE SESSION (LOCK)
+      await pool.query(`
+        UPDATE onboarding_sessions
+        SET status = 'completed', completed_at = NOW(), account_config = $2
+        WHERE id = $1
+      `, [id, JSON.stringify(accountConfig)]);
+      
+      auditEvents.push({
+        action: 'ONBOARDING_COMPLETED',
+        meta: { 
+          sessionId: id, 
+          employeeId, 
+          userId,
+          pathName: session.pathName,
+        },
+      });
+      
+      // COMMIT the transaction - all writes succeeded
+      await pool.query('COMMIT');
+      
+      // Log all audit events AFTER commit to ensure consistency
+      for (const event of auditEvents) {
+        try {
+          await auditService.logEvent({
+            entityType: 'employee_onboarding',
+            entityId: id,
+            action: event.action,
+            actor: { id: adminId, username: adminUsername },
+            meta: event.meta,
+          });
+        } catch (auditError) {
+          console.warn(`Audit logging failed for ${event.action}:`, auditError);
+        }
+      }
+      
+      res.json({
+        success: true,
+        message: 'Onboarding finalized successfully',
+        employeeId,
+        userId,
+        auditEvents: auditEvents.map(e => e.action),
+      });
+      
+    } catch (commitError) {
+      // ROLLBACK the transaction - no changes were committed
+      try {
+        await pool.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Rollback failed:', rollbackError);
+      }
+      
+      console.error('Finalization commit failed:', commitError);
+      
+      try {
+        await auditService.logEvent({
+          entityType: 'employee_onboarding',
+          entityId: id,
+          action: 'ONBOARDING_FINALIZATION_FAILED',
+          actor: { id: adminId, username: adminUsername },
+          meta: { 
+            error: (commitError as Error).message,
+            attemptedEvents: auditEvents.map(e => e.action),
+          },
+        });
+      } catch (auditError) {
+        console.warn('Audit logging failed for ONBOARDING_FINALIZATION_FAILED:', auditError);
+      }
+      
+      return res.status(500).json({
+        error: 'Finalization failed',
+        message: 'An error occurred during finalization. All changes have been rolled back.',
+        detail: (commitError as Error).message,
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in finalization endpoint:', error);
+    res.status(500).json({ error: 'Failed to finalize onboarding session' });
+  }
+});
+
+// Helper function to map intake data to employee fields
+function mapIntakeToEmployee(intakeData: Record<string, any>, schema: any[]): Record<string, any> {
+  const employeeData: Record<string, any> = {};
+  
+  // Direct mapping for common field names
+  const fieldMappings: Record<string, string> = {
+    'name': 'name',
+    'fullName': 'name',
+    'full_name': 'name',
+    'firstName': 'firstName',
+    'first_name': 'firstName',
+    'lastName': 'lastName',
+    'last_name': 'lastName',
+    'email': 'email',
+    'emailAddress': 'email',
+    'phone': 'phone',
+    'phoneNumber': 'phone',
+    'phone_number': 'phone',
+    'jobTitle': 'jobTitle',
+    'job_title': 'jobTitle',
+    'title': 'jobTitle',
+    'department': 'department',
+    'hireDate': 'hireDate',
+    'hire_date': 'hireDate',
+    'startDate': 'hireDate',
+    'start_date': 'hireDate',
+    'dateOfBirth': 'dateOfBirth',
+    'date_of_birth': 'dateOfBirth',
+    'dob': 'dateOfBirth',
+    'birthDate': 'dateOfBirth',
+    'address': 'address',
+    'homeAddress': 'address',
+    'emergencyContact': 'emergencyContact',
+    'emergency_contact': 'emergencyContact',
+    'emergencyContactName': 'emergencyContact',
+    'emergencyPhone': 'emergencyPhone',
+    'emergency_phone': 'emergencyPhone',
+    'emergencyContactPhone': 'emergencyPhone',
+  };
+  
+  // First, use schema mappings if available
+  for (const field of schema) {
+    const fieldKey = field.name || field.fieldKey;
+    const value = intakeData[fieldKey];
+    
+    if (value !== undefined && value !== null && value !== '') {
+      // Check for explicit mapping in schema
+      if (field.mappedToField) {
+        employeeData[field.mappedToField] = value;
+      }
+      // Check for auto-mapping
+      else if (fieldMappings[fieldKey]) {
+        employeeData[fieldMappings[fieldKey]] = value;
+      }
+    }
+  }
+  
+  // Also check intake data keys directly
+  for (const [key, value] of Object.entries(intakeData)) {
+    if (value !== undefined && value !== null && value !== '') {
+      if (fieldMappings[key] && !employeeData[fieldMappings[key]]) {
+        employeeData[fieldMappings[key]] = value;
+      }
+    }
+  }
+  
+  // Build full name from firstName + lastName if name not set
+  if (!employeeData.name && (employeeData.firstName || employeeData.lastName)) {
+    employeeData.name = [employeeData.firstName, employeeData.lastName].filter(Boolean).join(' ');
+  }
+  
+  return employeeData;
+}
+
 export default router;

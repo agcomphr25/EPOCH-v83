@@ -275,6 +275,10 @@ export default function OnboardingSessionWizard() {
             intakeFormData={intakeFormData}
             accountData={accountData}
             isReadOnly={isReadOnly}
+            onFinalized={(employeeId) => {
+              queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions'] });
+              navigate(`/employee-management/${employeeId}`);
+            }}
           />
         );
       default:
@@ -855,6 +859,7 @@ function ReviewStep({
   intakeFormData,
   accountData,
   isReadOnly,
+  onFinalized,
 }: {
   session: OnboardingSession;
   intakeFormData: Record<string, any>;
@@ -865,8 +870,11 @@ function ReviewStep({
     linkToEmployeeId: boolean;
   };
   isReadOnly: boolean;
+  onFinalized?: (employeeId: number) => void;
 }) {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const intakeComplete = session.intakeDataSchema?.length === 0 || 
     Object.keys(intakeFormData).length > 0;
@@ -878,11 +886,58 @@ function ReviewStep({
 
   const allComplete = intakeComplete && docsComplete && capturesComplete && accountComplete;
 
-  const handleFinalize = () => {
-    toast({
-      title: 'Finalize Onboarding',
-      description: 'Finalization will be implemented in a future phase. This will create the employee record and activate the account.',
-    });
+  const handleFinalize = async () => {
+    if (!allComplete) return;
+    
+    setIsSubmitting(true);
+    setValidationErrors([]);
+    
+    try {
+      const response = await fetch(`/api/onboarding/sessions/${session.id}/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountConfig: accountData }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (data.validationReport) {
+          setValidationErrors(data.validationReport);
+          toast({
+            title: 'Validation Failed',
+            description: 'Please review the errors below and complete all required steps.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Finalization Failed',
+            description: data.message || data.error || 'An error occurred during finalization.',
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+      
+      toast({
+        title: 'Onboarding Completed',
+        description: 'Employee record created and user account activated successfully.',
+      });
+      
+      if (onFinalized && data.employeeId) {
+        onFinalized(data.employeeId);
+      }
+      
+    } catch (error) {
+      console.error('Finalization error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to finalize onboarding. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const ReviewItem = ({ 
@@ -935,15 +990,40 @@ function ReviewStep({
         </div>
       </div>
 
+      {validationErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-900">Validation Errors</p>
+              <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
+                {validationErrors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!isReadOnly && (
         <div className="flex justify-end">
           <Button
             size="lg"
-            disabled={!allComplete}
+            disabled={!allComplete || isSubmitting}
             onClick={handleFinalize}
           >
-            <Check className="h-4 w-4 mr-2" />
-            Finalize Onboarding
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Finalizing...
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4 mr-2" />
+                Finalize Onboarding
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -952,6 +1032,20 @@ function ReviewStep({
         <p className="text-sm text-gray-500 text-center">
           Complete all steps above before finalizing the onboarding.
         </p>
+      )}
+
+      {isReadOnly && session.status === 'completed' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <div>
+              <p className="font-medium text-green-900">Onboarding Completed</p>
+              <p className="text-sm text-green-700">
+                This onboarding session has been finalized. Employee record and user account have been created.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

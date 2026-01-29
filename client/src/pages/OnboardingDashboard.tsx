@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import { Route, FileText, ClipboardList, ArrowRight, Play, Pause, Eye, Plus, Loader2, Users } from 'lucide-react';
+import { Route, FileText, ClipboardList, ArrowRight, Play, Pause, Eye, Plus, Loader2, Users, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -49,6 +49,7 @@ interface OnboardingSession {
 
 export default function OnboardingDashboard() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>('');
   const [showSessionDetail, setShowSessionDetail] = useState<OnboardingSession | null>(null);
@@ -258,11 +259,11 @@ export default function OnboardingDashboard() {
                         </div>
                         <div className="flex gap-2">
                           <Button
-                            variant="outline"
                             size="sm"
-                            onClick={() => setShowSessionDetail(session)}
+                            onClick={() => navigate(`/onboarding/session/${session.id}`)}
                           >
-                            <Eye className="h-4 w-4" />
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Open Wizard
                           </Button>
                           <Button
                             variant="outline"
@@ -302,9 +303,10 @@ export default function OnboardingDashboard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShowSessionDetail(session)}
+                            onClick={() => navigate(`/onboarding/session/${session.id}`)}
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
                           </Button>
                           <Button
                             size="sm"
@@ -343,7 +345,7 @@ export default function OnboardingDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setShowSessionDetail(session)}
+                          onClick={() => navigate(`/onboarding/session/${session.id}`)}
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           View

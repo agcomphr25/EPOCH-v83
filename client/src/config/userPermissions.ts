@@ -52,6 +52,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/onboarding',
   '/onboarding/paths',
   '/onboarding/forms',
+  '/onboarding/session/:id',
   '/feature-manager',
   '/finance/ap',
   '/finance/ar',

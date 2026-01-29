@@ -67,6 +67,7 @@ import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
 import OnboardingPathsPage from './pages/OnboardingPathsPage';
 import OnboardingFormsPage from './pages/OnboardingFormsPage';
+import OnboardingSessionWizard from './pages/OnboardingSessionWizard';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
@@ -525,6 +526,7 @@ function App() {
                   <Route path="/onboarding" component={OnboardingDashboard} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
                   <Route path="/onboarding/forms" component={OnboardingFormsPage} />
+                  <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />
                   <Route path="/pdf-settings" component={PDFSettings} />

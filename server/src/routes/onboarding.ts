@@ -896,4 +896,89 @@ router.patch('/sessions/:id/resume', async (req: Request, res: Response) => {
   }
 });
 
+// PATCH /sessions/:id/intake - Save intake form data
+router.patch('/sessions/:id/intake', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { intakeData } = req.body;
+    
+    if (!intakeData || typeof intakeData !== 'object') {
+      return res.status(400).json({ error: 'Invalid intake data' });
+    }
+    
+    const sessions = await pool.query(`
+      SELECT id, status FROM onboarding_sessions WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    if (sessions[0].status === 'completed') {
+      return res.status(400).json({ error: 'Cannot modify completed session' });
+    }
+    
+    const updated = await pool.query(`
+      UPDATE onboarding_sessions
+      SET intake_data = $1
+      WHERE id = $2
+      RETURNING id, intake_data as "intakeData"
+    `, [JSON.stringify(intakeData), id]);
+    
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'INTAKE_DATA_SAVED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: {
+          fieldsCount: Object.keys(intakeData).length,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for INTAKE_DATA_SAVED:', auditError);
+    }
+    
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Error saving intake data:', error);
+    res.status(500).json({ error: 'Failed to save intake data' });
+  }
+});
+
+// PATCH /sessions/:id/step - Update current step
+router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { currentStep } = req.body;
+    
+    if (!currentStep || typeof currentStep !== 'string') {
+      return res.status(400).json({ error: 'Invalid step' });
+    }
+    
+    const sessions = await pool.query(`
+      SELECT id, status FROM onboarding_sessions WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const updated = await pool.query(`
+      UPDATE onboarding_sessions
+      SET current_step = $1
+      WHERE id = $2
+      RETURNING id, current_step as "currentStep"
+    `, [currentStep, id]);
+    
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Error updating current step:', error);
+    res.status(500).json({ error: 'Failed to update current step' });
+  }
+});
+
 export default router;

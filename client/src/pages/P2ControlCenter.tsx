@@ -116,15 +116,38 @@ export default function P2ControlCenter() {
     setActiveTab('schedule');
   };
 
-  const getActionBadge = (type: string) => {
-    const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }> = {
-      'needs_bom': { variant: 'destructive', icon: AlertCircle },
-      'needs_schedule': { variant: 'secondary', icon: Calendar },
-      'in_production': { variant: 'default', icon: Factory },
-      'pending_qc': { variant: 'outline', icon: CheckCircle },
+  const getActionIcon = (type: string) => {
+    const iconMap: Record<string, typeof Clock> = {
+      'needs_bom': AlertCircle,
+      'needs_schedule': Calendar,
+      'in_production': Factory,
+      'pending_qc': CheckCircle,
     };
-    const c = config[type] || { variant: 'secondary' as const, icon: Clock };
-    return c;
+    return iconMap[type] || Clock;
+  };
+
+  const getSeverityStyle = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return { 
+          variant: 'destructive' as const, 
+          className: 'bg-red-600 hover:bg-red-700 text-white border-red-600',
+          indicator: '🔴'
+        };
+      case 'warning':
+        return { 
+          variant: 'default' as const, 
+          className: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500',
+          indicator: '🟡'
+        };
+      case 'info':
+      default:
+        return { 
+          variant: 'secondary' as const, 
+          className: 'bg-green-100 hover:bg-green-200 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-100',
+          indicator: '🟢'
+        };
+    }
   };
 
   if (showPOWizard) {
@@ -302,21 +325,35 @@ export default function P2ControlCenter() {
       {pendingActions.length > 0 && (
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <ArrowRight className="h-5 w-5" />
-              What's Next
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ArrowRight className="h-5 w-5" />
+                What's Next
+              </CardTitle>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">🔴 Blocking</span>
+                <span className="flex items-center gap-1">🟡 Due Soon</span>
+                <span className="flex items-center gap-1">🟢 On Track</span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {pendingActions.slice(0, 5).map((action, idx) => {
-                const badgeConfig = getActionBadge(action.type);
-                const Icon = badgeConfig.icon;
+              {pendingActions.slice(0, 8).map((action, idx) => {
+                const Icon = getActionIcon(action.type);
+                const severityStyle = getSeverityStyle(action.severity || 'info');
+                const daysText = action.daysUntilDue !== null && action.daysUntilDue !== undefined
+                  ? action.daysUntilDue < 0 
+                    ? `${Math.abs(action.daysUntilDue)}d overdue`
+                    : action.daysUntilDue === 0 
+                      ? 'Due today'
+                      : `${action.daysUntilDue}d left`
+                  : '';
                 return (
                   <Badge 
                     key={idx} 
-                    variant={badgeConfig.variant}
-                    className="cursor-pointer py-1.5 px-3"
+                    variant={severityStyle.variant}
+                    className={`cursor-pointer py-1.5 px-3 ${severityStyle.className}`}
                     onClick={() => {
                       if (action.type === 'needs_bom') {
                         setSelectedPOForBOM(action.poId);
@@ -328,6 +365,7 @@ export default function P2ControlCenter() {
                   >
                     <Icon className="h-3 w-3 mr-1" />
                     {action.label}
+                    {daysText && <span className="ml-1 opacity-80">({daysText})</span>}
                   </Badge>
                 );
               })}

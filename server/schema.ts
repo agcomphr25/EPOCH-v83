@@ -4046,6 +4046,19 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
 
   sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
+  
+  // Ownership fields for accountability and audit compliance
+  createdById: integer('created_by_id').references(() => employees.id), // Who created the PO
+  createdByName: text('created_by_name'), // Denormalized for display
+  assignedToId: integer('assigned_to_id').references(() => employees.id), // Who is responsible for this PO
+  assignedToName: text('assigned_to_name'), // Denormalized for display
+  bomOwnerId: integer('bom_owner_id').references(() => employees.id), // Who owns the BOM configuration
+  bomOwnerName: text('bom_owner_name'), // Denormalized for display
+  scheduledById: integer('scheduled_by_id').references(() => employees.id), // Who scheduled this PO
+  scheduledByName: text('scheduled_by_name'), // Denormalized for display
+  productionLeadId: integer('production_lead_id').references(() => employees.id), // Production lead for this PO
+  productionLeadName: text('production_lead_name'), // Denormalized for display
+  
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

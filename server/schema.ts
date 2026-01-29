@@ -220,6 +220,12 @@ export const orders = pgTable('orders', {
   scrapAuthorization: text('scrap_authorization'),
   isReplacement: boolean('is_replacement').default(false),
   replacedOrderId: text('replaced_order_id'),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3820,6 +3826,12 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   shippingCarrier: text('shipping_carrier'),
   shippedDate: date('shipped_date'),
   customerNotified: boolean('customer_notified').default(false),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6392,6 +6404,12 @@ export const kickbacks = pgTable('kickbacks', {
   impactedDepartments: text('impacted_departments').array(), // Other departments affected
   rootCause: text('root_cause'), // Identified root cause
   correctiveAction: text('corrective_action'), // Actions taken to prevent recurrence
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp }
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6432,6 +6450,72 @@ export const insertKickbackSchema = createInsertSchema(kickbacks)
 
 export type InsertKickback = z.infer<typeof insertKickbackSchema>;
 export type Kickback = typeof kickbacks.$inferSelect;
+
+// Production Delays - Active blockers requiring periodic confirmation
+export const productionDelays = pgTable('production_delays', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: text('order_id').notNull(),
+  delayType: text('delay_type').notNull(), // MATERIAL, EQUIPMENT, LABOR, VENDOR, CUSTOMER, OTHER
+  description: text('description').notNull(),
+  department: text('department').notNull(),
+  estimatedResolutionDate: timestamp('estimated_resolution_date'),
+  actualResolutionDate: timestamp('actual_resolution_date'),
+  delayOwnerUserId: integer('delay_owner_user_id'), // Person responsible for resolving
+  status: text('status').default('ACTIVE').notNull(), // ACTIVE, RESOLVED, CANCELLED
+  priority: text('priority').default('MEDIUM').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
+  blockerDetails: text('blocker_details'), // What specifically is blocking
+  resolutionNotes: text('resolution_notes'),
+  // State confirmation fields for Attention & State-Confidence system
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`),
+  lastConfirmedAt: timestamp('last_confirmed_at'), // "Delay still valid / blocker remains"
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'),
+  confirmationNote: text('confirmation_note'),
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  orderIdx: index('production_delays_order_idx').on(table.orderId),
+  statusIdx: index('production_delays_status_idx').on(table.status),
+  ownerIdx: index('production_delays_owner_idx').on(table.delayOwnerUserId),
+  riskIdx: index('production_delays_risk_idx').on(table.attentionRisk),
+}));
+
+export const insertProductionDelaySchema = createInsertSchema(productionDelays).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewedBy: true,
+  lastConfirmedAt: true,
+  lastConfirmedByUserId: true,
+  attentionRisk: true,
+});
+
+export type InsertProductionDelay = z.infer<typeof insertProductionDelaySchema>;
+export type ProductionDelay = typeof productionDelays.$inferSelect;
+
+// Staleness Configuration - Defines thresholds for attention risk escalation
+export const stalenessConfig = pgTable('staleness_config', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'ticket', 'order', 'qc_item', 'production_delay'
+  statusValue: text('status_value').notNull(), // The specific status (e.g., 'waiting_on_vendor', 'escalated')
+  hoursUntilLow: integer('hours_until_low').notNull().default(24), // Hours before LOW risk
+  hoursUntilMedium: integer('hours_until_medium').notNull().default(48), // Hours before MEDIUM risk
+  hoursUntilHigh: integer('hours_until_high').notNull().default(72), // Hours before HIGH risk
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  entityStatusIdx: index('staleness_config_entity_status_idx').on(table.entityType, table.statusValue),
+}));
+
+export const insertStalenessConfigSchema = createInsertSchema(stalenessConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertStalenessConfig = z.infer<typeof insertStalenessConfigSchema>;
+export type StalenessConfig = typeof stalenessConfig.$inferSelect;
 
 // Document Management System Tables
 export const documents = pgTable('documents', {
@@ -9969,6 +10053,12 @@ export const tickets = pgTable('tickets', {
   lastActivityAt: timestamp('last_activity_at').defaultNow(), // Last time ticket was updated/commented
   reminderCount: integer('reminder_count').default(0), // Number of stale reminders sent
   lastReminderAt: timestamp('last_reminder_at'), // When last reminder was sent
+  viewedBy: jsonb('viewed_by').$type<Record<string, string>>().default(sql`'{}'::jsonb`), // { [userId]: ISO timestamp } - tracks who viewed and when
+  // State confirmation fields for Attention & State-Confidence system
+  lastConfirmedAt: timestamp('last_confirmed_at'), // When state was last confirmed as accurate
+  lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
+  confirmationNote: text('confirmation_note'), // Optional short note with confirmation
+  attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
@@ -9979,6 +10069,7 @@ export const tickets = pgTable('tickets', {
   assignedIdx: index('tickets_assigned_idx').on(table.assignedUserId),
   slaIdx: index('tickets_sla_idx').on(table.slaDueAt),
   typeIdx: index('tickets_type_idx').on(table.ticketType),
+  attentionRiskIdx: index('tickets_attention_risk_idx').on(table.attentionRisk),
 }));
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({
@@ -9988,6 +10079,10 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   lastActivityAt: true,
   reminderCount: true,
   lastReminderAt: true,
+  viewedBy: true,
+  lastConfirmedAt: true,
+  lastConfirmedByUserId: true,
+  attentionRisk: true,
 });
 
 export type Ticket = typeof tickets.$inferSelect;
@@ -11921,3 +12016,87 @@ export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
 export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
 export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
 export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;
+
+// ============================================================================
+// QR CODE REGISTRY - Central QR Code Generation & Resolver System
+// ============================================================================
+
+// Entity types that can be referenced by QR codes
+export const qrEntityTypeEnum = pgEnum('qr_entity_type', [
+  'order',
+  'inventory_item',
+  'employee',
+  'mandrel',
+  'oven',
+  'timer_program',
+  'document',
+  'equipment',
+  'material_lot',
+  'custom',
+]);
+
+// QR Codes Registry - Central table for all QR codes in the system
+export const qrCodes = pgTable('qr_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  publicCode: text('public_code').notNull().unique(), // Format: qr_XXXXXXXX
+  entityType: qrEntityTypeEnum('entity_type').notNull(),
+  entityIdentifier: text('entity_identifier').notNull(), // Stable ID (orderId, agPartNumber, employeeCode, etc.)
+  label: text('label'), // Human-readable label for the QR code
+  description: text('description'), // Optional description
+  isActive: boolean('is_active').default(true).notNull(),
+  expiresAt: timestamp('expires_at'), // Optional expiration
+  environment: text('environment').default('dev').notNull(), // 'dev' or 'prod'
+  resolveUrl: text('resolve_url'), // Optional custom resolve URL override
+  metadata: jsonb('metadata'), // Additional context data
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  disabledAt: timestamp('disabled_at'), // When the QR code was disabled
+  disabledByUserId: integer('disabled_by_user_id').references(() => users.id),
+  disabledReason: text('disabled_reason'),
+}, (table) => ({
+  publicCodeIdx: index('qr_codes_public_code_idx').on(table.publicCode),
+  entityTypeIdx: index('qr_codes_entity_type_idx').on(table.entityType),
+  entityIdentifierIdx: index('qr_codes_entity_identifier_idx').on(table.entityIdentifier),
+  isActiveIdx: index('qr_codes_is_active_idx').on(table.isActive),
+  environmentIdx: index('qr_codes_environment_idx').on(table.environment),
+}));
+
+// QR Code Scan Audit Log - Track all QR code scan events
+export const qrCodeScanLog = pgTable('qr_code_scan_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  qrCodeId: uuid('qr_code_id').references(() => qrCodes.id).notNull(),
+  publicCode: text('public_code').notNull(), // Denormalized for query performance
+  scannedByUserId: integer('scanned_by_user_id').references(() => users.id),
+  scannedByEmployeeId: integer('scanned_by_employee_id').references(() => employees.id),
+  scanResult: text('scan_result').notNull(), // 'success', 'expired', 'disabled', 'not_found', 'environment_mismatch'
+  resolvedUrl: text('resolved_url'), // Where the user was redirected
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
+}, (table) => ({
+  qrCodeIdIdx: index('qr_code_scan_log_qr_code_id_idx').on(table.qrCodeId),
+  scannedAtIdx: index('qr_code_scan_log_scanned_at_idx').on(table.scannedAt),
+  scanResultIdx: index('qr_code_scan_log_scan_result_idx').on(table.scanResult),
+}));
+
+// Insert schemas for QR Code module
+export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  disabledAt: true,
+  disabledByUserId: true,
+  disabledReason: true,
+});
+
+export const insertQrCodeScanLogSchema = createInsertSchema(qrCodeScanLog).omit({
+  id: true,
+  scannedAt: true,
+});
+
+// Types for QR Code module
+export type QrCode = typeof qrCodes.$inferSelect;
+export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
+export type QrCodeScanLog = typeof qrCodeScanLog.$inferSelect;
+export type InsertQrCodeScanLog = z.infer<typeof insertQrCodeScanLogSchema>;

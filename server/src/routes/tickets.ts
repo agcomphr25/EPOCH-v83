@@ -1,9 +1,16 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
 import { sessionAwareAuth, requireRole } from '../../middleware/auth';
-import { insertTicketSchema, insertTicketActivitySchema } from '../../schema';
+import { insertTicketSchema, insertTicketActivitySchema, tickets } from '../../schema';
 import { z } from 'zod';
-import { pool } from '../../db';
+import { pool, db } from '../../db';
+import { eq, sql } from 'drizzle-orm';
+import { auditService } from '../services/auditService';
+
+// In-memory session-based deduplication for TICKET_VIEWED events
+// Key: `${userId}-${ticketId}`, Value: timestamp of last view in this session
+const ticketViewCache = new Map<string, number>();
+const VIEW_DEDUPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes - don't log repeat views within this window
 
 const router = Router();
 
@@ -70,14 +77,229 @@ router.get('/:id', sessionAwareAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const ticket = await storage.getTicketById(req.params.id);
+    const ticketId = req.params.id;
+    const ticket = await storage.getTicketById(ticketId);
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    res.json(ticket);
+
+    // === ENGAGEMENT TRACKING ===
+    // Use session ID for true per-session deduplication
+    const sessionId = (req as any).sessionID || req.get('x-session-id') || `anon-${req.ip}`;
+    let viewedByData = { ...(ticket.viewedBy || {}) };
+    
+    if (user?.id) {
+      const userId = user.id;
+      const sessionKey = `${userId}-${ticketId}-${sessionId}`;
+      const now = Date.now();
+      const lastView = ticketViewCache.get(sessionKey);
+
+      // Per-session deduplication: only log once per user/ticket/session
+      const shouldLogView = !lastView;
+
+      if (shouldLogView) {
+        // Mark as viewed in this session (no time window - truly once per session)
+        ticketViewCache.set(sessionKey, now);
+
+        // Determine assignment status for the viewing user
+        const isAssignee = ticket.assignedUserId === userId || 
+          (ticket.assignedUserIds && ticket.assignedUserIds.includes(userId));
+        const isOwner = ticket.ownerUserId === userId;
+
+        // Log TICKET_VIEWED audit event (non-blocking)
+        auditService.logEvent({
+          entityType: 'ticket',
+          entityId: ticketId,
+          action: 'TICKET_VIEWED',
+          actor: {
+            id: userId,
+            username: user.username,
+            role: user.role,
+          },
+          meta: {
+            ticketStatus: ticket.status,
+            assignmentStatus: isAssignee ? 'assignee' : isOwner ? 'owner' : 'viewer',
+            sessionId,
+          },
+          ipAddress: req.ip || undefined,
+          userAgent: req.get('user-agent') || undefined,
+        }).catch(err => console.error('[Ticket] Failed to log TICKET_VIEWED:', err));
+
+        // Update viewedBy tracking synchronously so response reflects current view
+        const nowIso = new Date().toISOString();
+        viewedByData[userId.toString()] = nowIso;
+        
+        // Persist to DB (non-blocking but use updated data in response)
+        db.update(tickets)
+          .set({ viewedBy: viewedByData })
+          .where(eq(tickets.id, ticketId))
+          .catch(err => console.error('[Ticket] Failed to update viewedBy:', err));
+      }
+    }
+
+    // Compute hasSeenLatestUpdate for each assignee (admin visibility)
+    // Use viewedByData which includes the current view
+    const viewedBy = viewedByData;
+    const updatedAt = ticket.updatedAt ? new Date(ticket.updatedAt).getTime() : 0;
+    
+    const engagementMetrics: Record<string, { lastViewedAt: string | null; hasSeenLatestUpdate: boolean }> = {};
+    
+    // Add current user's engagement status
+    if (user?.id) {
+      const userViewedAt = viewedBy[user.id.toString()];
+      engagementMetrics[user.id.toString()] = {
+        lastViewedAt: userViewedAt || null,
+        hasSeenLatestUpdate: userViewedAt ? new Date(userViewedAt).getTime() >= updatedAt : false,
+      };
+    }
+
+    // Add all assignees' engagement status (for admin views)
+    const allAssignees = [...(ticket.assignedUserIds || [])];
+    if (ticket.assignedUserId && !allAssignees.includes(ticket.assignedUserId)) {
+      allAssignees.push(ticket.assignedUserId);
+    }
+    
+    for (const assigneeId of allAssignees) {
+      const assigneeViewedAt = viewedBy[assigneeId.toString()];
+      engagementMetrics[assigneeId.toString()] = {
+        lastViewedAt: assigneeViewedAt || null,
+        hasSeenLatestUpdate: assigneeViewedAt ? new Date(assigneeViewedAt).getTime() >= updatedAt : false,
+      };
+    }
+
+    // Return ticket with engagement data
+    res.json({
+      ...ticket,
+      engagementMetrics,
+      currentUserHasSeenLatest: user?.id ? 
+        (viewedBy[user.id.toString()] ? new Date(viewedBy[user.id.toString()]).getTime() >= updatedAt : false) : null,
+    });
   } catch (error) {
     console.error('Error fetching ticket:', error);
     res.status(500).json({ error: 'Failed to fetch ticket' });
+  }
+});
+
+/**
+ * POST /:id/acknowledge - Mark ticket as reviewed (optional acknowledgement)
+ * Low-friction engagement signal - user explicitly acknowledges they've seen the ticket
+ */
+router.post('/:id/acknowledge', sessionAwareAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!hasAccess(user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const ticketId = req.params.id;
+    const ticket = await storage.getTicketById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const userId = user.id;
+    const now = new Date().toISOString();
+
+    // Update viewedBy with acknowledgement timestamp
+    const viewedByUpdate = {
+      ...(ticket.viewedBy || {}),
+      [userId.toString()]: now,
+    };
+
+    await db.update(tickets)
+      .set({ viewedBy: viewedByUpdate })
+      .where(eq(tickets.id, ticketId));
+
+    // Log TICKET_ACKNOWLEDGED audit event
+    await auditService.logEvent({
+      entityType: 'ticket',
+      entityId: ticketId,
+      action: 'TICKET_ACKNOWLEDGED',
+      actor: {
+        id: userId,
+        username: user.username,
+        role: user.role,
+      },
+      meta: {
+        ticketStatus: ticket.status,
+        ticketPriority: ticket.priority,
+        acknowledgedAt: now,
+      },
+      ipAddress: req.ip || undefined,
+      userAgent: req.get('user-agent') || undefined,
+    });
+
+    res.json({ 
+      success: true, 
+      acknowledgedAt: now,
+      message: 'Ticket acknowledged successfully',
+    });
+  } catch (error) {
+    console.error('Error acknowledging ticket:', error);
+    res.status(500).json({ error: 'Failed to acknowledge ticket' });
+  }
+});
+
+/**
+ * POST /:id/confirm-state - Confirm ticket state is still accurate
+ * Low-friction action: "Confirm Status" / "Still Waiting / No Change"
+ * Updates lastConfirmedAt without requiring comments
+ */
+router.post('/:id/confirm-state', sessionAwareAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!hasAccess(user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const ticketId = req.params.id;
+    const ticket = await storage.getTicketById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const userId = user.id;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const { confirmationNote } = req.body;
+
+    // Update confirmation fields
+    await db.update(tickets)
+      .set({ 
+        lastConfirmedAt: now,
+        lastConfirmedByUserId: userId,
+        confirmationNote: confirmationNote || null,
+        attentionRisk: null, // Reset risk on confirmation
+      })
+      .where(eq(tickets.id, ticketId));
+
+    // Log ENTITY_CONFIRMED audit event
+    await auditService.logEvent({
+      entityType: 'ticket',
+      entityId: ticketId,
+      action: 'ENTITY_CONFIRMED',
+      actor: {
+        id: userId,
+        username: user.username,
+        role: user.role,
+      },
+      meta: {
+        ticketStatus: ticket.status,
+        confirmedAt: nowIso,
+        confirmationNote,
+      },
+      ipAddress: req.ip || undefined,
+      userAgent: req.get('user-agent') || undefined,
+    });
+
+    res.json({ 
+      success: true, 
+      confirmedAt: nowIso,
+      message: 'Ticket state confirmed successfully',
+    });
+  } catch (error) {
+    console.error('Error confirming ticket state:', error);
+    res.status(500).json({ error: 'Failed to confirm ticket state' });
   }
 });
 

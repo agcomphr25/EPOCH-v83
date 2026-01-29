@@ -1,0 +1,177 @@
+Implement an Attention & State-Confidence system across EPOCH for Tickets, Orders, QC, and Production Delays.
+
+GOAL:
+Allow admins to identify where the system lacks confidence in the current state of work
+without relying on page-click tracking, time-on-page metrics, or manual daily notes.
+
+CORE PRINCIPLE:
+We do NOT measure effort.
+We measure awareness, confirmation, and staleness of state.
+
+────────────────────────────────────────
+PART 1 — SHARED ENGAGEMENT PRIMITIVES
+────────────────────────────────────────
+
+1) ADD STATE CONFIRMATION FIELDS
+For all applicable entities (tickets, orders, QC items, production delays), add:
+
+- lastConfirmedAt TIMESTAMPTZ NULL
+- lastConfirmedByUserId INT NULL
+- confirmationNote TEXT NULL (optional, short, non-required)
+
+Purpose:
+Represents “I have checked this and the current state is still accurate.”
+
+2) ADD AUDIT EVENTS (USING auditEvents)
+Use auditService.logEvent only.
+
+New actions:
+- ENTITY_VIEWED
+- ENTITY_CONFIRMED
+- ENTITY_STATE_STALE
+- ATTENTION_RISK_ESCALATED
+
+Use entityType values:
+- 'ticket'
+- 'order'
+- 'qc_item'
+- 'production_delay'
+
+Meta should include:
+{
+  previousConfirmedAt,
+  currentStatus,
+  riskLevel,
+}
+
+────────────────────────────────────────
+PART 2 — TICKETS (PRIMARY IMPLEMENTATION)
+────────────────────────────────────────
+
+3) TICKET VIEW EVENT
+On GET /tickets/:id:
+- Log ENTITY_VIEWED once per user per session
+- Update:
+    viewedBy JSONB { [userId]: timestamp }
+
+4) VIEWED-SINCE-UPDATE SIGNAL
+Expose derived boolean:
+- hasSeenLatestUpdate = viewedBy[userId] > updatedAt
+
+5) CONFIRM STATE ACTION
+Add a low-friction action:
+- “Confirm Status” / “Still Waiting / No Change”
+
+This:
+- Updates lastConfirmedAt / lastConfirmedByUserId
+- Logs ENTITY_CONFIRMED
+- Does NOT require comments
+
+6) STALENESS RULES (CONFIGURABLE)
+Define staleness thresholds by ticket status, e.g.:
+
+- Waiting on Vendor → 48 hours
+- Escalated → 4 hours
+- In Progress → 24 hours
+
+If exceeded:
+- Mark attentionRisk = LOW | MEDIUM | HIGH
+- Log ENTITY_STATE_STALE (once per escalation)
+
+────────────────────────────────────────
+PART 3 — EXTEND TO ORDERS
+────────────────────────────────────────
+
+7) ORDER ATTENTION TRACKING
+For orders assigned to CSRs or production leads:
+
+- Track lastConfirmedAt when:
+  - Order detail is opened
+  - Explicit “Confirm Order Status” is clicked
+
+Examples:
+- “Still waiting on material”
+- “Production on track”
+
+Expose:
+- hasConfirmedSinceLastChange
+- attentionRisk
+
+────────────────────────────────────────
+PART 4 — EXTEND TO QC
+────────────────────────────────────────
+
+8) QC STATE CONFIRMATION
+For QC holds, inspections, or rework queues:
+
+- Add confirmation action:
+  “QC Reviewed – No Change”
+
+Track:
+- lastConfirmedAt
+- inspector or responsible role
+
+Escalate attentionRisk if:
+- QC item is unconfirmed past SLA window
+
+────────────────────────────────────────
+PART 5 — EXTEND TO PRODUCTION DELAYS
+────────────────────────────────────────
+
+9) PRODUCTION DELAY CONFIDENCE
+For active production delays:
+
+- Require periodic confirmation:
+  “Delay still valid / blocker remains”
+
+Track:
+- lastConfirmedAt
+- delayOwnerUserId
+
+Escalate attentionRisk when:
+- Delay exists with no confirmation beyond threshold
+
+────────────────────────────────────────
+PART 6 — ADMIN ATTENTION DASHBOARD
+────────────────────────────────────────
+
+10) BUILD ATTENTION DASHBOARD (ADMIN ONLY)
+
+For each domain (Tickets, Orders, QC, Production):
+Show:
+- Entity ID
+- Assigned user / role
+- Current status
+- LastConfirmedAt
+- hasSeenLatestUpdate
+- Attention Risk Level
+- Time since last confirmation
+
+Explicitly DO NOT show:
+- Raw page clicks
+- Mouse activity
+- Time-on-page
+
+Dashboard purpose:
+Identify uncertainty and risk — not measure productivity.
+
+────────────────────────────────────────
+CONSTRAINTS
+────────────────────────────────────────
+
+- Do NOT log every page view
+- Do NOT track mouse movement, focus, or time-on-page
+- Do NOT require daily notes
+- Use auditEvents as the system of record
+- Favor derived signals over raw events
+
+────────────────────────────────────────
+DELIVERABLES
+────────────────────────────────────────
+
+- Schema changes
+- Audit event additions
+- Backend logic
+- Admin dashboard UI
+- Brief explanation of how this answers:
+  “Do we have confidence in the current state of work?”

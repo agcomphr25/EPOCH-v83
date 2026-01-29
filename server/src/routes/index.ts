@@ -109,6 +109,7 @@ import fieldRoutes from './field';
 import timerRoutes from './timer';
 import productionTimersRoutes from './productionTimers';
 import ticketsRoutes from './tickets';
+import attentionRoutes from './attention';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
@@ -119,6 +120,7 @@ import laborRoutes from './labor';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import accountingPrepRoutes from './accountingPrep';
+import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -126,6 +128,10 @@ export function registerRoutes(app: Express): Server {
 
   // Admin routes
   app.use('/api/admin', adminRoutes);
+
+  // QR Code routes - Separate routers for security
+  app.use('/api/qr-codes', qrAdminRouter); // Admin CRUD (protected)
+  app.use('/qr', qrResolverRouter); // Public QR code resolver (GET /qr/:code only)
 
   // Magic Link routes
   app.use('/api/magic-link', magicLinkRoutes);
@@ -287,6 +293,9 @@ export function registerRoutes(app: Express): Server {
 
   // Ticketing System - Internal CSR Tool for complaints, order status, internal issues
   app.use('/api/tickets', ticketsRoutes);
+  
+  // Attention & State-Confidence System - Admin dashboard for awareness/staleness tracking
+  app.use('/api/attention', attentionRoutes);
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);

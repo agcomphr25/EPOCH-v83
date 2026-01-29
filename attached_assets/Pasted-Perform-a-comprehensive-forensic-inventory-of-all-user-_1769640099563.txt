@@ -1,0 +1,73 @@
+Perform a comprehensive forensic inventory of all user activity and audit events currently captured in EPOCH.
+
+GOAL:
+Fully understand what user actions are audited today, what is NOT audited, and what additional low-friction signals could be captured to assess engagement with critical workflows (e.g. ticket monitoring) without requiring manual user input.
+
+RETURN A STRUCTURED REPORT WITH:
+
+1) CURRENT AUDIT EVENTS
+List every audit event type currently recorded, including:
+- action name
+- entityType
+- triggering code path (file + line)
+- actor information captured
+- metadata captured
+- whether the event is automatic or user-initiated
+
+Include events such as:
+- login / logout
+- badge scans
+- route access
+- record creation / updates
+- document views
+- ticket interactions
+- QR scans
+- any passive or inferred events
+
+2) ROUTE / PAGE VISIBILITY
+Determine whether the system currently logs:
+- page visits (e.g. /tickets, /admin, /production)
+- route access by user
+- timestamped access to critical views
+- duration or repeated access
+
+If NOT logged:
+- Identify where in the frontend or backend this *could* be captured safely.
+
+3) USER BEHAVIOR TRACEABILITY
+Answer explicitly:
+- Can the system currently answer:
+  “Did user X visit page Y on date Z?”
+- If yes, how?
+- If no, what is missing?
+
+4) EXISTING ENGAGEMENT SIGNALS
+Identify any existing indirect signals of engagement, such as:
+- viewing a ticket
+- opening a modal
+- hovering or focusing on an entity
+- polling or refetching ticket data
+- interacting with filters or status views
+- websocket subscriptions or live updates
+
+5) MANAGEMENT-FRIENDLY ALTERNATIVES TO MANUAL NOTES
+Propose better engagement signals than requiring daily notes, such as:
+- automatic “viewed since last update” flags
+- last-seen-on-entity timestamps
+- acknowledgement events
+- passive monitoring indicators
+- SLA-style attention metrics
+
+6) RISK & CULTURE CONSIDERATIONS
+Flag any audit ideas that could:
+- feel like surveillance
+- create noisy data
+- be misinterpreted without context
+
+7) RECOMMENDATION SUMMARY
+Provide:
+- Events we should absolutely audit
+- Events we should avoid auditing
+- 2–4 low-friction, high-signal additions that would let an admin assess whether a user is “paying attention” to critical areas (like tickets) without manual reporting.
+
+Include file paths, line numbers, and examples wherever applicable.

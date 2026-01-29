@@ -1,0 +1,340 @@
+index-3kKUbUov.js:4253 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-3kKUbUov.js:4253 React hooks: {useState: ƒ, useEffect: ƒ}
+index-3kKUbUov.js:4250 App component is rendering...
+index-3kKUbUov.js:4250 Environment: production
+index-3kKUbUov.js:4250 Base URL: /
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/documents/4 (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/documents/4: 500
+index-3kKUbUov.js:4253 API error raw body: {"error":"update or delete on table \"training_library_documents\" violates foreign key constraint \"topic_document_links_document_id_fkey\" on table \"topic_document_links\""}
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:4253 💥 API Request failed for /api/training/content-library/documents/4: Error: update or delete on table "training_library_documents" violates foreign key constraint "topic_document_links_document_id_fkey" on table "topic_document_links"
+    at Ge (index-3kKUbUov.js:235:6254)
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/documents/4 (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/documents/4: 500
+index-3kKUbUov.js:4253 API error raw body: {"error":"update or delete on table \"training_library_documents\" violates foreign key constraint \"topic_document_links_document_id_fkey\" on table \"topic_document_links\""}
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:4253 💥 API Request failed for /api/training/content-library/documents/4: Error: update or delete on table "training_library_documents" violates foreign key constraint "topic_document_links_document_id_fkey" on table "topic_document_links"
+    at Ge (index-3kKUbUov.js:235:6254)
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/documents/4 (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/documents/4: 500
+index-3kKUbUov.js:4253 API error raw body: {"error":"update or delete on table \"training_library_documents\" violates foreign key constraint \"topic_document_links_document_id_fkey\" on table \"topic_document_links\""}
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:4253 💥 API Request failed for /api/training/content-library/documents/4: Error: update or delete on table "training_library_documents" violates foreign key constraint "topic_document_links_document_id_fkey" on table "topic_document_links"
+    at Ge (index-3kKUbUov.js:235:6254)
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/categories (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/categories: 201
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+iP @ index-3kKUbUov.js:40
+Hy.flushSync @ index-3kKUbUov.js:40
+RQ @ index-3kKUbUov.js:235
+u @ index-3kKUbUov.js:1405
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/documents/4 (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/documents/4: 200
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:1409 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-3kKUbUov.js:1409
+lre @ index-3kKUbUov.js:40
+HO @ index-3kKUbUov.js:40
+SNt @ index-3kKUbUov.js:40
+gk @ index-3kKUbUov.js:40
+l5e @ index-3kKUbUov.js:40
+_I @ index-3kKUbUov.js:38
+(anonymous) @ index-3kKUbUov.js:40
+index-3kKUbUov.js:235 🌐 API Request to /api/training/content-library/documents/4 (timeout: 15000ms, deployment: true)
+index-3kKUbUov.js:235 ✅ API Response from /api/training/content-library/documents/4: 500
+index-3kKUbUov.js:4253 API error raw body: {"error":"update or delete on table \"training_library_documents\" violates foreign key constraint \"topic_document_links_document_id_fkey\" on table \"topic_document_links\""}
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37
+index-3kKUbUov.js:4253 💥 API Request failed for /api/training/content-library/documents/4: Error: update or delete on table "training_library_documents" violates foreign key constraint "topic_document_links_document_id_fkey" on table "topic_document_links"
+    at Ge (index-3kKUbUov.js:235:6254)
+console.error @ index-3kKUbUov.js:4253
+Ge @ index-3kKUbUov.js:235
+await in Ge
+mutationFn @ index-3kKUbUov.js:3202
+fn @ index-3kKUbUov.js:51
+p @ index-3kKUbUov.js:51
+start @ index-3kKUbUov.js:51
+execute @ index-3kKUbUov.js:51
+await in execute
+mutate @ index-3kKUbUov.js:51
+(anonymous) @ index-3kKUbUov.js:51
+onClick @ index-3kKUbUov.js:3202
+(anonymous) @ index-3kKUbUov.js:235
+Hjt @ index-3kKUbUov.js:37
+Gjt @ index-3kKUbUov.js:37
+Kjt @ index-3kKUbUov.js:37
+P4e @ index-3kKUbUov.js:37
+U$e @ index-3kKUbUov.js:37
+(anonymous) @ index-3kKUbUov.js:37
+xye @ index-3kKUbUov.js:40
+u$e @ index-3kKUbUov.js:37
+foe @ index-3kKUbUov.js:37
+Hve @ index-3kKUbUov.js:37
+dwt @ index-3kKUbUov.js:37

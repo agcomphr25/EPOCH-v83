@@ -47,6 +47,8 @@ import {
   p2PurchaseOrders,
   p2PurchaseOrderItems,
   p2ProductionOrders,
+  p2ProductionChanges,
+  p2TravelerChanges,
   p2SerializedItems,
   p2SerializedItemEvents,
   partRoutings,
@@ -264,6 +266,10 @@ import {
   type InsertP2PurchaseOrderItem,
   type P2ProductionOrder,
   type InsertP2ProductionOrder,
+  type P2ProductionChange,
+  type InsertP2ProductionChange,
+  type P2TravelerChange,
+  type InsertP2TravelerChange,
   type P2SerializedItem,
   type InsertP2SerializedItem,
   type P2SerializedItemEvent,
@@ -1264,6 +1270,20 @@ export interface IStorage {
   deleteP2ProductionOrdersByPoId(poId: number): Promise<number>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
+
+  // P2 Production Changes (PCF) CRUD
+  getAllP2ProductionChanges(): Promise<P2ProductionChange[]>;
+  getP2ProductionChange(id: string): Promise<P2ProductionChange | undefined>;
+  getP2ProductionChangesByPoId(poId: number): Promise<P2ProductionChange[]>;
+  createP2ProductionChange(data: InsertP2ProductionChange): Promise<P2ProductionChange>;
+  updateP2ProductionChange(id: string, data: Partial<InsertP2ProductionChange>): Promise<P2ProductionChange>;
+
+  // P2 Traveler Changes (Deviations) CRUD
+  getAllP2TravelerChanges(): Promise<P2TravelerChange[]>;
+  getP2TravelerChange(id: string): Promise<P2TravelerChange | undefined>;
+  getP2TravelerChangesByTravelerId(travelerId: string): Promise<P2TravelerChange[]>;
+  createP2TravelerChange(data: InsertP2TravelerChange): Promise<P2TravelerChange>;
+  updateP2TravelerChange(id: string, data: Partial<InsertP2TravelerChange>): Promise<P2TravelerChange>;
 
   // P2 Serialized Items CRUD
   generateSerializedItems(poItemId: number, username: string): Promise<P2SerializedItem[]>;
@@ -11947,6 +11967,74 @@ export class DatabaseStorage implements IStorage {
     }
 
     return materialRequirements;
+  }
+
+  // P2 Production Changes (PCF) CRUD
+  async getAllP2ProductionChanges(): Promise<P2ProductionChange[]> {
+    return await db.select().from(p2ProductionChanges).orderBy(desc(p2ProductionChanges.createdAt));
+  }
+
+  async getP2ProductionChange(id: string): Promise<P2ProductionChange | undefined> {
+    const [change] = await db.select().from(p2ProductionChanges).where(eq(p2ProductionChanges.id, id));
+    return change;
+  }
+
+  async getP2ProductionChangesByPoId(poId: number): Promise<P2ProductionChange[]> {
+    return await db.select().from(p2ProductionChanges).where(eq(p2ProductionChanges.poId, poId)).orderBy(desc(p2ProductionChanges.createdAt));
+  }
+
+  async createP2ProductionChange(data: InsertP2ProductionChange): Promise<P2ProductionChange> {
+    // Generate change number: PCF-YYYY-NNN
+    const year = new Date().getFullYear();
+    const existingChanges = await db.select().from(p2ProductionChanges);
+    const yearChanges = existingChanges.filter(c => c.changeNumber?.startsWith(`PCF-${year}`));
+    const nextNum = yearChanges.length + 1;
+    const changeNumber = `PCF-${year}-${String(nextNum).padStart(3, '0')}`;
+    
+    const [change] = await db.insert(p2ProductionChanges).values({ ...data, changeNumber }).returning();
+    return change;
+  }
+
+  async updateP2ProductionChange(id: string, data: Partial<InsertP2ProductionChange>): Promise<P2ProductionChange> {
+    const [change] = await db.update(p2ProductionChanges)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2ProductionChanges.id, id))
+      .returning();
+    return change;
+  }
+
+  // P2 Traveler Changes (Deviations) CRUD
+  async getAllP2TravelerChanges(): Promise<P2TravelerChange[]> {
+    return await db.select().from(p2TravelerChanges).orderBy(desc(p2TravelerChanges.createdAt));
+  }
+
+  async getP2TravelerChange(id: string): Promise<P2TravelerChange | undefined> {
+    const [change] = await db.select().from(p2TravelerChanges).where(eq(p2TravelerChanges.id, id));
+    return change;
+  }
+
+  async getP2TravelerChangesByTravelerId(travelerId: string): Promise<P2TravelerChange[]> {
+    return await db.select().from(p2TravelerChanges).where(eq(p2TravelerChanges.travelerId, travelerId)).orderBy(desc(p2TravelerChanges.createdAt));
+  }
+
+  async createP2TravelerChange(data: InsertP2TravelerChange): Promise<P2TravelerChange> {
+    // Generate change number: DEV-YYYY-NNN
+    const year = new Date().getFullYear();
+    const existingChanges = await db.select().from(p2TravelerChanges);
+    const yearChanges = existingChanges.filter(c => c.changeNumber?.startsWith(`DEV-${year}`));
+    const nextNum = yearChanges.length + 1;
+    const changeNumber = `DEV-${year}-${String(nextNum).padStart(3, '0')}`;
+    
+    const [change] = await db.insert(p2TravelerChanges).values({ ...data, changeNumber }).returning();
+    return change;
+  }
+
+  async updateP2TravelerChange(id: string, data: Partial<InsertP2TravelerChange>): Promise<P2TravelerChange> {
+    const [change] = await db.update(p2TravelerChanges)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2TravelerChanges.id, id))
+      .returning();
+    return change;
   }
 
   // P2 Serialized Items CRUD

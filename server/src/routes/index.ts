@@ -1772,6 +1772,195 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============== P2 Changes API Routes (AS9100 Change Control) ==============
+  
+  // Production Changes (PCF/PCR) CRUD
+  app.get('/api/p2/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getAllP2ProductionChanges();
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching production changes:', error);
+      res.status(500).json({ error: 'Failed to fetch production changes' });
+    }
+  });
+
+  app.get('/api/p2/changes/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.getP2ProductionChange(req.params.id);
+      if (!change) {
+        return res.status(404).json({ error: 'Production change not found' });
+      }
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error fetching production change:', error);
+      res.status(500).json({ error: 'Failed to fetch production change' });
+    }
+  });
+
+  app.post('/api/p2/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.createP2ProductionChange(req.body);
+      res.status(201).json(change);
+    } catch (error: any) {
+      console.error('Error creating production change:', error);
+      res.status(500).json({ error: 'Failed to create production change' });
+    }
+  });
+
+  app.post('/api/p2/changes/:id/approve', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { approvedById, approvedByName } = req.body;
+      const change = await storage.updateP2ProductionChange(req.params.id, {
+        status: 'APPROVED',
+        approvedById,
+        approvedByName,
+        approvedAt: new Date(),
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error approving production change:', error);
+      res.status(500).json({ error: 'Failed to approve production change' });
+    }
+  });
+
+  app.post('/api/p2/changes/:id/reject', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { rejectedById, rejectedByName, rejectionReason } = req.body;
+      const change = await storage.updateP2ProductionChange(req.params.id, {
+        status: 'REJECTED',
+        rejectedById,
+        rejectedByName,
+        rejectedAt: new Date(),
+        rejectionReason,
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error rejecting production change:', error);
+      res.status(500).json({ error: 'Failed to reject production change' });
+    }
+  });
+
+  app.put('/api/p2/changes/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.updateP2ProductionChange(req.params.id, req.body);
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error updating production change:', error);
+      res.status(500).json({ error: 'Failed to update production change' });
+    }
+  });
+
+  // Traveler Changes (Deviations) CRUD
+  app.get('/api/p2/traveler-changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getAllP2TravelerChanges();
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching traveler changes:', error);
+      res.status(500).json({ error: 'Failed to fetch traveler changes' });
+    }
+  });
+
+  app.get('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getP2TravelerChangesByTravelerId(req.params.travelerId);
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching traveler changes:', error);
+      res.status(500).json({ error: 'Failed to fetch traveler changes' });
+    }
+  });
+
+  app.post('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.createP2TravelerChange({
+        ...req.body,
+        travelerId: req.params.travelerId,
+      });
+      res.status(201).json(change);
+    } catch (error: any) {
+      console.error('Error creating traveler change:', error);
+      res.status(500).json({ error: 'Failed to create traveler change' });
+    }
+  });
+
+  app.post('/api/travelers/:travelerId/changes/:changeId/authorize', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { authorizedById, authorizedByName } = req.body;
+      const change = await storage.updateP2TravelerChange(req.params.changeId, {
+        status: 'APPROVED',
+        authorizedById,
+        authorizedByName,
+        authorizationDate: new Date(),
+        blocksTraveler: false, // Unblock once authorized
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error authorizing traveler change:', error);
+      res.status(500).json({ error: 'Failed to authorize traveler change' });
+    }
+  });
+
+  app.post('/api/p2/traveler-changes/:id/reject', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { rejectedById, rejectedByName, rejectionReason } = req.body;
+      const change = await storage.updateP2TravelerChange(req.params.id, {
+        status: 'REJECTED',
+        rejectedById,
+        rejectedByName,
+        rejectedAt: new Date(),
+        rejectionReason,
+        blocksTraveler: false, // Unblock after rejection
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error rejecting traveler change:', error);
+      res.status(500).json({ error: 'Failed to reject traveler change' });
+    }
+  });
+
+  // Change Impact Panel - aggregate view
+  app.get('/api/p2/changes/impact', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const productionChanges = await storage.getAllP2ProductionChanges();
+      const travelerChanges = await storage.getAllP2TravelerChanges();
+      
+      const pendingProductionChanges = productionChanges.filter((c: any) => ['DRAFT', 'SUBMITTED'].includes(c.status));
+      const pendingTravelerChanges = travelerChanges.filter((c: any) => c.status === 'PENDING');
+      const blockingChanges = travelerChanges.filter((c: any) => c.blocksTraveler && c.status === 'PENDING');
+      
+      res.json({
+        summary: {
+          totalProductionChanges: productionChanges.length,
+          pendingProductionChanges: pendingProductionChanges.length,
+          totalTravelerChanges: travelerChanges.length,
+          pendingTravelerChanges: pendingTravelerChanges.length,
+          blockingChanges: blockingChanges.length,
+          productionBlocked: blockingChanges.length > 0,
+        },
+        pendingProductionChanges,
+        pendingTravelerChanges,
+        blockingChanges,
+      });
+    } catch (error: any) {
+      console.error('Error fetching change impact:', error);
+      res.status(500).json({ error: 'Failed to fetch change impact' });
+    }
+  });
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {

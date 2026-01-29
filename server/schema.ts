@@ -8750,6 +8750,94 @@ export const insertP2DepartmentTransferSignatureSchema = createInsertSchema(p2De
 export type P2DepartmentTransferSignature = typeof p2DepartmentTransferSignatures.$inferSelect;
 export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2DepartmentTransferSignatureSchema>;
 
+// P2 Production Changes (PCF/PCR) - AS9100 Configuration Control
+// Scope: Affects routing, BOM, process, materials, or inspection requirements
+export const p2ProductionChanges = pgTable('p2_production_changes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  changeNumber: text('change_number').notNull().unique(), // PCF-2026-001 format
+  changeType: text('change_type').notNull(), // PROCESS | MATERIAL | ROUTING | BOM | INSPECTION
+  scope: text('scope').notNull().default('PO'), // GLOBAL | PO | PART
+  partNumber: text('part_number'),
+  poId: integer('po_id').references(() => p2PurchaseOrders.id),
+  routingId: uuid('routing_id'), // References routing document if applicable
+  currentRevision: text('current_revision'),
+  proposedChange: text('proposed_change').notNull(),
+  reason: text('reason').notNull(),
+  riskAssessment: text('risk_assessment'),
+  requiresCustomerApproval: boolean('requires_customer_approval').default(false),
+  status: text('status').notNull().default('DRAFT'), // DRAFT | SUBMITTED | APPROVED | REJECTED | IMPLEMENTED
+  submittedById: integer('submitted_by_id').references(() => employees.id),
+  submittedByName: text('submitted_by_name'),
+  submittedAt: timestamp('submitted_at'),
+  approvedById: integer('approved_by_id').references(() => employees.id),
+  approvedByName: text('approved_by_name'),
+  approvedAt: timestamp('approved_at'),
+  rejectedById: integer('rejected_by_id').references(() => employees.id),
+  rejectedByName: text('rejected_by_name'),
+  rejectedAt: timestamp('rejected_at'),
+  rejectionReason: text('rejection_reason'),
+  implementedAt: timestamp('implemented_at'),
+  effectiveDate: date('effective_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  poIdIdx: index('p2_prod_changes_po_id_idx').on(table.poId),
+  statusIdx: index('p2_prod_changes_status_idx').on(table.status),
+  changeTypeIdx: index('p2_prod_changes_type_idx').on(table.changeType),
+}));
+
+export const insertP2ProductionChangeSchema = createInsertSchema(p2ProductionChanges).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type P2ProductionChange = typeof p2ProductionChanges.$inferSelect;
+export type InsertP2ProductionChange = z.infer<typeof insertP2ProductionChangeSchema>;
+
+// P2 Traveler Changes / Deviations - AS9100 Controlled Deviations
+// Scope: Affects specific traveler only, routing stays intact
+export const p2TravelerChanges = pgTable('p2_traveler_changes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  changeNumber: text('change_number').notNull().unique(), // DEV-2026-001 format
+  travelerId: uuid('traveler_id').notNull(), // References traveler
+  serializedItemId: uuid('serialized_item_id').references(() => p2SerializedItems.id),
+  changeCategory: text('change_category').notNull(), // DEVIATION | REWORK | REPAIR | TEMPORARY
+  description: text('description').notNull(),
+  affectedStepIds: jsonb('affected_step_ids').$type<string[]>().default(sql`'[]'::jsonb`),
+  justification: text('justification').notNull(),
+  qualityImpact: text('quality_impact'),
+  status: text('status').notNull().default('PENDING'), // PENDING | APPROVED | REJECTED
+  blocksTraveler: boolean('blocks_traveler').default(false), // If true, traveler cannot continue
+  authorizedById: integer('authorized_by_id').references(() => employees.id),
+  authorizedByName: text('authorized_by_name'),
+  authorizationDate: timestamp('authorization_date'),
+  rejectedById: integer('rejected_by_id').references(() => employees.id),
+  rejectedByName: text('rejected_by_name'),
+  rejectedAt: timestamp('rejected_at'),
+  rejectionReason: text('rejection_reason'),
+  notes: text('notes'),
+  createdById: integer('created_by_id').references(() => employees.id),
+  createdByName: text('created_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  travelerIdIdx: index('p2_traveler_changes_traveler_id_idx').on(table.travelerId),
+  serializedItemIdIdx: index('p2_traveler_changes_item_id_idx').on(table.serializedItemId),
+  statusIdx: index('p2_traveler_changes_status_idx').on(table.status),
+  categoryIdx: index('p2_traveler_changes_category_idx').on(table.changeCategory),
+}));
+
+export const insertP2TravelerChangeSchema = createInsertSchema(p2TravelerChanges).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type P2TravelerChange = typeof p2TravelerChanges.$inferSelect;
+export type InsertP2TravelerChange = z.infer<typeof insertP2TravelerChangeSchema>;
+
 // Credit Memos - Customer credit management
 // sourceType: 'manual' = manual adjustment, 'overpayment' = order overpayment, 'return' = returned item/refund not sent to payment method
 export const creditMemos = pgTable('credit_memos', {

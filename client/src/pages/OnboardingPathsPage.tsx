@@ -37,7 +37,7 @@ export default function OnboardingPathsPage() {
   const [formData, setFormData] = useState({
     name: '',
     pathType: 'FULL_TIME',
-    intakeFormId: '',
+    intakeFormId: 'none',
     documentFolderId: '',
     isActive: true,
   });
@@ -57,8 +57,8 @@ export default function OnboardingPathsPage() {
         body: JSON.stringify({
           name: data.name,
           pathType: data.pathType,
-          intakeFormId: data.intakeFormId || null,
-          documentFolderId: data.documentFolderId || null,
+          intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
+          documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
           isActive: data.isActive,
         }),
       });
@@ -84,8 +84,8 @@ export default function OnboardingPathsPage() {
         body: JSON.stringify({
           name: data.name,
           pathType: data.pathType,
-          intakeFormId: data.intakeFormId || null,
-          documentFolderId: data.documentFolderId || null,
+          intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
+          documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
           isActive: data.isActive,
         }),
       });
@@ -128,7 +128,7 @@ export default function OnboardingPathsPage() {
     setFormData({
       name: '',
       pathType: 'FULL_TIME',
-      intakeFormId: '',
+      intakeFormId: 'none',
       documentFolderId: '',
       isActive: true,
     });
@@ -140,7 +140,7 @@ export default function OnboardingPathsPage() {
     setFormData({
       name: path.name,
       pathType: path.pathType,
-      intakeFormId: path.intakeFormId || '',
+      intakeFormId: path.intakeFormId || 'none',
       documentFolderId: path.documentFolderId || '',
       isActive: path.isActive,
     });
@@ -342,7 +342,7 @@ export default function OnboardingPathsPage() {
                     <SelectValue placeholder="Select an intake form" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {forms.filter(f => f.isActive).map((form) => (
                       <SelectItem key={form.id} value={form.id}>
                         {form.name}

@@ -48,6 +48,8 @@ const detailsSchema = z.object({
   customerPONumber: z.string().min(1, 'Customer PO number is required'),
   dueDate: z.string().min(1, 'Due date is required'),
   toleranceAuthorizer: z.string().min(1, 'Tolerance authorizer is required for quality control'),
+  assignedTo: z.string().optional(), // Who is responsible for this PO
+  productionLead: z.string().optional(), // Production lead for this PO
   notes: z.string().optional(),
 });
 
@@ -86,6 +88,8 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       customerPONumber: '',
       dueDate: '',
       toleranceAuthorizer: '',
+      assignedTo: '',
+      productionLead: '',
       notes: '',
     },
   });
@@ -180,6 +184,14 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       ? employees.find((emp: any) => emp.id.toString() === selectedAuthorizerId)
       : null;
 
+    // Find assigned employee and production lead for ownership fields
+    const assignedEmployee = poDetails?.assignedTo 
+      ? employees.find((e: any) => e.id.toString() === poDetails.assignedTo)
+      : null;
+    const productionLeadEmployee = poDetails?.productionLead
+      ? employees.find((e: any) => e.id.toString() === poDetails.productionLead)
+      : null;
+
     const orderData = {
       customerId: selectedCustomer.id,
       customerPONumber: poDetails?.customerPONumber,
@@ -191,6 +203,15 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
         : null,
       toleranceNotes: poDetails?.notes,
       notes: poDetails?.notes,
+      // Ownership fields for accountability
+      assignedToId: assignedEmployee?.id || null,
+      assignedToName: assignedEmployee 
+        ? `${assignedEmployee.firstName} ${assignedEmployee.lastName}` 
+        : null,
+      productionLeadId: productionLeadEmployee?.id || null,
+      productionLeadName: productionLeadEmployee
+        ? `${productionLeadEmployee.firstName} ${productionLeadEmployee.lastName}`
+        : null,
       lineItems: lineItems.map((item) => ({
         partNumber: item.partNumber,
         description: item.description,
@@ -363,6 +384,68 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   </FormItem>
                 )}
               />
+
+              <Separator className="my-4" />
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm text-muted-foreground">Ownership & Accountability</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={detailsForm.control}
+                    name="assignedTo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Assigned To (Optional)</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-assigned-to">
+                              <SelectValue placeholder="Who is responsible..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Unassigned</SelectItem>
+                            {employees
+                              .filter((emp: any) => emp.isActive !== false)
+                              .map((emp: any) => (
+                                <SelectItem key={emp.id} value={emp.id.toString()}>
+                                  {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={detailsForm.control}
+                    name="productionLead"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Production Lead (Optional)</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-production-lead">
+                              <SelectValue placeholder="Production lead..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Unassigned</SelectItem>
+                            {employees
+                              .filter((emp: any) => emp.isActive !== false)
+                              .map((emp: any) => (
+                                <SelectItem key={emp.id} value={emp.id.toString()}>
+                                  {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
 
               <FormField
                 control={detailsForm.control}

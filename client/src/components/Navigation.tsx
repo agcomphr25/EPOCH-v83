@@ -441,6 +441,12 @@ export default function Navigation() {
       icon: CheckSquare,
       description: 'Orders completed in Finish QC by technician and progression user',
     },
+    {
+      path: '/due-date-capacity',
+      label: 'Due Date Capacity Report',
+      icon: Calendar,
+      description: 'View orders grouped by due date week to identify capacity issues',
+    },
     // {
     //   path: '/ag-bottom-metal-report',
     //   label: 'AG Bottom Metal Report',
@@ -906,6 +912,12 @@ export default function Navigation() {
       label: 'Order Reports',
       icon: Search,
       description: 'Advanced search with AND/OR logic for filtering orders',
+    },
+    {
+      path: '/admin/qr-codes',
+      label: 'QR Code Management',
+      icon: QrCode,
+      description: 'Generate and manage QR codes for orders, employees, and products',
     },
     {
       path: '/due-date-capacity',

@@ -13,6 +13,7 @@ import {
   BarChart3,
   CheckCircle,
   GraduationCap,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -153,6 +154,29 @@ export default function Dashboard() {
                 <Button className="w-full justify-start" variant="outline">
                   <Settings className="h-4 w-4 mr-2" />
                   Time Clock Admin
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Customer Tickets */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-cyan-600" />
+              Customer Tickets
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">
+              Customer support ticket management
+            </p>
+            <div className="space-y-2">
+              <Link href="/tickets">
+                <Button className="w-full justify-start" variant="outline">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  View Tickets
                 </Button>
               </Link>
             </div>

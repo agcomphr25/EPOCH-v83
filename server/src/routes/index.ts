@@ -1551,7 +1551,11 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Request body:', JSON.stringify(req.body, null, 2));
       const { storage } = await import('../../storage');
       
-      const { customerId, customerPONumber, dueDate, toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems } = req.body;
+      const { 
+        customerId, customerPONumber, dueDate, 
+        toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
+        assignedToId, assignedToName, productionLeadId, productionLeadName 
+      } = req.body;
       
       // Get customer info
       const customer = await storage.getP2Customer(customerId);
@@ -1601,6 +1605,13 @@ export function registerRoutes(app: Express): Server {
         toleranceAuthorizerId: toleranceAuthorizerId || null,
         toleranceAuthorizerName: toleranceAuthorizerName || null,
         toleranceNotes: toleranceNotes || null,
+        // Ownership fields for AS9100 accountability
+        createdById: toleranceAuthorizerId || null, // Use authorizer as creator since no auth context
+        createdByName: toleranceAuthorizerName || null,
+        assignedToId: assignedToId && assignedToId !== 'none' ? parseInt(assignedToId) : null,
+        assignedToName: assignedToName || null,
+        productionLeadId: productionLeadId && productionLeadId !== 'none' ? parseInt(productionLeadId) : null,
+        productionLeadName: productionLeadName || null,
       };
       
       console.log('🔧 Creating PO with complete data:', JSON.stringify(poData, null, 2));
@@ -1642,13 +1653,33 @@ export function registerRoutes(app: Express): Server {
       const { id } = req.params;
       const poData = req.body;
       
-      // Check if PO is locked - prevent edits to locked POs
       const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
-      if (existingPO?.lockedAt) {
+      if (!existingPO) {
+        return res.status(404).json({ error: 'PO not found' });
+      }
+      
+      // STATE GUARD: Check if PO is locked - prevent edits to locked POs
+      if (existingPO.lockedAt) {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be modified',
           lockedAt: existingPO.lockedAt,
           lockedBy: existingPO.lockedBy
+        });
+      }
+      
+      // STATE GUARD: Cannot modify CLOSED or CANCELED POs
+      if (existingPO.status === 'CLOSED' || existingPO.status === 'CANCELED') {
+        return res.status(400).json({
+          error: `Cannot modify a ${existingPO.status} PO`,
+          currentStatus: existingPO.status
+        });
+      }
+      
+      // STATE GUARD: Cannot move to CLOSED unless BOM is configured
+      if (poData.status === 'CLOSED' && !existingPO.bomConfigured) {
+        return res.status(400).json({
+          error: 'Cannot close PO - BOM has not been configured',
+          guard: 'BOM_REQUIRED'
         });
       }
       
@@ -1741,6 +1772,195 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============== P2 Changes API Routes (AS9100 Change Control) ==============
+  
+  // Production Changes (PCF/PCR) CRUD
+  app.get('/api/p2/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getAllP2ProductionChanges();
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching production changes:', error);
+      res.status(500).json({ error: 'Failed to fetch production changes' });
+    }
+  });
+
+  app.get('/api/p2/changes/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.getP2ProductionChange(req.params.id);
+      if (!change) {
+        return res.status(404).json({ error: 'Production change not found' });
+      }
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error fetching production change:', error);
+      res.status(500).json({ error: 'Failed to fetch production change' });
+    }
+  });
+
+  app.post('/api/p2/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.createP2ProductionChange(req.body);
+      res.status(201).json(change);
+    } catch (error: any) {
+      console.error('Error creating production change:', error);
+      res.status(500).json({ error: 'Failed to create production change' });
+    }
+  });
+
+  app.post('/api/p2/changes/:id/approve', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { approvedById, approvedByName } = req.body;
+      const change = await storage.updateP2ProductionChange(req.params.id, {
+        status: 'APPROVED',
+        approvedById,
+        approvedByName,
+        approvedAt: new Date(),
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error approving production change:', error);
+      res.status(500).json({ error: 'Failed to approve production change' });
+    }
+  });
+
+  app.post('/api/p2/changes/:id/reject', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { rejectedById, rejectedByName, rejectionReason } = req.body;
+      const change = await storage.updateP2ProductionChange(req.params.id, {
+        status: 'REJECTED',
+        rejectedById,
+        rejectedByName,
+        rejectedAt: new Date(),
+        rejectionReason,
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error rejecting production change:', error);
+      res.status(500).json({ error: 'Failed to reject production change' });
+    }
+  });
+
+  app.put('/api/p2/changes/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.updateP2ProductionChange(req.params.id, req.body);
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error updating production change:', error);
+      res.status(500).json({ error: 'Failed to update production change' });
+    }
+  });
+
+  // Traveler Changes (Deviations) CRUD
+  app.get('/api/p2/traveler-changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getAllP2TravelerChanges();
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching traveler changes:', error);
+      res.status(500).json({ error: 'Failed to fetch traveler changes' });
+    }
+  });
+
+  app.get('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const changes = await storage.getP2TravelerChangesByTravelerId(req.params.travelerId);
+      res.json(changes);
+    } catch (error: any) {
+      console.error('Error fetching traveler changes:', error);
+      res.status(500).json({ error: 'Failed to fetch traveler changes' });
+    }
+  });
+
+  app.post('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const change = await storage.createP2TravelerChange({
+        ...req.body,
+        travelerId: req.params.travelerId,
+      });
+      res.status(201).json(change);
+    } catch (error: any) {
+      console.error('Error creating traveler change:', error);
+      res.status(500).json({ error: 'Failed to create traveler change' });
+    }
+  });
+
+  app.post('/api/travelers/:travelerId/changes/:changeId/authorize', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { authorizedById, authorizedByName } = req.body;
+      const change = await storage.updateP2TravelerChange(req.params.changeId, {
+        status: 'APPROVED',
+        authorizedById,
+        authorizedByName,
+        authorizationDate: new Date(),
+        blocksTraveler: false, // Unblock once authorized
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error authorizing traveler change:', error);
+      res.status(500).json({ error: 'Failed to authorize traveler change' });
+    }
+  });
+
+  app.post('/api/p2/traveler-changes/:id/reject', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { rejectedById, rejectedByName, rejectionReason } = req.body;
+      const change = await storage.updateP2TravelerChange(req.params.id, {
+        status: 'REJECTED',
+        rejectedById,
+        rejectedByName,
+        rejectedAt: new Date(),
+        rejectionReason,
+        blocksTraveler: false, // Unblock after rejection
+      });
+      res.json(change);
+    } catch (error: any) {
+      console.error('Error rejecting traveler change:', error);
+      res.status(500).json({ error: 'Failed to reject traveler change' });
+    }
+  });
+
+  // Change Impact Panel - aggregate view
+  app.get('/api/p2/changes/impact', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const productionChanges = await storage.getAllP2ProductionChanges();
+      const travelerChanges = await storage.getAllP2TravelerChanges();
+      
+      const pendingProductionChanges = productionChanges.filter((c: any) => ['DRAFT', 'SUBMITTED'].includes(c.status));
+      const pendingTravelerChanges = travelerChanges.filter((c: any) => c.status === 'PENDING');
+      const blockingChanges = travelerChanges.filter((c: any) => c.blocksTraveler && c.status === 'PENDING');
+      
+      res.json({
+        summary: {
+          totalProductionChanges: productionChanges.length,
+          pendingProductionChanges: pendingProductionChanges.length,
+          totalTravelerChanges: travelerChanges.length,
+          pendingTravelerChanges: pendingTravelerChanges.length,
+          blockingChanges: blockingChanges.length,
+          productionBlocked: blockingChanges.length > 0,
+        },
+        pendingProductionChanges,
+        pendingTravelerChanges,
+        blockingChanges,
+      });
+    } catch (error: any) {
+      console.error('Error fetching change impact:', error);
+      res.status(500).json({ error: 'Failed to fetch change impact' });
+    }
+  });
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
@@ -1783,14 +2003,77 @@ export function registerRoutes(app: Express): Server {
       const pos = await storage.getAllP2PurchaseOrders();
       const actions: any[] = [];
       
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Helper to calculate days until due
+      const getDaysUntilDue = (dueDate: string | Date | null): number | null => {
+        if (!dueDate) return null;
+        const due = new Date(dueDate);
+        due.setHours(0, 0, 0, 0);
+        const diffTime = due.getTime() - today.getTime();
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      };
+      
+      // Helper to determine severity based on days until due
+      // 🔴 critical: < 3 days or overdue
+      // 🟡 warning: 3-7 days
+      // 🟢 info: > 7 days
+      const getSeverity = (daysUntilDue: number | null, isBlocking: boolean = false): 'critical' | 'warning' | 'info' => {
+        if (isBlocking) return 'critical';
+        if (daysUntilDue === null) return 'info';
+        if (daysUntilDue < 3) return 'critical';
+        if (daysUntilDue <= 7) return 'warning';
+        return 'info';
+      };
+      
       pos.forEach((po: any) => {
+        if (po.status === 'CANCELED' || po.status === 'CLOSED') return;
+        
+        const daysUntilDue = getDaysUntilDue(po.expectedDelivery);
+        const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+        
+        // PO needs BOM setup - blocking production (always critical - can't proceed without BOM)
         if (!po.bomConfigured) {
+          const severity = getSeverity(daysUntilDue, true); // isBlocking=true for missing BOM
           actions.push({
             type: 'needs_bom',
             poId: po.id,
-            label: `${po.poNumber} needs BOM setup`
+            poNumber: po.poNumber,
+            customerName: po.customerName,
+            label: `${po.poNumber} needs BOM setup`,
+            severity,
+            daysUntilDue,
+            isOverdue
           });
         }
+        
+        // PO with BOM but not yet in production - needs scheduling
+        if (po.bomConfigured && po.status === 'OPEN') {
+          const severity = getSeverity(daysUntilDue);
+          actions.push({
+            type: 'needs_schedule',
+            poId: po.id,
+            poNumber: po.poNumber,
+            customerName: po.customerName,
+            label: `${po.poNumber} ready to schedule`,
+            severity,
+            daysUntilDue,
+            isOverdue
+          });
+        }
+      });
+      
+      // Sort by severity (critical first, then warning, then info) and then by days until due
+      const severityOrder = { critical: 0, warning: 1, info: 2 };
+      actions.sort((a, b) => {
+        const severityDiff = severityOrder[a.severity as keyof typeof severityOrder] - severityOrder[b.severity as keyof typeof severityOrder];
+        if (severityDiff !== 0) return severityDiff;
+        // Within same severity, sort by days until due (most urgent first)
+        if (a.daysUntilDue === null && b.daysUntilDue === null) return 0;
+        if (a.daysUntilDue === null) return 1;
+        if (b.daysUntilDue === null) return -1;
+        return a.daysUntilDue - b.daysUntilDue;
       });
       
       res.json(actions);

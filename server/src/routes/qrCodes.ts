@@ -20,6 +20,8 @@ import {
   resolveQRCode,
   isValidEntityType,
   generateQRCodeUrl,
+  generateQrSvg,
+  generateQrPng,
   VALID_ENTITY_TYPES,
 } from '../utils/qrCodeGenerator';
 
@@ -394,7 +396,7 @@ const createQRCodeSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   expiresAt: z.string().datetime().optional().nullable(),
-  resolveUrl: z.string().url().optional().nullable(),
+  resolveUrl: z.string().optional().nullable(), // Allow both full URLs and relative paths
   metadata: z.record(z.any()).optional(),
 });
 
@@ -475,13 +477,89 @@ adminRouter.post('/', authenticateToken, requireRole('ADMIN', 'OWNER'), async (r
 });
 
 /**
+ * GET /api/qr-codes/:id/image/svg - Generate QR code as SVG
+ */
+adminRouter.get('/:id/image/svg', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const currentEnv = getCurrentEnvironment();
+
+    // Look up QR record
+    const [qrCode] = await db
+      .select()
+      .from(qrCodes)
+      .where(eq(qrCodes.id, id));
+
+    if (!qrCode) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    // Construct resolver URL
+    const qrUrl = generateQRCodeUrl(qrCode.publicCode, currentEnv);
+
+    // Generate QR image
+    const svgBuffer = await generateQrSvg(qrUrl, {
+      errorCorrectionLevel: 'H', // High error correction for print
+      margin: 2,
+      width: 300,
+    });
+
+    // Send with correct content type
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Content-Disposition', `inline; filename="${qrCode.publicCode}.svg"`);
+    res.send(svgBuffer);
+  } catch (error) {
+    console.error('[QR] SVG generation error:', error);
+    res.status(500).json({ error: 'Failed to generate QR code SVG' });
+  }
+});
+
+/**
+ * GET /api/qr-codes/:id/image/png - Generate QR code as PNG
+ */
+adminRouter.get('/:id/image/png', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const currentEnv = getCurrentEnvironment();
+
+    // Look up QR record
+    const [qrCode] = await db
+      .select()
+      .from(qrCodes)
+      .where(eq(qrCodes.id, id));
+
+    if (!qrCode) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    // Construct resolver URL
+    const qrUrl = generateQRCodeUrl(qrCode.publicCode, currentEnv);
+
+    // Generate QR image
+    const pngBuffer = await generateQrPng(qrUrl, {
+      errorCorrectionLevel: 'H', // High error correction for print
+      margin: 2,
+      width: 300,
+    });
+
+    // Send with correct content type
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="${qrCode.publicCode}.png"`);
+    res.send(pngBuffer);
+  } catch (error) {
+    console.error('[QR] PNG generation error:', error);
+    res.status(500).json({ error: 'Failed to generate QR code PNG' });
+  }
+});
+
+/**
  * PATCH /api/qr-codes/:id - Update a QR code
  */
 const updateQRCodeSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   expiresAt: z.string().datetime().optional().nullable(),
-  resolveUrl: z.string().url().optional().nullable(),
+  resolveUrl: z.string().optional().nullable(), // Allow both full URLs and relative paths
   metadata: z.record(z.any()).optional(),
 });
 

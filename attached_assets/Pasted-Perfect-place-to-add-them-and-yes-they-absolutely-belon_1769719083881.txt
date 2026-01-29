@@ -1,0 +1,187 @@
+Perfect place to add them — and yes, they absolutely belong inside P2, not bolted on somewhere else.
+If you do this right, you’ll cover AS9100 change control + traveler integrity without wrecking production flow.
+
+I’ll give you a clean, minimal, auditor-proof design that fits your existing P2 Control Center logic.
+
+🧠 First: Conceptual Model (AS9100-Correct)
+
+You need two related but distinct change mechanisms:
+
+Change Type	Purpose	AS9100 Intent
+Production Change Form (PCF)	Change to how or what is being produced	Configuration control
+Traveler Change / Deviation	Change to this specific job	Controlled deviation
+
+Key rule:
+
+No silent changes. Ever.
+
+🧩 Where This Lives in P2 (UI Placement)
+✅ Add ONE new tab
+
+Tab Name: Changes
+(Do NOT bury this in Docs or Travelers — auditors look for this explicitly.)
+
+Tab order (recommended):
+
+Status | Customers | POs | Setup | Schedule | Production | Travelers | Changes | Docs | Routing | Certs
+
+🧭 Changes Tab – 3 Sections
+1️⃣ Production Change Requests (PCR / PCF)
+
+Scope: Affects routing, BOM, process, materials, or inspection requirements
+
+Examples:
+
+Material substitution
+
+Added/removed operation
+
+Cure cycle change
+
+Tooling change
+
+Inspection method change
+
+Key properties:
+
+Linked to:
+
+PO
+
+Part Number
+
+Routing Revision
+
+Does NOT auto-change anything
+
+Requires approval before effect
+
+2️⃣ Traveler Changes / Deviations
+
+Scope: Affects this traveler only
+
+Examples:
+
+Skip a step
+
+Resequence steps
+
+Extra inspection
+
+Repair or rework
+
+One-time material allowance
+
+Key rule:
+
+Routing stays intact. Traveler deviates with authorization.
+
+3️⃣ Change Impact Panel (Read-Only)
+
+Shows:
+
+Travelers affected
+
+POs affected
+
+Status: Pending / Approved / Rejected / Implemented
+
+Whether production is blocked
+
+This becomes a risk visibility tool for management.
+
+🗂 Data Model (Minimal + Powerful)
+🔹 Production Change Form (PCF)
+production_changes {
+  id
+  change_type            // PROCESS | MATERIAL | ROUTING | BOM | INSPECTION
+  scope                  // GLOBAL | PO | PART
+  part_number
+  po_id (nullable)
+  routing_id
+  current_revision
+  proposed_change
+  reason
+  risk_assessment
+  requires_customer_approval (boolean)
+  status                 // DRAFT | SUBMITTED | APPROVED | REJECTED | IMPLEMENTED
+  submitted_by
+  approved_by
+  approved_at
+  effective_date
+  created_at
+}
+
+🔹 Traveler Change / Deviation
+traveler_changes {
+  id
+  traveler_id
+  change_category        // DEVIATION | REWORK | REPAIR | TEMPORARY
+  description
+  affected_step_ids
+  justification
+  quality_impact
+  status                 // PENDING | APPROVED | REJECTED
+  authorized_by
+  authorization_date
+  blocks_traveler (boolean)
+}
+
+🚦 Behavior Rules (This Is Where You Win Audits)
+🔴 Hard Gates
+
+Traveler CANNOT continue if:
+
+Change status = PENDING
+
+blocks_traveler = true
+
+Production Change:
+
+Cannot modify routing/BOM directly
+
+Must generate:
+
+New routing revision OR
+
+Approved deviation reference
+
+🟢 Soft Gates
+
+Traveler change approved:
+
+Traveler resumes
+
+Deviation reference printed on traveler PDF
+
+Linked permanently to traveler record
+
+🖨 Traveler Integration (Critical)
+
+Every traveler must show:
+
+AUTHORIZED DEVIATIONS:
+- DEV-2026-014 – Approved by J.Smith – 2026-01-29
+
+
+This is non-negotiable for AS9100.
+
+🔁 Status Flow (Simple & Defensible)
+Production Change
+Draft → Submitted → Approved → Implemented → Closed
+
+Traveler Change
+Pending → Approved → Logged (Immutable)
+
+
+Once logged = read-only forever
+
+🔌 API Endpoints (Fits Your Existing Pattern)
+GET    /api/p2/changes
+POST   /api/p2/changes
+POST   /api/p2/changes/:id/approve
+POST   /api/p2/changes/:id/reject
+
+GET    /api/travelers/:id/changes
+POST   /api/travelers/:id/changes
+POST   /api/travelers/:id/changes/:id/authorize

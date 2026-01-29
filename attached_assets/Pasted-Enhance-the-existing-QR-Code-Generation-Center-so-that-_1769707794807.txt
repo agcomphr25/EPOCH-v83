@@ -1,0 +1,102 @@
+Enhance the existing QR Code Generation Center so that it actually generates,
+previews, and allows downloading QR codes.
+
+GOAL:
+When an admin creates a QR code, they must be able to immediately see,
+scan, and download the QR image for testing and physical use.
+
+DO NOT:
+- Change existing qr_codes schema (except where noted)
+- Break existing resolver URLs
+- Remove any existing functionality
+
+────────────────────────────────────────
+PART 1 — QR IMAGE GENERATION
+────────────────────────────────────────
+
+1) ADD QR IMAGE GENERATION UTILITY
+Create a reusable helper:
+- generateQrSvg(url: string): Buffer
+- generateQrPng(url: string): Buffer (optional but preferred)
+
+Use a standard QR library (e.g. qrcode npm package).
+The QR must encode the FULL resolver URL:
+  https://<app-domain>/qr/{qrCode}
+
+Ensure output is high-contrast and print-safe.
+
+────────────────────────────────────────
+PART 2 — BACKEND ENDPOINTS
+────────────────────────────────────────
+
+2) ADD QR IMAGE ENDPOINTS
+
+Add authenticated admin endpoints:
+
+GET /api/qr-codes/:id/image/svg
+GET /api/qr-codes/:id/image/png
+
+Behavior:
+- Look up QR record
+- Construct resolver URL
+- Generate QR image on demand
+- Stream response with correct Content-Type
+- No image storage required (generate dynamically)
+
+────────────────────────────────────────
+PART 3 — ADMIN UI ENHANCEMENTS
+────────────────────────────────────────
+
+3) ADD “VIEW QR” ACTION
+
+In the QR Codes table:
+- Add an icon/button: “View QR”
+- Clicking opens a modal displaying:
+  - Large QR preview
+  - Resolver URL (read-only)
+  - Buttons:
+      - Download SVG
+      - Download PNG
+      - Copy resolver URL
+
+4) IMMEDIATE POST-CREATE FEEDBACK
+
+After “Create QR Code” succeeds:
+- Automatically open the QR Preview modal
+- This confirms creation and enables instant testing
+
+────────────────────────────────────────
+PART 4 — UX SAFETY & CLARITY
+────────────────────────────────────────
+
+5) ADD HELPER TEXT (MINIMAL)
+
+In the QR preview modal:
+- Display:
+  “Scan this QR to open: /qr/{code}”
+
+Do NOT:
+- Ask the user to manually generate QR codes elsewhere
+- Require copy-pasting into third-party tools
+
+────────────────────────────────────────
+PART 5 — TESTING & VALIDATION
+────────────────────────────────────────
+
+6) VERIFY END-TO-END FLOW
+
+Confirm:
+- QR image scans correctly on a phone
+- Redirects through /qr/{code}
+- Enforces auth and environment rules
+- Audit logs still record QR_SCANNED
+
+────────────────────────────────────────
+DELIVERABLES
+────────────────────────────────────────
+
+- QR image generation utility
+- Admin API endpoints for QR images
+- Admin UI QR preview & download
+- Post-create auto-preview behavior
+- Brief summary of changes

@@ -68,6 +68,8 @@ import {
   X,
   Clock,
   AlertTriangle,
+  Eye,
+  Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -136,6 +138,9 @@ export default function QRCodeAdminPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
   const [disableReason, setDisableReason] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewQRCode, setPreviewQRCode] = useState<QRCode | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
   const { toast } = useToast();
 
   const [newQRCode, setNewQRCode] = useState({
@@ -210,6 +215,30 @@ export default function QRCodeAdminPage() {
         title: 'QR Code Created',
         description: `Code: ${data.publicCode}`,
       });
+      
+      // Auto-open preview after create
+      if (data.id) {
+        const createdQRCode: QRCode = {
+          id: data.id,
+          publicCode: data.publicCode,
+          entityType: data.entityType,
+          entityIdentifier: data.entityIdentifier,
+          label: data.label || null,
+          description: data.description || null,
+          isActive: data.isActive ?? true,
+          expiresAt: data.expiresAt || null,
+          environment: data.environment || 'dev',
+          resolveUrl: data.resolveUrl || null,
+          metadata: data.metadata || null,
+          createdByUserId: data.createdByUserId || null,
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString(),
+          disabledAt: null,
+          disabledByUserId: null,
+          disabledReason: null,
+        };
+        openQRPreview(createdQRCode);
+      }
     },
     onError: (error: any) => {
       toast({
@@ -289,6 +318,45 @@ export default function QRCodeAdminPage() {
 
   const getQRUrl = (publicCode: string) => {
     return `${window.location.origin}/qr/${publicCode}`;
+  };
+
+  const openQRPreview = (qrCode: QRCode) => {
+    setPreviewQRCode(qrCode);
+    setPreviewImageUrl(`/api/qr-codes/${qrCode.id}/image/svg`);
+    setIsPreviewOpen(true);
+  };
+
+  const handleDownload = async (format: 'svg' | 'png') => {
+    if (!previewQRCode) return;
+    
+    try {
+      const response = await fetch(`/api/qr-codes/${previewQRCode.id}/image/${format}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) throw new Error('Failed to download');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${previewQRCode.publicCode}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'Downloaded',
+        description: `QR code saved as ${previewQRCode.publicCode}.${format}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to download QR code',
+        variant: 'destructive',
+      });
+    }
   };
 
   const columns: ColumnDef<QRCode>[] = useMemo(() => [
@@ -373,9 +441,21 @@ export default function QRCodeAdminPage() {
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
+              openQRPreview(row.original);
+            }}
+            title="View QR Code"
+          >
+            <Eye className="h-4 w-4 text-blue-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
               setSelectedQRCode(row.original);
               setIsPanelOpen(true);
             }}
+            title="Scan History"
           >
             <History className="h-4 w-4" />
           </Button>
@@ -919,6 +999,91 @@ export default function QRCodeAdminPage() {
               disabled={!disableReason || disableMutation.isPending}
             >
               {disableMutation.isPending ? 'Disabling...' : 'Disable'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              QR Code Preview
+            </DialogTitle>
+            <DialogDescription>
+              Scan this QR code to open: <code className="text-xs bg-gray-100 px-1 rounded">/qr/{previewQRCode?.publicCode}</code>
+            </DialogDescription>
+          </DialogHeader>
+          
+          {previewQRCode && (
+            <div className="flex flex-col items-center space-y-4 py-4">
+              {/* QR Code Image */}
+              <div className="bg-white p-4 rounded-lg border shadow-sm">
+                <img
+                  src={previewImageUrl}
+                  alt={`QR Code for ${previewQRCode.publicCode}`}
+                  className="w-64 h-64"
+                  style={{ imageRendering: 'crisp-edges' }}
+                />
+              </div>
+              
+              {/* QR Info */}
+              <div className="text-center space-y-1">
+                <p className="font-mono text-lg font-semibold">{previewQRCode.publicCode}</p>
+                {previewQRCode.label && (
+                  <p className="text-sm text-gray-600">{previewQRCode.label}</p>
+                )}
+                <Badge variant="outline" className="mt-1">
+                  {ENTITY_TYPES.find(t => t.value === previewQRCode.entityType)?.label || previewQRCode.entityType}
+                </Badge>
+              </div>
+              
+              {/* Resolver URL */}
+              <div className="w-full space-y-2">
+                <Label className="text-xs text-gray-500">Resolver URL</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={getQRUrl(previewQRCode.publicCode)}
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(getQRUrl(previewQRCode.publicCode))}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Download Buttons */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownload('svg')}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download SVG
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownload('png')}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download PNG
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

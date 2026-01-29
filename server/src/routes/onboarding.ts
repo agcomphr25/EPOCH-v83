@@ -509,25 +509,391 @@ router.delete('/forms/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/sessions', (_req: Request, res: Response) => {
-  res.status(501).json({ 
-    error: 'Not Implemented',
-    message: 'Onboarding sessions API coming in Phase 2'
-  });
+// Session Schemas
+const createSessionSchema = z.object({
+  onboardingPathId: z.string().uuid(),
+  employeeId: z.number().int().positive().optional(),
 });
 
-router.post('/sessions', (_req: Request, res: Response) => {
-  res.status(501).json({ 
-    error: 'Not Implemented',
-    message: 'Onboarding sessions API coming in Phase 2'
-  });
+const sessionStatusSchema = z.enum(['in_progress', 'paused', 'completed']);
+
+// GET /sessions - List all sessions with filters
+router.get('/sessions', async (req: Request, res: Response) => {
+  try {
+    const { status } = req.query;
+    
+    let query = `
+      SELECT 
+        s.id, s.employee_id as "employeeId", s.path_id as "pathId",
+        s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
+        s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
+        s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
+        p.name as "pathName", p.path_type as "pathType",
+        e.name as "employeeName"
+      FROM onboarding_sessions s
+      LEFT JOIN onboarding_paths p ON s.path_id = p.id
+      LEFT JOIN employees e ON s.employee_id = e.id
+    `;
+    
+    const params: any[] = [];
+    
+    if (status && typeof status === 'string') {
+      query += ` WHERE s.status = $1`;
+      params.push(status);
+    }
+    
+    query += ` ORDER BY s.started_at DESC`;
+    
+    const sessions = await pool.query(query, params);
+    
+    // Fetch documents and captures for each session
+    const sessionsWithSteps = await Promise.all(
+      sessions.map(async (session: any) => {
+        const documents = await pool.query(`
+          SELECT id, template_id as "templateId", instance_id as "instanceId",
+                 order_index as "orderIndex", status, signed_at as "signedAt"
+          FROM onboarding_session_documents
+          WHERE session_id = $1
+          ORDER BY order_index
+        `, [session.id]);
+        
+        const captures = await pool.query(`
+          SELECT id, capture_type as "captureType", media_item_id as "mediaItemId",
+                 captured_at as "capturedAt"
+          FROM onboarding_session_captures
+          WHERE session_id = $1
+        `, [session.id]);
+        
+        return {
+          ...session,
+          documents,
+          captures,
+        };
+      })
+    );
+    
+    res.json(sessionsWithSteps);
+  } catch (error) {
+    console.error('Error fetching onboarding sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch onboarding sessions' });
+  }
 });
 
-router.get('/sessions/:id', (_req: Request, res: Response) => {
-  res.status(501).json({ 
-    error: 'Not Implemented',
-    message: 'Onboarding sessions API coming in Phase 2'
-  });
+// GET /sessions/:id - Get single session with full details
+router.get('/sessions/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const sessions = await pool.query(`
+      SELECT 
+        s.id, s.employee_id as "employeeId", s.path_id as "pathId",
+        s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
+        s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
+        s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
+        p.name as "pathName", p.path_type as "pathType",
+        e.name as "employeeName"
+      FROM onboarding_sessions s
+      LEFT JOIN onboarding_paths p ON s.path_id = p.id
+      LEFT JOIN employees e ON s.employee_id = e.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // Fetch documents
+    const documents = await pool.query(`
+      SELECT id, template_id as "templateId", instance_id as "instanceId",
+             order_index as "orderIndex", status, signed_at as "signedAt"
+      FROM onboarding_session_documents
+      WHERE session_id = $1
+      ORDER BY order_index
+    `, [id]);
+    
+    // Fetch captures
+    const captures = await pool.query(`
+      SELECT id, capture_type as "captureType", media_item_id as "mediaItemId",
+             captured_at as "capturedAt"
+      FROM onboarding_session_captures
+      WHERE session_id = $1
+    `, [id]);
+    
+    res.json({
+      ...session,
+      documents,
+      captures,
+    });
+  } catch (error) {
+    console.error('Error fetching onboarding session:', error);
+    res.status(500).json({ error: 'Failed to fetch onboarding session' });
+  }
+});
+
+// POST /sessions - Create new session
+router.post('/sessions', async (req: Request, res: Response) => {
+  try {
+    const parsed = createSessionSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Invalid input', 
+        details: parsed.error.errors 
+      });
+    }
+    
+    const adminId = (req as any).user?.id || 1;
+    const { onboardingPathId, employeeId } = parsed.data;
+    
+    // Fetch the path to get intake form and document folder
+    const paths = await pool.query(`
+      SELECT id, name, path_type as "pathType", intake_form_id as "intakeFormId",
+             document_folder_id as "documentFolderId"
+      FROM onboarding_paths
+      WHERE id = $1 AND is_active = true
+    `, [onboardingPathId]);
+    
+    if (paths.length === 0) {
+      return res.status(404).json({ error: 'Onboarding path not found or inactive' });
+    }
+    
+    const path = paths[0];
+    
+    // Resolve intake form structure (snapshot)
+    let intakeDataSchema = null;
+    if (path.intakeFormId) {
+      const forms = await pool.query(`
+        SELECT fields_json as "fieldsJson"
+        FROM onboarding_forms
+        WHERE id = $1 AND is_active = true
+      `, [path.intakeFormId]);
+      
+      if (forms.length > 0) {
+        intakeDataSchema = forms[0].fieldsJson;
+      }
+    }
+    
+    // Create the session
+    const sessions = await pool.query(`
+      INSERT INTO onboarding_sessions 
+        (employee_id, path_id, admin_id, status, intake_data_schema, started_at)
+      VALUES ($1, $2, $3, 'in_progress', $4, NOW())
+      RETURNING id, employee_id as "employeeId", path_id as "pathId",
+                admin_id as "adminId", status, intake_data as "intakeData",
+                intake_data_schema as "intakeDataSchema", current_step as "currentStep",
+                started_at as "startedAt", paused_at as "pausedAt", completed_at as "completedAt"
+    `, [
+      employeeId || null,
+      onboardingPathId,
+      adminId,
+      intakeDataSchema ? JSON.stringify(intakeDataSchema) : null,
+    ]);
+    
+    const newSession = sessions[0];
+    
+    // Resolve document templates from folder if configured
+    if (path.documentFolderId) {
+      // Query fillable PDF templates from the document folder
+      const templates = await pool.query(`
+        SELECT id, name
+        FROM fillable_pdf_templates
+        WHERE folder_id = $1 AND is_active = true
+        ORDER BY name
+      `, [path.documentFolderId]);
+      
+      // Create session documents for each template
+      for (let i = 0; i < templates.length; i++) {
+        await pool.query(`
+          INSERT INTO onboarding_session_documents
+            (session_id, template_id, order_index, status)
+          VALUES ($1, $2, $3, 'pending')
+        `, [newSession.id, templates[i].id, i]);
+      }
+    }
+    
+    // Create default capture steps (photo ID, signature)
+    const defaultCaptures = ['photo_id', 'employee_photo'];
+    for (const captureType of defaultCaptures) {
+      await pool.query(`
+        INSERT INTO onboarding_session_captures
+          (session_id, capture_type)
+        VALUES ($1, $2)
+      `, [newSession.id, captureType]);
+    }
+    
+    // Fetch the created documents and captures
+    const documents = await pool.query(`
+      SELECT id, template_id as "templateId", order_index as "orderIndex", status
+      FROM onboarding_session_documents
+      WHERE session_id = $1
+      ORDER BY order_index
+    `, [newSession.id]);
+    
+    const captures = await pool.query(`
+      SELECT id, capture_type as "captureType", media_item_id as "mediaItemId"
+      FROM onboarding_session_captures
+      WHERE session_id = $1
+    `, [newSession.id]);
+    
+    // Audit log
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: newSession.id,
+        action: 'ONBOARDING_STARTED',
+        actor: {
+          id: adminId,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: {
+          pathId: onboardingPathId,
+          pathName: path.name,
+          employeeId: employeeId || null,
+          documentsCount: documents.length,
+          capturesCount: captures.length,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for ONBOARDING_STARTED:', auditError);
+    }
+    
+    res.status(201).json({
+      ...newSession,
+      pathName: path.name,
+      pathType: path.pathType,
+      documents,
+      captures,
+    });
+  } catch (error) {
+    console.error('Error creating onboarding session:', error);
+    res.status(500).json({ error: 'Failed to create onboarding session' });
+  }
+});
+
+// PATCH /sessions/:id/pause - Pause a session
+router.patch('/sessions/:id/pause', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user?.id || 1;
+    
+    // Check session exists and is in_progress
+    const sessions = await pool.query(`
+      SELECT id, status, path_id as "pathId"
+      FROM onboarding_sessions
+      WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    if (session.status !== 'in_progress') {
+      return res.status(400).json({ 
+        error: 'Cannot pause session', 
+        message: `Session is ${session.status}, can only pause in_progress sessions` 
+      });
+    }
+    
+    // Update to paused
+    const updated = await pool.query(`
+      UPDATE onboarding_sessions
+      SET status = 'paused', paused_at = NOW()
+      WHERE id = $1
+      RETURNING id, employee_id as "employeeId", path_id as "pathId",
+                admin_id as "adminId", status, intake_data as "intakeData",
+                intake_data_schema as "intakeDataSchema", current_step as "currentStep",
+                started_at as "startedAt", paused_at as "pausedAt", completed_at as "completedAt"
+    `, [id]);
+    
+    // Audit log
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_PAUSED',
+        actor: {
+          id: adminId,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: {
+          pathId: session.pathId,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for ONBOARDING_PAUSED:', auditError);
+    }
+    
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Error pausing onboarding session:', error);
+    res.status(500).json({ error: 'Failed to pause onboarding session' });
+  }
+});
+
+// PATCH /sessions/:id/resume - Resume a paused session
+router.patch('/sessions/:id/resume', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user?.id || 1;
+    
+    // Check session exists and is paused
+    const sessions = await pool.query(`
+      SELECT id, status, path_id as "pathId"
+      FROM onboarding_sessions
+      WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    if (session.status !== 'paused') {
+      return res.status(400).json({ 
+        error: 'Cannot resume session', 
+        message: `Session is ${session.status}, can only resume paused sessions` 
+      });
+    }
+    
+    // Update to in_progress
+    const updated = await pool.query(`
+      UPDATE onboarding_sessions
+      SET status = 'in_progress', paused_at = NULL
+      WHERE id = $1
+      RETURNING id, employee_id as "employeeId", path_id as "pathId",
+                admin_id as "adminId", status, intake_data as "intakeData",
+                intake_data_schema as "intakeDataSchema", current_step as "currentStep",
+                started_at as "startedAt", paused_at as "pausedAt", completed_at as "completedAt"
+    `, [id]);
+    
+    // Audit log
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'ONBOARDING_RESUMED',
+        actor: {
+          id: adminId,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: {
+          pathId: session.pathId,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for ONBOARDING_RESUMED:', auditError);
+    }
+    
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Error resuming onboarding session:', error);
+    res.status(500).json({ error: 'Failed to resume onboarding session' });
+  }
 });
 
 export default router;

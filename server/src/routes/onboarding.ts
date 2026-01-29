@@ -1372,7 +1372,75 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         }
       }
       
-      // D) FINALIZE SESSION (LOCK)
+      // D) CREATE/UPDATE EMPLOYMENT PERIOD
+      // For REHIRE: Close existing active employment period first
+      if (isRehire) {
+        const activePeriodsResult = await pool.query(`
+          SELECT id FROM employment_periods 
+          WHERE employee_id = $1 AND status = 'ACTIVE'
+        `, [employeeId]);
+        
+        if (activePeriodsResult.length > 0) {
+          const activePeriodId = activePeriodsResult[0].id;
+          // Close the active period (end date = day before new hire date, or same day if no hire date)
+          const endDate = employeeData.hireDate 
+            ? new Date(new Date(employeeData.hireDate).getTime() - 86400000).toISOString().split('T')[0]
+            : new Date().toISOString().split('T')[0];
+          
+          await pool.query(`
+            UPDATE employment_periods 
+            SET end_date = $1, status = 'ENDED', ended_via_session_id = $2
+            WHERE id = $3
+          `, [endDate, id, activePeriodId]);
+          
+          auditEvents.push({
+            action: 'EMPLOYMENT_ENDED',
+            meta: { 
+              employeeId, 
+              periodId: activePeriodId,
+              endDate,
+              endedViaSessionId: id,
+            },
+          });
+        }
+      }
+      
+      // Create new employment period
+      const startDate = employeeData.hireDate || new Date().toISOString().split('T')[0];
+      const employmentType = session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME';
+      
+      const newPeriodResult = await pool.query(`
+        INSERT INTO employment_periods (
+          employee_id, start_date, employment_type, department, job_title,
+          status, started_via_session_id
+        ) VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6)
+        RETURNING id
+      `, [
+        employeeId,
+        startDate,
+        employmentType,
+        employeeData.department || null,
+        employeeData.jobTitle || null,
+        id,
+      ]);
+      
+      const newPeriodId = newPeriodResult[0].id;
+      
+      auditEvents.push({
+        action: 'EMPLOYMENT_STARTED',
+        meta: { 
+          employeeId, 
+          periodId: newPeriodId,
+          startDate,
+          employmentType,
+          department: employeeData.department,
+          jobTitle: employeeData.jobTitle,
+          startedViaSessionId: id,
+          isRehire,
+        },
+      });
+      
+      // E) FINALIZE SESSION (LOCK)
       await pool.query(`
         UPDATE onboarding_sessions
         SET status = 'completed', completed_at = NOW(), account_config = $2

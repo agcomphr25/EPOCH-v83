@@ -64,6 +64,7 @@ import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
+import OnboardingDashboard from './pages/OnboardingDashboard';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
@@ -519,6 +520,7 @@ function App() {
 
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
+                  <Route path="/onboarding" component={OnboardingDashboard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />
                   <Route path="/pdf-settings" component={PDFSettings} />

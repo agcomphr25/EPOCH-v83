@@ -1,0 +1,114 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 0 of the Employee Onboarding System — foundation only.
+NO UI wizards yet. NO form builders yet.
+
+---
+
+SCOPE (STRICT):
+
+1) DATABASE STRUCTURE
+Create the following tables with minimal but correct schemas:
+
+A) onboarding_paths
+- id (PK)
+- name
+- pathType (FULL_TIME, CONTRACT)
+- intakeFormId (nullable)
+- documentFolderId (nullable)
+- isActive
+- createdAt
+
+B) onboarding_forms
+- id (PK)
+- name
+- description
+- fieldsJson (array of field definitions)
+- createdAt
+
+C) onboarding_sessions
+- id (PK)
+- employeeId (nullable until finalization)
+- pathId
+- adminId
+- status (in_progress, paused, completed)
+- intakeData (JSONB)
+- currentStep
+- startedAt
+- pausedAt
+- completedAt
+
+D) onboarding_session_documents
+- id (PK)
+- sessionId
+- templateId
+- instanceId
+- orderIndex
+- status (pending, signed)
+- signedAt
+
+E) onboarding_session_captures
+- id (PK)
+- sessionId
+- captureType (driver_license, bank_info, other)
+- mediaItemId
+- capturedAt
+
+---
+
+2) AUDIT SUPPORT
+Extend auditService to support:
+- entityType: "employee_onboarding"
+- entityType: "employee"
+
+Log (but do not yet emit everywhere):
+- ONBOARDING_STARTED
+- ONBOARDING_PAUSED
+- ONBOARDING_COMPLETED
+
+---
+
+3) MEDIA LIBRARY PREP
+Ensure there is a top-level folder:
+"Onboarding Documents"
+
+• Visible to ADMIN only
+• Intended for signable PDFs
+• Do NOT move existing documents
+
+---
+
+4) NAVIGATION
+Add an Admin-only menu item:
+Employees → Onboarding
+
+Route can point to a placeholder page:
+OnboardingDashboard.tsx
+with text:
+"Employee onboarding configuration coming soon."
+
+Follow existing permission and routing patterns.
+
+---
+
+5) API PLACEHOLDERS
+Create empty route files (no logic yet):
+
+/api/onboarding/paths
+/api/onboarding/forms
+/api/onboarding/sessions
+
+Each should return 501 Not Implemented for now.
+
+---
+
+IMPORTANT RULES:
+• Do NOT build wizards
+• Do NOT build UI editors
+• Do NOT write PDF merge logic
+• Do NOT wire to employee creation yet
+• Run migrations cleanly
+• Output a summary of what changed
+
+This phase should be safe to deploy without affecting existing behavior.

@@ -12100,3 +12100,120 @@ export type QrCode = typeof qrCodes.$inferSelect;
 export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
 export type QrCodeScanLog = typeof qrCodeScanLog.$inferSelect;
 export type InsertQrCodeScanLog = z.infer<typeof insertQrCodeScanLogSchema>;
+
+// ============================================================================
+// EMPLOYEE ONBOARDING SYSTEM - Phase 0 Foundation
+// ============================================================================
+
+// Onboarding Paths - Define configurable onboarding workflows
+export const onboardingPaths = pgTable('onboarding_paths', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  pathType: text('path_type').notNull().default('FULL_TIME'), // FULL_TIME, CONTRACT
+  intakeFormId: uuid('intake_form_id'),
+  documentFolderId: uuid('document_folder_id'), // Reference to media_folders for signable PDFs
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertOnboardingPathSchema = createInsertSchema(onboardingPaths).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OnboardingPath = typeof onboardingPaths.$inferSelect;
+export type InsertOnboardingPath = z.infer<typeof insertOnboardingPathSchema>;
+
+// Onboarding Forms - Dynamic intake form definitions
+export const onboardingForms = pgTable('onboarding_forms', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  fieldsJson: jsonb('fields_json').$type<Array<{
+    name: string;
+    label: string;
+    type: 'text' | 'date' | 'dropdown' | 'checkbox';
+    required?: boolean;
+    options?: string[];
+    mappedToField?: string; // Maps to employee profile field
+  }>>().default([]).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertOnboardingFormSchema = createInsertSchema(onboardingForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OnboardingForm = typeof onboardingForms.$inferSelect;
+export type InsertOnboardingForm = z.infer<typeof insertOnboardingFormSchema>;
+
+// Onboarding Sessions - Track in-progress onboarding sessions
+export const onboardingSessions = pgTable('onboarding_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id), // Nullable until finalization
+  pathId: uuid('path_id').references(() => onboardingPaths.id).notNull(),
+  adminId: integer('admin_id').references(() => users.id).notNull(),
+  status: text('status').notNull().default('in_progress'), // in_progress, paused, completed
+  intakeData: jsonb('intake_data').$type<Record<string, any>>().default({}),
+  currentStep: text('current_step').default('intake'),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  pausedAt: timestamp('paused_at'),
+  completedAt: timestamp('completed_at'),
+}, (table) => ({
+  pathIdIdx: index('onboarding_sessions_path_id_idx').on(table.pathId),
+  statusIdx: index('onboarding_sessions_status_idx').on(table.status),
+  employeeIdIdx: index('onboarding_sessions_employee_id_idx').on(table.employeeId),
+}));
+
+export const insertOnboardingSessionSchema = createInsertSchema(onboardingSessions).omit({
+  id: true,
+  startedAt: true,
+});
+
+export type OnboardingSession = typeof onboardingSessions.$inferSelect;
+export type InsertOnboardingSession = z.infer<typeof insertOnboardingSessionSchema>;
+
+// Onboarding Session Documents - Track documents for each session
+export const onboardingSessionDocuments = pgTable('onboarding_session_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => onboardingSessions.id).notNull(),
+  templateId: uuid('template_id').references(() => fillablePdfTemplates.id).notNull(),
+  instanceId: uuid('instance_id').references(() => fillablePdfInstances.id),
+  orderIndex: integer('order_index').notNull().default(0),
+  status: text('status').notNull().default('pending'), // pending, signed
+  signedAt: timestamp('signed_at'),
+}, (table) => ({
+  sessionIdIdx: index('onboarding_session_docs_session_id_idx').on(table.sessionId),
+}));
+
+export const insertOnboardingSessionDocumentSchema = createInsertSchema(onboardingSessionDocuments).omit({
+  id: true,
+});
+
+export type OnboardingSessionDocument = typeof onboardingSessionDocuments.$inferSelect;
+export type InsertOnboardingSessionDocument = z.infer<typeof insertOnboardingSessionDocumentSchema>;
+
+// Onboarding Session Captures - Track camera captures (ID photos, etc.)
+export const onboardingSessionCaptures = pgTable('onboarding_session_captures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => onboardingSessions.id).notNull(),
+  captureType: text('capture_type').notNull(), // driver_license, bank_info, other
+  mediaItemId: uuid('media_item_id').references(() => mediaLibrary.id),
+  capturedAt: timestamp('captured_at').defaultNow().notNull(),
+}, (table) => ({
+  sessionIdIdx: index('onboarding_session_captures_session_id_idx').on(table.sessionId),
+}));
+
+export const insertOnboardingSessionCaptureSchema = createInsertSchema(onboardingSessionCaptures).omit({
+  id: true,
+  capturedAt: true,
+});
+
+export type OnboardingSessionCapture = typeof onboardingSessionCaptures.$inferSelect;
+export type InsertOnboardingSessionCapture = z.infer<typeof insertOnboardingSessionCaptureSchema>;

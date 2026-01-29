@@ -640,6 +640,12 @@ export default function Navigation() {
       description: 'Manage employee profiles, certifications, and evaluations',
     },
     {
+      path: '/onboarding',
+      label: 'Onboarding',
+      icon: Users,
+      description: 'Admin-driven employee onboarding sessions',
+    },
+    {
       path: '/user-management',
       label: 'User Management',
       icon: User,

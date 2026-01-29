@@ -121,6 +121,7 @@ import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import accountingPrepRoutes from './accountingPrep';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
+import onboardingRoutes from './onboarding';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -236,6 +237,8 @@ export function registerRoutes(app: Express): Server {
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);
 
+  // Employee Onboarding routes (Phase 0 - placeholder)
+  app.use('/api/onboarding', onboardingRoutes);
 
   // PDF Configuration Settings routes
   app.use(pdfSettingsRoutes);

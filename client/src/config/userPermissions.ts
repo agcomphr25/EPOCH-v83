@@ -49,6 +49,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/document-management',
   '/employee',
   '/employee-portal',
+  '/onboarding',
   '/feature-manager',
   '/finance/ap',
   '/finance/ar',

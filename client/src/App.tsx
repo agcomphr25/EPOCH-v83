@@ -64,6 +64,10 @@ import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
+import OnboardingDashboard from './pages/OnboardingDashboard';
+import OnboardingPathsPage from './pages/OnboardingPathsPage';
+import OnboardingFormsPage from './pages/OnboardingFormsPage';
+import OnboardingSessionWizard from './pages/OnboardingSessionWizard';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
@@ -85,6 +89,7 @@ import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
+import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
@@ -370,6 +375,7 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
+                  <Route path="/due-date-capacity" component={DueDateCapacityReport} />
                   <Route path="/filtered-orders-report" component={FilteredOrdersReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/business-review" component={BusinessReviewPresentation} />
@@ -517,6 +523,10 @@ function App() {
 
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
+                  <Route path="/onboarding" component={OnboardingDashboard} />
+                  <Route path="/onboarding/paths" component={OnboardingPathsPage} />
+                  <Route path="/onboarding/forms" component={OnboardingFormsPage} />
+                  <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />
                   <Route path="/pdf-settings" component={PDFSettings} />

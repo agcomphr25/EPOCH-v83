@@ -1,0 +1,113 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 3C of the Employee Onboarding System:
+Employment History Timeline (read-only UI).
+
+This phase exposes employment history clearly and safely.
+NO mutations. NO new backend logic.
+
+---
+
+CORE PRINCIPLES:
+• Timeline is read-only
+• Employment periods are the source of truth
+• Each period is auditable and traceable
+• UI must clearly distinguish ACTIVE vs ENDED periods
+
+---
+
+SCOPE (STRICT):
+
+1) BACKEND READ API
+
+Implement:
+GET /api/employees/:id/employment-periods
+
+Returns:
+• All employment_periods for the employee
+• Sorted by start_date ASC
+• Include:
+  - startDate
+  - endDate (or null)
+  - status
+  - employmentType
+  - department
+  - jobTitle
+  - startedViaSessionId
+  - endedViaSessionId
+
+---
+
+2) EMPLOYEE DETAIL UI — NEW TAB
+
+Add tab to Employee Detail page:
+"Employment History"
+
+---
+
+3) TIMELINE UI
+
+Render a vertical timeline or stacked cards:
+
+For each employment period:
+• Date range:
+  - “Mar 1, 2022 → Aug 15, 2024”
+  - “Feb 1, 2026 → Present” (ACTIVE)
+• Employment type
+• Job title
+• Department
+• Status badge:
+  - ACTIVE (highlighted)
+  - ENDED (muted)
+
+---
+
+4) SESSION & BUNDLE LINKS
+
+If startedViaSessionId exists:
+• Show:
+  - “Started via Onboarding” or “Re-Hire”
+  - Link to onboarding session
+  - Link to onboarding bundle PDF (if exists)
+
+If endedViaSessionId exists:
+• Show:
+  - “Ended via Re-Hire” or future offboarding
+
+---
+
+5) LEGACY EMPLOYEE HANDLING
+
+If employee has NO employment_periods:
+• Display banner:
+  “Employment history not yet recorded (legacy employee).”
+• Do NOT block UI
+• Do NOT auto-create periods
+
+---
+
+6) UX DETAILS
+
+• ACTIVE period visually distinct
+• Timeline clearly chronological
+• Mobile-friendly layout
+• No edit buttons
+• No delete actions
+
+---
+
+IMPORTANT RULES:
+• Do NOT add edit capabilities
+• Do NOT modify employment_periods
+• Do NOT infer or auto-correct data
+• Timeline is informational only
+
+---
+
+DELIVERABLE:
+• Backend read endpoint
+• Employee Detail UI tab
+• Employment history timeline
+• Session & bundle links
+• Clear ACTIVE indicator

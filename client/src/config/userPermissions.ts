@@ -24,6 +24,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/health-checks',
   '/admin/monitored-links',
   '/admin/communication-logs',
+  '/admin/qr-codes',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -48,6 +49,10 @@ export const VALID_NAVBAR_ROUTES = [
   '/document-management',
   '/employee',
   '/employee-portal',
+  '/onboarding',
+  '/onboarding/paths',
+  '/onboarding/forms',
+  '/onboarding/session/:id',
   '/feature-manager',
   '/finance/ap',
   '/finance/ar',
@@ -79,6 +84,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/order-department-transfer',
   '/order-entry',
   '/order-reports',
+  '/due-date-capacity',
   '/orders-list',
   '/orders-management',
   '/p2-control-center',
@@ -185,6 +191,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/barcode-scanner',
       '/metal-accessories',
       '/training',
+      '/oem-shipments',
     ],
   },
 
@@ -450,6 +457,7 @@ export function hasRouteAccess(
 const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
+  '/due-date-capacity': ['ADMIN', 'OWNER'],
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
@@ -493,6 +501,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/sign-pdf': ['ADMIN', 'OWNER'],
   '/signed-documents': ['ADMIN', 'OWNER'],
   '/reference-docs': ['ADMIN', 'OWNER'],
+  '/admin/qr-codes': ['ADMIN', 'OWNER'],
 };
 
 /**

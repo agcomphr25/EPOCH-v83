@@ -31,11 +31,6 @@ interface ProductionProgram {
   isActive: boolean;
 }
 
-interface InventoryItem {
-  id: number;
-  sku: string;
-  name: string;
-}
 
 interface StartProductionTimerModalProps {
   open: boolean;
@@ -53,7 +48,7 @@ export default function StartProductionTimerModal({
 
   const [programId, setProgramId] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
-  const [inventoryItemId, setInventoryItemId] = useState('');
+  const [description, setDescription] = useState('');
   const [mandrelNumber, setMandrelNumber] = useState('');
   const [ovenNumber, setOvenNumber] = useState('');
   const [ovenSlot, setOvenSlot] = useState('');
@@ -63,21 +58,6 @@ export default function StartProductionTimerModal({
 
   const { data: programs, isLoading: programsLoading } = useQuery<ProductionProgram[]>({
     queryKey: ['/api/production/timers/programs'],
-    enabled: open,
-  });
-
-  const { data: inventoryItems, isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/enhanced/inventory/items'],
-    queryFn: async () => {
-      const res = await fetch('/api/enhanced/inventory/items');
-      if (!res.ok) throw new Error('Failed to fetch inventory');
-      const data = await res.json();
-      return data.map((item: any) => ({
-        id: item.id,
-        sku: item.sku || '',
-        name: item.name || item.description || '',
-      }));
-    },
     enabled: open,
   });
 
@@ -92,7 +72,7 @@ export default function StartProductionTimerModal({
       stopScanning();
       setProgramId('');
       setSerialNumber('');
-      setInventoryItemId('');
+      setDescription('');
       setMandrelNumber('');
       setOvenNumber('');
       setOvenSlot('');
@@ -107,7 +87,7 @@ export default function StartProductionTimerModal({
         body: JSON.stringify({
           programId,
           serialNumber: serialNumber.trim(),
-          inventoryItemId: parseInt(inventoryItemId, 10),
+          description: description.trim() || undefined,
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
@@ -206,7 +186,7 @@ export default function StartProductionTimerModal({
     startMutation.mutate();
   };
 
-  const isValid = programId && serialNumber.trim() && inventoryItemId && mandrelNumber && ovenNumber && ovenSlot;
+  const isValid = programId && serialNumber.trim() && mandrelNumber && ovenNumber && ovenSlot;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -295,29 +275,13 @@ export default function StartProductionTimerModal({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="inventoryItem">SKU *</Label>
-            <Select value={inventoryItemId} onValueChange={setInventoryItemId}>
-              <SelectTrigger id="inventoryItem">
-                <SelectValue placeholder="Select inventory item..." />
-              </SelectTrigger>
-              <SelectContent>
-                {inventoryLoading ? (
-                  <div className="p-2 text-center text-muted-foreground">
-                    Loading inventory...
-                  </div>
-                ) : inventoryItems?.length === 0 ? (
-                  <div className="p-2 text-center text-muted-foreground">
-                    No inventory items found
-                  </div>
-                ) : (
-                  inventoryItems?.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.sku} — {item.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="description">Description</Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter description (optional)"
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-3">

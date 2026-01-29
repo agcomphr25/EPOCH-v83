@@ -1,0 +1,124 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 2B of the Employee Onboarding System:
+Controlled email distribution of finalized onboarding PDF bundles.
+
+This phase ONLY distributes already-generated bundles.
+It does NOT modify onboarding, employees, or documents.
+
+---
+
+CORE PRINCIPLES:
+• Distribution is explicit and auditable
+• Bundles must already exist
+• No unsigned or draft data may be sent
+• No public or anonymous links
+
+---
+
+SCOPE (STRICT):
+
+1) EMAIL DISTRIBUTION ENDPOINT
+
+Implement:
+POST /api/onboarding/sessions/:id/email-bundle
+
+Admin-only.
+
+---
+
+2) PREFLIGHT VALIDATION
+
+Before sending email:
+
+✔ Onboarding session exists
+✔ onboarding_sessions.status = 'completed'
+✔ onboarding_sessions.bundleMediaItemId exists
+✔ Employee record exists
+✔ Employee email exists (from intake or employee profile)
+
+If any check fails:
+• Return 400 with clear error
+• Do NOT send email
+• Log audit event: ONBOARDING_BUNDLE_EMAIL_BLOCKED
+
+---
+
+3) EMAIL CONTENT
+
+Email Subject:
+"Your EPOCH Employment Onboarding Documents"
+
+Email Body (friendly, professional):
+• Thank employee for completing onboarding
+• Explain attached document is their official onboarding packet
+• Include contact instructions for corrections
+
+Email Attachment:
+• Attach onboarding PDF bundle
+• Filename:
+  EPOCH_Onboarding_<LastName>_<FirstName>_<YYYY-MM-DD>.pdf
+
+Optional CC (Admin-selected):
+• HR
+• Admin initiating send
+
+---
+
+4) EMAIL IMPLEMENTATION
+
+• Use existing email infrastructure (SendGrid / configured provider)
+• Attach PDF directly (no public links)
+• Respect file size limits
+• Fail clearly if attachment too large
+
+---
+
+5) UI INTEGRATION
+
+In completed onboarding session view:
+
+Add:
+• "Email Onboarding Packet" button
+
+UI Flow:
+• Modal confirmation:
+  - Shows recipient email
+  - Optional CC checkbox
+• Send button with loading state
+• Success / error feedback
+
+---
+
+6) AUDIT LOGGING
+
+On success:
+• ONBOARDING_BUNDLE_EMAILED
+  - sessionId
+  - employeeId
+  - recipient email
+  - adminId
+  - timestamp
+
+On failure:
+• ONBOARDING_BUNDLE_EMAIL_FAILED
+  - reason
+
+---
+
+IMPORTANT RULES:
+• Do NOT generate bundle here
+• Do NOT allow emailing before completion
+• Do NOT expose public URLs
+• Do NOT resend automatically
+• No schema changes unless required
+
+---
+
+DELIVERABLE:
+• Email endpoint
+• UI send flow
+• Attachment handling
+• Audit events
+• Summary of delivery behavior

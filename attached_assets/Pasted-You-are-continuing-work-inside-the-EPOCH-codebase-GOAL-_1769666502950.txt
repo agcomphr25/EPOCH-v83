@@ -1,0 +1,127 @@
+You are continuing work inside the EPOCH codebase.
+
+GOAL:
+Implement Phase 3A of the Employee Onboarding System:
+RE-HIRE workflows with selective document re-signing.
+
+This phase reuses the existing onboarding engine.
+
+---
+
+CORE PRINCIPLES:
+• Re-hire uses existing employee records
+• No duplicate employees
+• Documents are selectively re-signed
+• All signatures remain immutable
+• Re-hire is fully auditable and bundled
+
+---
+
+SCOPE (STRICT):
+
+1) PATH SUPPORT FOR RE-HIRE
+
+Extend onboarding_paths with:
+• pathPurpose ENUM('ONBOARDING', 'REHIRE')
+
+Admin UI:
+• Allow creating/editing REHIRE paths
+• For REHIRE paths:
+  - Intake form is optional
+  - Admin selects specific document templates or folder + manual selection
+  - Path is clearly labeled "Re-Hire"
+
+---
+
+2) START RE-HIRE SESSION
+
+Update:
+POST /api/onboarding/sessions
+
+Behavior:
+• Admin must select an EXISTING employeeId
+• Session is linked to that employee immediately
+• User account remains inactive until finalization
+• Session status = in_progress
+
+Audit:
+• REHIRE_STARTED
+
+---
+
+3) DOCUMENT RESOLUTION (RE-HIRE MODE)
+
+For REHIRE paths:
+• Resolve ONLY admin-selected documents
+• Ignore standard onboarding defaults
+• Documents must be re-signed even if signed previously
+
+Do NOT:
+• Auto-carry prior signatures
+• Auto-mark documents complete
+
+---
+
+4) FINALIZATION (RE-HIRE)
+
+Reuse existing finalization logic with adjustments:
+
+• Do NOT create new employee
+• Update employment fields:
+  - employmentType
+  - department
+  - jobTitle
+  - hireDate (new start date)
+• Reactivate user account if inactive
+
+Audit:
+• EMPLOYEE_REHIRED
+• USER_REACTIVATED
+• REHIRE_COMPLETED
+
+---
+
+5) BUNDLE GENERATION
+
+Reuse Phase 2A bundle logic:
+• Bundle includes ONLY re-hire documents
+• Include re-hire cover page:
+  - "Re-Hire Packet"
+  - Prior employment reference
+  - New start date
+
+---
+
+6) UI INTEGRATION
+
+Employees → Onboarding:
+• "Start Re-Hire" action
+• Employee selector (inactive only)
+• Path selector (REHIRE paths only)
+
+Wizard:
+• Same wizard UI
+• Clear "Re-Hire" banner
+• Review step shows:
+  - Documents to be re-signed
+  - Prior signatures summary (read-only)
+
+---
+
+IMPORTANT RULES:
+• Do NOT overwrite prior signatures
+• Do NOT allow re-hire for active employees
+• Do NOT create new employee records
+• No schema changes beyond pathPurpose unless required
+• Maintain full audit trail
+
+---
+
+DELIVERABLE:
+• Re-hire path support
+• Session creation rules
+• Selective document re-signing
+• Finalization adjustments
+• Bundle generation reuse
+• Audit events
+• UI entry points

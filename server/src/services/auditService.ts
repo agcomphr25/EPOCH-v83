@@ -29,7 +29,9 @@ export type AuditEntityType =
   | 'ticket'
   | 'order'           // For order attention tracking
   | 'qc_item'         // For QC nonconformance/kickback attention tracking
-  | 'production_delay'; // For production delay attention tracking
+  | 'production_delay' // For production delay attention tracking
+  | 'employee'        // For employee profile changes
+  | 'employee_onboarding'; // For onboarding session tracking
 
 // Standard audit actions for Attention & State-Confidence system
 export type AttentionAuditAction = 

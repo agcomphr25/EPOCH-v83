@@ -908,6 +908,12 @@ export default function Navigation() {
       description: 'Advanced search with AND/OR logic for filtering orders',
     },
     {
+      path: '/admin/qr-codes',
+      label: 'QR Code Management',
+      icon: QrCode,
+      description: 'Generate and manage QR codes for orders, employees, and products',
+    },
+    {
       path: '/due-date-capacity',
       label: 'Due Date Capacity',
       icon: Calendar,

@@ -12075,8 +12075,6 @@ export const insertQrCodeSchema = createInsertSchema(qrCodes).omit({
 // Types for QR Code module
 export type QrCode = typeof qrCodes.$inferSelect;
 export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
-export type QrCodeScanLog = typeof qrCodeScanLog.$inferSelect;
-export type InsertQrCodeScanLog = z.infer<typeof insertQrCodeScanLogSchema>;
 
 // ============================================================================
 // EMPLOYEE ONBOARDING SYSTEM - Phase 0 Foundation

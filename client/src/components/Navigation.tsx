@@ -295,6 +295,12 @@ export default function Navigation() {
         'Advanced BOM management with lifecycle tracking and cost analysis',
     },
     {
+      path: '/p2-control-center',
+      label: 'P2 Control Center',
+      icon: Factory,
+      description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcode Scanner',
       icon: Scan,

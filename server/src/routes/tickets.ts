@@ -15,6 +15,7 @@ const VIEW_DEDUPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes - don't log repeat vie
 const router = Router();
 
 const CSR_ADMIN_ROLES = ['ADMIN', 'OWNER', 'CSR'];
+const WRITE_ROLES = ['ADMIN', 'OWNER']; // Only admins can write
 
 const updateTicketSchema = z.object({
   status: z.enum(['new', 'in_progress', 'waiting_on_customer', 'waiting_on_production', 'resolved', 'closed']).optional(),
@@ -27,14 +28,20 @@ const updateTicketSchema = z.object({
   category: z.string().nullable().optional(),
 });
 
-function hasAccess(user: any): boolean {
-  return user && CSR_ADMIN_ROLES.includes(user.role);
+// Read access for all authenticated users
+function hasReadAccess(user: any): boolean {
+  return !!user;
+}
+
+// Write access only for ADMIN/OWNER
+function hasWriteAccess(user: any): boolean {
+  return user && WRITE_ROLES.includes(user.role);
 }
 
 router.get('/', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
+    if (!hasReadAccess(user)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -58,7 +65,7 @@ router.get('/', sessionAwareAuth, async (req, res) => {
 router.get('/metrics', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
+    if (!hasReadAccess(user)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -73,7 +80,7 @@ router.get('/metrics', sessionAwareAuth, async (req, res) => {
 router.get('/:id', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
+    if (!hasReadAccess(user)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -187,8 +194,8 @@ router.get('/:id', sessionAwareAuth, async (req, res) => {
 router.post('/:id/acknowledge', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can modify tickets.' });
     }
 
     const ticketId = req.params.id;
@@ -248,8 +255,8 @@ router.post('/:id/acknowledge', sessionAwareAuth, async (req, res) => {
 router.post('/:id/confirm-state', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can modify tickets.' });
     }
 
     const ticketId = req.params.id;
@@ -306,8 +313,8 @@ router.post('/:id/confirm-state', sessionAwareAuth, async (req, res) => {
 router.post('/', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can create tickets.' });
     }
 
     const data = insertTicketSchema.parse({
@@ -337,8 +344,8 @@ router.post('/', sessionAwareAuth, async (req, res) => {
 router.patch('/:id', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can modify tickets.' });
     }
 
     const existingTicket = await storage.getTicketById(req.params.id);
@@ -483,8 +490,8 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
 router.post('/:id/archive', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can archive tickets.' });
     }
 
     const ticket = await storage.archiveTicket(req.params.id);
@@ -506,7 +513,7 @@ router.post('/:id/archive', sessionAwareAuth, async (req, res) => {
 router.get('/:id/activity', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
+    if (!hasReadAccess(user)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -521,8 +528,8 @@ router.get('/:id/activity', sessionAwareAuth, async (req, res) => {
 router.post('/:id/activity', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can add activity.' });
     }
 
     const data = insertTicketActivitySchema.parse({
@@ -546,7 +553,7 @@ router.post('/:id/activity', sessionAwareAuth, async (req, res) => {
 router.get('/:id/orders', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
+    if (!hasReadAccess(user)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -561,8 +568,8 @@ router.get('/:id/orders', sessionAwareAuth, async (req, res) => {
 router.post('/:id/orders', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can link orders.' });
     }
 
     const { orderId } = req.body;
@@ -589,8 +596,8 @@ router.post('/:id/orders', sessionAwareAuth, async (req, res) => {
 router.delete('/:id/orders/:orderId', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can unlink orders.' });
     }
 
     await storage.unlinkOrderFromTicket(req.params.id, req.params.orderId);
@@ -612,8 +619,8 @@ router.delete('/:id/orders/:orderId', sessionAwareAuth, async (req, res) => {
 router.post('/check-sla', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    if (!hasAccess(user)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasWriteAccess(user)) {
+      return res.status(403).json({ error: 'Write access denied. Only admins can check SLA.' });
     }
 
     const breachedCount = await storage.checkSlaBreaches();

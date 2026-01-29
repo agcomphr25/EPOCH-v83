@@ -394,7 +394,7 @@ const createQRCodeSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   expiresAt: z.string().datetime().optional().nullable(),
-  resolveUrl: z.string().url().optional().nullable(),
+  resolveUrl: z.string().optional().nullable(), // Allow both full URLs and relative paths
   metadata: z.record(z.any()).optional(),
 });
 
@@ -481,7 +481,7 @@ const updateQRCodeSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   expiresAt: z.string().datetime().optional().nullable(),
-  resolveUrl: z.string().url().optional().nullable(),
+  resolveUrl: z.string().optional().nullable(), // Allow both full URLs and relative paths
   metadata: z.record(z.any()).optional(),
 });
 

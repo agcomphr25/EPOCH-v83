@@ -756,10 +756,8 @@ router.get('/po-production-orders', async (req, res) => {
 // Due Date Capacity Report - Shows FINALIZED and IN_PROGRESS orders grouped by week
 router.get('/due-date-capacity', async (req, res) => {
   try {
-    const pool = db.$client;
-    
     // Query orders with FINALIZED or IN_PROGRESS status, joined with customer info
-    const ordersQuery = `
+    const ordersResult = await db.execute(sql`
       SELECT 
         o.id,
         o.order_id as "orderId",
@@ -767,8 +765,8 @@ router.get('/due-date-capacity', async (req, res) => {
         o.customer_id as "customerId",
         o.current_department as "currentDepartment",
         o.status,
-        o.order_source as "orderSource",
-        COALESCE(c.company_name, c.first_name || ' ' || c.last_name, 'Unknown Customer') as "customerName"
+        'SALES' as "orderSource",
+        COALESCE(c.name, c.company, 'Unknown Customer') as "customerName"
       FROM all_orders o
       LEFT JOIN customers c ON CASE 
         WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer 
@@ -778,10 +776,9 @@ router.get('/due-date-capacity', async (req, res) => {
         AND o.is_cancelled = false
         AND o.due_date IS NOT NULL
       ORDER BY o.due_date ASC
-    `;
+    `);
     
-    const ordersResult = await pool.query(ordersQuery);
-    const orders = Array.isArray(ordersResult) ? ordersResult : ordersResult.rows || [];
+    const orders = ordersResult.rows || [];
     
     // Group orders by week (Monday start)
     const weekGroups: Record<string, {

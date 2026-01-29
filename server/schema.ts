@@ -12085,6 +12085,7 @@ export const onboardingPaths = pgTable('onboarding_paths', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
   pathType: text('path_type').notNull().default('FULL_TIME'), // FULL_TIME, CONTRACT
+  pathPurpose: text('path_purpose').notNull().default('ONBOARDING'), // ONBOARDING, REHIRE
   intakeFormId: uuid('intake_form_id'),
   documentFolderId: uuid('document_folder_id'), // Reference to media_folders for signable PDFs
   isActive: boolean('is_active').default(true).notNull(),

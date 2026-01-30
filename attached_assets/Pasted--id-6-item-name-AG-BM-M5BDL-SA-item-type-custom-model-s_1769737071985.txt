@@ -1,0 +1,242 @@
+[
+  {
+    "id": 6,
+    "item_name": "AG-BM-M5BDL-SA",
+    "item_type": "custom_model",
+    "stock_model_spec": "no_stock",
+    "quantity": 1,
+    "scheduled": 0
+  },
+  {
+    "id": 12,
+    "item_name": "AG-CRB-PV105-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 1,
+    "scheduled": 0
+  },
+  {
+    "id": 13,
+    "item_name": "AG-CRB-PV105-SR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 2,
+    "scheduled": 0
+  },
+  {
+    "id": 17,
+    "item_name": "AG-CRB-AHV105-ER",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 18,
+    "item_name": "AG-CRB-PV105-ER",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 19,
+    "item_name": "AG-FG-P205-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 16,
+    "item_name": "AG-FG-P205-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 14,
+    "item_name": "AG-FG-AHV105-AR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 20,
+    "item_name": "AG-CRB-ADJ-AHV105-AR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 7,
+    "item_name": "AG-CRB-ADJ-AHV205-ER",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 8,
+    "item_name": "AG-CRB-AHV105-KR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 9,
+    "item_name": "AG-CRB-AHV105-SR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 11,
+    "item_name": "AG-CRB-P200-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 15,
+    "item_name": "AG-FG-AHV105-KR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_alpine_hunter",
+    "quantity": 2,
+    "scheduled": 2
+  },
+  {
+    "id": 21,
+    "item_name": "AG-CRB-ADJ-AHV105-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 22,
+    "item_name": "AG-CRB-ADJ-AHV205-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 23,
+    "item_name": "AG-CRB-AHV105-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 24,
+    "item_name": "AG-CRB-AHV205-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 25,
+    "item_name": "AG-CRB-AHV205-CS",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 26,
+    "item_name": "AG-CRB-P205-SR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 27,
+    "item_name": "AG-CRB-PV105-KR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 29,
+    "item_name": "AG-FG-ADJ-AHV105-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_adj_alp_hunter",
+    "quantity": 2,
+    "scheduled": 2
+  },
+  {
+    "id": 30,
+    "item_name": "AG-FG-ADJ-AHV205-SR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 31,
+    "item_name": "AG-FG-PV105-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 32,
+    "item_name": "AG-FG-PV105-SR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_privateer",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 42,
+    "item_name": "AG-FG-AHV105-AR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 43,
+    "item_name": "AG-FG-AHV105-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 44,
+    "item_name": "AG-FG-PV200-AR",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_alpine_hunter",
+    "quantity": 1,
+    "scheduled": 1
+  },
+  {
+    "id": 47,
+    "item_name": "AG-CRB-ADJ-AHV105-KR",
+    "item_type": "custom_model",
+    "stock_model_spec": "cf_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 0
+  },
+  {
+    "id": 48,
+    "item_name": "AG-FG-ADJ-AHV205-CDN",
+    "item_type": "custom_model",
+    "stock_model_spec": "fg_adj_alp_hunter",
+    "quantity": 1,
+    "scheduled": 0
+  }
+]

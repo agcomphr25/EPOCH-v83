@@ -27,8 +27,10 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
-  Route
+  Route,
+  Library
 } from 'lucide-react';
+import MediaLibraryPicker from '@/components/MediaLibraryPicker';
 
 interface RoutingDocument {
   id: string;
@@ -99,6 +101,7 @@ export default function RoutingDocumentManagement() {
     templateType: 'work_instruction',
     description: '',
   });
+  const [showMediaLibraryPicker, setShowMediaLibraryPicker] = useState(false);
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
   const [generateRoutingForm, setGenerateRoutingForm] = useState({
     partNumber: '',
@@ -249,6 +252,29 @@ export default function RoutingDocumentManagement() {
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to generate document', variant: 'destructive' });
+    },
+  });
+
+  const importFromLibraryMutation = useMutation({
+    mutationFn: async (data: { fileUrl: string; filename: string }) => {
+      return apiRequest('/api/routing-documents/import-from-library', {
+        method: 'POST',
+        body: {
+          fileUrl: data.fileUrl,
+          fileName: data.filename,
+          title: data.filename.replace(/\.[^/.]+$/, ''),
+          documentType: 'reference',
+          sourceType: 'media_library',
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Reference Document Imported', description: 'Document has been linked from the media library' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+      setShowMediaLibraryPicker(false);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to import document', variant: 'destructive' });
     },
   });
 
@@ -417,6 +443,10 @@ export default function RoutingDocumentManagement() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowMediaLibraryPicker(true)}>
+            <Library className="h-4 w-4 mr-2" />
+            Import from Library
+          </Button>
           <Button variant="outline" onClick={() => setShowLearnDialog(true)} disabled={selectedDocuments.length === 0}>
             <Brain className="h-4 w-4 mr-2" />
             Learn Template ({selectedDocuments.length})
@@ -1207,6 +1237,17 @@ export default function RoutingDocumentManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Media Library Picker for importing reference documents */}
+      <MediaLibraryPicker
+        open={showMediaLibraryPicker}
+        onOpenChange={setShowMediaLibraryPicker}
+        onSelect={(url, filename) => {
+          importFromLibraryMutation.mutate({ fileUrl: url, filename });
+        }}
+        acceptedTypes={['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+        title="Select Reference Document from Media Library"
+      />
     </div>
   );
 }

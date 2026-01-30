@@ -443,6 +443,38 @@ Return a JSON object with the following structure:
   }
 });
 
+// Import reference document from media library
+router.post('/import-from-library', async (req: Request, res: Response) => {
+  try {
+    const { fileUrl, fileName, title, documentType, sourceType } = req.body;
+    const user = (req as any).user;
+    
+    if (!fileUrl || !fileName) {
+      return res.status(400).json({ error: 'File URL and file name are required' });
+    }
+    
+    // Create the document linked to the media library file
+    const [document] = await db.insert(routingDocuments).values({
+      title: title || fileName.replace(/\.[^/.]+$/, ''),
+      documentType: documentType || 'reference',
+      sourceType: sourceType || 'media_library',
+      fileName: fileName,
+      fileUrl: fileUrl,
+      description: `Imported from media library: ${fileName}`,
+      isTemplate: false,
+      createdBy: user?.username || 'system',
+    }).returning();
+    
+    res.status(201).json({ 
+      ...transformRow(document),
+      message: 'Reference document imported successfully' 
+    });
+  } catch (error) {
+    console.error('Error importing document from library:', error);
+    res.status(500).json({ error: 'Failed to import document from library' });
+  }
+});
+
 // Complete upload and create routing document
 router.post('/complete-upload', async (req: Request, res: Response) => {
   try {

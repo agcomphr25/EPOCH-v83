@@ -6,6 +6,40 @@ import { z } from 'zod';
 
 const router = Router();
 
+router.get('/groups', async (req, res) => {
+  try {
+    const allGroups = await db
+      .select()
+      .from(linkedOrderGroups);
+
+    const groupsWithOrders = await Promise.all(
+      allGroups.map(async (group) => {
+        const groupOrders = await db
+          .select({
+            linkedOrder: linkedOrders,
+            order: allOrders,
+          })
+          .from(linkedOrders)
+          .leftJoin(allOrders, eq(linkedOrders.orderId, allOrders.orderId))
+          .where(eq(linkedOrders.linkGroupId, group.id));
+
+        const { approvalCode, ...safeGroup } = group;
+
+        return {
+          ...safeGroup,
+          orders: groupOrders,
+          orderCount: groupOrders.length,
+        };
+      })
+    );
+
+    return res.json(groupsWithOrders);
+  } catch (error) {
+    console.error('Error fetching all link groups:', error);
+    return res.status(500).json({ error: 'Failed to fetch link groups' });
+  }
+});
+
 router.get('/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;

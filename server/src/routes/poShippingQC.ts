@@ -777,12 +777,21 @@ router.get('/oem-shipments', async (req, res) => {
     }
 
     // Main query - lightweight, no base64 blobs
+    // Use COALESCE to get customer_name from purchase_order_items when not set in shipment_records
     const query = `
       WITH shipment_aggregates AS (
         SELECT 
           sr.id,
           sr.customer_id,
-          sr.customer_name,
+          COALESCE(
+            NULLIF(sr.customer_name, ''),
+            (SELECT DISTINCT po.customer_name 
+             FROM shipment_items si2 
+             JOIN purchase_order_items poi ON si2.po_item_id = poi.id
+             JOIN p1_purchase_orders po ON poi.po_id = po.id
+             WHERE si2.shipment_id = sr.id
+             LIMIT 1)
+          ) as customer_name,
           sr.customer_address,
           sr.customer_city,
           sr.customer_state,

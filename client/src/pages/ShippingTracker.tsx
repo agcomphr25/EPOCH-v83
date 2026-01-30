@@ -46,6 +46,9 @@ import {
   History,
   MessageSquare,
   Phone,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import {
   getCurrentOperationalWeek,
@@ -58,7 +61,8 @@ import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import { useToast } from '@/hooks/use-toast';
-import { queryClient } from '@/lib/queryClient';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Label } from '@/components/ui/label';
 
 interface Order {
   id: number;
@@ -120,6 +124,68 @@ export default function ShippingTracker() {
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editTrackingNumber, setEditTrackingNumber] = useState('');
+  const [editCarrier, setEditCarrier] = useState('UPS');
+
+  // Mutation to update tracking info
+  const updateTrackingMutation = useMutation({
+    mutationFn: async ({ orderId, trackingNumber, carrier }: { orderId: string; trackingNumber: string; carrier: string }) => {
+      return apiRequest(`/api/shipping/tracking/${orderId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Tracking Updated', description: 'Tracking information has been updated successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      setEditingOrder(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Mutation to delete/clear tracking info
+  const deleteTrackingMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/shipping/tracking/${orderId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ trackingNumber: '', shippingCarrier: '' }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Tracking Deleted', description: 'Tracking information has been removed.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const openEditDialog = (order: Order) => {
+    setEditingOrder(order);
+    setEditTrackingNumber(order.trackingNumber || '');
+    setEditCarrier(order.shippingCarrier || 'UPS');
+  };
+
+  const handleUpdateTracking = () => {
+    if (!editingOrder || !editTrackingNumber.trim()) {
+      toast({ title: 'Validation Error', description: 'Please enter a tracking number', variant: 'destructive' });
+      return;
+    }
+    updateTrackingMutation.mutate({
+      orderId: editingOrder.orderId,
+      trackingNumber: editTrackingNumber.trim(),
+      carrier: editCarrier,
+    });
+  };
+
+  const handleDeleteTracking = (order: Order) => {
+    if (confirm(`Are you sure you want to delete the tracking number for order ${order.orderId}?`)) {
+      deleteTrackingMutation.mutate(order.orderId);
+    }
+  };
 
   // Mutation to send notification to customer
   const sendNotificationMutation = useMutation({
@@ -579,6 +645,25 @@ export default function ShippingTracker() {
                                     <ExternalLink className="h-3 w-3 mr-1" />
                                     Track
                                   </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={() => openEditDialog(order)}
+                                    data-testid={`button-edit-tracking-${order.orderId}`}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-red-600 hover:text-red-700"
+                                    onClick={() => handleDeleteTracking(order)}
+                                    disabled={deleteTrackingMutation.isPending}
+                                    data-testid={`button-delete-tracking-${order.orderId}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
                                 </div>
                                 {consolidated && (
                                   <div className="text-xs text-amber-700">
@@ -826,6 +911,58 @@ export default function ShippingTracker() {
               </div>
             )}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Tracking Dialog */}
+      <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Tracking Information</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Order: <span className="font-medium">{editingOrder?.orderId}</span></p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tracking-number">Tracking Number</Label>
+              <Input
+                id="edit-tracking-number"
+                value={editTrackingNumber}
+                onChange={(e) => setEditTrackingNumber(e.target.value)}
+                placeholder="Enter tracking number"
+                data-testid="input-edit-tracking-number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-carrier">Carrier</Label>
+              <Select value={editCarrier} onValueChange={setEditCarrier}>
+                <SelectTrigger id="edit-carrier" data-testid="select-edit-carrier">
+                  <SelectValue placeholder="Select carrier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UPS">UPS</SelectItem>
+                  <SelectItem value="USPS">USPS</SelectItem>
+                  <SelectItem value="FedEx">FedEx</SelectItem>
+                  <SelectItem value="DHL">DHL</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditingOrder(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateTracking}
+              disabled={updateTrackingMutation.isPending}
+              data-testid="button-save-tracking"
+            >
+              {updateTrackingMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

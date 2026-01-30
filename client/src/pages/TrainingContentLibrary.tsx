@@ -123,6 +123,41 @@ interface QuizSchedule {
   completed?: boolean;
 }
 
+interface GeneratedTrainingStep {
+  id: string;
+  stepNumber: number;
+  stepTitle: string;
+  trainerInstructions: string;
+  keyPoints: string[];
+  demonstrations: string;
+  safetyNotes: string;
+  estimatedTime: number;
+  accepted: boolean;
+}
+
+interface GeneratedQuizQuestion {
+  id: string;
+  question: string;
+  questionType: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+  stepNumber?: number;
+  accepted: boolean;
+}
+
+interface GeneratedTopicData {
+  title: string;
+  description: string;
+  objectives: string[];
+  prerequisites: string;
+  estimatedDuration: number;
+  difficultyLevel: string;
+  materials: GeneratedTrainingStep[];
+  quizQuestions: GeneratedQuizQuestion[];
+  documentIds: number[];
+}
+
 export default function TrainingContentLibrary() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('documents');
@@ -136,6 +171,30 @@ export default function TrainingContentLibrary() {
   const [assignTrainingOpen, setAssignTrainingOpen] = useState(false);
   const [viewTopicOpen, setViewTopicOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<any>(null);
+  
+  // AI Review workflow state
+  const [reviewTopicOpen, setReviewTopicOpen] = useState(false);
+  const [generatedTopicData, setGeneratedTopicData] = useState<GeneratedTopicData | null>(null);
+  const [reviewTab, setReviewTab] = useState<'steps' | 'quiz'>('steps');
+  const [editingStep, setEditingStep] = useState<GeneratedTrainingStep | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<GeneratedQuizQuestion | null>(null);
+  const [addingCustomStep, setAddingCustomStep] = useState(false);
+  const [addingCustomQuestion, setAddingCustomQuestion] = useState(false);
+  const [customStep, setCustomStep] = useState<Partial<GeneratedTrainingStep>>({
+    stepTitle: '',
+    trainerInstructions: '',
+    keyPoints: [],
+    demonstrations: '',
+    safetyNotes: '',
+    estimatedTime: 15,
+  });
+  const [customQuestion, setCustomQuestion] = useState<Partial<GeneratedQuizQuestion>>({
+    question: '',
+    questionType: 'multiple_choice',
+    options: ['', '', '', ''],
+    correctAnswer: '',
+    explanation: '',
+  });
   
   const [newCategory, setNewCategory] = useState({ name: '', type: 'custom', description: '', color: '#3B82F6' });
   const [newDoc, setNewDoc] = useState({ title: '', extractedText: '', categoryIds: [] as number[], fileName: '' });
@@ -397,7 +456,7 @@ export default function TrainingContentLibrary() {
 
   const generateTopicMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/training/content-library/generate-topic', {
+      return apiRequest('/api/training/content-library/generate-topic-preview', {
         method: 'POST',
         timeout: 120000, // 2 minutes for AI generation
         body: JSON.stringify({
@@ -406,14 +465,75 @@ export default function TrainingContentLibrary() {
         }),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/topics'] });
+    onSuccess: (data: any) => {
+      // Transform data for review - add IDs and accepted status
+      const materials = (data.materials || []).map((m: any, i: number) => ({
+        ...m,
+        id: `step-${i}`,
+        keyPoints: m.keyPoints || [],
+        accepted: true,
+      }));
+      const quizQuestions = (data.quizQuestions || []).map((q: any, i: number) => ({
+        ...q,
+        id: `quiz-${i}`,
+        options: q.options || [],
+        accepted: true,
+      }));
+      
+      setGeneratedTopicData({
+        ...data,
+        objectives: data.objectives || [],
+        materials,
+        quizQuestions,
+        documentIds: selectedDocuments, // Preserve document IDs for linking
+      });
       setGenerateTopicOpen(false);
-      setSelectedDocuments([]);
-      toast({ title: 'Training topic generated with 4-Step materials and quiz!' });
+      setReviewTopicOpen(true);
+      setReviewTab('steps');
+      toast({ title: 'AI content generated - review and customize before saving' });
     },
     onError: (error: any) => {
       toast({ title: 'Error generating topic', description: error.message, variant: 'destructive' });
+    },
+  });
+  
+  // Save reviewed topic mutation
+  const saveReviewedTopicMutation = useMutation({
+    mutationFn: async () => {
+      if (!generatedTopicData) return;
+      
+      const acceptedMaterials = generatedTopicData.materials.filter(m => m.accepted);
+      const acceptedQuestions = generatedTopicData.quizQuestions.filter(q => q.accepted);
+      
+      if (acceptedMaterials.length === 0) {
+        throw new Error('At least one training step must be accepted');
+      }
+      
+      return apiRequest('/api/training/content-library/save-reviewed-topic', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: generatedTopicData.title,
+          description: generatedTopicData.description,
+          objectives: generatedTopicData.objectives,
+          prerequisites: generatedTopicData.prerequisites,
+          estimatedDuration: generatedTopicData.estimatedDuration,
+          difficultyLevel: generatedTopicData.difficultyLevel,
+          categoryId: categoryFilter !== 'all' ? parseInt(categoryFilter) : null,
+          materials: acceptedMaterials,
+          quizQuestions: acceptedQuestions,
+          documentIds: generatedTopicData.documentIds, // Include document IDs for linking
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/content-library/topics'] });
+      setReviewTopicOpen(false);
+      setGeneratedTopicData(null);
+      setSelectedDocuments([]);
+      toast({ title: 'Training topic saved with your customizations!' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error saving topic', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -1458,6 +1578,500 @@ export default function TrainingContentLibrary() {
                 </>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Content Review Dialog */}
+      <Dialog open={reviewTopicOpen} onOpenChange={setReviewTopicOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-purple-500" />
+              Review AI-Generated Training Content
+            </DialogTitle>
+          </DialogHeader>
+          
+          {generatedTopicData && (
+            <div className="flex-1 overflow-hidden flex flex-col gap-4">
+              {/* Topic Header Info */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Topic Title</Label>
+                    <Input
+                      value={generatedTopicData.title}
+                      onChange={(e) => setGeneratedTopicData(prev => prev ? {...prev, title: e.target.value} : null)}
+                      className="text-lg font-semibold mt-1"
+                    />
+                  </div>
+                  <Badge variant="outline">{generatedTopicData.difficultyLevel}</Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <Textarea
+                    value={generatedTopicData.description}
+                    onChange={(e) => setGeneratedTopicData(prev => prev ? {...prev, description: e.target.value} : null)}
+                    className="mt-1"
+                    rows={2}
+                  />
+                </div>
+              </div>
+              
+              {/* Tab Navigation */}
+              <div className="flex gap-2 border-b">
+                <Button
+                  variant={reviewTab === 'steps' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setReviewTab('steps')}
+                  className="gap-2"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Training Steps ({generatedTopicData.materials.filter(m => m.accepted).length}/{generatedTopicData.materials.length})
+                </Button>
+                <Button
+                  variant={reviewTab === 'quiz' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setReviewTab('quiz')}
+                  className="gap-2"
+                >
+                  <Target className="h-4 w-4" />
+                  Quiz Questions ({generatedTopicData.quizQuestions.filter(q => q.accepted).length}/{generatedTopicData.quizQuestions.length})
+                </Button>
+              </div>
+              
+              {/* Content Area */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                {reviewTab === 'steps' && (
+                  <>
+                    {generatedTopicData.materials.map((step, index) => (
+                      <Card key={step.id} className={`${!step.accepted ? 'opacity-50 bg-muted' : ''}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="secondary">Step {step.stepNumber}</Badge>
+                                <span className="font-semibold">{step.stepTitle}</span>
+                                <Badge variant="outline" className="ml-auto">{step.estimatedTime} min</Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">{step.trainerInstructions}</p>
+                              {step.keyPoints.length > 0 && (
+                                <div className="text-xs">
+                                  <span className="font-medium">Key Points: </span>
+                                  {step.keyPoints.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditingStep(step)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={step.accepted ? 'default' : 'outline'}
+                                className={step.accepted ? 'bg-green-600 hover:bg-green-700' : ''}
+                                onClick={() => {
+                                  setGeneratedTopicData(prev => prev ? {
+                                    ...prev,
+                                    materials: prev.materials.map(m => 
+                                      m.id === step.id ? {...m, accepted: !m.accepted} : m
+                                    )
+                                  } : null);
+                                }}
+                              >
+                                {step.accepted ? <CheckCircle className="h-4 w-4" /> : 'Accept'}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    
+                    {/* Add Custom Step Button */}
+                    <Button
+                      variant="outline"
+                      className="w-full border-dashed"
+                      onClick={() => {
+                        setAddingCustomStep(true);
+                        setCustomStep({
+                          stepTitle: '',
+                          trainerInstructions: '',
+                          keyPoints: [],
+                          demonstrations: '',
+                          safetyNotes: '',
+                          estimatedTime: 15,
+                        });
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Custom Training Step
+                    </Button>
+                  </>
+                )}
+                
+                {reviewTab === 'quiz' && (
+                  <>
+                    {generatedTopicData.quizQuestions.map((question, index) => (
+                      <Card key={question.id} className={`${!question.accepted ? 'opacity-50 bg-muted' : ''}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="secondary">Q{index + 1}</Badge>
+                                <Badge variant="outline">{question.questionType}</Badge>
+                              </div>
+                              <p className="font-medium mb-2">{question.question}</p>
+                              {question.options.length > 0 && (
+                                <div className="space-y-1 mb-2">
+                                  {question.options.map((opt, i) => (
+                                    <div key={i} className={`text-sm ${opt.startsWith(question.correctAnswer) ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+                                      {opt}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {question.explanation && (
+                                <p className="text-xs text-muted-foreground italic">
+                                  Explanation: {question.explanation}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditingQuestion(question)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={question.accepted ? 'default' : 'outline'}
+                                className={question.accepted ? 'bg-green-600 hover:bg-green-700' : ''}
+                                onClick={() => {
+                                  setGeneratedTopicData(prev => prev ? {
+                                    ...prev,
+                                    quizQuestions: prev.quizQuestions.map(q => 
+                                      q.id === question.id ? {...q, accepted: !q.accepted} : q
+                                    )
+                                  } : null);
+                                }}
+                              >
+                                {question.accepted ? <CheckCircle className="h-4 w-4" /> : 'Accept'}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    
+                    {/* Add Custom Question Button */}
+                    <Button
+                      variant="outline"
+                      className="w-full border-dashed"
+                      onClick={() => {
+                        setAddingCustomQuestion(true);
+                        setCustomQuestion({
+                          question: '',
+                          questionType: 'multiple_choice',
+                          options: ['', '', '', ''],
+                          correctAnswer: '',
+                          explanation: '',
+                        });
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Custom Quiz Question
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="border-t pt-4">
+            <div className="flex justify-between w-full">
+              <Button variant="outline" onClick={() => {
+                setReviewTopicOpen(false);
+                setGeneratedTopicData(null);
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => saveReviewedTopicMutation.mutate()}
+                disabled={saveReviewedTopicMutation.isPending || !generatedTopicData?.materials.some(m => m.accepted)}
+                className="bg-gradient-to-r from-purple-500 to-pink-500"
+              >
+                {saveReviewedTopicMutation.isPending ? 'Saving...' : 'Save Training Topic'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Step Dialog */}
+      <Dialog open={!!editingStep} onOpenChange={(open) => !open && setEditingStep(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Training Step</DialogTitle>
+          </DialogHeader>
+          {editingStep && (
+            <div className="space-y-4">
+              <div>
+                <Label>Step Title</Label>
+                <Input
+                  value={editingStep.stepTitle}
+                  onChange={(e) => setEditingStep({...editingStep, stepTitle: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>Trainer Instructions</Label>
+                <Textarea
+                  value={editingStep.trainerInstructions}
+                  onChange={(e) => setEditingStep({...editingStep, trainerInstructions: e.target.value})}
+                  rows={4}
+                />
+              </div>
+              <div>
+                <Label>Key Points (comma separated)</Label>
+                <Input
+                  value={editingStep.keyPoints.join(', ')}
+                  onChange={(e) => setEditingStep({...editingStep, keyPoints: e.target.value.split(',').map(s => s.trim())})}
+                />
+              </div>
+              <div>
+                <Label>Estimated Time (minutes)</Label>
+                <Input
+                  type="number"
+                  value={editingStep.estimatedTime}
+                  onChange={(e) => setEditingStep({...editingStep, estimatedTime: parseInt(e.target.value) || 15})}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingStep(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (editingStep && generatedTopicData) {
+                setGeneratedTopicData({
+                  ...generatedTopicData,
+                  materials: generatedTopicData.materials.map(m => 
+                    m.id === editingStep.id ? editingStep : m
+                  )
+                });
+                setEditingStep(null);
+              }
+            }}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Question Dialog */}
+      <Dialog open={!!editingQuestion} onOpenChange={(open) => !open && setEditingQuestion(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Quiz Question</DialogTitle>
+          </DialogHeader>
+          {editingQuestion && (
+            <div className="space-y-4">
+              <div>
+                <Label>Question</Label>
+                <Textarea
+                  value={editingQuestion.question}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, question: e.target.value})}
+                  rows={2}
+                />
+              </div>
+              <div>
+                <Label>Options</Label>
+                {editingQuestion.options.map((opt, i) => (
+                  <Input
+                    key={i}
+                    value={opt}
+                    onChange={(e) => {
+                      const newOpts = [...editingQuestion.options];
+                      newOpts[i] = e.target.value;
+                      setEditingQuestion({...editingQuestion, options: newOpts});
+                    }}
+                    className="mb-2"
+                    placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                  />
+                ))}
+              </div>
+              <div>
+                <Label>Correct Answer (e.g., A, B, C, D)</Label>
+                <Input
+                  value={editingQuestion.correctAnswer}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, correctAnswer: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>Explanation</Label>
+                <Textarea
+                  value={editingQuestion.explanation}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, explanation: e.target.value})}
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingQuestion(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (editingQuestion && generatedTopicData) {
+                setGeneratedTopicData({
+                  ...generatedTopicData,
+                  quizQuestions: generatedTopicData.quizQuestions.map(q => 
+                    q.id === editingQuestion.id ? editingQuestion : q
+                  )
+                });
+                setEditingQuestion(null);
+              }
+            }}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Custom Step Dialog */}
+      <Dialog open={addingCustomStep} onOpenChange={setAddingCustomStep}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Custom Training Step</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Step Title</Label>
+              <Input
+                value={customStep.stepTitle || ''}
+                onChange={(e) => setCustomStep({...customStep, stepTitle: e.target.value})}
+                placeholder="e.g., Safety Overview"
+              />
+            </div>
+            <div>
+              <Label>Trainer Instructions</Label>
+              <Textarea
+                value={customStep.trainerInstructions || ''}
+                onChange={(e) => setCustomStep({...customStep, trainerInstructions: e.target.value})}
+                rows={4}
+                placeholder="Describe what the trainer should do..."
+              />
+            </div>
+            <div>
+              <Label>Key Points (comma separated)</Label>
+              <Input
+                value={customStep.keyPoints?.join(', ') || ''}
+                onChange={(e) => setCustomStep({...customStep, keyPoints: e.target.value.split(',').map(s => s.trim())})}
+                placeholder="Point 1, Point 2, Point 3"
+              />
+            </div>
+            <div>
+              <Label>Estimated Time (minutes)</Label>
+              <Input
+                type="number"
+                value={customStep.estimatedTime || 15}
+                onChange={(e) => setCustomStep({...customStep, estimatedTime: parseInt(e.target.value) || 15})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddingCustomStep(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (generatedTopicData && customStep.stepTitle) {
+                const newStep: GeneratedTrainingStep = {
+                  id: `custom-step-${Date.now()}`,
+                  stepNumber: generatedTopicData.materials.length + 1,
+                  stepTitle: customStep.stepTitle || '',
+                  trainerInstructions: customStep.trainerInstructions || '',
+                  keyPoints: customStep.keyPoints || [],
+                  demonstrations: customStep.demonstrations || '',
+                  safetyNotes: customStep.safetyNotes || '',
+                  estimatedTime: customStep.estimatedTime || 15,
+                  accepted: true,
+                };
+                setGeneratedTopicData({
+                  ...generatedTopicData,
+                  materials: [...generatedTopicData.materials, newStep]
+                });
+                setAddingCustomStep(false);
+              }
+            }}>Add Step</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Custom Question Dialog */}
+      <Dialog open={addingCustomQuestion} onOpenChange={setAddingCustomQuestion}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Custom Quiz Question</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Question</Label>
+              <Textarea
+                value={customQuestion.question || ''}
+                onChange={(e) => setCustomQuestion({...customQuestion, question: e.target.value})}
+                rows={2}
+                placeholder="Enter your question..."
+              />
+            </div>
+            <div>
+              <Label>Options</Label>
+              {(customQuestion.options || ['', '', '', '']).map((opt, i) => (
+                <Input
+                  key={i}
+                  value={opt}
+                  onChange={(e) => {
+                    const newOpts = [...(customQuestion.options || ['', '', '', ''])];
+                    newOpts[i] = e.target.value;
+                    setCustomQuestion({...customQuestion, options: newOpts});
+                  }}
+                  className="mb-2"
+                  placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                />
+              ))}
+            </div>
+            <div>
+              <Label>Correct Answer (e.g., A, B, C, D)</Label>
+              <Input
+                value={customQuestion.correctAnswer || ''}
+                onChange={(e) => setCustomQuestion({...customQuestion, correctAnswer: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label>Explanation</Label>
+              <Textarea
+                value={customQuestion.explanation || ''}
+                onChange={(e) => setCustomQuestion({...customQuestion, explanation: e.target.value})}
+                rows={2}
+                placeholder="Why is this the correct answer?"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddingCustomQuestion(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (generatedTopicData && customQuestion.question) {
+                const newQuestion: GeneratedQuizQuestion = {
+                  id: `custom-quiz-${Date.now()}`,
+                  question: customQuestion.question || '',
+                  questionType: customQuestion.questionType || 'multiple_choice',
+                  options: customQuestion.options || [],
+                  correctAnswer: customQuestion.correctAnswer || '',
+                  explanation: customQuestion.explanation || '',
+                  accepted: true,
+                };
+                setGeneratedTopicData({
+                  ...generatedTopicData,
+                  quizQuestions: [...generatedTopicData.quizQuestions, newQuestion]
+                });
+                setAddingCustomQuestion(false);
+              }
+            }}>Add Question</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

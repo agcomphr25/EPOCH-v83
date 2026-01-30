@@ -20,13 +20,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Plus } from 'lucide-react';
 
 interface ShipmentItem {
   id: number;
@@ -90,6 +100,11 @@ export default function OEMShipmentsPage() {
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
   const [editingTrackingId, setEditingTrackingId] = useState<number | null>(null);
   const [editingTrackingValue, setEditingTrackingValue] = useState('');
+  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
+  const [addItemShipmentId, setAddItemShipmentId] = useState<string | null>(null);
+  const [addItemPoItemId, setAddItemPoItemId] = useState('');
+  const [addItemOrderId, setAddItemOrderId] = useState('');
+  const [addItemPoNumber, setAddItemPoNumber] = useState('');
   const limit = 20;
 
   // Fetch shipments with filters
@@ -245,6 +260,65 @@ export default function OEMShipmentsPage() {
   const cancelEditingTracking = () => {
     setEditingTrackingId(null);
     setEditingTrackingValue('');
+  };
+
+  const addItemMutation = useMutation({
+    mutationFn: async ({ shipmentId, poItemId, orderId, poNumber }: { 
+      shipmentId: string; 
+      poItemId: number; 
+      orderId: string;
+      poNumber?: string;
+    }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/items`, { 
+        method: 'POST', 
+        body: { poItemId, orderId, quantity: 1, poNumber: poNumber || '' } 
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: 'Item added successfully', description: data.message });
+      closeAddItemDialog();
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Failed to add item', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const openAddItemDialog = (shipmentId: string) => {
+    setAddItemShipmentId(shipmentId);
+    setAddItemPoItemId('');
+    setAddItemOrderId('');
+    setAddItemPoNumber('');
+    setAddItemDialogOpen(true);
+  };
+
+  const closeAddItemDialog = () => {
+    setAddItemDialogOpen(false);
+    setAddItemShipmentId(null);
+    setAddItemPoItemId('');
+    setAddItemOrderId('');
+    setAddItemPoNumber('');
+  };
+
+  const handleAddItem = () => {
+    if (!addItemShipmentId || !addItemPoItemId || !addItemOrderId) {
+      toast({ 
+        title: 'Missing required fields', 
+        description: 'Please fill in PO Item ID and Order ID',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    addItemMutation.mutate({ 
+      shipmentId: addItemShipmentId, 
+      poItemId: parseInt(addItemPoItemId), 
+      orderId: addItemOrderId,
+      poNumber: addItemPoNumber
+    });
   };
 
   const toggleDateExpanded = (date: string) => {
@@ -609,6 +683,17 @@ export default function OEMShipmentsPage() {
                                     ))}
                                   </tbody>
                                 </table>
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAddItemDialog(String(shipment.id))}
+                                  className="gap-1"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  Add Item
+                                </Button>
                               </div>
                             </CardContent>
                           </CollapsibleContent>
@@ -978,6 +1063,65 @@ export default function OEMShipmentsPage() {
           </div>
         </div>
       )}
+
+      {/* Add Item Dialog */}
+      <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Item to Shipment</DialogTitle>
+            <DialogDescription>
+              Add a missing item to this shipment. The Order ID format is PO-[poItemId]-[sequence] (e.g., PO-201-7).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="poItemId">PO Item ID *</Label>
+              <Input
+                id="poItemId"
+                type="number"
+                placeholder="e.g., 201"
+                value={addItemPoItemId}
+                onChange={(e) => setAddItemPoItemId(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">
+                The purchase_order_items table ID for this stock model
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="orderId">Order ID *</Label>
+              <Input
+                id="orderId"
+                placeholder="e.g., PO-201-7"
+                value={addItemOrderId}
+                onChange={(e) => setAddItemOrderId(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">
+                Format: PO-[poItemId]-[sequence number]
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="poNumber">PO Number (optional)</Label>
+              <Input
+                id="poNumber"
+                placeholder="e.g., RFPO-002612"
+                value={addItemPoNumber}
+                onChange={(e) => setAddItemPoNumber(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeAddItemDialog}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAddItem} 
+              disabled={addItemMutation.isPending}
+            >
+              {addItemMutation.isPending ? 'Adding...' : 'Add Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

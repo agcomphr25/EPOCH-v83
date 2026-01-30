@@ -992,6 +992,68 @@ router.patch('/oem-shipments/:id/tracking', authenticateToken, async (req, res) 
   }
 });
 
+// POST /api/po-orders/oem-shipments/:id/items
+// Add items to an existing shipment (admin correction feature)
+router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { poItemId, orderId, quantity = 1, description = '', poNumber = '' } = req.body;
+    
+    console.log(`📦 Adding item to shipment ${id}: ${orderId}`);
+
+    // Validate UUID format for shipment ID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ _error: 'Invalid shipment ID format' });
+    }
+
+    // Validate required fields
+    if (!poItemId || !orderId) {
+      return res.status(400).json({ _error: 'poItemId and orderId are required' });
+    }
+
+    // Check if shipment exists
+    const shipmentCheck = await pool.query(
+      'SELECT id FROM shipment_records WHERE id = $1',
+      [id]
+    );
+    
+    if ((shipmentCheck.rows || shipmentCheck).length === 0) {
+      return res.status(404).json({ _error: 'Shipment not found' });
+    }
+
+    // Check if item already exists in this shipment
+    const existingCheck = await pool.query(
+      'SELECT id FROM shipment_items WHERE shipment_id = $1 AND order_id = $2',
+      [id, orderId]
+    );
+    
+    if ((existingCheck.rows || existingCheck).length > 0) {
+      return res.status(400).json({ _error: `Item ${orderId} already exists in this shipment` });
+    }
+
+    // Insert the new shipment item
+    const insertQuery = `
+      INSERT INTO shipment_items (id, shipment_id, po_item_id, order_id, quantity, description, po_number)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+      RETURNING id, shipment_id, po_item_id, order_id, quantity
+    `;
+
+    const result = await pool.query(insertQuery, [id, poItemId, orderId, quantity, description, poNumber]);
+    const newItem = (result.rows || result)[0];
+
+    console.log(`✅ Item ${orderId} added to shipment ${id}`);
+    res.json({ 
+      success: true, 
+      item: newItem,
+      message: `Item ${orderId} added to shipment successfully`
+    });
+  } catch (error: any) {
+    console.error('❌ Error adding item to shipment:', error);
+    res.status(500).json({ _error: 'Failed to add item to shipment', details: error.message });
+  }
+});
+
 // POST /api/po-orders/toggle-fulfilled
 // Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
 // Supports both single orderId and batch orderIds array

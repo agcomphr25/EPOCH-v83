@@ -341,8 +341,23 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
+  // Render company name if present (above the attention/name line)
+  if (orderData.customerCompany) {
+    shipCurrentY -= 15;
+    page.drawText(orderData.customerCompany, {
+      x: shipToX,
+      y: shipCurrentY,
+      size: 10,
+      font: font,
+    });
+  }
+
+  // Render name with "Attn:" prefix if company is present, otherwise just name
   shipCurrentY -= 15;
-  page.drawText(orderData.customerName, {
+  const nameDisplay = orderData.customerCompany 
+    ? `Attn: ${orderData.customerName}` 
+    : orderData.customerName;
+  page.drawText(nameDisplay, {
     x: shipToX,
     y: shipCurrentY,
     size: 10,

@@ -5513,6 +5513,198 @@ router.post('/content-library/extract-text', upload.single('file'), async (req, 
 
 // --- AI TRAINING TOPIC GENERATION ---
 
+// Generate training topic PREVIEW from selected documents (returns data for review, doesn't save)
+router.post('/content-library/generate-topic-preview', async (req, res) => {
+  try {
+    const { documentIds, categoryId } = req.body;
+
+    // Fetch document contents using pgPool
+    const docsResult = await pgPool.query(`
+      SELECT id, title, extracted_content as "extractedContent", summary
+      FROM training_library_documents
+      WHERE id = ANY($1)
+    `, [documentIds]);
+    const docs = docsResult.rows;
+
+    const combinedContent = docs.map(d => 
+      `Document: ${d.title}\n${d.extractedContent || d.summary || ''}`
+    ).join('\n\n---\n\n');
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: `You are creating a comprehensive training topic using the 4-Step Training Method.
+Create training materials that a trainer can easily follow.
+
+Return JSON with this structure:
+{
+  "title": "Training Topic Title",
+  "description": "Overview of what will be learned",
+  "objectives": ["objective 1", "objective 2", ...],
+  "prerequisites": "Any required prior knowledge",
+  "estimatedDuration": 60,
+  "difficultyLevel": "beginner|intermediate|advanced",
+  "materials": [
+    {
+      "stepNumber": 1,
+      "stepTitle": "Trainer Does / Trainer Explains",
+      "trainerInstructions": "Detailed instructions for what the trainer should demonstrate and explain",
+      "keyPoints": ["key point 1", "key point 2"],
+      "demonstrations": "What to physically demonstrate",
+      "safetyNotes": "Any safety considerations",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 2,
+      "stepTitle": "Trainer Does / Trainee Explains",
+      "trainerInstructions": "Instructions for this step...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 3,
+      "stepTitle": "Trainee Does / Trainer Coaches",
+      "trainerInstructions": "Instructions for hands-on practice with coaching...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    },
+    {
+      "stepNumber": 4,
+      "stepTitle": "Trainee Does / Trainer Observes",
+      "trainerInstructions": "Instructions for independent execution with observation...",
+      "keyPoints": [...],
+      "demonstrations": "...",
+      "safetyNotes": "...",
+      "estimatedTime": 15
+    }
+  ],
+  "quizQuestions": [
+    {
+      "question": "Question text",
+      "questionType": "multiple_choice",
+      "options": ["A) option", "B) option", "C) option", "D) option"],
+      "correctAnswer": "A",
+      "explanation": "Why this is correct",
+      "difficulty": "easy|medium|hard",
+      "stepNumber": 1
+    }
+  ]
+}`
+        },
+        { role: 'user', content: `Create a complete 4-Step training topic from this content:\n\n${combinedContent.substring(0, 25000)}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.5,
+    });
+
+    const generated = JSON.parse(completion.choices[0]?.message?.content || '{}');
+
+    // Return the generated content for review (don't save yet)
+    res.json(generated);
+  } catch (error: any) {
+    console.error('Error generating topic preview:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save reviewed/customized training topic
+router.post('/content-library/save-reviewed-topic', async (req, res) => {
+  try {
+    const { 
+      title, description, objectives, prerequisites, 
+      estimatedDuration, difficultyLevel, categoryId, 
+      materials, quizQuestions, documentIds 
+    } = req.body;
+
+    // Validation: require at least one material
+    if (!materials || materials.length === 0) {
+      return res.status(400).json({ error: 'At least one training step is required' });
+    }
+
+    // Parse category ID
+    const categoryIdInt = categoryId && categoryId !== '' ? parseInt(String(categoryId), 10) : null;
+
+    // Create the topic
+    const topicResult = await pgPool.query(`
+      INSERT INTO training_library_topics 
+        (title, description, objectives, prerequisites, estimated_duration, difficulty_level, category_id, is_ai_generated, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      RETURNING id, title, description, objectives, prerequisites, estimated_duration as "estimatedDuration", 
+                difficulty_level as "difficultyLevel", category_id as "categoryId",
+                is_ai_generated as "isAiGenerated", created_at as "createdAt", updated_at as "updatedAt"
+    `, [
+      title,
+      description,
+      JSON.stringify(objectives || []),
+      prerequisites || null,
+      estimatedDuration || 60,
+      difficultyLevel || 'intermediate',
+      categoryIdInt,
+      true
+    ]);
+    const topic = topicResult.rows[0];
+
+    // Link documents to topic (preserve traceability)
+    if (documentIds && Array.isArray(documentIds)) {
+      for (const docId of documentIds) {
+        await pgPool.query(`
+          INSERT INTO topic_document_links (topic_id, document_id, created_at)
+          VALUES ($1, $2, NOW())
+        `, [topic.id, docId]);
+      }
+    }
+
+    // Create training materials for each accepted step
+    for (const material of materials || []) {
+      await pgPool.query(`
+        INSERT INTO training_topic_materials 
+          (topic_id, step_number, step_title, trainer_instructions, trainee_activities, key_points, visual_aids, estimated_duration, facility_modules, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      `, [
+        topic.id,
+        material.stepNumber,
+        material.stepTitle,
+        material.trainerInstructions,
+        material.demonstrations || null,
+        JSON.stringify(material.keyPoints || []),
+        material.safetyNotes || null,
+        material.estimatedTime || 15,
+        null
+      ]);
+    }
+
+    // Create quiz questions for each accepted question
+    for (const q of quizQuestions || []) {
+      await pgPool.query(`
+        INSERT INTO training_topic_quiz_questions 
+          (topic_id, step_number, question, question_type, options, correct_answer, explanation, points, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `, [
+        topic.id,
+        q.stepNumber || 1,
+        q.question,
+        q.questionType || 'multiple_choice',
+        JSON.stringify(q.options || []),
+        q.correctAnswer,
+        q.explanation || null,
+        10
+      ]);
+    }
+
+    res.status(201).json({ topic, materials, quizQuestions });
+  } catch (error: any) {
+    console.error('Error saving reviewed topic:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate training topic from selected documents
 router.post('/content-library/generate-topic', async (req, res) => {
   try {

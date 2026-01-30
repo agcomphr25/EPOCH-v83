@@ -13,8 +13,11 @@ export async function validateActionToken(
 
   const actionToken = req.headers['x-action-token'] as string;
   if (!actionToken) {
+    console.log('[ActionToken] No action token in request');
     return next();
   }
+
+  console.log('[ActionToken] Validating token:', actionToken.substring(0, 8) + '...');
 
   try {
     const result = await pool.query(
@@ -26,8 +29,11 @@ export async function validateActionToken(
     );
 
     const rows = result?.rows || result;
+    console.log('[ActionToken] Query result rows:', rows?.length || 0);
+    
     if (rows && rows.length > 0) {
       const tokenRecord = rows[0];
+      console.log('[ActionToken] Token valid for user:', tokenRecord.username);
       (req as any).user = {
         id: tokenRecord.user_id,
         username: tokenRecord.username,
@@ -37,6 +43,8 @@ export async function validateActionToken(
         isActive: true,
         authMethod: 'action_token',
       };
+    } else {
+      console.log('[ActionToken] Token not found or expired');
     }
   } catch (error) {
     console.error('[ActionToken] Validation error:', error);

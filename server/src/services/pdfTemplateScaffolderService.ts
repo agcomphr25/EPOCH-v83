@@ -329,7 +329,6 @@ export async function scaffoldFromMediaItem(
   const { db } = await import('../../db');
   const { mediaLibrary } = await import('../../schema');
   const { eq } = await import('drizzle-orm');
-  const { ObjectStorageService } = await import('../../../replit_integrations/object_storage');
   
   const [mediaItem] = await db
     .select()
@@ -345,11 +344,25 @@ export async function scaffoldFromMediaItem(
     throw new Error(`Media item is not a PDF: ${mediaItem.mimeType}`);
   }
   
-  const objectStorage = new ObjectStorageService();
-  const pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+  let pdfBuffer: Buffer;
+  
+  // Try local file first (for development/legacy uploads)
+  const localPath = path.join(process.cwd(), mediaItem.storagePath);
+  if (fs.existsSync(localPath)) {
+    console.log('[Scaffold] Reading PDF from local path:', localPath);
+    pdfBuffer = fs.readFileSync(localPath);
+  } else if (mediaItem.storagePath.startsWith('/objects/')) {
+    // Try object storage for cloud-stored files
+    console.log('[Scaffold] Reading PDF from object storage:', mediaItem.storagePath);
+    const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+    const objectStorage = new ObjectStorageService();
+    pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+  } else {
+    throw new Error(`PDF file not found: ${mediaItem.storagePath}`);
+  }
   
   if (!pdfBuffer || pdfBuffer.length === 0) {
-    throw new Error('Failed to download PDF from storage');
+    throw new Error('Failed to read PDF content');
   }
   
   const result = await scaffoldTemplateFromPdf(pdfBuffer, mediaItem.filename);

@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Upload, FileText, Send, Eye, Trash2, Edit, PenLine } from 'lucide-react';
+import { Plus, Upload, FileText, Send, Eye, Trash2, Edit, PenLine, Wand2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface FieldDef {
   name: string;
@@ -67,6 +75,36 @@ interface Instance {
   signedAt: string | null;
 }
 
+interface MediaItem {
+  id: string;
+  filename: string;
+  mimeType: string;
+  createdAt: string;
+}
+
+interface ScaffoldResult {
+  success: boolean;
+  templateName: string;
+  pageCount: number;
+  fieldDefsJson: FieldDef[];
+  signaturePlacement: {
+    x: number;
+    y: number;
+    page: number;
+    width: number;
+    height: number;
+  };
+  warnings: string[];
+  isImageOnly: boolean;
+  textDensity: number;
+  detectedBlanks: number;
+  mediaItem: {
+    id: string;
+    filename: string;
+    storagePath: string;
+  };
+}
+
 const defaultFieldDefs: FieldDef[] = [
   { name: 'full_name', label: 'Full Name', type: 'text', required: true, x: 150, y: 700, page: 0 },
   { name: 'email', label: 'Email Address', type: 'email', required: true, x: 150, y: 680, page: 0 },
@@ -78,6 +116,12 @@ export default function FillablePdfTemplatesAdmin() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isInstanceOpen, setIsInstanceOpen] = useState(false);
+  
+  // Scaffold state
+  const [isScaffoldOpen, setIsScaffoldOpen] = useState(false);
+  const [selectedMediaId, setSelectedMediaId] = useState<string>('');
+  const [scaffoldResult, setScaffoldResult] = useState<ScaffoldResult | null>(null);
+  const [scaffoldTemplateName, setScaffoldTemplateName] = useState('');
   
   // Form state for creating template
   const [templateName, setTemplateName] = useState('');
@@ -93,6 +137,18 @@ export default function FillablePdfTemplatesAdmin() {
   // Fetch templates
   const { data: templates = [], isLoading } = useQuery<Template[]>({
     queryKey: ['/api/pdf-templates'],
+  });
+
+  // Fetch PDF media items for scaffold dialog
+  const { data: mediaItems = [] } = useQuery<MediaItem[]>({
+    queryKey: ['/api/media', 'pdfs'],
+    queryFn: async () => {
+      const response = await fetch('/api/media?mimeType=application/pdf&limit=100');
+      if (!response.ok) throw new Error('Failed to fetch media items');
+      const data = await response.json();
+      return data.items || data;
+    },
+    enabled: isScaffoldOpen,
   });
 
   // Fetch instances for selected template
@@ -161,6 +217,54 @@ export default function FillablePdfTemplatesAdmin() {
     },
   });
 
+  // Scaffold PDF mutation - analyze PDF
+  const scaffoldMutation = useMutation({
+    mutationFn: async (mediaItemId: string) => {
+      return apiRequest('/api/pdf-templates/scaffold', {
+        method: 'POST',
+        body: JSON.stringify({ mediaItemId }),
+      });
+    },
+    onSuccess: (data: ScaffoldResult) => {
+      setScaffoldResult(data);
+      setScaffoldTemplateName(data.templateName);
+      toast({ title: 'PDF analyzed successfully', description: `Found ${data.detectedBlanks} blanks, created ${data.fieldDefsJson.length} fields` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Analysis failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Create template from scaffold result
+  const createFromScaffoldMutation = useMutation({
+    mutationFn: async (data: { 
+      mediaItemId: string; 
+      templateName: string; 
+      fieldDefsJson: FieldDef[]; 
+      signaturePlacement: ScaffoldResult['signaturePlacement'];
+    }) => {
+      return apiRequest('/api/pdf-templates/scaffold/create', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates'] });
+      setIsScaffoldOpen(false);
+      resetScaffoldState();
+      toast({ title: 'Template created from PDF', description: 'You can now edit the field positions' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const resetScaffoldState = () => {
+    setSelectedMediaId('');
+    setScaffoldResult(null);
+    setScaffoldTemplateName('');
+  };
+
   const resetForm = () => {
     setTemplateName('');
     setTemplateDescription('');
@@ -225,13 +329,164 @@ export default function FillablePdfTemplatesAdmin() {
           <h1 className="text-2xl font-bold">Fillable PDF Templates</h1>
           <p className="text-muted-foreground">Manage PDF templates for customer fill-and-sign workflow</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Template
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={isScaffoldOpen} onOpenChange={(open) => { setIsScaffoldOpen(open); if (!open) resetScaffoldState(); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Wand2 className="w-4 h-4 mr-2" />
+                Scaffold from Media
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Scaffold Template from PDF</DialogTitle>
+                <DialogDescription>
+                  Select a PDF from Media Library to automatically detect and create fillable fields
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                {!scaffoldResult ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Select PDF from Media Library</Label>
+                      <Select value={selectedMediaId} onValueChange={setSelectedMediaId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a PDF file..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mediaItems.filter(m => m.mimeType === 'application/pdf').map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.filename}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {mediaItems.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No PDFs found in Media Library. Upload a PDF first.
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => scaffoldMutation.mutate(selectedMediaId)}
+                      disabled={!selectedMediaId || scaffoldMutation.isPending}
+                      className="w-full"
+                    >
+                      {scaffoldMutation.isPending ? 'Analyzing PDF...' : 'Analyze PDF'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="font-medium">PDF Analysis Complete</span>
+                    </div>
+                    
+                    {scaffoldResult.warnings.length > 0 && (
+                      <Alert variant="default" className="mb-4">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <ul className="list-disc list-inside">
+                            {scaffoldResult.warnings.map((w, i) => (
+                              <li key={i} className="text-sm">{w}</li>
+                            ))}
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-muted-foreground">Pages</div>
+                        <div className="font-medium">{scaffoldResult.pageCount}</div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-muted-foreground">Blanks Detected</div>
+                        <div className="font-medium">{scaffoldResult.detectedBlanks}</div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-muted-foreground">Fields Created</div>
+                        <div className="font-medium">{scaffoldResult.fieldDefsJson.length}</div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-muted-foreground">Text Density</div>
+                        <div className="font-medium">{scaffoldResult.textDensity} chars/page</div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Template Name</Label>
+                      <Input
+                        value={scaffoldTemplateName}
+                        onChange={(e) => setScaffoldTemplateName(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Detected Fields</Label>
+                      <div className="border rounded-lg max-h-48 overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Label</TableHead>
+                              <TableHead>Page</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {scaffoldResult.fieldDefsJson.map((field, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-mono text-xs">{field.name}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">{field.type}</Badge>
+                                </TableCell>
+                                <TableCell>{field.label}</TableCell>
+                                <TableCell>{(field.page || 0) + 1}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Field positions can be fine-tuned in the visual editor after creation
+                      </p>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={resetScaffoldState}
+                        className="flex-1"
+                      >
+                        Start Over
+                      </Button>
+                      <Button
+                        onClick={() => createFromScaffoldMutation.mutate({
+                          mediaItemId: scaffoldResult.mediaItem.id,
+                          templateName: scaffoldTemplateName,
+                          fieldDefsJson: scaffoldResult.fieldDefsJson,
+                          signaturePlacement: scaffoldResult.signaturePlacement,
+                        })}
+                        disabled={!scaffoldTemplateName || createFromScaffoldMutation.isPending}
+                        className="flex-1"
+                      >
+                        {createFromScaffoldMutation.isPending ? 'Creating...' : 'Create Template'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Template
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Template</DialogTitle>
@@ -299,6 +554,7 @@ export default function FillablePdfTemplatesAdmin() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

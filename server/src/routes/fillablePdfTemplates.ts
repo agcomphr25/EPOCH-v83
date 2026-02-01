@@ -273,7 +273,7 @@ router.post('/scaffold', async (req: Request, res: Response) => {
     
     console.log('[Scaffold] Starting PDF analysis for media item:', mediaItemId);
     
-    const { scaffoldFromMediaItem } = await import('../../services/pdfTemplateScaffolderService');
+    const { scaffoldFromMediaItem } = await import('../services/pdfTemplateScaffolderService');
     const result = await scaffoldFromMediaItem(mediaItemId);
     
     console.log('[Scaffold] Analysis complete:', {
@@ -354,7 +354,7 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
     }
     
     // Copy PDF to templates directory for stability
-    const { ObjectStorageService } = await import('../../../replit_integrations/object_storage');
+    const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
     const objectStorage = new ObjectStorageService();
     const pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
     

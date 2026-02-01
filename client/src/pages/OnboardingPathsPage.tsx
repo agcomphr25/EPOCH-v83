@@ -37,6 +37,12 @@ interface MediaFolder {
   parentFolderId: string | null;
 }
 
+interface FillableTemplate {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 export default function OnboardingPathsPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -60,6 +66,10 @@ export default function OnboardingPathsPage() {
 
   const { data: folders = [] } = useQuery<MediaFolder[]>({
     queryKey: ['/api/media/folders'],
+  });
+
+  const { data: fillableTemplates = [] } = useQuery<FillableTemplate[]>({
+    queryKey: ['/api/fillable-pdf-templates'],
   });
 
   const createMutation = useMutation({
@@ -386,13 +396,31 @@ export default function OnboardingPathsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {forms.filter(f => f.isActive).map((form) => (
-                      <SelectItem key={form.id} value={form.id}>
-                        {form.name}
-                      </SelectItem>
-                    ))}
+                    {forms.filter(f => f.isActive).length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Custom Forms</div>
+                        {forms.filter(f => f.isActive).map((form) => (
+                          <SelectItem key={form.id} value={form.id}>
+                            {form.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {fillableTemplates.filter(t => t.isActive).length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Fillable PDF Templates</div>
+                        {fillableTemplates.filter(t => t.isActive).map((template) => (
+                          <SelectItem key={`template:${template.id}`} value={`template:${template.id}`}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose a custom form or use a fillable PDF template directly from the Media Library.
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -446,7 +446,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/followup-orders', followupOrdersRoutes);
 
   // Fillable PDF Templates routes
-  app.use('/api/pdf-templates', fillablePdfTemplatesRoutes);
+  app.use('/api/fillable-pdf-templates', fillablePdfTemplatesRoutes);
 
   // Accounting Prep routes (Phase 0 - QuickBooks Journal Entry Prep)
   app.use('/api/accounting-prep', accountingPrepRoutes);

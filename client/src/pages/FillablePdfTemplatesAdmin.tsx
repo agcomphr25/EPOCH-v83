@@ -136,7 +136,7 @@ export default function FillablePdfTemplatesAdmin() {
 
   // Fetch templates
   const { data: templates = [], isLoading } = useQuery<Template[]>({
-    queryKey: ['/api/pdf-templates'],
+    queryKey: ['/api/fillable-pdf-templates'],
   });
 
   // Fetch PDF media items for scaffold dialog
@@ -153,14 +153,14 @@ export default function FillablePdfTemplatesAdmin() {
 
   // Fetch instances for selected template
   const { data: instances = [] } = useQuery<Instance[]>({
-    queryKey: ['/api/pdf-templates', selectedTemplate?.id, 'instances'],
+    queryKey: ['/api/fillable-pdf-templates', selectedTemplate?.id, 'instances'],
     enabled: !!selectedTemplate,
   });
 
   // Create template mutation
   const createTemplateMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch('/api/pdf-templates', {
+      const response = await fetch('/api/fillable-pdf-templates', {
         method: 'POST',
         body: formData,
       });
@@ -171,7 +171,7 @@ export default function FillablePdfTemplatesAdmin() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates'] });
       setIsCreateOpen(false);
       resetForm();
       toast({ title: 'Template created successfully' });
@@ -184,13 +184,13 @@ export default function FillablePdfTemplatesAdmin() {
   // Create instance mutation
   const createInstanceMutation = useMutation({
     mutationFn: async (data: { templateId: string; recipientEmail?: string; recipientName?: string }) => {
-      return apiRequest('/api/pdf-templates/instances', {
+      return apiRequest('/api/fillable-pdf-templates/instances', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     onSuccess: (data: { instance: Instance; publicUrl: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates', selectedTemplate?.id, 'instances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates', selectedTemplate?.id, 'instances'] });
       setIsInstanceOpen(false);
       setRecipientEmail('');
       setRecipientName('');
@@ -209,10 +209,10 @@ export default function FillablePdfTemplatesAdmin() {
   // Delete template mutation
   const deleteTemplateMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/pdf-templates/${id}`, { method: 'DELETE' });
+      return apiRequest(`/api/fillable-pdf-templates/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates'] });
       toast({ title: 'Template deactivated' });
     },
   });
@@ -220,7 +220,7 @@ export default function FillablePdfTemplatesAdmin() {
   // Scaffold PDF mutation - analyze PDF
   const scaffoldMutation = useMutation({
     mutationFn: async (mediaItemId: string) => {
-      return apiRequest('/api/pdf-templates/scaffold', {
+      return apiRequest('/api/fillable-pdf-templates/scaffold', {
         method: 'POST',
         body: JSON.stringify({ mediaItemId }),
       });
@@ -243,13 +243,13 @@ export default function FillablePdfTemplatesAdmin() {
       fieldDefsJson: FieldDef[]; 
       signaturePlacement: ScaffoldResult['signaturePlacement'];
     }) => {
-      return apiRequest('/api/pdf-templates/scaffold/create', {
+      return apiRequest('/api/fillable-pdf-templates/scaffold/create', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates'] });
       setIsScaffoldOpen(false);
       resetScaffoldState();
       toast({ title: 'Template created from PDF', description: 'You can now edit the field positions' });
@@ -725,7 +725,7 @@ export default function FillablePdfTemplatesAdmin() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              window.open(`/api/pdf-templates/instances/${instance.publicSignatureId}/signed-pdf`, '_blank');
+                              window.open(`/api/fillable-pdf-templates/instances/${instance.publicSignatureId}/signed-pdf`, '_blank');
                             }}
                           >
                             Download

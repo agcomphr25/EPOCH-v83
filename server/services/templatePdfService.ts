@@ -13,7 +13,7 @@ import * as path from 'path';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { db } from '../db';
 import { fillablePdfTemplates, fillablePdfInstances, FillableFieldDef } from '../schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { generatePublicSignatureId, getCurrentEnvironment } from '../utils/magicLink';
 import crypto from 'crypto';
 
@@ -409,10 +409,12 @@ export async function markInstanceViewed(publicSignatureId: string): Promise<voi
  * Get all templates for admin listing
  */
 export async function getAllTemplates(): Promise<(typeof fillablePdfTemplates.$inferSelect)[]> {
-  return await db
+  const templates = await db
     .select()
     .from(fillablePdfTemplates)
-    .orderBy(fillablePdfTemplates.createdAt);
+    .where(eq(fillablePdfTemplates.isActive, true))
+    .orderBy(desc(fillablePdfTemplates.createdAt));
+  return templates;
 }
 
 /**

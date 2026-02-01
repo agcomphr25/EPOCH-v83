@@ -44,7 +44,7 @@ export default function FillAndSignPage() {
 
   // Fetch instance data
   const { data: instanceData, isLoading, error } = useQuery<InstanceData>({
-    queryKey: ['/api/pdf-templates/instances', publicSignatureId],
+    queryKey: ['/api/fillable-pdf-templates/instances', publicSignatureId],
     enabled: !!publicSignatureId,
   });
 
@@ -80,7 +80,7 @@ export default function FillAndSignPage() {
   // Submit mutation
   const submitMutation = useMutation({
     mutationFn: async (data: { valuesJson: Record<string, any>; signatureDataUrl?: string }) => {
-      return apiRequest(`/api/pdf-templates/instances/${publicSignatureId}/submit`, {
+      return apiRequest(`/api/fillable-pdf-templates/instances/${publicSignatureId}/submit`, {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -312,7 +312,7 @@ export default function FillAndSignPage() {
             </p>
             <Button
               onClick={() => {
-                window.open(`/api/pdf-templates/instances/${publicSignatureId}/signed-pdf`, '_blank');
+                window.open(`/api/fillable-pdf-templates/instances/${publicSignatureId}/signed-pdf`, '_blank');
               }}
             >
               <Download className="w-4 h-4 mr-2" />
@@ -336,7 +336,7 @@ export default function FillAndSignPage() {
             </p>
             <Button
               onClick={() => {
-                window.open(`/api/pdf-templates/instances/${publicSignatureId}/signed-pdf`, '_blank');
+                window.open(`/api/fillable-pdf-templates/instances/${publicSignatureId}/signed-pdf`, '_blank');
               }}
             >
               <Download className="w-4 h-4 mr-2" />

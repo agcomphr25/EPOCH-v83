@@ -93,7 +93,7 @@ export default function VisualFieldEditor() {
   const [hasChanges, setHasChanges] = useState(false);
 
   const { data: template, isLoading } = useQuery<Template>({
-    queryKey: ['/api/pdf-templates', id],
+    queryKey: ['/api/fillable-pdf-templates', id],
     enabled: !!id,
   });
 
@@ -108,14 +108,14 @@ export default function VisualFieldEditor() {
 
   const saveMutation = useMutation({
     mutationFn: async (fieldDefsJson: any[]) => {
-      return apiRequest(`/api/pdf-templates/${id}`, {
+      return apiRequest(`/api/fillable-pdf-templates/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ fieldDefsJson }),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates', id] });
-      queryClient.invalidateQueries({ queryKey: ['/api/pdf-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/fillable-pdf-templates'] });
       setHasChanges(false);
       toast({ title: 'Field definitions saved' });
     },

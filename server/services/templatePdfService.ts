@@ -438,6 +438,7 @@ export async function createTemplate(params: {
   name: string;
   description?: string;
   templatePdfPath: string;
+  sourceMediaItemId?: string;
   fieldDefsJson: FillableFieldDef[];
   requiresSignature?: boolean;
   signaturePlacement?: {
@@ -455,6 +456,7 @@ export async function createTemplate(params: {
       name: params.name,
       description: params.description,
       templatePdfPath: params.templatePdfPath,
+      sourceMediaItemId: params.sourceMediaItemId,
       fieldDefsJson: params.fieldDefsJson,
       requiresSignature: params.requiresSignature ?? true,
       signaturePlacement: params.signaturePlacement,

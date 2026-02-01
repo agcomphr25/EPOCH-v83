@@ -379,16 +379,17 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
     
     fs.writeFileSync(templatePath, pdfBuffer);
     
-    // Create the template
+    // Create the template with source media item reference
     const template = await createTemplate({
       name: templateName,
       templatePdfPath: templatePath,
+      sourceMediaItemId: mediaItemId,
       fieldDefsJson,
       requiresSignature,
       signaturePlacement,
     });
     
-    console.log('[Scaffold] Template created:', template.id);
+    console.log('[Scaffold] Template created:', template.id, 'from media item:', mediaItemId);
     
     res.status(201).json(template);
   } catch (error: any) {

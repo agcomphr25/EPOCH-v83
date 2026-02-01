@@ -46,7 +46,10 @@ export async function loadTemplatePdf(templateId: string): Promise<{
     return null;
   }
 
-  const pdfPath = path.join(process.cwd(), template.templatePdfPath);
+  // Handle both absolute and relative paths
+  const pdfPath = template.templatePdfPath.startsWith('/') 
+    ? template.templatePdfPath 
+    : path.join(process.cwd(), template.templatePdfPath);
   if (!fs.existsSync(pdfPath)) {
     console.error(`[TemplatePDF] Template PDF file not found: ${pdfPath}`);
     return null;

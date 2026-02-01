@@ -253,6 +253,141 @@ router.get('/:id/instances', async (req: Request, res: Response) => {
 });
 
 // ============================================================================
+// PDF SCAFFOLDING - Auto-generate template from Media Library PDF
+// ============================================================================
+
+/**
+ * POST /api/pdf-templates/scaffold
+ * Analyze a PDF from Media Library and scaffold a template (admin)
+ * 
+ * Body: { mediaItemId: string, templateName?: string }
+ * Returns: Scaffold analysis result with inferred fields
+ */
+router.post('/scaffold', async (req: Request, res: Response) => {
+  try {
+    const { mediaItemId, templateName: customTemplateName } = req.body;
+    
+    if (!mediaItemId) {
+      return res.status(400).json({ error: 'mediaItemId is required' });
+    }
+    
+    console.log('[Scaffold] Starting PDF analysis for media item:', mediaItemId);
+    
+    const { scaffoldFromMediaItem } = await import('../../services/pdfTemplateScaffolderService');
+    const result = await scaffoldFromMediaItem(mediaItemId);
+    
+    console.log('[Scaffold] Analysis complete:', {
+      pageCount: result.pageCount,
+      fieldsDetected: result.fieldDefsJson.length,
+      blanksFound: result.detectedBlanks,
+      isImageOnly: result.isImageOnly,
+    });
+    
+    // Return the scaffold result for admin review
+    res.json({
+      success: result.success,
+      templateName: customTemplateName || result.templateName,
+      pageCount: result.pageCount,
+      pageDimensions: result.pageDimensions,
+      fieldDefsJson: result.fieldDefsJson,
+      signaturePlacement: result.signaturePlacement,
+      warnings: result.warnings,
+      isImageOnly: result.isImageOnly,
+      textDensity: result.textDensity,
+      detectedBlanks: result.detectedBlanks,
+      mediaItem: {
+        id: result.mediaItem.id,
+        filename: result.mediaItem.filename,
+        storagePath: result.mediaItem.storagePath,
+      },
+    });
+  } catch (error: any) {
+    console.error('[API] Error scaffolding template:', error);
+    res.status(500).json({ 
+      error: 'Failed to scaffold template', 
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/pdf-templates/scaffold/create
+ * Create a template from scaffold result (admin)
+ * 
+ * Body: { 
+ *   mediaItemId: string, 
+ *   templateName: string, 
+ *   fieldDefsJson: FillableFieldDef[],
+ *   signaturePlacement: {...},
+ *   requiresSignature?: boolean 
+ * }
+ */
+router.post('/scaffold/create', async (req: Request, res: Response) => {
+  try {
+    const { 
+      mediaItemId, 
+      templateName, 
+      fieldDefsJson, 
+      signaturePlacement, 
+      requiresSignature = true 
+    } = req.body;
+    
+    if (!mediaItemId || !templateName || !fieldDefsJson) {
+      return res.status(400).json({ 
+        error: 'mediaItemId, templateName, and fieldDefsJson are required' 
+      });
+    }
+    
+    // Get media item to get the storage path
+    const { db } = await import('../../db');
+    const { mediaLibrary } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    
+    const [mediaItem] = await db
+      .select()
+      .from(mediaLibrary)
+      .where(eq(mediaLibrary.id, mediaItemId))
+      .limit(1);
+    
+    if (!mediaItem) {
+      return res.status(404).json({ error: 'Media item not found' });
+    }
+    
+    // Copy PDF to templates directory for stability
+    const { ObjectStorageService } = await import('../../../replit_integrations/object_storage');
+    const objectStorage = new ObjectStorageService();
+    const pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+    
+    // Save to templates directory
+    const timestamp = Date.now();
+    const safeName = mediaItem.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const templateFilename = `template-${timestamp}-${safeName}`;
+    const templatePath = path.join(TEMPLATES_DIR, templateFilename);
+    
+    fs.writeFileSync(templatePath, pdfBuffer);
+    
+    // Create the template
+    const template = await createTemplate({
+      name: templateName,
+      templatePdfPath: templatePath,
+      fieldDefsJson,
+      requiresSignature,
+      signaturePlacement,
+    });
+    
+    console.log('[Scaffold] Template created:', template.id);
+    
+    res.status(201).json(template);
+  } catch (error: any) {
+    console.error('[API] Error creating scaffolded template:', error);
+    res.status(500).json({ 
+      error: 'Failed to create template', 
+      details: error.message 
+    });
+  }
+});
+
+// ============================================================================
 // INSTANCE ROUTES - Create and manage fill-and-sign instances
 // ============================================================================
 

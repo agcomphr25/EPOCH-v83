@@ -1,0 +1,129 @@
+You are working inside the EPOCH codebase.
+
+GOAL:
+Given an uploaded PDF in the Media Library, automatically scaffold a
+fillablePdfTemplate suitable for onboarding and digital signing.
+
+This tool assists admins in converting legacy HR PDFs into clean,
+fillable, signable templates with minimal manual effort.
+
+---
+
+INPUT:
+• mediaItemId (PDF already uploaded to Media Library)
+
+---
+
+CORE PRINCIPLES:
+• Preserve original PDF layout and branding
+• Overlay fields — do NOT recreate document text
+• Generate a professional, legally sound signature experience
+• Minimize admin setup time
+• Output a usable draft template (admin may fine-tune placement)
+
+---
+
+STEP 1 — PDF ANALYSIS
+
+1. Load the PDF from Media Library using mediaItemId
+2. Detect:
+   • Page count
+   • Page dimensions
+   • Text blocks (if extractable)
+   • Horizontal line patterns (likely fill-in blanks)
+   • Existing labels near blanks (e.g. “Name”, “Date”, “Signature”)
+3. If PDF text is NOT extractable:
+   • Switch to visual heuristics:
+     - Long horizontal lines
+     - Underscore sequences
+     - Bottom-page signature patterns
+
+Log analysis results for admin review.
+
+---
+
+STEP 2 — FIELD INFERENCE
+
+Automatically infer candidate fields:
+
+STANDARD FIELD TYPES:
+• employee_name (text)
+• employee_email (email) — if “Email” label detected
+• generic_text_N (text)
+• generic_date_N (date)
+• acknowledgment_checkbox (checkbox)
+• signature (signature)
+• signed_date (date)
+
+Rules:
+• Never infer more than 8 text fields automatically
+• Always include:
+  - acknowledgment_checkbox
+  - signature
+  - signed_date
+• If multiple blanks detected:
+  - Generate numbered field keys (text_1, text_2, etc.)
+
+---
+
+STEP 3 — SIGNATURE BLOCK PLACEMENT
+
+Detect bottom-page area and place:
+• acknowledgment_checkbox with label:
+  “I agree to sign electronically.”
+• signature field aligned with existing “Sign” line if present
+• signed_date aligned with “Date” line if present
+
+If no obvious signature area exists:
+• Insert a clean signature block at bottom of last page
+
+---
+
+STEP 4 — TEMPLATE GENERATION
+
+Create a new fillablePdfTemplate:
+
+• name:
+  "<Original PDF Name> (Fillable Template)"
+• templatePdfPath:
+  Original PDF path
+• requiresSignature = true
+• fieldDefsJson:
+  Auto-generated inferred fields with coordinates
+• signaturePlacement:
+  Explicit coordinates (do NOT rely on defaults)
+
+Persist template in database.
+
+---
+
+STEP 5 — ADMIN PREVIEW OUTPUT
+
+Return:
+• Template ID
+• List of inferred fields with:
+  - fieldKey
+  - type
+  - page number
+  - coordinates
+• Warnings if:
+  - PDF is image-only
+  - Field confidence is low
+  - Manual review is recommended
+
+---
+
+IMPORTANT RULES:
+• Do NOT modify the original PDF
+• Do NOT auto-map to employee table yet
+• Do NOT auto-publish template
+• Template must be editable before use
+• This tool assists — admin is final authority
+
+---
+
+DELIVERABLE:
+• Scaffolding service/function
+• Generated fillablePdfTemplate
+• Clear admin-reviewable output
+• Zero impact on existing onboarding flows

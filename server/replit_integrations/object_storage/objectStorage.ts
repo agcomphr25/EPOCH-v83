@@ -237,6 +237,34 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  // Downloads an object as a buffer by storage path
+  async downloadAsBuffer(storagePath: string): Promise<Buffer> {
+    try {
+      // Handle both /objects/ paths and direct bucket paths
+      let objectFile: File;
+      
+      if (storagePath.startsWith('/objects/')) {
+        objectFile = await this.getObjectEntityFile(storagePath);
+      } else {
+        // Direct path format: /bucket-name/path/to/file
+        const { bucketName, objectName } = parseObjectPath(storagePath);
+        const bucket = objectStorageClient.bucket(bucketName);
+        objectFile = bucket.file(objectName);
+        
+        const [exists] = await objectFile.exists();
+        if (!exists) {
+          throw new ObjectNotFoundError();
+        }
+      }
+      
+      const [contents] = await objectFile.download();
+      return contents;
+    } catch (error) {
+      console.error('[ObjectStorage] Error downloading as buffer:', error);
+      throw error;
+    }
+  }
 }
 
 function parseObjectPath(path: string): {

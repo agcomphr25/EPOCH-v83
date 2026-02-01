@@ -49,6 +49,12 @@ import {
   Download,
   ExternalLink,
   Upload,
+  FolderPlus,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  Home,
+  MoveRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -58,6 +64,7 @@ interface MediaItem {
   storagePath: string;
   mimeType: string;
   fileSize: number;
+  folderId: string | null;
   capturedById: number | null;
   capturedByName: string | null;
   captureDate: string;
@@ -69,6 +76,14 @@ interface MediaItem {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+interface MediaFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  visibleToRoles: string[] | null;
+  createdAt: string;
 }
 
 const CATEGORIES = [
@@ -116,9 +131,66 @@ export default function MediaLibrary() {
   const [editCategory, setEditCategory] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<MediaItem | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [movingItem, setMovingItem] = useState<MediaItem | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: folders = [] } = useQuery<MediaFolder[]>({
+    queryKey: ['/api/media-library/folders'],
+  });
+
+  const currentFolder = folders.find(f => f.id === currentFolderId);
+  const childFolders = folders.filter(f => f.parentId === currentFolderId);
+
+  const getBreadcrumbs = () => {
+    const crumbs: { id: string | null; name: string }[] = [{ id: null, name: 'Root' }];
+    let folder = currentFolder;
+    const folderPath: MediaFolder[] = [];
+    while (folder) {
+      folderPath.unshift(folder);
+      folder = folders.find(f => f.id === folder?.parentId);
+    }
+    return [...crumbs, ...folderPath.map(f => ({ id: f.id, name: f.name }))];
+  };
+
+  const createFolderMutation = useMutation({
+    mutationFn: async (name: string) => {
+      return apiRequest('/api/media-library/folders', {
+        method: 'POST',
+        body: { name, parentId: currentFolderId },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/media-library/folders'] });
+      toast({ title: 'Folder created successfully' });
+      setIsCreateFolderOpen(false);
+      setNewFolderName('');
+    },
+    onError: () => {
+      toast({ title: 'Failed to create folder', variant: 'destructive' });
+    },
+  });
+
+  const moveItemMutation = useMutation({
+    mutationFn: async ({ itemId, folderId }: { itemId: string; folderId: string | null }) => {
+      return apiRequest(`/api/media/${itemId}/move`, {
+        method: 'PATCH',
+        body: { folderId },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/media'] });
+      toast({ title: 'Item moved successfully' });
+      setMovingItem(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to move item', variant: 'destructive' });
+    },
+  });
   
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -129,6 +201,9 @@ export default function MediaLibrary() {
     formData.append('file', file);
     formData.append('title', file.name);
     formData.append('category', 'document');
+    if (currentFolderId) {
+      formData.append('folderId', currentFolderId);
+    }
     
     try {
       const response = await fetch('/api/media/upload', {
@@ -157,16 +232,21 @@ export default function MediaLibrary() {
   };
 
   const { data: mediaItems = [], isLoading } = useQuery<MediaItem[]>({
-    queryKey: ['/api/media', { search, category, includeArchived }],
+    queryKey: ['/api/media', { search, category, includeArchived, folderId: currentFolderId }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (category !== 'all') params.set('category', category);
       if (includeArchived) params.set('includeArchived', 'true');
+      if (currentFolderId) params.set('folderId', currentFolderId);
       const res = await fetch(`/api/media?${params}`, { credentials: 'include' });
       return res.json();
     },
   });
+
+  const filteredItems = currentFolderId 
+    ? mediaItems.filter(item => item.folderId === currentFolderId)
+    : mediaItems.filter(item => !item.folderId);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; notes?: string; category?: string; isArchived?: boolean }) => {
@@ -232,6 +312,13 @@ export default function MediaLibrary() {
         </div>
         <div className="flex gap-2">
           <Button 
+            variant="outline"
+            onClick={() => setIsCreateFolderOpen(true)}
+          >
+            <FolderPlus className="mr-2 h-4 w-4" />
+            New Folder
+          </Button>
+          <Button 
             variant="outline" 
             disabled={isUploading}
             onClick={() => document.getElementById('file-upload-input')?.click()}
@@ -260,6 +347,24 @@ export default function MediaLibrary() {
             }
           />
         </div>
+      </div>
+
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-1 mb-4 text-sm">
+        {getBreadcrumbs().map((crumb, index, arr) => (
+          <div key={crumb.id ?? 'root'} className="flex items-center">
+            <button
+              onClick={() => setCurrentFolderId(crumb.id)}
+              className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-muted ${
+                index === arr.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              {index === 0 ? <Home className="h-4 w-4" /> : <Folder className="h-4 w-4" />}
+              {crumb.name}
+            </button>
+            {index < arr.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        ))}
       </div>
 
       {/* Filters */}
@@ -303,17 +408,36 @@ export default function MediaLibrary() {
             <Skeleton key={i} className="aspect-square rounded-lg" />
           ))}
         </div>
-      ) : mediaItems.length === 0 ? (
+      ) : filteredItems.length === 0 && childFolders.length === 0 ? (
         <div className="text-center py-12">
-          <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No images found</h3>
+          <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">This folder is empty</h3>
           <p className="text-muted-foreground">
-            Capture a new image or adjust your filters.
+            Create a folder, upload files, or capture images.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {mediaItems.map((media) => (
+          {/* Folders first */}
+          {childFolders.map((folder) => (
+            <Card
+              key={folder.id}
+              className="group cursor-pointer transition-all hover:ring-2 hover:ring-primary"
+              onClick={() => setCurrentFolderId(folder.id)}
+            >
+              <CardContent className="p-0">
+                <div className="aspect-square flex flex-col items-center justify-center bg-muted/50 rounded-t-lg">
+                  <FolderOpen className="h-16 w-16 text-amber-500" />
+                </div>
+                <div className="p-3 border-t">
+                  <p className="font-medium text-sm truncate">{folder.name}</p>
+                  <p className="text-xs text-muted-foreground">Folder</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {/* Then media items */}
+          {filteredItems.map((media) => (
             <Card
               key={media.id}
               className={`group cursor-pointer transition-all hover:ring-2 hover:ring-primary ${
@@ -350,6 +474,10 @@ export default function MediaLibrary() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(media); }}>
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingItem(media); }}>
+                          <MoveRight className="mr-2 h-4 w-4" />
+                          Move to Folder
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleArchive(media); }}>
                           <Archive className="mr-2 h-4 w-4" />
@@ -557,6 +685,73 @@ export default function MediaLibrary() {
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogDescription>
+              Create a folder to organize your documents and images.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="folderName">Folder Name</Label>
+            <Input
+              id="folderName"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="e.g., Onboarding Documents"
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => createFolderMutation.mutate(newFolderName)}
+              disabled={!newFolderName.trim() || createFolderMutation.isPending}
+            >
+              {createFolderMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Item Dialog */}
+      <Dialog open={!!movingItem} onOpenChange={() => setMovingItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move to Folder</DialogTitle>
+            <DialogDescription>
+              Select a destination folder for "{movingItem?.title || movingItem?.filename}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => movingItem && moveItemMutation.mutate({ itemId: movingItem.id, folderId: null })}
+            >
+              <Home className="mr-2 h-4 w-4" />
+              Root (No folder)
+            </Button>
+            {folders.map((folder) => (
+              <Button
+                key={folder.id}
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => movingItem && moveItemMutation.mutate({ itemId: movingItem.id, folderId: folder.id })}
+              >
+                <Folder className="mr-2 h-4 w-4 text-amber-500" />
+                {folder.name}
+              </Button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

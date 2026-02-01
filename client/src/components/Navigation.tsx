@@ -540,6 +540,12 @@ export default function Navigation() {
       icon: MapPin,
       description: 'Visualize order distribution by customer location',
     },
+    {
+      path: '/fillable-pdf-templates',
+      label: 'Fillable PDF Templates',
+      icon: FileText,
+      description: 'Create and manage fillable PDF templates for customer sign workflows',
+    },
   ];
 
   const travelerItems = [

@@ -48,6 +48,7 @@ import {
   X,
   Download,
   ExternalLink,
+  Upload,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -114,9 +115,46 @@ export default function MediaLibrary() {
   const [editNotes, setEditNotes] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<MediaItem | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', file.name);
+    formData.append('category', 'document');
+    
+    try {
+      const response = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      await queryClient.invalidateQueries({ queryKey: ['/api/media'] });
+      toast({ title: 'Success', description: `${file.name} uploaded successfully` });
+    } catch (error: any) {
+      toast({ 
+        title: 'Upload Failed', 
+        description: error.message || 'Failed to upload file', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsUploading(false);
+      event.target.value = '';
+    }
+  };
 
   const { data: mediaItems = [], isLoading } = useQuery<MediaItem[]>({
     queryKey: ['/api/media', { search, category, includeArchived }],
@@ -192,14 +230,36 @@ export default function MediaLibrary() {
             Captured images and documents for quick reference
           </p>
         </div>
-        <CameraCapture
-          trigger={
-            <Button data-testid="button-new-capture">
-              <Camera className="mr-2 h-4 w-4" />
-              Capture New
-            </Button>
-          }
-        />
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            disabled={isUploading}
+            onClick={() => document.getElementById('file-upload-input')?.click()}
+            data-testid="button-upload-file"
+          >
+            {isUploading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            {isUploading ? 'Uploading...' : 'Upload File'}
+          </Button>
+          <input
+            id="file-upload-input"
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <CameraCapture
+            trigger={
+              <Button data-testid="button-new-capture">
+                <Camera className="mr-2 h-4 w-4" />
+                Capture New
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       {/* Filters */}

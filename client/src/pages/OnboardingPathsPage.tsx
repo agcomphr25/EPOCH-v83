@@ -31,6 +31,12 @@ interface OnboardingForm {
   isActive: boolean;
 }
 
+interface MediaFolder {
+  id: string;
+  name: string;
+  parentFolderId: string | null;
+}
+
 export default function OnboardingPathsPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -50,6 +56,10 @@ export default function OnboardingPathsPage() {
 
   const { data: forms = [] } = useQuery<OnboardingForm[]>({
     queryKey: ['/api/onboarding/forms'],
+  });
+
+  const { data: folders = [] } = useQuery<MediaFolder[]>({
+    queryKey: ['/api/media-library/folders'],
   });
 
   const createMutation = useMutation({
@@ -383,6 +393,29 @@ export default function OnboardingPathsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="documentFolderId">Document Folder</Label>
+                <Select
+                  value={formData.documentFolderId || 'none'}
+                  onValueChange={(value) => setFormData({ ...formData, documentFolderId: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a folder with onboarding documents" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {folders.map((folder) => (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select a Media Library folder containing PDFs. Documents with fillable templates will be signable.
+                </p>
               </div>
 
               <div className="flex items-center justify-between">

@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Upload, FileText, Send, Eye, Trash2, Edit, PenLine, Wand2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Upload, FileText, Send, Eye, Trash2, Edit, PenLine, Wand2, AlertTriangle, CheckCircle, FolderOpen } from 'lucide-react';
 
 interface FieldDef {
   name: string;
@@ -327,7 +327,14 @@ export default function FillablePdfTemplatesAdmin() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Fillable PDF Templates</h1>
-          <p className="text-muted-foreground">Manage PDF templates for customer fill-and-sign workflow</p>
+          <p className="text-muted-foreground">
+            Manage PDF templates for customer fill-and-sign workflow
+            <span className="mx-2">|</span>
+            <Link href="/media-library" className="text-primary hover:underline inline-flex items-center gap-1">
+              <FolderOpen className="h-4 w-4" />
+              Open Media Library
+            </Link>
+          </p>
         </div>
         <div className="flex gap-2">
           <Dialog open={isScaffoldOpen} onOpenChange={(open) => { setIsScaffoldOpen(open); if (!open) resetScaffoldState(); }}>

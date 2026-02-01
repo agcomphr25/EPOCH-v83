@@ -567,8 +567,10 @@ router.get('/sessions', async (req: Request, res: Response) => {
     const sessionsWithSteps = await Promise.all(
       sessions.map(async (session: any) => {
         const documents = await pool.query(`
-          SELECT id, template_id as "templateId", instance_id as "instanceId",
-                 order_index as "orderIndex", status, signed_at as "signedAt"
+          SELECT id, media_item_id as "mediaItemId", template_id as "templateId", 
+                 instance_id as "instanceId", document_name as "documentName",
+                 is_fillable as "isFillable", order_index as "orderIndex", 
+                 status, signed_at as "signedAt"
           FROM onboarding_session_documents
           WHERE session_id = $1
           ORDER BY order_index
@@ -623,8 +625,10 @@ router.get('/sessions/:id', async (req: Request, res: Response) => {
     
     // Fetch documents
     const documents = await pool.query(`
-      SELECT id, template_id as "templateId", instance_id as "instanceId",
-             order_index as "orderIndex", status, signed_at as "signedAt"
+      SELECT id, media_item_id as "mediaItemId", template_id as "templateId", 
+             instance_id as "instanceId", document_name as "documentName",
+             is_fillable as "isFillable", order_index as "orderIndex", 
+             status, signed_at as "signedAt"
       FROM onboarding_session_documents
       WHERE session_id = $1
       ORDER BY order_index
@@ -737,23 +741,63 @@ router.post('/sessions', async (req: Request, res: Response) => {
     
     const newSession = sessions[0];
     
-    // Resolve document templates from folder if configured
+    // Resolve documents from folder if configured
     if (path.documentFolderId) {
-      // Query fillable PDF templates from the document folder
-      const templates = await pool.query(`
-        SELECT id, name
-        FROM fillable_pdf_templates
-        WHERE folder_id = $1 AND is_active = true
-        ORDER BY name
+      // Query media items (PDFs) in the document folder
+      const mediaItems = await pool.query(`
+        SELECT id, filename, mime_type as "mimeType"
+        FROM media_library
+        WHERE folder_id = $1 AND mime_type = 'application/pdf'
+        ORDER BY filename
       `, [path.documentFolderId]);
       
-      // Create session documents for each template
-      for (let i = 0; i < templates.length; i++) {
+      // For each media item, check if there's a fillable template linked to it
+      for (let i = 0; i < mediaItems.length; i++) {
+        const mediaItem = mediaItems[i];
+        
+        // Check if there's a fillable PDF template for this media item
+        const templates = await pool.query(`
+          SELECT id, name
+          FROM fillable_pdf_templates
+          WHERE source_media_item_id = $1 AND is_active = true
+          LIMIT 1
+        `, [mediaItem.id]);
+        
+        const hasTemplate = templates.length > 0;
+        const template = hasTemplate ? templates[0] : null;
+        let instanceId = null;
+        
+        // If there's a fillable template, create an instance for this session
+        if (hasTemplate && template) {
+          // Generate unique signature IDs for the instance
+          const crypto = await import('crypto');
+          const publicSignatureId = 'onb_' + crypto.randomBytes(4).toString('hex').toUpperCase();
+          const signatureToken = crypto.randomBytes(32).toString('base64url');
+          
+          const instances = await pool.query(`
+            INSERT INTO fillable_pdf_instances
+              (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
+            VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+            RETURNING id
+          `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+          
+          instanceId = instances[0].id;
+        }
+        
+        // Create session document entry
         await pool.query(`
           INSERT INTO onboarding_session_documents
-            (session_id, template_id, order_index, status)
-          VALUES ($1, $2, $3, 'pending')
-        `, [newSession.id, templates[i].id, i]);
+            (session_id, media_item_id, template_id, instance_id, document_name, is_fillable, order_index, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        `, [
+          newSession.id,
+          mediaItem.id,
+          template?.id || null,
+          instanceId,
+          mediaItem.filename.replace(/\.pdf$/i, ''),
+          hasTemplate,
+          i
+        ]);
       }
     }
     
@@ -769,7 +813,9 @@ router.post('/sessions', async (req: Request, res: Response) => {
     
     // Fetch the created documents and captures
     const documents = await pool.query(`
-      SELECT id, template_id as "templateId", order_index as "orderIndex", status
+      SELECT id, media_item_id as "mediaItemId", template_id as "templateId", 
+             instance_id as "instanceId", document_name as "documentName",
+             is_fillable as "isFillable", order_index as "orderIndex", status
       FROM onboarding_session_documents
       WHERE session_id = $1
       ORDER BY order_index

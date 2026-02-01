@@ -12274,10 +12274,13 @@ export type InsertOnboardingSession = z.infer<typeof insertOnboardingSessionSche
 export const onboardingSessionDocuments = pgTable('onboarding_session_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
   sessionId: uuid('session_id').references(() => onboardingSessions.id).notNull(),
-  templateId: uuid('template_id').references(() => fillablePdfTemplates.id).notNull(),
-  instanceId: uuid('instance_id').references(() => fillablePdfInstances.id),
+  mediaItemId: uuid('media_item_id').references(() => mediaLibrary.id), // Source media item from folder
+  templateId: uuid('template_id').references(() => fillablePdfTemplates.id), // Fillable template (null = view-only)
+  instanceId: uuid('instance_id').references(() => fillablePdfInstances.id), // Instance for this session
+  documentName: text('document_name').notNull(), // Display name from media item
+  isFillable: boolean('is_fillable').notNull().default(false), // true = signable, false = view-only
   orderIndex: integer('order_index').notNull().default(0),
-  status: text('status').notNull().default('pending'), // pending, signed
+  status: text('status').notNull().default('pending'), // pending, viewed, signed
   signedAt: timestamp('signed_at'),
 }, (table) => ({
   sessionIdIdx: index('onboarding_session_docs_session_id_idx').on(table.sessionId),

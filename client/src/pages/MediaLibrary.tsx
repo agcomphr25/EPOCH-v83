@@ -140,7 +140,7 @@ export default function MediaLibrary() {
   const { toast } = useToast();
 
   const { data: folders = [] } = useQuery<MediaFolder[]>({
-    queryKey: ['/api/media-library/folders'],
+    queryKey: ['/api/media/folders'],
   });
 
   const currentFolder = folders.find(f => f.id === currentFolderId);
@@ -159,13 +159,13 @@ export default function MediaLibrary() {
 
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
-      return apiRequest('/api/media-library/folders', {
+      return apiRequest('/api/media/folders', {
         method: 'POST',
         body: { name, parentId: currentFolderId },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/media-library/folders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/media/folders'] });
       toast({ title: 'Folder created successfully' });
       setIsCreateFolderOpen(false);
       setNewFolderName('');

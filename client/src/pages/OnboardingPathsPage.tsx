@@ -59,7 +59,7 @@ export default function OnboardingPathsPage() {
   });
 
   const { data: folders = [] } = useQuery<MediaFolder[]>({
-    queryKey: ['/api/media-library/folders'],
+    queryKey: ['/api/media/folders'],
   });
 
   const createMutation = useMutation({

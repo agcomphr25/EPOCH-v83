@@ -12,8 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Edit, Trash2, FileText, GripVertical, X } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, FileText, GripVertical, X, Download, FolderOpen } from 'lucide-react';
 import { Link } from 'wouter';
+
+interface FillableTemplate {
+  id: string;
+  name: string;
+  fieldDefinitions: Array<{
+    name: string;
+    label: string;
+    type: string;
+    required?: boolean;
+  }>;
+}
 
 interface FormField {
   fieldKey: string;
@@ -61,6 +72,7 @@ const EMPLOYEE_FIELD_OPTIONS = [
 export default function OnboardingFormsPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<OnboardingForm | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -71,6 +83,10 @@ export default function OnboardingFormsPage() {
 
   const { data: forms = [], isLoading } = useQuery<OnboardingForm[]>({
     queryKey: ['/api/onboarding/forms'],
+  });
+
+  const { data: templates = [] } = useQuery<FillableTemplate[]>({
+    queryKey: ['/api/fillable-pdf-templates'],
   });
 
   const createMutation = useMutation({
@@ -139,6 +155,27 @@ export default function OnboardingFormsPage() {
     setFormData({ name: '', description: '', isActive: true });
     setFields([]);
     setIsDialogOpen(true);
+  };
+
+  const importFromTemplate = (template: FillableTemplate) => {
+    setEditingForm(null);
+    setFormData({ 
+      name: template.name, 
+      description: `Imported from fillable PDF template: ${template.name}`, 
+      isActive: true 
+    });
+    const importedFields: FormField[] = (template.fieldDefinitions || []).map(f => ({
+      fieldKey: f.name,
+      label: f.label || f.name,
+      type: (f.type === 'signature' ? 'text' : f.type === 'dropdown' ? 'select' : f.type) as FormField['type'],
+      required: f.required || false,
+      options: undefined,
+      employeeFieldMapping: '',
+    }));
+    setFields(importedFields);
+    setIsImportDialogOpen(false);
+    setIsDialogOpen(true);
+    toast({ title: `Imported ${importedFields.length} fields from "${template.name}"` });
   };
 
   const openEditDialog = (form: OnboardingForm) => {
@@ -232,10 +269,16 @@ export default function OnboardingFormsPage() {
           <h1 className="text-2xl font-bold">Intake Forms</h1>
           <p className="text-muted-foreground">Design forms to collect employee information during onboarding</p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Form
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+            <Download className="h-4 w-4 mr-2" />
+            Import from Template
+          </Button>
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Form
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -503,6 +546,54 @@ export default function OnboardingFormsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import from Template Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import from Fillable Template</DialogTitle>
+            <DialogDescription>
+              Select a fillable PDF template to import its fields as an intake form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-96 overflow-y-auto">
+            {templates.length === 0 ? (
+              <div className="text-center py-8">
+                <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground mb-2">No fillable templates found</p>
+                <p className="text-sm text-muted-foreground">
+                  Create fillable templates in Forms & Reports first, then import them here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {templates.map((template) => (
+                  <Card 
+                    key={template.id} 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => importFromTemplate(template)}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{template.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {template.fieldDefinitions?.length || 0} fields defined
+                        </p>
+                      </div>
+                      <Download className="h-5 w-5 text-muted-foreground" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -354,9 +354,22 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
     }
     
     // Copy PDF to templates directory for stability
-    const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-    const objectStorage = new ObjectStorageService();
-    const pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+    let pdfBuffer: Buffer;
+    
+    // Try local file first (for development/legacy uploads)
+    const localPath = path.join(process.cwd(), mediaItem.storagePath);
+    if (fs.existsSync(localPath)) {
+      console.log('[Scaffold Create] Reading PDF from local path:', localPath);
+      pdfBuffer = fs.readFileSync(localPath);
+    } else if (mediaItem.storagePath.startsWith('/objects/')) {
+      // Try object storage for cloud-stored files
+      console.log('[Scaffold Create] Reading PDF from object storage:', mediaItem.storagePath);
+      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+      const objectStorage = new ObjectStorageService();
+      pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+    } else {
+      return res.status(404).json({ error: `PDF file not found: ${mediaItem.storagePath}` });
+    }
     
     // Save to templates directory
     const timestamp = Date.now();

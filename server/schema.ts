@@ -11872,6 +11872,7 @@ export const fillablePdfTemplates = pgTable('fillable_pdf_templates', {
   description: text('description'),
   version: integer('version').notNull().default(1),
   templatePdfPath: text('template_pdf_path').notNull(),
+  sourceMediaItemId: uuid('source_media_item_id'), // Reference to media_library item this was scaffolded from
   fieldDefsJson: jsonb('field_defs_json').$type<FillableFieldDef[]>().notNull().default([]),
   requiresSignature: boolean('requires_signature').notNull().default(true),
   signaturePlacement: jsonb('signature_placement').$type<{
@@ -11888,6 +11889,7 @@ export const fillablePdfTemplates = pgTable('fillable_pdf_templates', {
 }, (table) => ({
   nameIdx: index('fillable_pdf_templates_name_idx').on(table.name),
   activeIdx: index('fillable_pdf_templates_active_idx').on(table.isActive),
+  sourceMediaItemIdx: index('fillable_pdf_templates_source_media_item_idx').on(table.sourceMediaItemId),
 }));
 
 // Fillable PDF Instances - Individual customer fill-and-sign sessions

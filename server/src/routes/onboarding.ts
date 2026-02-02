@@ -1604,6 +1604,9 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     // ===== PREFLIGHT VALIDATION (NO WRITES) =====
     const validationErrors: string[] = [];
     
+    // Get account config from request body (passed from frontend)
+    const { accountConfig: requestAccountConfig } = req.body;
+    
     // 1. Fetch session with all related data
     const sessions = await pool.query(`
       SELECT 
@@ -1611,7 +1614,7 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
         s.intake_data_schema as "intakeDataSchema", s.demographics_data as "demographicsData",
         s.current_step as "currentStep",
-        s.started_at as "startedAt", s.account_config as "accountConfig",
+        s.started_at as "startedAt",
         p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose"
       FROM onboarding_sessions s
       LEFT JOIN onboarding_paths p ON s.path_id = p.id
@@ -1660,24 +1663,15 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       validationErrors.push(`${unsignedRequiredDocs.length} required document(s) not signed`);
     }
     
-    // Check 4: All REQUIRED camera captures completed
+    // Check 4: Camera captures (optional - just fetch for reference, no validation errors)
     const captures = await pool.query(`
       SELECT id, capture_type as "captureType", media_item_id as "mediaItemId", is_required as "isRequired"
       FROM onboarding_session_captures
       WHERE session_id = $1
     `, [id]);
     
-    const requiredCaptures = captures.filter((c: any) => c.isRequired !== false);
-    const incompleteCaptures = requiredCaptures.filter((c: any) => !c.mediaItemId);
-    if (incompleteCaptures.length > 0) {
-      validationErrors.push(`${incompleteCaptures.length} required camera capture(s) not completed`);
-    }
-    
-    // Check 5: User account configuration exists (optional for REHIRE - may reuse existing account)
-    const accountConfig = session.accountConfig || req.body.accountConfig;
-    if (!isRehire && (!accountConfig || !accountConfig.username)) {
-      validationErrors.push('User account configuration is missing or incomplete');
-    }
+    // Check 5: User account configuration (optional - can finalize without creating a user account)
+    const accountConfig = requestAccountConfig || null;
     
     // If any validation fails, return error and log audit
     if (validationErrors.length > 0) {

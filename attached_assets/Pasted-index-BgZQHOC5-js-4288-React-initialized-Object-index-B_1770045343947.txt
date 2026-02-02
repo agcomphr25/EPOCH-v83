@@ -1,0 +1,78 @@
+index-BgZQHOC5.js:4288 React initialized: Object
+index-BgZQHOC5.js:4288 React hooks: Object
+index-BgZQHOC5.js:4285 App component is rendering...
+index-BgZQHOC5.js:4285 Environment: production
+index-BgZQHOC5.js:4285 Base URL: /
+index-BgZQHOC5.js:4288 Failed to fetch session for redirect: Error: Not authenticated
+    at index-BgZQHOC5.js:4285:167649
+console.error @ index-BgZQHOC5.js:4288
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-BgZQHOC5.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-BgZQHOC5.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-BgZQHOC5.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-BgZQHOC5.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-BgZQHOC5.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-BgZQHOC5.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-BgZQHOC5.js:235 🌐 API Request to /api/p2/customers/1 (timeout: 15000ms, deployment: true)
+index-BgZQHOC5.js:235 ✅ API Response from /api/p2/customers/1: 500
+index-BgZQHOC5.js:4288 API error raw body: {"error":"Failed to update P2 customer"}
+console.error @ index-BgZQHOC5.js:4288
+index-BgZQHOC5.js:4288 💥 API Request failed for /api/p2/customers/1: Error: Failed to update P2 customer
+    at Ve (index-BgZQHOC5.js:235:6254)
+console.error @ index-BgZQHOC5.js:4288
+index-BgZQHOC5.js:235 🌐 API Request to /api/p2-purchase-orders-bypass (timeout: 15000ms, deployment: true)
+index-BgZQHOC5.js:235 ✅ API Response from /api/p2-purchase-orders-bypass: 500
+index-BgZQHOC5.js:4288 API error raw body: {"_error":"Failed to create P2 purchase order via bypass route","message":"column \"created_by_id\" does not exist"}
+console.error @ index-BgZQHOC5.js:4288
+Ve @ index-BgZQHOC5.js:235
+await in Ve
+mutationFn @ index-BgZQHOC5.js:2779
+fn @ index-BgZQHOC5.js:51
+p @ index-BgZQHOC5.js:51
+start @ index-BgZQHOC5.js:51
+execute @ index-BgZQHOC5.js:51
+await in execute
+mutate @ index-BgZQHOC5.js:51
+(anonymous) @ index-BgZQHOC5.js:51
+D @ index-BgZQHOC5.js:2783
+(anonymous) @ index-BgZQHOC5.js:1462
+await in (anonymous)
+bwt @ index-BgZQHOC5.js:37
+wwt @ index-BgZQHOC5.js:37
+Nwt @ index-BgZQHOC5.js:37
+Y4e @ index-BgZQHOC5.js:37
+dHe @ index-BgZQHOC5.js:37
+(anonymous) @ index-BgZQHOC5.js:37
+Bye @ index-BgZQHOC5.js:40
+B$e @ index-BgZQHOC5.js:37
+_oe @ index-BgZQHOC5.js:37
+lye @ index-BgZQHOC5.js:37
+Qwt @ index-BgZQHOC5.js:37
+index-BgZQHOC5.js:4288 💥 API Request failed for /api/p2-purchase-orders-bypass: Error: column "created_by_id" does not exist
+    at Ve (index-BgZQHOC5.js:235:6254)
+console.error @ index-BgZQHOC5.js:4288
+Ve @ index-BgZQHOC5.js:235
+await in Ve
+mutationFn @ index-BgZQHOC5.js:2779
+fn @ index-BgZQHOC5.js:51
+p @ index-BgZQHOC5.js:51
+start @ index-BgZQHOC5.js:51
+execute @ index-BgZQHOC5.js:51
+await in execute
+mutate @ index-BgZQHOC5.js:51
+(anonymous) @ index-BgZQHOC5.js:51
+D @ index-BgZQHOC5.js:2783
+(anonymous) @ index-BgZQHOC5.js:1462
+await in (anonymous)
+bwt @ index-BgZQHOC5.js:37
+wwt @ index-BgZQHOC5.js:37
+Nwt @ index-BgZQHOC5.js:37
+Y4e @ index-BgZQHOC5.js:37
+dHe @ index-BgZQHOC5.js:37
+(anonymous) @ index-BgZQHOC5.js:37
+Bye @ index-BgZQHOC5.js:40
+B$e @ index-BgZQHOC5.js:37
+_oe @ index-BgZQHOC5.js:37
+lye @ index-BgZQHOC5.js:37
+Qwt @ index-BgZQHOC5.js:37

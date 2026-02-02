@@ -1204,7 +1204,10 @@ router.put('/customers/:id', async (req: Request, res: Response) => {
     res.json(updatedCustomer);
   } catch (error) {
     console.error('Update P2 customer error:', error);
-    res.status(500).json({ error: 'Failed to update P2 customer' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('Update P2 customer error details:', { errorMessage, errorStack });
+    res.status(500).json({ error: 'Failed to update P2 customer', details: errorMessage });
   }
 });
 

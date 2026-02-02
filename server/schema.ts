@@ -11896,6 +11896,7 @@ export const fillablePdfTemplates = pgTable('fillable_pdf_templates', {
     height: number;
   }>(),
   isActive: boolean('is_active').notNull().default(true),
+  pageCount: integer('page_count').default(1),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   createdBy: text('created_by'),

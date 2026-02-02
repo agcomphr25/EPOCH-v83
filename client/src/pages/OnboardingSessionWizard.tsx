@@ -132,15 +132,21 @@ export default function OnboardingSessionWizard() {
     if (sessionDemographics && Object.keys(sessionDemographics).length > 0 && Object.keys(demographicsData).length === 0) {
       setDemographicsData(sessionDemographics);
       setDemographicsCompleted(true);
-      setSignatureAuthCompleted(true);
     } else if (session?.intakeData && Object.keys(demographicsData).length === 0) {
       setDemographicsData(session.intakeData);
       if (Object.keys(session.intakeData).length > 0) {
         setDemographicsCompleted(true);
+      }
+    }
+    
+    // Check if signature authorization is complete by looking at first document (signature auth template)
+    if (session?.documents && session.documents.length > 0) {
+      const signatureAuthDoc = session.documents[0];
+      if (signatureAuthDoc?.status === 'signed') {
         setSignatureAuthCompleted(true);
       }
     }
-  }, [session?.intakeData, (session as any)?.demographicsData]);
+  }, [session?.intakeData, (session as any)?.demographicsData, session?.documents]);
 
   useEffect(() => {
     if (session?.currentStep) {

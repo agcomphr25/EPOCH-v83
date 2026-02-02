@@ -325,7 +325,7 @@ export default function OnboardingSessionWizard() {
             isReadOnly={isReadOnly}
             onFinalized={(employeeId) => {
               queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions'] });
-              navigate(`/employee-management/${employeeId}`);
+              navigate(`/employee-detail/${employeeId}`);
             }}
           />
         );

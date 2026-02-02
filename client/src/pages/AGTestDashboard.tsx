@@ -373,6 +373,25 @@ export default function AGTestDashboard() {
           </CardContent>
         </Card>
 
+        <Card
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20"
+          onClick={() => navigateTo('/department-queue/layup-plugging')}
+          data-testid="card-layup-plugging"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-medium">Layup/Plugging Queue</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Manage layup and plugging department queue
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>

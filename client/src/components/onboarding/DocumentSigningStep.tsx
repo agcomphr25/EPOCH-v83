@@ -19,7 +19,7 @@ interface SessionDocument {
   templateId: string;
   templateName?: string;
   status: 'pending' | 'signed' | 'skipped' | 'deferred';
-  signedAt?: string;
+  signedAt?: string | null;
   isRequired?: boolean;
   sortOrder?: number;
   pageCount?: number;

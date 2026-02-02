@@ -635,6 +635,8 @@ router.get('/sessions/:id', async (req: Request, res: Response) => {
         s.intake_data_schema as "intakeDataSchema", s.demographics_data as "demographicsData",
         s.current_step as "currentStep",
         s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
+        s.signature_auth_completed as "signatureAuthCompleted",
+        s.signature_auth_data as "signatureAuthData",
         p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
         e.name as "employeeName"
       FROM onboarding_sessions s
@@ -1270,6 +1272,92 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error saving demographics:', error);
     res.status(500).json({ error: 'Failed to save demographics' });
+  }
+});
+
+// PATCH /sessions/:id/signature-auth - Save signature authorization
+router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { signedName, acknowledged, signedAt } = req.body;
+    
+    if (!signedName || signedName.trim().length < 2) {
+      return res.status(400).json({ error: 'Signed name is required' });
+    }
+    
+    if (!acknowledged) {
+      return res.status(400).json({ error: 'Acknowledgement is required' });
+    }
+    
+    const sessions = await pool.query(`
+      SELECT id, status FROM onboarding_sessions WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    if (session.status === 'completed') {
+      return res.status(400).json({ error: 'Cannot modify completed session' });
+    }
+    
+    const signatureAuthData = {
+      signedName: signedName.trim(),
+      acknowledged: true,
+      signedAt: signedAt || new Date().toISOString(),
+    };
+    
+    await pool.query(`
+      UPDATE onboarding_sessions
+      SET signature_auth_completed = true,
+          signature_auth_data = $1,
+          updated_at = NOW()
+      WHERE id = $2
+    `, [JSON.stringify(signatureAuthData), id]);
+    
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'SIGNATURE_AUTH_COMPLETED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: { signedName: signedName.trim() },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed:', auditError);
+    }
+    
+    res.json({ success: true, signatureAuthCompleted: true });
+  } catch (error) {
+    console.error('Error saving signature authorization:', error);
+    res.status(500).json({ error: 'Failed to save signature authorization' });
+  }
+});
+
+// GET /sessions/:id/signature-auth - Get signature auth status
+router.get('/sessions/:id/signature-auth', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const sessions = await pool.query(`
+      SELECT signature_auth_completed as "signatureAuthCompleted",
+             signature_auth_data as "signatureAuthData"
+      FROM onboarding_sessions WHERE id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json(sessions[0]);
+  } catch (error) {
+    console.error('Error fetching signature auth status:', error);
+    res.status(500).json({ error: 'Failed to fetch signature auth status' });
   }
 });
 

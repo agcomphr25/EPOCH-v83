@@ -66,6 +66,12 @@ interface OnboardingSession {
   completedAt: string | null;
   documents: SessionDocument[];
   captures: SessionCapture[];
+  signatureAuthCompleted?: boolean;
+  signatureAuthData?: {
+    signedName: string;
+    acknowledged: boolean;
+    signedAt: string;
+  };
 }
 
 interface SessionDocument {
@@ -145,14 +151,11 @@ export default function OnboardingSessionWizard() {
       }
     }
     
-    // Check if signature authorization is complete by looking at first document (signature auth template)
-    if (session?.documents && session.documents.length > 0) {
-      const signatureAuthDoc = session.documents[0];
-      if (signatureAuthDoc?.status === 'signed') {
-        setSignatureAuthCompleted(true);
-      }
+    // Check if signature authorization is complete from persisted session state
+    if (session?.signatureAuthCompleted) {
+      setSignatureAuthCompleted(true);
     }
-  }, [session?.intakeData, (session as any)?.demographicsData, session?.documents]);
+  }, [session?.intakeData, (session as any)?.demographicsData, session?.signatureAuthCompleted]);
 
   useEffect(() => {
     if (session?.currentStep) {

@@ -317,16 +317,28 @@ export default function DemographicsIntakeForm({
   }
 
   if (isCompleted) {
+    const hasSkippedSections = skippedCount > 0;
     return (
-      <Card className="border-green-200 bg-green-50">
+      <Card className={hasSkippedSections ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50"}>
         <CardContent className="py-8">
           <div className="flex flex-col items-center gap-4 text-center">
-            <CheckCircle2 className="h-12 w-12 text-green-600" />
+            {hasSkippedSections ? (
+              <AlertCircle className="h-12 w-12 text-amber-600" />
+            ) : (
+              <CheckCircle2 className="h-12 w-12 text-green-600" />
+            )}
             <div>
-              <p className="text-lg font-medium text-green-800">Demographics Completed</p>
-              <p className="text-green-600 mt-1">
+              <p className={`text-lg font-medium ${hasSkippedSections ? 'text-amber-800' : 'text-green-800'}`}>
+                {hasSkippedSections ? 'Demographics Saved - Sections Pending' : 'Demographics Completed'}
+              </p>
+              <p className={hasSkippedSections ? "text-amber-600 mt-1" : "text-green-600 mt-1"}>
                 {data.firstName} {data.lastName} - {data.email}
               </p>
+              {hasSkippedSections && (
+                <p className="text-sm text-amber-700 mt-3 bg-amber-100 rounded-lg px-4 py-2">
+                  {skippedCount} section{skippedCount > 1 ? 's' : ''} skipped - can be completed later
+                </p>
+              )}
             </div>
           </div>
         </CardContent>

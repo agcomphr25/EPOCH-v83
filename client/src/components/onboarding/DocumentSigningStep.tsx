@@ -22,6 +22,7 @@ interface SessionDocument {
   signedAt?: string;
   isRequired?: boolean;
   sortOrder?: number;
+  pageCount?: number;
 }
 
 interface DocumentSigningStepProps {
@@ -46,7 +47,6 @@ export default function DocumentSigningStep({
   const { toast } = useToast();
   const [currentDocIndex, setCurrentDocIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(3);
   const [pageInitials, setPageInitials] = useState<PageInitials>({});
   const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
   const [typedSignature, setTypedSignature] = useState('');
@@ -60,6 +60,8 @@ export default function DocumentSigningStep({
   const currentDoc = pendingDocs[currentDocIndex];
   const completedCount = documents.filter(d => d.status === 'signed').length;
   const skippedCount = documents.filter(d => d.status === 'skipped' || d.status === 'deferred').length;
+  
+  const totalPages = currentDoc?.pageCount || 1;
 
   const signDocMutation = useMutation({
     mutationFn: async ({ docId, signatureData }: { docId: string; signatureData: string }) => {
@@ -195,6 +197,7 @@ export default function DocumentSigningStep({
   };
 
   const allPagesInitialed = () => {
+    if (totalPages <= 1) return true;
     for (let i = 1; i < totalPages; i++) {
       if (!isPageInitialed(i)) return false;
     }

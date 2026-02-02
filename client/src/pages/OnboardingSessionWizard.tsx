@@ -70,10 +70,14 @@ interface OnboardingSession {
 interface SessionDocument {
   id: string;
   templateId: string;
+  templateName?: string;
   instanceId: string | null;
   orderIndex: number;
   status: string;
   signedAt: string | null;
+  isRequired?: boolean;
+  sortOrder?: number;
+  pageCount?: number;
 }
 
 interface SessionCapture {
@@ -658,6 +662,7 @@ function DocumentsStep({ session, isReadOnly }: { session: OnboardingSession; is
         signedAt: doc.signedAt,
         isRequired: doc.isRequired,
         sortOrder: doc.sortOrder,
+        pageCount: doc.pageCount || 1,
       }))}
       isReadOnly={isReadOnly}
       onAllDocumentsComplete={handleAllDocumentsComplete}

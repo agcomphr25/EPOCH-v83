@@ -649,15 +649,18 @@ router.get('/sessions/:id', async (req: Request, res: Response) => {
     
     const session = sessions[0];
     
-    // Fetch documents
+    // Fetch documents with template info
     const documents = await pool.query(`
-      SELECT id, media_item_id as "mediaItemId", template_id as "templateId", 
-             instance_id as "instanceId", document_name as "documentName",
-             is_fillable as "isFillable", order_index as "orderIndex", 
-             status, signed_at as "signedAt"
-      FROM onboarding_session_documents
-      WHERE session_id = $1
-      ORDER BY order_index
+      SELECT sd.id, sd.media_item_id as "mediaItemId", sd.template_id as "templateId", 
+             sd.instance_id as "instanceId", sd.document_name as "documentName",
+             sd.is_fillable as "isFillable", sd.order_index as "orderIndex", 
+             sd.status, sd.signed_at as "signedAt",
+             COALESCE(t.name, sd.document_name) as "templateName",
+             COALESCE(t.page_count, 1) as "pageCount"
+      FROM onboarding_session_documents sd
+      LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+      WHERE sd.session_id = $1
+      ORDER BY sd.order_index
     `, [id]);
     
     // Fetch captures
@@ -1394,6 +1397,11 @@ router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, r
   try {
     const { sessionId, docId } = req.params;
     const { signatureData, initials, signedAt } = req.body;
+    
+    // Validate signature data is provided
+    if (!signatureData || typeof signatureData !== 'string' || signatureData.trim().length < 2) {
+      return res.status(400).json({ error: 'Valid signature data is required' });
+    }
     
     // Verify session and document exist
     const docs = await pool.query(`

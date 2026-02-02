@@ -527,7 +527,8 @@ function App() {
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/onboarding" component={OnboardingDashboard} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
-                  <Route path="/onboarding/forms" component={OnboardingFormsPage} />
+                  {/* DEPRECATED: Form builder hidden - using fixed demographics instead */}
+                  {/* <Route path="/onboarding/forms" component={OnboardingFormsPage} /> */}
                   <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />

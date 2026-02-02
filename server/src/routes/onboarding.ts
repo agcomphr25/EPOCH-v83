@@ -21,6 +21,8 @@ const createPathSchema = z.object({
   pathPurpose: pathPurposeSchema.optional().default('ONBOARDING'),
   intakeFormId: z.string().uuid().nullable().optional(),
   documentFolderId: z.string().uuid().nullable().optional(),
+  signatureAuthTemplateId: z.string().uuid().nullable().optional(),
+  documentTemplateIds: z.array(z.string().uuid()).nullable().optional(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -30,6 +32,8 @@ const updatePathSchema = z.object({
   pathPurpose: pathPurposeSchema.optional(),
   intakeFormId: z.string().uuid().nullable().optional(),
   documentFolderId: z.string().uuid().nullable().optional(),
+  signatureAuthTemplateId: z.string().uuid().nullable().optional(),
+  documentTemplateIds: z.array(z.string().uuid()).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -61,6 +65,8 @@ router.get('/paths', async (_req: Request, res: Response) => {
     const paths = await pool.query(`
       SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
              intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             signature_auth_template_id as "signatureAuthTemplateId",
+             document_template_ids as "documentTemplateIds",
              is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
       FROM onboarding_paths 
       ORDER BY created_at DESC
@@ -80,6 +86,8 @@ router.get('/paths/:id', async (req: Request, res: Response) => {
     const paths = await pool.query(`
       SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
              intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             signature_auth_template_id as "signatureAuthTemplateId",
+             document_template_ids as "documentTemplateIds",
              is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
       FROM onboarding_paths 
       WHERE id = $1
@@ -108,10 +116,13 @@ router.post('/paths', async (req: Request, res: Response) => {
     }
     
     const paths = await pool.query(`
-      INSERT INTO onboarding_paths (name, path_type, path_purpose, intake_form_id, document_folder_id, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO onboarding_paths (name, path_type, path_purpose, intake_form_id, document_folder_id, 
+                                    signature_auth_template_id, document_template_ids, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, name, path_type as "pathType", path_purpose as "pathPurpose",
                 intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+                signature_auth_template_id as "signatureAuthTemplateId",
+                document_template_ids as "documentTemplateIds",
                 is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
     `, [
       parsed.data.name,
@@ -119,6 +130,8 @@ router.post('/paths', async (req: Request, res: Response) => {
       parsed.data.pathPurpose,
       parsed.data.intakeFormId || null,
       parsed.data.documentFolderId || null,
+      parsed.data.signatureAuthTemplateId || null,
+      parsed.data.documentTemplateIds || null,
       parsed.data.isActive,
     ]);
     
@@ -164,6 +177,8 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
     const existingPaths = await pool.query(`
       SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
              intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+             signature_auth_template_id as "signatureAuthTemplateId",
+             document_template_ids as "documentTemplateIds",
              is_active as "isActive"
       FROM onboarding_paths 
       WHERE id = $1
@@ -199,6 +214,14 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
       updates.push(`document_folder_id = $${paramIndex++}`);
       values.push(parsed.data.documentFolderId);
     }
+    if (parsed.data.signatureAuthTemplateId !== undefined) {
+      updates.push(`signature_auth_template_id = $${paramIndex++}`);
+      values.push(parsed.data.signatureAuthTemplateId);
+    }
+    if (parsed.data.documentTemplateIds !== undefined) {
+      updates.push(`document_template_ids = $${paramIndex++}`);
+      values.push(parsed.data.documentTemplateIds);
+    }
     if (parsed.data.isActive !== undefined) {
       updates.push(`is_active = $${paramIndex++}`);
       values.push(parsed.data.isActive);
@@ -212,6 +235,8 @@ router.patch('/paths/:id', async (req: Request, res: Response) => {
       WHERE id = $${paramIndex}
       RETURNING id, name, path_type as "pathType", path_purpose as "pathPurpose",
                 intake_form_id as "intakeFormId", document_folder_id as "documentFolderId", 
+                signature_auth_template_id as "signatureAuthTemplateId",
+                document_template_ids as "documentTemplateIds",
                 is_active as "isActive",
                 created_at as "createdAt", updated_at as "updatedAt"
     `, values);
@@ -669,10 +694,12 @@ router.post('/sessions', async (req: Request, res: Response) => {
     const adminUsername = (req as any).user?.username || 'system';
     const { onboardingPathId, employeeId } = parsed.data;
     
-    // Fetch the path to get intake form and document folder
+    // Fetch the path to get intake form and document templates
     const paths = await pool.query(`
       SELECT id, name, path_type as "pathType", path_purpose as "pathPurpose",
-             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId"
+             intake_form_id as "intakeFormId", document_folder_id as "documentFolderId",
+             signature_auth_template_id as "signatureAuthTemplateId",
+             document_template_ids as "documentTemplateIds"
       FROM onboarding_paths
       WHERE id = $1 AND is_active = true
     `, [onboardingPathId]);
@@ -741,9 +768,59 @@ router.post('/sessions', async (req: Request, res: Response) => {
     
     const newSession = sessions[0];
     
-    // Resolve documents from folder if configured
-    if (path.documentFolderId) {
-      // Query media items (PDFs) in the document folder
+    // Resolve documents - prefer new ordered template IDs, fall back to legacy folder mode
+    const templateIds = path.documentTemplateIds as string[] | null;
+    
+    if (templateIds && templateIds.length > 0) {
+      // NEW MODE: Use ordered template IDs directly
+      for (let i = 0; i < templateIds.length; i++) {
+        const templateId = templateIds[i];
+        
+        // Fetch template info
+        const templates = await pool.query(`
+          SELECT id, name, source_media_item_id as "sourceMediaItemId"
+          FROM fillable_pdf_templates
+          WHERE id = $1 AND is_active = true
+        `, [templateId]);
+        
+        if (templates.length === 0) {
+          console.warn(`Template ${templateId} not found or inactive, skipping`);
+          continue;
+        }
+        
+        const template = templates[0];
+        
+        // Generate unique signature IDs for the instance
+        const crypto = await import('crypto');
+        const publicSignatureId = 'onb_' + crypto.randomBytes(4).toString('hex').toUpperCase();
+        const signatureToken = crypto.randomBytes(32).toString('base64url');
+        
+        const instances = await pool.query(`
+          INSERT INTO fillable_pdf_instances
+            (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
+          VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+          RETURNING id
+        `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+        
+        const instanceId = instances[0].id;
+        
+        // Create session document entry
+        await pool.query(`
+          INSERT INTO onboarding_session_documents
+            (session_id, media_item_id, template_id, instance_id, document_name, is_fillable, order_index, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        `, [
+          newSession.id,
+          template.sourceMediaItemId || null,
+          template.id,
+          instanceId,
+          template.name,
+          true,
+          i
+        ]);
+      }
+    } else if (path.documentFolderId) {
+      // LEGACY MODE: Resolve documents from folder
       const mediaItems = await pool.query(`
         SELECT id, filename, mime_type as "mimeType"
         FROM media_library

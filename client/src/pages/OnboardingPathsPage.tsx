@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Edit, Trash2, Route, FileText, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Route, FileText, GripVertical, ArrowUp, ArrowDown, X, FileSignature } from 'lucide-react';
 import { Link } from 'wouter';
 
 interface OnboardingPath {
@@ -20,6 +20,8 @@ interface OnboardingPath {
   pathPurpose: string;
   intakeFormId: string | null;
   documentFolderId: string | null;
+  signatureAuthTemplateId: string | null;
+  documentTemplateIds: string[] | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string | null;
@@ -53,6 +55,8 @@ export default function OnboardingPathsPage() {
     pathPurpose: 'ONBOARDING',
     intakeFormId: 'none',
     documentFolderId: '',
+    signatureAuthTemplateId: '',
+    documentTemplateIds: [] as string[],
     isActive: true,
   });
 
@@ -82,6 +86,8 @@ export default function OnboardingPathsPage() {
           pathPurpose: data.pathPurpose,
           intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
           documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
+          signatureAuthTemplateId: data.signatureAuthTemplateId || null,
+          documentTemplateIds: data.documentTemplateIds.length > 0 ? data.documentTemplateIds : null,
           isActive: data.isActive,
         }),
       });
@@ -110,6 +116,8 @@ export default function OnboardingPathsPage() {
           pathPurpose: data.pathPurpose,
           intakeFormId: data.intakeFormId && data.intakeFormId !== 'none' ? data.intakeFormId : null,
           documentFolderId: data.documentFolderId && data.documentFolderId !== 'none' ? data.documentFolderId : null,
+          signatureAuthTemplateId: data.signatureAuthTemplateId || null,
+          documentTemplateIds: data.documentTemplateIds.length > 0 ? data.documentTemplateIds : null,
           isActive: data.isActive,
         }),
       });
@@ -155,6 +163,8 @@ export default function OnboardingPathsPage() {
       pathPurpose: 'ONBOARDING',
       intakeFormId: 'none',
       documentFolderId: '',
+      signatureAuthTemplateId: '',
+      documentTemplateIds: [],
       isActive: true,
     });
     setIsDialogOpen(true);
@@ -168,6 +178,8 @@ export default function OnboardingPathsPage() {
       pathPurpose: path.pathPurpose || 'ONBOARDING',
       intakeFormId: path.intakeFormId || 'none',
       documentFolderId: path.documentFolderId || '',
+      signatureAuthTemplateId: path.signatureAuthTemplateId || '',
+      documentTemplateIds: path.documentTemplateIds || [],
       isActive: path.isActive,
     });
     setIsDialogOpen(true);
@@ -187,8 +199,47 @@ export default function OnboardingPathsPage() {
     }
   };
 
+  const addDocumentTemplate = (templateId: string) => {
+    if (!formData.documentTemplateIds.includes(templateId)) {
+      setFormData({
+        ...formData,
+        documentTemplateIds: [...formData.documentTemplateIds, templateId],
+      });
+    }
+  };
+
+  const removeDocumentTemplate = (templateId: string) => {
+    setFormData({
+      ...formData,
+      documentTemplateIds: formData.documentTemplateIds.filter(id => id !== templateId),
+    });
+  };
+
+  const moveTemplateUp = (index: number) => {
+    if (index === 0) return;
+    const newIds = [...formData.documentTemplateIds];
+    [newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]];
+    setFormData({ ...formData, documentTemplateIds: newIds });
+  };
+
+  const moveTemplateDown = (index: number) => {
+    if (index === formData.documentTemplateIds.length - 1) return;
+    const newIds = [...formData.documentTemplateIds];
+    [newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]];
+    setFormData({ ...formData, documentTemplateIds: newIds });
+  };
+
+  const getTemplateName = (templateId: string) => {
+    const template = fillableTemplates.find(t => t.id === templateId);
+    return template?.name || 'Unknown Template';
+  };
+
   const activePaths = paths.filter(p => p.isActive);
   const inactivePaths = paths.filter(p => !p.isActive);
+  const activeTemplates = fillableTemplates.filter(t => t.isActive);
+  const availableTemplates = activeTemplates.filter(
+    t => !formData.documentTemplateIds.includes(t.id) && t.id !== formData.signatureAuthTemplateId
+  );
 
   return (
     <div className="container mx-auto py-6 px-4 max-w-6xl">
@@ -253,19 +304,21 @@ export default function OnboardingPathsPage() {
                     <CardContent>
                       <div className="space-y-2 text-sm text-muted-foreground mb-4">
                         <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4" />
-                          {path.intakeFormId ? (
-                            <span>Intake form assigned</span>
+                          <FileSignature className="h-4 w-4" />
+                          {path.signatureAuthTemplateId ? (
+                            <span>Signature auth configured</span>
                           ) : (
-                            <span className="italic">No intake form</span>
+                            <span className="italic">No signature auth</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <FolderOpen className="h-4 w-4" />
-                          {path.documentFolderId ? (
-                            <span>Document folder assigned</span>
+                          <FileText className="h-4 w-4" />
+                          {path.documentTemplateIds && path.documentTemplateIds.length > 0 ? (
+                            <span>{path.documentTemplateIds.length} document{path.documentTemplateIds.length !== 1 ? 's' : ''} configured</span>
+                          ) : path.documentFolderId ? (
+                            <span className="italic text-amber-600">Legacy folder mode</span>
                           ) : (
-                            <span className="italic">No document folder</span>
+                            <span className="italic">No documents</span>
                           )}
                         </div>
                       </div>
@@ -326,7 +379,7 @@ export default function OnboardingPathsPage() {
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingPath ? 'Edit Path' : 'Create New Path'}</DialogTitle>
             <DialogDescription>
@@ -385,68 +438,117 @@ export default function OnboardingPathsPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="intakeFormId">Intake Form (Optional)</Label>
-                <Select
-                  value={formData.intakeFormId}
-                  onValueChange={(value) => setFormData({ ...formData, intakeFormId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an intake form" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {forms.filter(f => f.isActive).length > 0 && (
-                      <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Custom Forms</div>
-                        {forms.filter(f => f.isActive).map((form) => (
-                          <SelectItem key={form.id} value={form.id}>
-                            {form.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {fillableTemplates.filter(t => t.isActive).length > 0 && (
-                      <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Fillable PDF Templates</div>
-                        {fillableTemplates.filter(t => t.isActive).map((template) => (
-                          <SelectItem key={`template:${template.id}`} value={`template:${template.id}`}>
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-sm mb-3">Document Templates</h4>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="signatureAuth">Signature Authorization Template</Label>
+                  <Select
+                    value={formData.signatureAuthTemplateId || 'none'}
+                    onValueChange={(value) => setFormData({ 
+                      ...formData, 
+                      signatureAuthTemplateId: value === 'none' ? '' : value 
+                    })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select signature auth template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (Use built-in consent)</SelectItem>
+                      {activeTemplates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Select a PDF template for e-signature authorization consent, or use the built-in consent form.
+                  </p>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <Label>HR Documents (Ordered)</Label>
+                  
+                  {formData.documentTemplateIds.length > 0 && (
+                    <div className="border rounded-md divide-y">
+                      {formData.documentTemplateIds.map((templateId, index) => (
+                        <div 
+                          key={templateId} 
+                          className="flex items-center gap-2 p-2 bg-muted/30"
+                        >
+                          <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium w-6 text-center">{index + 1}</span>
+                          <span className="flex-1 text-sm truncate">{getTemplateName(templateId)}</span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => moveTemplateUp(index)}
+                              disabled={index === 0}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => moveTemplateDown(index)}
+                              disabled={index === formData.documentTemplateIds.length - 1}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => removeDocumentTemplate(templateId)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {availableTemplates.length > 0 ? (
+                    <Select
+                      value=""
+                      onValueChange={(value) => {
+                        if (value) addDocumentTemplate(value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Add a document template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTemplates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
                             {template.name}
                           </SelectItem>
                         ))}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Choose a custom form or use a fillable PDF template directly from the Media Library.
-                </p>
+                      </SelectContent>
+                    </Select>
+                  ) : formData.documentTemplateIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">
+                      No fillable PDF templates available. Create templates in the Media Library first.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">All available templates have been added.</p>
+                  )}
+                  
+                  <p className="text-xs text-muted-foreground">
+                    Select HR documents in the order they should be signed during onboarding.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="documentFolderId">Document Folder</Label>
-                <Select
-                  value={formData.documentFolderId || 'none'}
-                  onValueChange={(value) => setFormData({ ...formData, documentFolderId: value === 'none' ? '' : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a folder with onboarding documents" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {folders.map((folder) => (
-                      <SelectItem key={folder.id} value={folder.id}>
-                        {folder.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Select a Media Library folder containing PDFs. Documents with fillable templates will be signable.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-2">
                 <Label htmlFor="isActive">Active</Label>
                 <Switch
                   id="isActive"

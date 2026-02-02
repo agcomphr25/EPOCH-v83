@@ -186,6 +186,7 @@ export default function DemographicsIntakeForm({
   const { toast } = useToast();
   const [data, setData] = useState<DemographicsData>(INITIAL_DEMOGRAPHICS);
   const [showAccountNumber, setShowAccountNumber] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const dlFileInputRef = useRef<HTMLInputElement>(null);
   const checkFileInputRef = useRef<HTMLInputElement>(null);
   const lastFetchedRef = useRef<string | null>(null);
@@ -316,7 +317,7 @@ export default function DemographicsIntakeForm({
     );
   }
 
-  if (isCompleted) {
+  if (isCompleted && !isEditing) {
     const hasSkippedSections = skippedCount > 0;
     return (
       <Card className={hasSkippedSections ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50"}>
@@ -340,6 +341,13 @@ export default function DemographicsIntakeForm({
                 </p>
               )}
             </div>
+            <Button 
+              onClick={() => setIsEditing(true)}
+              variant={hasSkippedSections ? "default" : "outline"}
+              className={hasSkippedSections ? "mt-4 h-12 px-6 bg-amber-600 hover:bg-amber-700" : "mt-4 h-12 px-6"}
+            >
+              {hasSkippedSections ? 'Complete Skipped Sections' : 'Edit Information'}
+            </Button>
           </div>
         </CardContent>
       </Card>

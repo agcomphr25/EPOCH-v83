@@ -34,7 +34,10 @@ import {
   Lock,
   Download,
   Mail,
+  Shield,
 } from 'lucide-react';
+import SignatureAuthorizationStep from '@/components/onboarding/SignatureAuthorizationStep';
+import DemographicsIntakeForm from '@/components/onboarding/DemographicsIntakeForm';
 import {
   Dialog,
   DialogContent,
@@ -89,12 +92,10 @@ interface FormField {
 }
 
 const WIZARD_STEPS = [
-  { id: 'overview', label: 'Overview', icon: ClipboardList },
-  { id: 'intake', label: 'Intake Form', icon: FileText },
-  { id: 'documents', label: 'Documents', icon: FileText },
-  { id: 'captures', label: 'Camera Captures', icon: Camera },
-  { id: 'account', label: 'User Account', icon: User },
-  { id: 'review', label: 'Review', icon: Eye },
+  { id: 'signature_auth', label: 'Signature Authorization', icon: Shield },
+  { id: 'demographics', label: 'Demographics', icon: User },
+  { id: 'documents', label: 'HR Documents', icon: FileText },
+  { id: 'review', label: 'Review & Complete', icon: Eye },
 ];
 
 export default function OnboardingSessionWizard() {
@@ -111,6 +112,9 @@ export default function OnboardingSessionWizard() {
     linkToEmployeeId: false,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [signatureAuthCompleted, setSignatureAuthCompleted] = useState(false);
+  const [demographicsCompleted, setDemographicsCompleted] = useState(false);
+  const [demographicsData, setDemographicsData] = useState<Record<string, any>>({});
 
   const { data: session, isLoading, error } = useQuery<OnboardingSession>({
     queryKey: ['/api/onboarding/sessions', id],
@@ -124,11 +128,27 @@ export default function OnboardingSessionWizard() {
     if (session?.intakeData && Object.keys(intakeFormData).length === 0) {
       setIntakeFormData(session.intakeData);
     }
+    if (session?.intakeData && Object.keys(demographicsData).length === 0) {
+      setDemographicsData(session.intakeData);
+      if (Object.keys(session.intakeData).length > 0) {
+        setDemographicsCompleted(true);
+        setSignatureAuthCompleted(true);
+      }
+    }
   }, [session?.intakeData]);
 
   useEffect(() => {
     if (session?.currentStep) {
-      const stepIndex = WIZARD_STEPS.findIndex(s => s.id === session.currentStep);
+      const legacyStepMap: Record<string, string> = {
+        'overview': 'signature_auth',
+        'intake': 'demographics',
+        'documents': 'documents',
+        'captures': 'documents',
+        'account': 'review',
+        'review': 'review',
+      };
+      const mappedStep = legacyStepMap[session.currentStep] || session.currentStep;
+      const stepIndex = WIZARD_STEPS.findIndex(s => s.id === mappedStep);
       if (stepIndex >= 0) {
         setCurrentStepIndex(stepIndex);
       }
@@ -199,25 +219,17 @@ export default function OnboardingSessionWizard() {
     if (!session) return 'pending';
     
     switch (stepId) {
-      case 'overview':
-        return 'complete';
-      case 'intake':
-        const hasIntakeData = session.intakeData && Object.keys(session.intakeData).length > 0;
-        if (currentStep.id === 'intake') return 'current';
-        return hasIntakeData ? 'complete' : 'pending';
+      case 'signature_auth':
+        if (currentStep.id === 'signature_auth') return 'current';
+        return signatureAuthCompleted || isReadOnly ? 'complete' : 'pending';
+      case 'demographics':
+        if (currentStep.id === 'demographics') return 'current';
+        return demographicsCompleted || isReadOnly ? 'complete' : 'pending';
       case 'documents':
         const allDocsSigned = session.documents.length === 0 || 
           session.documents.every(d => d.status === 'signed');
         if (currentStep.id === 'documents') return 'current';
         return allDocsSigned && session.documents.length > 0 ? 'complete' : 'pending';
-      case 'captures':
-        const allCaptured = session.captures.length === 0 ||
-          session.captures.every(c => c.mediaItemId !== null);
-        if (currentStep.id === 'captures') return 'current';
-        return allCaptured && session.captures.length > 0 ? 'complete' : 'pending';
-      case 'account':
-        if (currentStep.id === 'account') return 'current';
-        return accountData.username ? 'complete' : 'pending';
       case 'review':
         if (currentStep.id === 'review') return 'current';
         return session.status === 'completed' ? 'complete' : 'pending';
@@ -253,36 +265,40 @@ export default function OnboardingSessionWizard() {
 
   const renderStepContent = () => {
     switch (currentStep.id) {
-      case 'overview':
-        return <OverviewStep session={session} isReadOnly={isReadOnly} />;
-      case 'intake':
+      case 'signature_auth':
         return (
-          <IntakeFormStep
-            session={session}
-            formData={intakeFormData}
-            setFormData={setIntakeFormData}
-            onSave={handleSaveIntake}
-            isSaving={isSaving}
-            isReadOnly={isReadOnly}
+          <SignatureAuthorizationStep
+            sessionId={session.id}
+            employeeName={session.employeeName || undefined}
+            isCompleted={signatureAuthCompleted || isReadOnly}
+            onComplete={() => {
+              setSignatureAuthCompleted(true);
+              handleNext();
+            }}
+          />
+        );
+      case 'demographics':
+        return (
+          <DemographicsIntakeForm
+            sessionId={session.id}
+            initialData={demographicsData}
+            isCompleted={demographicsCompleted || isReadOnly}
+            isRehire={session.pathType === 'REHIRE'}
+            onComplete={(data) => {
+              setDemographicsData(data);
+              setDemographicsCompleted(true);
+              saveIntakeDataMutation.mutate(data);
+              handleNext();
+            }}
           />
         );
       case 'documents':
         return <DocumentsStep session={session} isReadOnly={isReadOnly} />;
-      case 'captures':
-        return <CapturesStep session={session} isReadOnly={isReadOnly} />;
-      case 'account':
-        return (
-          <AccountSetupStep
-            accountData={accountData}
-            setAccountData={setAccountData}
-            isReadOnly={isReadOnly}
-          />
-        );
       case 'review':
         return (
           <ReviewStep
             session={session}
-            intakeFormData={intakeFormData}
+            intakeFormData={demographicsData}
             accountData={accountData}
             isReadOnly={isReadOnly}
             onFinalized={(employeeId) => {

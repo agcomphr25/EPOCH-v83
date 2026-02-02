@@ -1125,19 +1125,25 @@ router.patch('/sessions/:id/intake', async (req: Request, res: Response) => {
 const demographicsSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
+  preferredName: z.string().optional().default(''),
   email: z.string().email('Invalid email'),
-  phone: z.string().optional().default(''),
+  phone: z.string().min(1, 'Phone number is required'),
   address: z.string().optional().default(''),
+  aptUnit: z.string().optional().default(''),
   city: z.string().optional().default(''),
   state: z.string().optional().default(''),
   zipCode: z.string().optional().default(''),
   vehicleType: z.string().optional().default(''),
-  licensePlate: z.string().optional().default(''),
+  vehicleMakeModel: z.string().optional().default(''),
   driversLicenseNumber: z.string().optional().default(''),
   driversLicenseState: z.string().optional().default(''),
+  driversLicenseExpiration: z.string().optional().default(''),
+  driversLicensePhotoId: z.string().nullable().optional().default(null),
   bankName: z.string().optional().default(''),
   bankRoutingNumber: z.string().optional().default(''),
   bankAccountNumber: z.string().optional().default(''),
+  bankAccountType: z.string().optional().default(''),
+  voidedCheckPhotoId: z.string().nullable().optional().default(null),
 });
 
 // PATCH /sessions/:id/demographics - Save fixed-schema demographics (NEW SYSTEM)
@@ -1184,30 +1190,37 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
     // For re-hire sessions, also update the existing employee record immediately
     if (session.pathPurpose === 'REHIRE' && session.employeeId) {
       const fullName = `${demographics.firstName} ${demographics.lastName}`.trim();
-      const fullAddress = demographics.address 
-        ? `${demographics.address}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode}`.trim()
+      const streetAddress = demographics.aptUnit 
+        ? `${demographics.address} ${demographics.aptUnit}`.trim()
+        : demographics.address;
+      const fullAddress = streetAddress 
+        ? `${streetAddress}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode || ''}`.trim()
         : null;
       
       await pool.query(`
         UPDATE employees
         SET name = $1,
-            email = $2,
-            phone = $3,
-            address = $4,
-            city = $5,
-            state = $6,
-            zip_code = $7,
-            vehicle_type = $8,
-            license_plate = $9,
-            drivers_license_number = $10,
-            drivers_license_state = $11,
-            bank_name = $12,
-            bank_routing_number = $13,
-            bank_account_number = $14,
+            preferred_name = $2,
+            email = $3,
+            phone = $4,
+            address = $5,
+            city = $6,
+            state = $7,
+            zip_code = $8,
+            vehicle_type = $9,
+            vehicle_make_model = $10,
+            drivers_license_number = $11,
+            drivers_license_state = $12,
+            drivers_license_expiration = $13,
+            bank_name = $14,
+            bank_routing_number = $15,
+            bank_account_number = $16,
+            bank_account_type = $17,
             updated_at = NOW()
-        WHERE id = $15
+        WHERE id = $18
       `, [
         fullName,
+        demographics.preferredName || null,
         demographics.email || null,
         demographics.phone || null,
         fullAddress,
@@ -1215,12 +1228,14 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
         demographics.state || null,
         demographics.zipCode || null,
         demographics.vehicleType || null,
-        demographics.licensePlate || null,
+        demographics.vehicleMakeModel || null,
         demographics.driversLicenseNumber || null,
         demographics.driversLicenseState || null,
+        demographics.driversLicenseExpiration || null,
         demographics.bankName || null,
         demographics.bankRoutingNumber || null,
         demographics.bankAccountNumber || null,
+        demographics.bankAccountType || null,
         session.employeeId,
       ]);
     }
@@ -1264,12 +1279,14 @@ router.get('/sessions/:id/demographics', async (req: Request, res: Response) => 
     const sessions = await pool.query(`
       SELECT s.id, s.demographics_data as "demographicsData", s.employee_id as "employeeId",
              p.path_purpose as "pathPurpose",
-             e.name, e.email, e.phone, e.address, e.city, e.state, e.zip_code as "zipCode",
-             e.vehicle_type as "vehicleType", e.license_plate as "licensePlate",
+             e.name, e.preferred_name as "preferredName", e.email, e.phone, e.address, 
+             e.city, e.state, e.zip_code as "zipCode",
+             e.vehicle_type as "vehicleType", e.vehicle_make_model as "vehicleMakeModel",
              e.drivers_license_number as "driversLicenseNumber", 
              e.drivers_license_state as "driversLicenseState",
+             e.drivers_license_expiration as "driversLicenseExpiration",
              e.bank_name as "bankName", e.bank_routing_number as "bankRoutingNumber",
-             e.bank_account_number as "bankAccountNumber"
+             e.bank_account_number as "bankAccountNumber", e.bank_account_type as "bankAccountType"
       FROM onboarding_sessions s
       JOIN onboarding_paths p ON s.path_id = p.id
       LEFT JOIN employees e ON s.employee_id = e.id
@@ -1300,19 +1317,25 @@ router.get('/sessions/:id/demographics', async (req: Request, res: Response) => 
       const prefilled = {
         firstName,
         lastName,
+        preferredName: session.preferredName || '',
         email: session.email || '',
         phone: session.phone || '',
         address: session.address || '',
+        aptUnit: '',
         city: session.city || '',
         state: session.state || '',
         zipCode: session.zipCode || '',
         vehicleType: session.vehicleType || '',
-        licensePlate: session.licensePlate || '',
+        vehicleMakeModel: session.vehicleMakeModel || '',
         driversLicenseNumber: session.driversLicenseNumber || '',
         driversLicenseState: session.driversLicenseState || '',
+        driversLicenseExpiration: session.driversLicenseExpiration || '',
+        driversLicensePhotoId: null,
         bankName: session.bankName || '',
         bankRoutingNumber: session.bankRoutingNumber || '',
         bankAccountNumber: session.bankAccountNumber || '',
+        bankAccountType: session.bankAccountType || '',
+        voidedCheckPhotoId: null,
       };
       
       return res.json({
@@ -1582,6 +1605,22 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           updateFields.push(`bank_account_number = $${paramIndex++}`);
           updateValues.push(employeeData.bankAccountNumber);
         }
+        if (employeeData.preferredName) {
+          updateFields.push(`preferred_name = $${paramIndex++}`);
+          updateValues.push(employeeData.preferredName);
+        }
+        if (employeeData.vehicleMakeModel) {
+          updateFields.push(`vehicle_make_model = $${paramIndex++}`);
+          updateValues.push(employeeData.vehicleMakeModel);
+        }
+        if (employeeData.driversLicenseExpiration) {
+          updateFields.push(`drivers_license_expiration = $${paramIndex++}`);
+          updateValues.push(employeeData.driversLicenseExpiration);
+        }
+        if (employeeData.bankAccountType) {
+          updateFields.push(`bank_account_type = $${paramIndex++}`);
+          updateValues.push(employeeData.bankAccountType);
+        }
         
         updateFields.push(`updated_at = NOW()`);
         updateValues.push(employeeId);
@@ -1606,16 +1645,17 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         // CREATE new employee
         const insertResult = await pool.query(`
           INSERT INTO employees (
-            name, email, phone, job_title, department, hire_date, 
+            name, preferred_name, email, phone, job_title, department, hire_date, 
             date_of_birth, address, emergency_contact, emergency_phone,
-            city, state, zip_code, vehicle_type, license_plate,
-            drivers_license_number, drivers_license_state,
-            bank_name, bank_routing_number, bank_account_number,
+            city, state, zip_code, vehicle_type, vehicle_make_model,
+            drivers_license_number, drivers_license_state, drivers_license_expiration,
+            bank_name, bank_routing_number, bank_account_number, bank_account_type,
             user_role, employment_type, is_active
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, true)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, true)
           RETURNING id
         `, [
           employeeData.name || 'New Employee',
+          employeeData.preferredName || null,
           employeeData.email || null,
           employeeData.phone || null,
           employeeData.jobTitle || null,
@@ -1629,12 +1669,14 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           employeeData.state || null,
           employeeData.zipCode || null,
           employeeData.vehicleType || null,
-          employeeData.licensePlate || null,
+          employeeData.vehicleMakeModel || null,
           employeeData.driversLicenseNumber || null,
           employeeData.driversLicenseState || null,
+          employeeData.driversLicenseExpiration || null,
           employeeData.bankName || null,
           employeeData.bankRoutingNumber || null,
           employeeData.bankAccountNumber || null,
+          employeeData.bankAccountType || null,
           accountConfig.role || 'EMPLOYEE',
           session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME',
         ]);
@@ -1946,12 +1988,16 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
 // Helper function to map fixed-schema demographics to employee fields (NEW SYSTEM)
 function mapDemographicsToEmployee(demographics: Record<string, any>): Record<string, any> {
   const fullName = `${demographics.firstName || ''} ${demographics.lastName || ''}`.trim();
-  const fullAddress = demographics.address 
-    ? `${demographics.address}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode || ''}`.trim()
+  const streetAddress = demographics.aptUnit 
+    ? `${demographics.address || ''} ${demographics.aptUnit}`.trim()
+    : demographics.address || '';
+  const fullAddress = streetAddress 
+    ? `${streetAddress}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode || ''}`.trim()
     : null;
   
   return {
     name: fullName || null,
+    preferredName: demographics.preferredName || null,
     email: demographics.email || null,
     phone: demographics.phone || null,
     address: fullAddress,
@@ -1959,12 +2005,14 @@ function mapDemographicsToEmployee(demographics: Record<string, any>): Record<st
     state: demographics.state || null,
     zipCode: demographics.zipCode || null,
     vehicleType: demographics.vehicleType || null,
-    licensePlate: demographics.licensePlate || null,
+    vehicleMakeModel: demographics.vehicleMakeModel || null,
     driversLicenseNumber: demographics.driversLicenseNumber || null,
     driversLicenseState: demographics.driversLicenseState || null,
+    driversLicenseExpiration: demographics.driversLicenseExpiration || null,
     bankName: demographics.bankName || null,
     bankRoutingNumber: demographics.bankRoutingNumber || null,
     bankAccountNumber: demographics.bankAccountNumber || null,
+    bankAccountType: demographics.bankAccountType || null,
   };
 }
 

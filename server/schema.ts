@@ -851,6 +851,7 @@ export const employees = pgTable('employees', {
   employeeCode: text('employee_code'), // Constraint exists in production as employees_employee_code_unique
   canonicalId: uuid('canonical_id'), // Link to canonical identity for cross-system deduplication
   name: text('name').notNull(),
+  preferredName: text('preferred_name'), // Name employee goes by (optional)
   email: text('email'),
   phone: text('phone'),
   jobTitle: text('job_title'), // Informational only - e.g., "Department Manager", "HR Specialist"
@@ -866,12 +867,15 @@ export const employees = pgTable('employees', {
   emergencyPhone: text('emergency_phone'),
   gateCardNumber: text('gate_card_number'),
   vehicleType: text('vehicle_type'),
+  vehicleMakeModel: text('vehicle_make_model'), // e.g., "Toyota Camry"
   licensePlate: text('license_plate'),
   driversLicenseNumber: text('drivers_license_number'),
   driversLicenseState: text('drivers_license_state'),
+  driversLicenseExpiration: date('drivers_license_expiration'), // For tracking expiring licenses
   bankName: text('bank_name'),
   bankRoutingNumber: text('bank_routing_number'),
   bankAccountNumber: text('bank_account_number'),
+  bankAccountType: text('bank_account_type'), // 'checking' or 'savings'
   buildingKeyAccess: boolean('building_key_access').default(false),
   tciAccess: boolean('tci_access').default(false),
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT

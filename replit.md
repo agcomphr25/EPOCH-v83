@@ -55,7 +55,10 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
   - Path purposes: ONBOARDING (new employees) and REHIRE (bringing back inactive employees)
   - Simplified 4-step wizard UI: Signature Authorization, Demographics Intake, HR Documents, Review & Complete
   - Fixed-schema demographics system with dedicated API endpoints and automatic re-hire prefill from existing employee records
-  - Demographics fields include: contact info, address (city/state/zip), vehicle/license plate, driver's license, and bank information
+  - Tablet-first Demographics Intake UI with 5 card-based sections: Basic Information, Home Address, Transportation, Identification (sensitive), Payroll Information (sensitive)
+  - Demographics fields include: full name, preferred name, email, phone, address (street, apt/unit, city, state, zip), vehicle (type, make/model), driver's license (number, state, expiration), and bank information (name, routing, account, type)
+  - Step locking: Demographics step locked until Digital Signature Authorization is complete
+  - Sticky bottom action bar with "Save & Continue" and "Save for Later" actions
   - Session lifecycle (in_progress, paused, completed) with pause/resume support
   - Transactional finalization with mapDemographicsToEmployee() helper that prefers demographicsData over legacy intakeData, atomically creates/updates employee records, activates user accounts, and attaches signed documents
   - Re-hire workflows: Select inactive employees, reactivate employee records, auto-reactivate linked user accounts

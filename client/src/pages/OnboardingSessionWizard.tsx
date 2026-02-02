@@ -287,10 +287,14 @@ export default function OnboardingSessionWizard() {
           <DemographicsIntakeForm
             sessionId={session.id}
             isCompleted={demographicsCompleted || isReadOnly}
+            isLocked={!signatureAuthCompleted && !isReadOnly}
             onComplete={(data) => {
               setDemographicsData(data);
               setDemographicsCompleted(true);
               handleNext();
+            }}
+            onSaveForLater={() => {
+              toast({ title: 'Progress saved', description: 'You can resume this session later.' });
             }}
           />
         );

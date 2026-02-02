@@ -351,7 +351,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
 
     // Schema-safe query: avoid referencing columns that may not exist in all environments
     // UNIFIED PRIORITY MODEL: Include all priority-related fields for computeEffectivePriority()
-    // UNION query to include both regular orders (all_orders) AND PO orders (production_orders)
+    // NOTE: P1 PO orders are handled separately in their dedicated P1 Purchase Orders queue
+    // This query only includes regular customer orders from all_orders
     const queueQuery = `
       SELECT 
         o.order_id as orderId,
@@ -384,38 +385,9 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND LOWER(o.model_id) != 'no stock'
         AND LOWER(o.model_id) != 'no_stock'
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
-      
-      UNION ALL
-      
-      SELECT 
-        po.order_id as orderId,
-        NULL as fbOrderNumber,
-        po.item_id as modelId,
-        po.item_id as stockModelId,
-        po.due_date as dueDate,
-        po.order_date as orderDate,
-        po.current_department as currentDepartment,
-        po.production_status as status,
-        po.customer_id as customerId,
-        po.specifications as features,
-        NULL as urgency,
-        false as isManualUrgency,
-        NULL as manual_priority_override,
-        NULL as prioritySource,
-        'ready' as productionReadinessStatus,
-        0 as queuePosition,
-        po.created_at as createdAt,
-        po.customer_name as customerName,
-        'PO_RELEASE' as orderSource
-      FROM production_orders po
-      WHERE po.current_department = 'P1 Production Queue'
-        AND po.production_status IN ('PENDING', 'IN_PROGRESS')
-        AND po.item_id IS NOT NULL 
-        AND po.item_id != ''
-      
       ORDER BY 
-        dueDate ASC,
-        createdAt ASC
+        o.due_date ASC,
+        o.created_at ASC
     `;
 
     const queueResult = await pool.query(queueQuery);

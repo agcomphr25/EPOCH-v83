@@ -39,6 +39,7 @@ import {
 import SignatureAuthorizationStep from '@/components/onboarding/SignatureAuthorizationStep';
 import DemographicsIntakeForm from '@/components/onboarding/DemographicsIntakeForm';
 import DocumentSigningStep from '@/components/onboarding/DocumentSigningStep';
+import SessionOverviewPanel from '@/components/onboarding/SessionOverviewPanel';
 import {
   Dialog,
   DialogContent,
@@ -356,48 +357,25 @@ export default function OnboardingSessionWizard() {
       </div>
 
       <div className="flex gap-6">
-        <div className="w-64 shrink-0">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-500">Steps</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <nav className="space-y-1">
-                {WIZARD_STEPS.map((step, index) => {
-                  const status = getStepStatus(step.id);
-                  const Icon = step.icon;
-                  const isActive = index === currentStepIndex;
-                  
-                  return (
-                    <button
-                      key={step.id}
-                      onClick={() => handleStepClick(index)}
-                      disabled={isReadOnly && index !== currentStepIndex}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left text-sm transition-colors ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-700 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className={`flex-shrink-0 ${
-                        status === 'complete' ? 'text-green-500' :
-                        status === 'current' ? 'text-blue-500' :
-                        'text-gray-400'
-                      }`}>
-                        {status === 'complete' ? (
-                          <CheckCircle2 className="h-5 w-5" />
-                        ) : (
-                          <Circle className="h-5 w-5" />
-                        )}
-                      </div>
-                      <Icon className="h-4 w-4" />
-                      <span>{step.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </CardContent>
-          </Card>
+        <div className="w-80 shrink-0">
+          <SessionOverviewPanel
+            currentStep={currentStep.id}
+            signatureAuthStatus={signatureAuthCompleted || isReadOnly ? 'completed' : 'pending'}
+            demographicsStatus={demographicsCompleted || isReadOnly ? 'completed' : 'pending'}
+            documents={session.documents}
+            onStepClick={(step) => {
+              const stepIndex = WIZARD_STEPS.findIndex(s => 
+                (step === 'signature' && s.id === 'signature_auth') ||
+                (step === 'demographics' && s.id === 'demographics') ||
+                (step === 'documents' && s.id === 'documents')
+              );
+              if (stepIndex >= 0) handleStepClick(stepIndex);
+            }}
+            onDocumentClick={(docId, index) => {
+              const docsStepIndex = WIZARD_STEPS.findIndex(s => s.id === 'documents');
+              if (docsStepIndex >= 0) handleStepClick(docsStepIndex);
+            }}
+          />
         </div>
 
         <div className="flex-1">

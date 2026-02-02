@@ -321,6 +321,7 @@ export default function OnboardingSessionWizard() {
             session={session}
             intakeFormData={demographicsData}
             accountData={accountData}
+            setAccountData={setAccountData}
             isReadOnly={isReadOnly}
             onFinalized={(employeeId) => {
               queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions'] });
@@ -857,6 +858,7 @@ function ReviewStep({
   session,
   intakeFormData,
   accountData,
+  setAccountData,
   isReadOnly,
   onFinalized,
 }: {
@@ -868,9 +870,11 @@ function ReviewStep({
     permissions: string[];
     linkToEmployeeId: boolean;
   };
+  setAccountData: (data: typeof accountData) => void;
   isReadOnly: boolean;
   onFinalized?: (employeeId: number) => void;
 }) {
+  const [showAccountConfig, setShowAccountConfig] = useState(false);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -987,8 +991,8 @@ function ReviewStep({
     session.captures.every(c => c.mediaItemId !== null);
   const accountConfigured = !!accountData.username;
 
-  // User account is optional - finalization requires intake, docs, and captures only
-  const allComplete = intakeComplete && docsComplete && capturesComplete;
+  // Camera Captures and User Account are optional - only intake and docs are required
+  const allComplete = intakeComplete && docsComplete;
 
   const handleFinalize = async () => {
     if (!allComplete) return;
@@ -1084,13 +1088,64 @@ function ReviewStep({
           <ReviewItem
             label="Camera Captures"
             complete={capturesComplete}
-            detail={`${session.captures.filter(c => c.mediaItemId).length}/${session.captures.length} captured`}
+            detail={session.captures.length === 0 
+              ? 'None required' 
+              : capturesComplete 
+                ? `${session.captures.filter(c => c.mediaItemId).length}/${session.captures.length} captured`
+                : `Optional - ${session.captures.filter(c => c.mediaItemId).length}/${session.captures.length} captured`}
           />
-          <ReviewItem
-            label="User Account"
-            complete={accountConfigured}
-            detail={accountConfigured ? `Username: ${accountData.username}` : 'Optional - not configured'}
-          />
+          <div 
+            className="flex items-center justify-between py-3 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 rounded px-2 -mx-2"
+            onClick={() => !isReadOnly && setShowAccountConfig(!showAccountConfig)}
+          >
+            <div className="flex items-center gap-3">
+              {accountConfigured ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : (
+                <Circle className="h-5 w-5 text-gray-300" />
+              )}
+              <span className="font-medium">User Account</span>
+              {!isReadOnly && (
+                <span className="text-xs text-blue-600 ml-2">
+                  {showAccountConfig ? '(click to collapse)' : '(click to configure)'}
+                </span>
+              )}
+            </div>
+            <span className="text-sm text-gray-500">
+              {accountConfigured ? `Username: ${accountData.username}` : 'Optional - not configured'}
+            </span>
+          </div>
+          
+          {showAccountConfig && !isReadOnly && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border space-y-4">
+              <h4 className="font-medium text-sm text-gray-700">Configure User Account (Optional)</h4>
+              <div className="space-y-2">
+                <Label htmlFor="review-username">Username</Label>
+                <Input
+                  id="review-username"
+                  value={accountData.username}
+                  onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
+                  placeholder="Enter username for login"
+                />
+                <p className="text-xs text-gray-500">Leave empty to skip account creation</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="review-role">Role</Label>
+                <Select
+                  value={accountData.role}
+                  onValueChange={(value) => setAccountData({ ...accountData, role: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

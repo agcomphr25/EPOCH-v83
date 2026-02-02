@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import SignatureAuthorizationStep from '@/components/onboarding/SignatureAuthorizationStep';
 import DemographicsIntakeForm from '@/components/onboarding/DemographicsIntakeForm';
+import DocumentSigningStep from '@/components/onboarding/DocumentSigningStep';
 import {
   Dialog,
   DialogContent,
@@ -627,6 +628,15 @@ function IntakeFormStep({
 
 function DocumentsStep({ session, isReadOnly }: { session: OnboardingSession; isReadOnly: boolean }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleAllDocumentsComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', session.id] });
+    toast({
+      title: 'Documents Complete',
+      description: 'All documents have been processed. You can proceed to the next step.',
+    });
+  };
 
   if (session.documents.length === 0) {
     return (
@@ -637,59 +647,21 @@ function DocumentsStep({ session, isReadOnly }: { session: OnboardingSession; is
     );
   }
 
-  const handleLaunchSign = (doc: SessionDocument) => {
-    toast({
-      title: 'Document Signing',
-      description: 'Fill-and-Sign workflow will be integrated in a future phase.',
-    });
-  };
-
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-500">
-        Complete all required documents by signing them.
-      </p>
-
-      <div className="space-y-3">
-        {session.documents.map((doc, index) => (
-          <div
-            key={doc.id}
-            className="flex items-center justify-between p-4 border rounded-lg"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${
-                doc.status === 'signed' ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                {doc.status === 'signed' ? (
-                  <Check className="h-4 w-4 text-green-600" />
-                ) : (
-                  <FileText className="h-4 w-4 text-gray-400" />
-                )}
-              </div>
-              <div>
-                <p className="font-medium">Document {index + 1}</p>
-                <p className="text-sm text-gray-500">
-                  {doc.status === 'signed' 
-                    ? `Signed on ${new Date(doc.signedAt!).toLocaleDateString()}`
-                    : 'Pending signature'
-                  }
-                </p>
-              </div>
-            </div>
-            
-            {doc.status !== 'signed' && !isReadOnly ? (
-              <Button size="sm" onClick={() => handleLaunchSign(doc)}>
-                Sign Document
-              </Button>
-            ) : (
-              <Badge className={doc.status === 'signed' ? 'bg-green-100 text-green-800' : ''}>
-                {doc.status === 'signed' ? 'Signed' : 'Pending'}
-              </Badge>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
+    <DocumentSigningStep
+      sessionId={session.id}
+      documents={session.documents.map(doc => ({
+        id: doc.id,
+        templateId: doc.templateId,
+        templateName: doc.templateName,
+        status: doc.status as 'pending' | 'signed' | 'skipped' | 'deferred',
+        signedAt: doc.signedAt,
+        isRequired: doc.isRequired,
+        sortOrder: doc.sortOrder,
+      }))}
+      isReadOnly={isReadOnly}
+      onAllDocumentsComplete={handleAllDocumentsComplete}
+    />
   );
 }
 

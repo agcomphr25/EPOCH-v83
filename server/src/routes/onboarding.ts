@@ -1389,6 +1389,113 @@ router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
   }
 });
 
+// POST /sessions/:sessionId/documents/:docId/sign - Sign a document
+router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, docId } = req.params;
+    const { signatureData, initials, signedAt } = req.body;
+    
+    // Verify session and document exist
+    const docs = await pool.query(`
+      SELECT sd.id, sd.status, sd.session_id as "sessionId", 
+             t.name as "templateName"
+      FROM onboarding_session_documents sd
+      LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+      WHERE sd.id = $1 AND sd.session_id = $2
+    `, [docId, sessionId]);
+    
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const doc = docs[0];
+    
+    if (doc.status === 'signed') {
+      return res.status(400).json({ error: 'Document already signed' });
+    }
+    
+    // Update document status to signed
+    await pool.query(`
+      UPDATE onboarding_session_documents
+      SET status = 'signed',
+          signed_at = $1,
+          signature_data = $2,
+          initials_data = $3,
+          updated_at = NOW()
+      WHERE id = $4
+    `, [signedAt || new Date().toISOString(), signatureData, JSON.stringify(initials || {}), docId]);
+    
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: sessionId,
+        action: 'DOCUMENT_SIGNED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: { docId, templateName: doc.templateName },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for DOCUMENT_SIGNED:', auditError);
+    }
+    
+    res.json({ success: true, status: 'signed' });
+  } catch (error) {
+    console.error('Error signing document:', error);
+    res.status(500).json({ error: 'Failed to sign document' });
+  }
+});
+
+// PATCH /sessions/:sessionId/documents/:docId/status - Update document status (skip/defer)
+router.patch('/sessions/:sessionId/documents/:docId/status', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, docId } = req.params;
+    const { status } = req.body;
+    
+    if (!['skipped', 'deferred', 'pending'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be skipped, deferred, or pending.' });
+    }
+    
+    // Verify document exists
+    const docs = await pool.query(`
+      SELECT id, session_id as "sessionId" 
+      FROM onboarding_session_documents 
+      WHERE id = $1 AND session_id = $2
+    `, [docId, sessionId]);
+    
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    await pool.query(`
+      UPDATE onboarding_session_documents
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2
+    `, [status, docId]);
+    
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: sessionId,
+        action: status === 'skipped' ? 'DOCUMENT_SKIPPED' : 'DOCUMENT_DEFERRED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: { docId, status },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed:', auditError);
+    }
+    
+    res.json({ success: true, status });
+  } catch (error) {
+    console.error('Error updating document status:', error);
+    res.status(500).json({ error: 'Failed to update document status' });
+  }
+});
+
 // POST /sessions/:id/finalize - Finalize onboarding session (admin-only)
 router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
   const { id } = req.params;

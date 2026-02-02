@@ -985,9 +985,10 @@ function ReviewStep({
     session.documents.every(d => d.status === 'signed');
   const capturesComplete = session.captures.length === 0 || 
     session.captures.every(c => c.mediaItemId !== null);
-  const accountComplete = !!accountData.username;
+  const accountConfigured = !!accountData.username;
 
-  const allComplete = intakeComplete && docsComplete && capturesComplete && accountComplete;
+  // User account is optional - finalization requires intake, docs, and captures only
+  const allComplete = intakeComplete && docsComplete && capturesComplete;
 
   const handleFinalize = async () => {
     if (!allComplete) return;
@@ -1087,8 +1088,8 @@ function ReviewStep({
           />
           <ReviewItem
             label="User Account"
-            complete={accountComplete}
-            detail={accountComplete ? `Username: ${accountData.username}` : 'Not configured'}
+            complete={accountConfigured}
+            detail={accountConfigured ? `Username: ${accountData.username}` : 'Optional - not configured'}
           />
         </div>
       </div>

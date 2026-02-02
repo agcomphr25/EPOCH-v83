@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { 
   CheckCircle2, User, Mail, Phone, MapPin, Car, CreditCard, Loader2, 
-  AlertCircle, Lock, Camera, Upload, Shield, Calendar, IdCard, Building2
+  AlertCircle, Lock, Camera, Upload, Shield, Calendar, IdCard, Building2,
+  SkipForward, RotateCcw
 } from 'lucide-react';
 
 interface DemographicsData {
@@ -24,6 +25,7 @@ interface DemographicsData {
   state: string;
   zipCode: string;
   vehicleType: string;
+  vehicleColor: string;
   vehicleMakeModel: string;
   driversLicenseNumber: string;
   driversLicenseState: string;
@@ -34,6 +36,7 @@ interface DemographicsData {
   bankAccountNumber: string;
   bankAccountType: string;
   voidedCheckPhotoId: string | null;
+  skippedSections: string[];
 }
 
 interface DemographicsIntakeFormProps {
@@ -56,6 +59,7 @@ const INITIAL_DEMOGRAPHICS: DemographicsData = {
   state: '',
   zipCode: '',
   vehicleType: '',
+  vehicleColor: '',
   vehicleMakeModel: '',
   driversLicenseNumber: '',
   driversLicenseState: '',
@@ -66,6 +70,7 @@ const INITIAL_DEMOGRAPHICS: DemographicsData = {
   bankAccountNumber: '',
   bankAccountType: '',
   voidedCheckPhotoId: null,
+  skippedSections: [],
 };
 
 const VEHICLE_TYPES = [
@@ -78,6 +83,30 @@ const VEHICLE_TYPES = [
   { value: 'motorcycle', label: 'Motorcycle' },
   { value: 'other', label: 'Other' },
 ];
+
+const VEHICLE_COLORS = [
+  { value: 'white', label: 'White' },
+  { value: 'black', label: 'Black' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'gray', label: 'Gray' },
+  { value: 'red', label: 'Red' },
+  { value: 'blue', label: 'Blue' },
+  { value: 'green', label: 'Green' },
+  { value: 'brown', label: 'Brown / Tan' },
+  { value: 'gold', label: 'Gold / Beige' },
+  { value: 'orange', label: 'Orange' },
+  { value: 'yellow', label: 'Yellow' },
+  { value: 'purple', label: 'Purple' },
+  { value: 'other', label: 'Other' },
+];
+
+const SECTION_IDS = {
+  BASIC: 'basic_info',
+  ADDRESS: 'home_address',
+  TRANSPORTATION: 'transportation',
+  IDENTIFICATION: 'identification',
+  PAYROLL: 'payroll',
+};
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -156,10 +185,10 @@ export default function DemographicsIntakeForm({
 }: DemographicsIntakeFormProps) {
   const { toast } = useToast();
   const [data, setData] = useState<DemographicsData>(INITIAL_DEMOGRAPHICS);
-  const [hasInitialized, setHasInitialized] = useState(false);
   const [showAccountNumber, setShowAccountNumber] = useState(false);
   const dlFileInputRef = useRef<HTMLInputElement>(null);
   const checkFileInputRef = useRef<HTMLInputElement>(null);
+  const lastFetchedRef = useRef<string | null>(null);
 
   const { data: fetchedData, isLoading: isFetching } = useQuery<{
     demographicsData: DemographicsData | null;
@@ -171,11 +200,14 @@ export default function DemographicsIntakeForm({
   });
 
   useEffect(() => {
-    if (fetchedData?.demographicsData && !hasInitialized) {
-      setData({ ...INITIAL_DEMOGRAPHICS, ...fetchedData.demographicsData });
-      setHasInitialized(true);
+    if (fetchedData?.demographicsData) {
+      const fetchedJson = JSON.stringify(fetchedData.demographicsData);
+      if (lastFetchedRef.current !== fetchedJson) {
+        setData({ ...INITIAL_DEMOGRAPHICS, ...fetchedData.demographicsData });
+        lastFetchedRef.current = fetchedJson;
+      }
     }
-  }, [fetchedData, hasInitialized]);
+  }, [fetchedData]);
 
   const saveMutation = useMutation({
     mutationFn: async (demographics: DemographicsData) => {
@@ -201,6 +233,22 @@ export default function DemographicsIntakeForm({
     setData(prev => ({ ...prev, [field]: value }));
   };
 
+  const toggleSkipSection = (sectionId: string) => {
+    setData(prev => {
+      const skipped = prev.skippedSections || [];
+      if (skipped.includes(sectionId)) {
+        return { ...prev, skippedSections: skipped.filter(s => s !== sectionId) };
+      } else {
+        return { ...prev, skippedSections: [...skipped, sectionId] };
+      }
+    });
+  };
+
+  const isSectionSkipped = (sectionId: string) => {
+    return (data.skippedSections || []).includes(sectionId);
+  };
+
+  const skippedCount = (data.skippedSections || []).length;
   const isValid = data.firstName.trim() && data.lastName.trim() && data.email.trim() && data.phone.trim();
 
   const handleSaveAndContinue = async () => {
@@ -481,12 +529,12 @@ export default function DemographicsIntakeForm({
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="space-y-2">
-                <Label htmlFor="vehicleType" className="text-base font-medium">Primary Vehicle Type</Label>
+                <Label htmlFor="vehicleType" className="text-base font-medium">Vehicle Type</Label>
                 <Select value={data.vehicleType} onValueChange={(v) => updateField('vehicleType', v)}>
                   <SelectTrigger className="h-14 text-lg">
-                    <SelectValue placeholder="Select vehicle type" />
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
                     {VEHICLE_TYPES.map(type => (
@@ -498,8 +546,23 @@ export default function DemographicsIntakeForm({
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="vehicleColor" className="text-base font-medium">Vehicle Color</Label>
+                <Select value={data.vehicleColor} onValueChange={(v) => updateField('vehicleColor', v)}>
+                  <SelectTrigger className="h-14 text-lg">
+                    <SelectValue placeholder="Select color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VEHICLE_COLORS.map(color => (
+                      <SelectItem key={color.value} value={color.value} className="text-lg py-3">
+                        {color.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="vehicleMakeModel" className="text-base font-medium">
-                  Vehicle Make / Model <span className="text-gray-400 font-normal">(optional)</span>
+                  Make / Model <span className="text-gray-400 font-normal">(opt)</span>
                 </Label>
                 <Input
                   id="vehicleMakeModel"
@@ -595,22 +658,49 @@ export default function DemographicsIntakeForm({
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-amber-200 bg-amber-50/30">
+        <Card className={`shadow-sm ${isSectionSkipped(SECTION_IDS.PAYROLL) ? 'border-gray-300 bg-gray-50 opacity-75' : 'border-amber-200 bg-amber-50/30'}`}>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Building2 className="h-6 w-6 text-amber-600" />
+              <div className={`p-2 rounded-lg ${isSectionSkipped(SECTION_IDS.PAYROLL) ? 'bg-gray-200' : 'bg-amber-100'}`}>
+                <Building2 className={`h-6 w-6 ${isSectionSkipped(SECTION_IDS.PAYROLL) ? 'text-gray-500' : 'text-amber-600'}`} />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-xl">Payroll Information</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  Payroll Information
+                  {isSectionSkipped(SECTION_IDS.PAYROLL) && (
+                    <span className="text-xs font-medium text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Skipped</span>
+                  )}
+                </CardTitle>
                 <CardDescription className="text-sm">For direct deposit setup</CardDescription>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 rounded-full">
-                <Shield className="h-4 w-4 text-amber-700" />
-                <span className="text-sm font-medium text-amber-700">Sensitive</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleSkipSection(SECTION_IDS.PAYROLL)}
+                  className="h-10 px-4"
+                >
+                  {isSectionSkipped(SECTION_IDS.PAYROLL) ? (
+                    <>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Fill Later
+                    </>
+                  ) : (
+                    <>
+                      <SkipForward className="h-4 w-4 mr-1" />
+                      Skip Section
+                    </>
+                  )}
+                </Button>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 rounded-full">
+                  <Shield className="h-4 w-4 text-amber-700" />
+                  <span className="text-sm font-medium text-amber-700">Sensitive</span>
+                </div>
               </div>
             </div>
           </CardHeader>
+          {!isSectionSkipped(SECTION_IDS.PAYROLL) && (
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
@@ -692,6 +782,7 @@ export default function DemographicsIntakeForm({
               />
             </div>
           </CardContent>
+        )}
         </Card>
       </div>
 
@@ -730,6 +821,11 @@ export default function DemographicsIntakeForm({
           {!isValid && (
             <p className="text-sm text-amber-600 mt-2 text-center">
               Please fill in required fields: Full Name, Email, and Phone
+            </p>
+          )}
+          {skippedCount > 0 && (
+            <p className="text-sm text-orange-600 mt-2 text-center">
+              {skippedCount} section{skippedCount > 1 ? 's' : ''} skipped - you can complete {skippedCount > 1 ? 'them' : 'it'} later
             </p>
           )}
         </div>

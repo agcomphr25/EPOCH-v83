@@ -1139,6 +1139,7 @@ const demographicsSchema = z.object({
   state: z.string().optional().default(''),
   zipCode: z.string().optional().default(''),
   vehicleType: z.string().optional().default(''),
+  vehicleColor: z.string().optional().default(''),
   vehicleMakeModel: z.string().optional().default(''),
   driversLicenseNumber: z.string().optional().default(''),
   driversLicenseState: z.string().optional().default(''),
@@ -1149,6 +1150,7 @@ const demographicsSchema = z.object({
   bankAccountNumber: z.string().optional().default(''),
   bankAccountType: z.string().optional().default(''),
   voidedCheckPhotoId: z.string().nullable().optional().default(null),
+  skippedSections: z.array(z.string()).optional().default([]),
 });
 
 // PATCH /sessions/:id/demographics - Save fixed-schema demographics (NEW SYSTEM)

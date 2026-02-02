@@ -397,11 +397,12 @@ export default function OnboardingSessionWizard() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-between mt-4">
+          <div className="flex justify-between mt-6 py-4 border-t bg-white relative z-10">
             <Button
               variant="outline"
               onClick={handleBack}
               disabled={currentStepIndex === 0}
+              className="h-12 px-6"
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
               Back
@@ -409,6 +410,7 @@ export default function OnboardingSessionWizard() {
             <Button
               onClick={handleNext}
               disabled={currentStepIndex === WIZARD_STEPS.length - 1}
+              className="h-12 px-6"
             >
               Next
               <ChevronRight className="h-4 w-4 ml-1" />

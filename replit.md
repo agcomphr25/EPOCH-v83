@@ -48,9 +48,12 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Training Builder Module**: Self-contained training program management using the Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, and certification workflow.
 - **Epoch 4-Step Training System**: Comprehensive training management using the 4-step methodology, with AI-generated training plans and quizzes, sequential step completion, and automatic traveler authorization.
 - **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, session lifecycle management, and atomic finalization. Features include:
-  - Configurable onboarding paths with associated intake forms and document templates
+  - Configurable onboarding paths with ordered fillable PDF templates (signature auth template + HR documents)
+  - Path configuration supports ordered template selection with up/down reordering, replacing legacy folder-based approach
+  - Session creation respects configured template order, creating fillable instances in sequence
+  - Backward compatibility: Legacy folder-based paths still work (documentFolderId fallback mode)
   - Path purposes: ONBOARDING (new employees) and REHIRE (bringing back inactive employees)
-  - Multi-step wizard UI (Overview, Intake Form, Documents, Camera Captures, User Account Setup, Review)
+  - Simplified 4-step wizard UI: Signature Authorization, Demographics Intake, HR Documents, Review & Complete
   - Session lifecycle (in_progress, paused, completed) with pause/resume support
   - Transactional finalization that atomically creates/updates employee records, activates user accounts, and attaches signed documents
   - Re-hire workflows: Select inactive employees, reactivate employee records, auto-reactivate linked user accounts

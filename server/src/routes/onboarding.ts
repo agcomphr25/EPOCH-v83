@@ -2009,102 +2009,106 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
         }
       }
       
-      // D) CREATE/UPDATE EMPLOYMENT PERIOD
-      // For REHIRE: Close existing active employment period first
-      if (isRehire) {
-        const activePeriodsResult = await pool.query(`
-          SELECT id, start_date as "startDate" FROM employment_periods 
-          WHERE employee_id = $1 AND status = 'ACTIVE'
+      // D) CREATE/UPDATE EMPLOYMENT PERIOD (optional - table may not exist)
+      try {
+        // For REHIRE: Close existing active employment period first
+        if (isRehire) {
+          const activePeriodsResult = await pool.query(`
+            SELECT id, start_date as "startDate" FROM employment_periods 
+            WHERE employee_id = $1 AND status = 'ACTIVE'
+          `, [employeeId]);
+          
+          if (activePeriodsResult.length > 0) {
+            const activePeriod = activePeriodsResult[0];
+            const activePeriodId = activePeriod.id;
+            const periodStartDate = activePeriod.startDate;
+            
+            // Close the active period (end date = day before new hire date, or same day if no hire date)
+            let endDate = employeeData.hireDate 
+              ? new Date(new Date(employeeData.hireDate).getTime() - 86400000).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0];
+            
+            // Ensure end_date is not before start_date (use start_date if it would be earlier)
+            if (periodStartDate && new Date(endDate) < new Date(periodStartDate)) {
+              endDate = new Date(periodStartDate).toISOString().split('T')[0];
+              console.warn(`[Onboarding] Adjusted employment end date to match start date for period ${activePeriodId}`);
+            }
+            
+            await pool.query(`
+              UPDATE employment_periods 
+              SET end_date = $1, status = 'ENDED', ended_via_session_id = $2
+              WHERE id = $3
+            `, [endDate, id, activePeriodId]);
+            
+            auditEvents.push({
+              action: 'EMPLOYMENT_ENDED',
+              meta: { 
+                employeeId, 
+                periodId: activePeriodId,
+                endDate,
+                endedViaSessionId: id,
+              },
+            });
+          }
+        }
+        
+        // Create new employment period (guard against duplicates for legacy employees)
+        const startDate = employeeData.hireDate || new Date().toISOString().split('T')[0];
+        const employmentType = session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME';
+        
+        // Check if employee already has an active employment period (legacy employee handling)
+        let newPeriodId: string | null = null;
+        const existingActiveCheck = await pool.query(`
+          SELECT id FROM employment_periods WHERE employee_id = $1 AND status = 'ACTIVE'
         `, [employeeId]);
         
-        if (activePeriodsResult.length > 0) {
-          const activePeriod = activePeriodsResult[0];
-          const activePeriodId = activePeriod.id;
-          const periodStartDate = activePeriod.startDate;
+        if (existingActiveCheck.length > 0 && !isRehire) {
+          // Legacy employee already has active period - skip creation but log warning
+          console.warn(`[Onboarding] Employee ${employeeId} already has active employment period - skipping creation (legacy employee)`);
+          newPeriodId = existingActiveCheck[0].id;
+        } else {
+          const newPeriodResult = await pool.query(`
+            INSERT INTO employment_periods (
+              employee_id, start_date, employment_type, department, job_title,
+              status, started_via_session_id
+            ) VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6)
+            RETURNING id
+          `, [
+            employeeId,
+            startDate,
+            employmentType,
+            employeeData.department || null,
+            employeeData.jobTitle || null,
+            id,
+          ]);
           
-          // Close the active period (end date = day before new hire date, or same day if no hire date)
-          let endDate = employeeData.hireDate 
-            ? new Date(new Date(employeeData.hireDate).getTime() - 86400000).toISOString().split('T')[0]
-            : new Date().toISOString().split('T')[0];
-          
-          // Ensure end_date is not before start_date (use start_date if it would be earlier)
-          if (periodStartDate && new Date(endDate) < new Date(periodStartDate)) {
-            endDate = new Date(periodStartDate).toISOString().split('T')[0];
-            console.warn(`[Onboarding] Adjusted employment end date to match start date for period ${activePeriodId}`);
-          }
-          
-          await pool.query(`
-            UPDATE employment_periods 
-            SET end_date = $1, status = 'ENDED', ended_via_session_id = $2
-            WHERE id = $3
-          `, [endDate, id, activePeriodId]);
+          newPeriodId = newPeriodResult[0].id;
           
           auditEvents.push({
-            action: 'EMPLOYMENT_ENDED',
+            action: 'EMPLOYMENT_STARTED',
             meta: { 
               employeeId, 
-              periodId: activePeriodId,
-              endDate,
-              endedViaSessionId: id,
+              periodId: newPeriodId,
+              startDate,
+              employmentType,
+              department: employeeData.department,
+              jobTitle: employeeData.jobTitle,
+              startedViaSessionId: id,
+              isRehire,
             },
           });
         }
-      }
-      
-      // Create new employment period (guard against duplicates for legacy employees)
-      const startDate = employeeData.hireDate || new Date().toISOString().split('T')[0];
-      const employmentType = session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME';
-      
-      // Check if employee already has an active employment period (legacy employee handling)
-      // This should only happen for legacy employees without proper employment periods
-      let newPeriodId: string | null = null;
-      const existingActiveCheck = await pool.query(`
-        SELECT id FROM employment_periods WHERE employee_id = $1 AND status = 'ACTIVE'
-      `, [employeeId]);
-      
-      if (existingActiveCheck.length > 0 && !isRehire) {
-        // Legacy employee already has active period - skip creation but log warning
-        console.warn(`[Onboarding] Employee ${employeeId} already has active employment period - skipping creation (legacy employee)`);
-        newPeriodId = existingActiveCheck[0].id;
-      } else {
-        const newPeriodResult = await pool.query(`
-          INSERT INTO employment_periods (
-            employee_id, start_date, employment_type, department, job_title,
-            status, started_via_session_id
-          ) VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6)
-          RETURNING id
-        `, [
-          employeeId,
-          startDate,
-          employmentType,
-          employeeData.department || null,
-          employeeData.jobTitle || null,
-          id,
-        ]);
-        
-        newPeriodId = newPeriodResult[0].id;
-        
-        auditEvents.push({
-          action: 'EMPLOYMENT_STARTED',
-          meta: { 
-            employeeId, 
-            periodId: newPeriodId,
-            startDate,
-            employmentType,
-            department: employeeData.department,
-            jobTitle: employeeData.jobTitle,
-            startedViaSessionId: id,
-            isRehire,
-          },
-        });
+      } catch (periodError: any) {
+        // Employment periods table may not exist yet - log and continue
+        console.warn('[Onboarding] Employment periods table not available, skipping period creation:', periodError.message);
       }
       
       // E) FINALIZE SESSION (LOCK)
       await pool.query(`
         UPDATE onboarding_sessions
-        SET status = 'completed', completed_at = NOW(), account_config = $2
+        SET status = 'completed', completed_at = NOW()
         WHERE id = $1
-      `, [id, JSON.stringify(accountConfig || null)]);
+      `, [id]);
       
       auditEvents.push({
         action: isRehire ? 'REHIRE_COMPLETED' : 'ONBOARDING_COMPLETED',

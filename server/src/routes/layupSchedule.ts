@@ -820,7 +820,7 @@ router.post('/save', async (req: Request, res: Response) => {
 
       // Save schedule entries
       for (const entry of entries) {
-        const { orderId, scheduledDate, moldId, employeeAssignments } = entry;
+        const { orderId, scheduledDate, moldId, employeeAssignments, stockModel, stockModelId, product } = entry;
 
         // Validate required fields
         if (!orderId || !scheduledDate) {
@@ -839,12 +839,25 @@ router.post('/save', async (req: Request, res: Response) => {
           ? processedScheduledDate.toISOString().split('T')[0]
           : new Date(processedScheduledDate).toISOString().split('T')[0];
         
+        // Derive stock model from entry or mold name
+        let derivedStockModel = stockModel || stockModelId || product || '';
+        if (!derivedStockModel && moldId) {
+          // Extract stock model from mold name (e.g., "Alpine Hunter-6" -> "Alpine Hunter")
+          const moldParts = moldId.split('-');
+          if (moldParts.length >= 2) {
+            moldParts.pop(); // Remove the instance number
+            derivedStockModel = moldParts.join('-');
+          } else {
+            derivedStockModel = moldId;
+          }
+        }
+        
         await client.query(
           `
           INSERT INTO layup_schedule (
             order_id, scheduled_date, layup_day, mold_id, employee_assignments,
-            is_override, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            is_override, created_at, updated_at, stock_model
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
           [
             orderId,
@@ -855,6 +868,7 @@ router.post('/save', async (req: Request, res: Response) => {
             true, // This is a manual schedule save
             new Date().toISOString(),
             new Date().toISOString(),
+            derivedStockModel,
           ]
         );
 
@@ -894,6 +908,9 @@ router.post('/save', async (req: Request, res: Response) => {
               if (poItemResult.rows && poItemResult.rows.length > 0) {
                 const poItem = poItemResult.rows[0];
                 
+                // Use derived stock model or fall back to item name
+                const stockModelForPO = derivedStockModel || poItem.stock_model_id || poItem.item_name || '';
+                
                 // Upsert production_orders record
                 await client.query(`
                   INSERT INTO production_orders (
@@ -903,6 +920,8 @@ router.post('/save', async (req: Request, res: Response) => {
                   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                   ON CONFLICT (order_id) DO UPDATE SET
                     current_department = 'Layup/Plugging',
+                    item_id = COALESCE(NULLIF($8, ''), production_orders.item_id),
+                    item_name = COALESCE(NULLIF($9, ''), production_orders.item_name),
                     updated_at = NOW()
                 `, [
                   orderId,
@@ -912,15 +931,15 @@ router.post('/save', async (req: Request, res: Response) => {
                   poItem.vendor_name || 'OEM Vendor',
                   poItem.po_number,
                   poItem.item_type || 'stock_model',
-                  poItem.stock_model_id || '',
-                  poItem.item_name || '',
+                  stockModelForPO,
+                  poItem.item_name || stockModelForPO,
                   new Date(),
                   poItem.due_date || processedScheduledDate,
                   'Layup/Plugging',
                   'PENDING'
                 ]);
                 
-                console.log(`📦 Created/updated production_orders record for ${orderId}`);
+                console.log(`📦 Created/updated production_orders record for ${orderId} with stock model: ${stockModelForPO}`);
               }
             } catch (poError) {
               console.log(`⚠️ Could not create production_orders for ${orderId}:`, poError);
@@ -1666,7 +1685,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
     try {
       // Get all PO items in layup_schedule that don't have production_orders records
       const missingResult = await client.query(`
-        SELECT ls.order_id, ls.scheduled_date, ls.created_at
+        SELECT ls.order_id, ls.scheduled_date, ls.created_at, ls.mold_id, ls.stock_model
         FROM layup_schedule ls
         WHERE ls.order_id LIKE 'PO-%'
           AND NOT EXISTS (
@@ -1732,6 +1751,21 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
           
           const poItem = poItemResult.rows[0];
           
+          // Derive stock model from mold_id or existing data
+          let derivedStockModel = row.stock_model || poItem.stock_model_id || '';
+          if (!derivedStockModel && row.mold_id) {
+            // Extract stock model from mold name (e.g., "Alpine Hunter-6" -> "Alpine Hunter")
+            const moldParts = row.mold_id.split('-');
+            if (moldParts.length >= 2) {
+              moldParts.pop(); // Remove the instance number
+              derivedStockModel = moldParts.join('-');
+            } else {
+              derivedStockModel = row.mold_id;
+            }
+          }
+          
+          const stockModelForItem = derivedStockModel || poItem.item_name || '';
+          
           // Insert production_orders record
           await client.query(`
             INSERT INTO production_orders (
@@ -1748,8 +1782,8 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
             poItem.customer_name || 'OEM Vendor',
             poItem.po_number,
             poItem.item_type || 'stock_model',
-            poItem.stock_model_id || '',
-            poItem.item_name || '',
+            stockModelForItem,
+            poItem.item_name || stockModelForItem,
             row.created_at || new Date(),
             poItem.expected_delivery || row.scheduled_date,
             'Layup/Plugging',
@@ -1757,6 +1791,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
             false
           ]);
           
+          console.log(`✅ Created production_orders for ${orderId} with stock model: ${stockModelForItem}`);
           createdCount++;
         } catch (itemError) {
           console.log(`❌ Error processing ${orderId}:`, itemError);

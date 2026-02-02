@@ -1,0 +1,104 @@
+You are working inside the EPOCH codebase.
+
+IMPORTANT:
+This task REPLACES the current /onboarding experience under Employees.
+Do NOT preserve existing onboarding UI if it conflicts with this design.
+
+GOAL:
+Create a SIMPLE, PROFESSIONAL, ADMIN-LED onboarding system
+that matches real-world HR workflows.
+
+This is a FLOW + UI realignment task.
+Reuse existing backend logic wherever possible.
+
+---
+
+AUTHORITATIVE RULES (DO NOT DEVIATE):
+
+1) ONBOARDING IS ADMIN-LED AND IN-PERSON
+• Admin starts session
+• Employee completes forms during the session
+• Admin controls flow
+
+2) FORM ORDER (FIXED STRUCTURE)
+
+Every onboarding session follows this structure:
+
+STEP 1 — Digital Signature Authorization
+• Required
+• Signed once
+• Authorizes electronic signatures
+• Included in final bundle
+
+STEP 2 — Demographics Intake
+• Single clean page (NOT the old form builder UX)
+• CRUD-editable schema
+• Collects:
+  - name
+  - email
+  - phone
+  - address
+  - vehicle / car type
+  - driver license info
+  - bank info
+• Supports optional photo upload
+• Represents CURRENT TRUTH only (overwrite on update)
+• Feeds downstream documents for auto-prefill
+
+STEP 3+ — HR / Policy Documents
+• Selected from Fillable PDF Templates
+• Admin chooses which documents and ORDER
+• Each document:
+  - Requires signature
+  - Includes per-document electronic signature acknowledgment
+  - Requires initials on EVERY page if multi-page
+• Admin may:
+  - skip a document
+  - defer it
+  - continue to next document
+
+Skipped/deferred documents may remain incomplete forever.
+
+---
+
+3) PATHS
+• Full-Time
+• Contractor
+• Re-Hire
+
+Rules:
+• Session must remain within ONE path
+• Re-Hire:
+  - starts with existing demographics
+  - admin verifies/updates
+  - re-signs selected documents only
+
+---
+
+4) END OF SESSION
+• Signed PDFs are saved
+• NO auto-email
+• NO auto-publish to portal
+• Admin handles distribution manually
+
+---
+
+WHAT TO REMOVE / SIDELINE:
+• The complex form-builder UX currently under /onboarding
+• Any duplicate intake mechanisms that confuse admins
+
+---
+
+DELIVERABLE:
+Produce a clear implementation plan that explains:
+
+1) What /onboarding UI becomes
+2) What existing components are reused
+3) What existing components are hidden or deprecated
+4) How data flows:
+   Demographics → PDFs → Session → Saved artifacts
+5) What minimal changes are required to achieve this
+
+DO NOT WRITE CODE YET.
+DO NOT ADD NEW FEATURES.
+FOCUS ON ALIGNMENT AND SIMPLICITY.

@@ -12202,7 +12202,9 @@ export const onboardingPaths = pgTable('onboarding_paths', {
   pathType: text('path_type').notNull().default('FULL_TIME'), // FULL_TIME, CONTRACT
   pathPurpose: text('path_purpose').notNull().default('ONBOARDING'), // ONBOARDING, REHIRE
   intakeFormId: uuid('intake_form_id'),
-  documentFolderId: uuid('document_folder_id'), // Reference to media_folders for signable PDFs
+  documentFolderId: uuid('document_folder_id'), // DEPRECATED: Reference to media_folders (kept for backward compat)
+  signatureAuthTemplateId: uuid('signature_auth_template_id'), // Fillable template for e-signature authorization
+  documentTemplateIds: uuid('document_template_ids').array(), // Ordered list of fillable template IDs
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow(),

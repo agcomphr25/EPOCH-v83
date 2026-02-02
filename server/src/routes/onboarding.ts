@@ -632,7 +632,8 @@ router.get('/sessions/:id', async (req: Request, res: Response) => {
       SELECT 
         s.id, s.employee_id as "employeeId", s.path_id as "pathId",
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
-        s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
+        s.intake_data_schema as "intakeDataSchema", s.demographics_data as "demographicsData",
+        s.current_step as "currentStep",
         s.started_at as "startedAt", s.paused_at as "pausedAt", s.completed_at as "completedAt",
         p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
         e.name as "employeeName"
@@ -1120,6 +1121,219 @@ router.patch('/sessions/:id/intake', async (req: Request, res: Response) => {
   }
 });
 
+// Demographics validation schema
+const demographicsSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email'),
+  phone: z.string().optional().default(''),
+  address: z.string().optional().default(''),
+  city: z.string().optional().default(''),
+  state: z.string().optional().default(''),
+  zipCode: z.string().optional().default(''),
+  vehicleType: z.string().optional().default(''),
+  licensePlate: z.string().optional().default(''),
+  driversLicenseNumber: z.string().optional().default(''),
+  driversLicenseState: z.string().optional().default(''),
+  bankName: z.string().optional().default(''),
+  bankRoutingNumber: z.string().optional().default(''),
+  bankAccountNumber: z.string().optional().default(''),
+});
+
+// PATCH /sessions/:id/demographics - Save fixed-schema demographics (NEW SYSTEM)
+router.patch('/sessions/:id/demographics', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = demographicsSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Invalid demographics data',
+        details: parsed.error.errors,
+      });
+    }
+    
+    const demographics = parsed.data;
+    
+    // Check session exists and is not completed
+    const sessions = await pool.query(`
+      SELECT s.id, s.status, s.employee_id as "employeeId", 
+             p.path_purpose as "pathPurpose"
+      FROM onboarding_sessions s
+      JOIN onboarding_paths p ON s.path_id = p.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Onboarding session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    if (session.status === 'completed') {
+      return res.status(400).json({ error: 'Cannot modify completed session' });
+    }
+    
+    // Save demographics to session
+    await pool.query(`
+      UPDATE onboarding_sessions
+      SET demographics_data = $1, updated_at = NOW()
+      WHERE id = $2
+    `, [JSON.stringify(demographics), id]);
+    
+    // For re-hire sessions, also update the existing employee record immediately
+    if (session.pathPurpose === 'REHIRE' && session.employeeId) {
+      const fullName = `${demographics.firstName} ${demographics.lastName}`.trim();
+      const fullAddress = demographics.address 
+        ? `${demographics.address}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode}`.trim()
+        : null;
+      
+      await pool.query(`
+        UPDATE employees
+        SET name = $1,
+            email = $2,
+            phone = $3,
+            address = $4,
+            city = $5,
+            state = $6,
+            zip_code = $7,
+            vehicle_type = $8,
+            license_plate = $9,
+            drivers_license_number = $10,
+            drivers_license_state = $11,
+            bank_name = $12,
+            bank_routing_number = $13,
+            bank_account_number = $14,
+            updated_at = NOW()
+        WHERE id = $15
+      `, [
+        fullName,
+        demographics.email || null,
+        demographics.phone || null,
+        fullAddress,
+        demographics.city || null,
+        demographics.state || null,
+        demographics.zipCode || null,
+        demographics.vehicleType || null,
+        demographics.licensePlate || null,
+        demographics.driversLicenseNumber || null,
+        demographics.driversLicenseState || null,
+        demographics.bankName || null,
+        demographics.bankRoutingNumber || null,
+        demographics.bankAccountNumber || null,
+        session.employeeId,
+      ]);
+    }
+    
+    try {
+      await auditService.logEvent({
+        entityType: 'employee_onboarding',
+        entityId: id,
+        action: 'DEMOGRAPHICS_SAVED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'system',
+        },
+        meta: {
+          employeeName: `${demographics.firstName} ${demographics.lastName}`,
+          isRehire: session.pathPurpose === 'REHIRE',
+          employeeId: session.employeeId,
+        },
+      });
+    } catch (auditError) {
+      console.warn('Audit logging failed for DEMOGRAPHICS_SAVED:', auditError);
+    }
+    
+    res.json({ 
+      success: true, 
+      demographicsData: demographics,
+      employeeUpdated: session.pathPurpose === 'REHIRE' && session.employeeId,
+    });
+  } catch (error) {
+    console.error('Error saving demographics:', error);
+    res.status(500).json({ error: 'Failed to save demographics' });
+  }
+});
+
+// GET /sessions/:id/demographics - Get demographics (with prefill for re-hire)
+router.get('/sessions/:id/demographics', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Get session with employee data for prefill
+    const sessions = await pool.query(`
+      SELECT s.id, s.demographics_data as "demographicsData", s.employee_id as "employeeId",
+             p.path_purpose as "pathPurpose",
+             e.name, e.email, e.phone, e.address, e.city, e.state, e.zip_code as "zipCode",
+             e.vehicle_type as "vehicleType", e.license_plate as "licensePlate",
+             e.drivers_license_number as "driversLicenseNumber", 
+             e.drivers_license_state as "driversLicenseState",
+             e.bank_name as "bankName", e.bank_routing_number as "bankRoutingNumber",
+             e.bank_account_number as "bankAccountNumber"
+      FROM onboarding_sessions s
+      JOIN onboarding_paths p ON s.path_id = p.id
+      LEFT JOIN employees e ON s.employee_id = e.id
+      WHERE s.id = $1
+    `, [id]);
+    
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // If demographics already saved, return it
+    if (session.demographicsData && Object.keys(session.demographicsData).length > 0) {
+      return res.json({
+        demographicsData: session.demographicsData,
+        isRehire: session.pathPurpose === 'REHIRE',
+        source: 'session',
+      });
+    }
+    
+    // For re-hire, prefill from employee record
+    if (session.pathPurpose === 'REHIRE' && session.employeeId && session.name) {
+      const nameParts = (session.name || '').split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      const prefilled = {
+        firstName,
+        lastName,
+        email: session.email || '',
+        phone: session.phone || '',
+        address: session.address || '',
+        city: session.city || '',
+        state: session.state || '',
+        zipCode: session.zipCode || '',
+        vehicleType: session.vehicleType || '',
+        licensePlate: session.licensePlate || '',
+        driversLicenseNumber: session.driversLicenseNumber || '',
+        driversLicenseState: session.driversLicenseState || '',
+        bankName: session.bankName || '',
+        bankRoutingNumber: session.bankRoutingNumber || '',
+        bankAccountNumber: session.bankAccountNumber || '',
+      };
+      
+      return res.json({
+        demographicsData: prefilled,
+        isRehire: true,
+        source: 'employee_prefill',
+      });
+    }
+    
+    // New hire with no data yet
+    res.json({
+      demographicsData: null,
+      isRehire: session.pathPurpose === 'REHIRE',
+      source: 'empty',
+    });
+  } catch (error) {
+    console.error('Error fetching demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch demographics' });
+  }
+});
+
 // PATCH /sessions/:id/step - Update current step
 router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
   try {
@@ -1167,7 +1381,8 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       SELECT 
         s.id, s.employee_id as "employeeId", s.path_id as "pathId",
         s.admin_id as "adminId", s.status, s.intake_data as "intakeData",
-        s.intake_data_schema as "intakeDataSchema", s.current_step as "currentStep",
+        s.intake_data_schema as "intakeDataSchema", s.demographics_data as "demographicsData",
+        s.current_step as "currentStep",
         s.started_at as "startedAt", s.account_config as "accountConfig",
         p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose"
       FROM onboarding_sessions s
@@ -1263,7 +1478,12 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     let employeeId = session.employeeId;
     let userId: number | null = null;
     const auditEvents: Array<{ action: string; meta: any }> = [];
-    const employeeData = mapIntakeToEmployee(intakeData, intakeSchema);
+    
+    // Prefer demographicsData (new system) over intakeData (legacy)
+    const demographicsData = session.demographicsData || {};
+    const employeeData = Object.keys(demographicsData).length > 0
+      ? mapDemographicsToEmployee(demographicsData)
+      : mapIntakeToEmployee(intakeData, intakeSchema);
     
     // Begin transaction
     await pool.query('BEGIN');
@@ -1322,6 +1542,46 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           updateFields.push(`emergency_phone = $${paramIndex++}`);
           updateValues.push(employeeData.emergencyPhone);
         }
+        if (employeeData.city) {
+          updateFields.push(`city = $${paramIndex++}`);
+          updateValues.push(employeeData.city);
+        }
+        if (employeeData.state) {
+          updateFields.push(`state = $${paramIndex++}`);
+          updateValues.push(employeeData.state);
+        }
+        if (employeeData.zipCode) {
+          updateFields.push(`zip_code = $${paramIndex++}`);
+          updateValues.push(employeeData.zipCode);
+        }
+        if (employeeData.vehicleType) {
+          updateFields.push(`vehicle_type = $${paramIndex++}`);
+          updateValues.push(employeeData.vehicleType);
+        }
+        if (employeeData.licensePlate) {
+          updateFields.push(`license_plate = $${paramIndex++}`);
+          updateValues.push(employeeData.licensePlate);
+        }
+        if (employeeData.driversLicenseNumber) {
+          updateFields.push(`drivers_license_number = $${paramIndex++}`);
+          updateValues.push(employeeData.driversLicenseNumber);
+        }
+        if (employeeData.driversLicenseState) {
+          updateFields.push(`drivers_license_state = $${paramIndex++}`);
+          updateValues.push(employeeData.driversLicenseState);
+        }
+        if (employeeData.bankName) {
+          updateFields.push(`bank_name = $${paramIndex++}`);
+          updateValues.push(employeeData.bankName);
+        }
+        if (employeeData.bankRoutingNumber) {
+          updateFields.push(`bank_routing_number = $${paramIndex++}`);
+          updateValues.push(employeeData.bankRoutingNumber);
+        }
+        if (employeeData.bankAccountNumber) {
+          updateFields.push(`bank_account_number = $${paramIndex++}`);
+          updateValues.push(employeeData.bankAccountNumber);
+        }
         
         updateFields.push(`updated_at = NOW()`);
         updateValues.push(employeeId);
@@ -1348,8 +1608,11 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           INSERT INTO employees (
             name, email, phone, job_title, department, hire_date, 
             date_of_birth, address, emergency_contact, emergency_phone,
+            city, state, zip_code, vehicle_type, license_plate,
+            drivers_license_number, drivers_license_state,
+            bank_name, bank_routing_number, bank_account_number,
             user_role, employment_type, is_active
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, true)
           RETURNING id
         `, [
           employeeData.name || 'New Employee',
@@ -1362,6 +1625,16 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
           employeeData.address || null,
           employeeData.emergencyContact || null,
           employeeData.emergencyPhone || null,
+          employeeData.city || null,
+          employeeData.state || null,
+          employeeData.zipCode || null,
+          employeeData.vehicleType || null,
+          employeeData.licensePlate || null,
+          employeeData.driversLicenseNumber || null,
+          employeeData.driversLicenseState || null,
+          employeeData.bankName || null,
+          employeeData.bankRoutingNumber || null,
+          employeeData.bankAccountNumber || null,
           accountConfig.role || 'EMPLOYEE',
           session.pathType === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME',
         ]);
@@ -1670,7 +1943,32 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
   }
 });
 
-// Helper function to map intake data to employee fields
+// Helper function to map fixed-schema demographics to employee fields (NEW SYSTEM)
+function mapDemographicsToEmployee(demographics: Record<string, any>): Record<string, any> {
+  const fullName = `${demographics.firstName || ''} ${demographics.lastName || ''}`.trim();
+  const fullAddress = demographics.address 
+    ? `${demographics.address}${demographics.city ? ', ' + demographics.city : ''}${demographics.state ? ', ' + demographics.state : ''} ${demographics.zipCode || ''}`.trim()
+    : null;
+  
+  return {
+    name: fullName || null,
+    email: demographics.email || null,
+    phone: demographics.phone || null,
+    address: fullAddress,
+    city: demographics.city || null,
+    state: demographics.state || null,
+    zipCode: demographics.zipCode || null,
+    vehicleType: demographics.vehicleType || null,
+    licensePlate: demographics.licensePlate || null,
+    driversLicenseNumber: demographics.driversLicenseNumber || null,
+    driversLicenseState: demographics.driversLicenseState || null,
+    bankName: demographics.bankName || null,
+    bankRoutingNumber: demographics.bankRoutingNumber || null,
+    bankAccountNumber: demographics.bankAccountNumber || null,
+  };
+}
+
+// Helper function to map intake data to employee fields (LEGACY)
 function mapIntakeToEmployee(intakeData: Record<string, any>, schema: any[]): Record<string, any> {
   const employeeData: Record<string, any> = {};
   

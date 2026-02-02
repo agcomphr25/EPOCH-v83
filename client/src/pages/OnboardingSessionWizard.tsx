@@ -128,14 +128,19 @@ export default function OnboardingSessionWizard() {
     if (session?.intakeData && Object.keys(intakeFormData).length === 0) {
       setIntakeFormData(session.intakeData);
     }
-    if (session?.intakeData && Object.keys(demographicsData).length === 0) {
+    const sessionDemographics = (session as any)?.demographicsData;
+    if (sessionDemographics && Object.keys(sessionDemographics).length > 0 && Object.keys(demographicsData).length === 0) {
+      setDemographicsData(sessionDemographics);
+      setDemographicsCompleted(true);
+      setSignatureAuthCompleted(true);
+    } else if (session?.intakeData && Object.keys(demographicsData).length === 0) {
       setDemographicsData(session.intakeData);
       if (Object.keys(session.intakeData).length > 0) {
         setDemographicsCompleted(true);
         setSignatureAuthCompleted(true);
       }
     }
-  }, [session?.intakeData]);
+  }, [session?.intakeData, (session as any)?.demographicsData]);
 
   useEffect(() => {
     if (session?.currentStep) {
@@ -281,13 +286,10 @@ export default function OnboardingSessionWizard() {
         return (
           <DemographicsIntakeForm
             sessionId={session.id}
-            initialData={demographicsData}
             isCompleted={demographicsCompleted || isReadOnly}
-            isRehire={session.pathType === 'REHIRE'}
             onComplete={(data) => {
               setDemographicsData(data);
               setDemographicsCompleted(true);
-              saveIntakeDataMutation.mutate(data);
               handleNext();
             }}
           />

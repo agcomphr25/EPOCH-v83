@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, User, Mail, Phone, MapPin, Car, CreditCard, Camera, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { CheckCircle2, User, Mail, Phone, MapPin, Car, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 
 interface DemographicsData {
   firstName: string;
@@ -27,9 +28,7 @@ interface DemographicsData {
 
 interface DemographicsIntakeFormProps {
   sessionId: string;
-  initialData?: Partial<DemographicsData>;
   isCompleted?: boolean;
-  isRehire?: boolean;
   onComplete?: (data: DemographicsData) => void;
 }
 
@@ -53,16 +52,49 @@ const INITIAL_DEMOGRAPHICS: DemographicsData = {
 
 export default function DemographicsIntakeForm({
   sessionId,
-  initialData = {},
   isCompleted = false,
-  isRehire = false,
   onComplete,
 }: DemographicsIntakeFormProps) {
-  const [data, setData] = useState<DemographicsData>({
-    ...INITIAL_DEMOGRAPHICS,
-    ...initialData,
+  const { toast } = useToast();
+  const [data, setData] = useState<DemographicsData>(INITIAL_DEMOGRAPHICS);
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  const { data: fetchedData, isLoading: isFetching } = useQuery<{
+    demographicsData: DemographicsData | null;
+    isRehire: boolean;
+    source: string;
+  }>({
+    queryKey: ['/api/onboarding/sessions', sessionId, 'demographics'],
+    enabled: !!sessionId,
   });
-  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (fetchedData?.demographicsData && !hasInitialized) {
+      setData({ ...INITIAL_DEMOGRAPHICS, ...fetchedData.demographicsData });
+      setHasInitialized(true);
+    }
+  }, [fetchedData, hasInitialized]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (demographics: DemographicsData) => {
+      return apiRequest(`/api/onboarding/sessions/${sessionId}/demographics`, {
+        method: 'PATCH',
+        body: JSON.stringify(demographics),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', sessionId] });
+      toast({ title: 'Demographics saved successfully' });
+      onComplete?.(data);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Failed to save demographics', 
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   const updateField = (field: keyof DemographicsData, value: string) => {
     setData(prev => ({ ...prev, [field]: value }));
@@ -72,11 +104,19 @@ export default function DemographicsIntakeForm({
 
   const handleSave = async () => {
     if (!isValid) return;
-    setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setIsSaving(false);
-    onComplete?.(data);
+    saveMutation.mutate(data);
   };
+
+  if (isFetching) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+          <p className="mt-2 text-gray-500">Loading demographics...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isCompleted) {
     return (
@@ -96,14 +136,22 @@ export default function DemographicsIntakeForm({
     );
   }
 
+  const isRehire = fetchedData?.isRehire || false;
+
   return (
     <div className="space-y-6">
       {isRehire && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            <strong>Re-Hire:</strong> Verify and update the employee's information below.
-            Fields are pre-filled from their previous record.
-          </p>
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">Re-Hire: Verify Information</p>
+              <p className="text-sm text-blue-600 mt-1">
+                The fields below are pre-filled from this employee's previous record.
+                Please verify and update any information that has changed.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -299,26 +347,12 @@ export default function DemographicsIntakeForm({
               <Label htmlFor="bankAccountNumber">Account Number</Label>
               <Input
                 id="bankAccountNumber"
+                type="password"
                 value={data.bankAccountNumber}
                 onChange={(e) => updateField('bankAccountNumber', e.target.value)}
-                placeholder="••••••••1234"
+                placeholder="Enter account number"
               />
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Camera className="h-5 w-5 text-gray-600" />
-            <CardTitle>Photo (Optional)</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="border-2 border-dashed rounded-lg p-8 text-center text-gray-400">
-            <Camera className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Photo capture will be available in a future update</p>
           </div>
         </CardContent>
       </Card>
@@ -326,10 +360,10 @@ export default function DemographicsIntakeForm({
       <div className="flex justify-end gap-4">
         <Button
           onClick={handleSave}
-          disabled={!isValid || isSaving}
+          disabled={!isValid || saveMutation.isPending}
           size="lg"
         >
-          {isSaving ? (
+          {saveMutation.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Saving...
@@ -338,10 +372,6 @@ export default function DemographicsIntakeForm({
             'Save & Continue'
           )}
         </Button>
-      </div>
-
-      <div className="text-center text-xs text-gray-400">
-        Session ID: {sessionId}
       </div>
     </div>
   );

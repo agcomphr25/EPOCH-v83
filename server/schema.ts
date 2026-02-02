@@ -12255,6 +12255,25 @@ export const insertOnboardingFormSchema = createInsertSchema(onboardingForms).om
 export type OnboardingForm = typeof onboardingForms.$inferSelect;
 export type InsertOnboardingForm = z.infer<typeof insertOnboardingFormSchema>;
 
+// Demographics data type for fixed-schema intake
+export interface DemographicsData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  vehicleType: string;
+  licensePlate: string;
+  driversLicenseNumber: string;
+  driversLicenseState: string;
+  bankName: string;
+  bankRoutingNumber: string;
+  bankAccountNumber: string;
+}
+
 // Onboarding Sessions - Track in-progress onboarding sessions
 export const onboardingSessions = pgTable('onboarding_sessions', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -12262,8 +12281,9 @@ export const onboardingSessions = pgTable('onboarding_sessions', {
   pathId: uuid('path_id').references(() => onboardingPaths.id).notNull(),
   adminId: integer('admin_id').references(() => users.id).notNull(),
   status: text('status').notNull().default('in_progress'), // in_progress, paused, completed
-  intakeData: jsonb('intake_data').$type<Record<string, any>>().default({}),
-  currentStep: text('current_step').default('intake'),
+  intakeData: jsonb('intake_data').$type<Record<string, any>>().default({}), // DEPRECATED: Use demographicsData
+  demographicsData: jsonb('demographics_data').$type<DemographicsData>(), // Fixed-schema demographics
+  currentStep: text('current_step').default('signature_auth'),
   startedAt: timestamp('started_at').defaultNow().notNull(),
   pausedAt: timestamp('paused_at'),
   completedAt: timestamp('completed_at'),

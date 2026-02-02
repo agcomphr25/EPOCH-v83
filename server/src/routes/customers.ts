@@ -1187,11 +1187,22 @@ router.post('/customers', async (req: Request, res: Response) => {
 router.put('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
-    const updates = req.body;
     
     console.log('📝 Updating P2 customer:', customerId);
-    console.log('📊 Update data received:', JSON.stringify(updates, null, 2));
-    console.log('🔢 rfqSequences in update:', updates.rfqSequences);
+    console.log('📊 Update data received:', JSON.stringify(req.body, null, 2));
+    
+    // Validate the update data through the schema (partial allows optional fields)
+    const validation = insertP2CustomerSchema.partial().safeParse(req.body);
+    if (!validation.success) {
+      console.error('❌ P2 customer validation error:', validation.error.format());
+      return res.status(400).json({ 
+        error: 'Invalid customer data',
+        details: validation.error.format()
+      });
+    }
+    
+    const updates = validation.data;
+    console.log('🔢 Validated updates:', JSON.stringify(updates, null, 2));
     
     const updatedCustomer = await storage.updateP2Customer(customerId, updates);
     
@@ -1199,15 +1210,21 @@ router.put('/customers/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
     
-    console.log('✅ Customer updated, rfqSequences after update:', updatedCustomer?.rfqSequences);
+    console.log('✅ Customer updated successfully:', updatedCustomer.id);
     
     res.json(updatedCustomer);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update P2 customer error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorStack = error instanceof Error ? error.stack : '';
-    console.error('Update P2 customer error details:', { errorMessage, errorStack });
-    res.status(500).json({ error: 'Failed to update P2 customer', details: errorMessage });
+    console.error('Error name:', error?.name);
+    console.error('Error message:', error?.message);
+    console.error('Error code:', error?.code);
+    console.error('Error detail:', error?.detail);
+    console.error('Error stack:', error?.stack);
+    res.status(500).json({ 
+      error: 'Failed to update P2 customer', 
+      details: error?.message || 'Unknown error',
+      code: error?.code
+    });
   }
 });
 

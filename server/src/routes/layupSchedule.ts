@@ -869,6 +869,62 @@ router.post('/save', async (req: Request, res: Response) => {
             const itemId = parts[2];
             const key = `${poNumber}-${itemId}`;
             poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
+            
+            // Create/update production_orders record for this PO unit
+            // This ensures the item appears in the Layup/Plugging department queue
+            try {
+              // Get PO item details
+              const poItemResult = await client.query(`
+                SELECT 
+                  poi.id as item_id,
+                  poi.stock_model_id,
+                  poi.item_name,
+                  poi.item_type,
+                  po.id as po_id,
+                  po.po_number,
+                  po.vendor_id,
+                  po.due_date,
+                  v.name as vendor_name
+                FROM purchase_order_items poi
+                JOIN purchase_orders po ON poi.po_id = po.id
+                LEFT JOIN vendors v ON po.vendor_id = v.id
+                WHERE poi.id = $1
+              `, [parseInt(itemId)]);
+              
+              if (poItemResult.rows && poItemResult.rows.length > 0) {
+                const poItem = poItemResult.rows[0];
+                
+                // Upsert production_orders record
+                await client.query(`
+                  INSERT INTO production_orders (
+                    order_id, po_id, po_item_id, customer_id, customer_name, 
+                    po_number, item_type, item_id, item_name, 
+                    order_date, due_date, current_department, production_status
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                  ON CONFLICT (order_id) DO UPDATE SET
+                    current_department = 'Layup/Plugging',
+                    updated_at = NOW()
+                `, [
+                  orderId,
+                  poItem.po_id,
+                  parseInt(itemId),
+                  poItem.vendor_id || 'unknown',
+                  poItem.vendor_name || 'OEM Vendor',
+                  poItem.po_number,
+                  poItem.item_type || 'stock_model',
+                  poItem.stock_model_id || '',
+                  poItem.item_name || '',
+                  new Date(),
+                  poItem.due_date || processedScheduledDate,
+                  'Layup/Plugging',
+                  'PENDING'
+                ]);
+                
+                console.log(`📦 Created/updated production_orders record for ${orderId}`);
+              }
+            } catch (poError) {
+              console.log(`⚠️ Could not create production_orders for ${orderId}:`, poError);
+            }
           }
         } else {
           // Track regular order IDs

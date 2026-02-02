@@ -43,6 +43,116 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get all P1 PO production orders (items that have been scheduled into production)
+router.get('/production-orders', async (req: Request, res: Response) => {
+  try {
+    console.log('📦 P1 PO Queue: Fetching production orders...');
+    const result = await pool.query(`
+      SELECT 
+        po.id as order_id,
+        po.order_id as display_order_id,
+        po.po_id,
+        po.po_item_id,
+        po.customer_id,
+        po.customer_name,
+        po.po_number,
+        po.item_type,
+        po.item_id,
+        po.item_name,
+        po.specifications,
+        po.order_date,
+        po.due_date,
+        po.production_status,
+        po.current_department,
+        po.is_fulfilled,
+        po.fulfilled_date,
+        po.laid_up_at,
+        po.shipped_at,
+        po.created_at,
+        po.layup_completed_at,
+        po.cnc_completed_at,
+        po.finish_completed_at,
+        po.gunsmith_completed_at,
+        po.paint_completed_at,
+        po.qc_completed_at,
+        po.shipping_completed_at
+      FROM production_orders po
+      WHERE po.is_fulfilled = false
+      ORDER BY po.customer_name, po.po_number, po.order_id
+    `);
+    
+    const rows = Array.isArray(result) ? result : result.rows || [];
+    console.log(`📦 P1 PO Queue: Returning ${rows.length} production orders`);
+    
+    // Group by customer and PO number for better display
+    const grouped: Record<string, { 
+      customerId: string; 
+      customerName: string; 
+      purchaseOrders: Record<string, { 
+        poNumber: string; 
+        items: any[] 
+      }> 
+    }> = {};
+    
+    for (const row of rows) {
+      const custKey = row.customer_id?.toString() || row.customer_name || 'Unknown';
+      if (!grouped[custKey]) {
+        grouped[custKey] = {
+          customerId: custKey,
+          customerName: row.customer_name || `Customer ${custKey}`,
+          purchaseOrders: {}
+        };
+      }
+      
+      const poKey = row.po_number || 'No PO';
+      if (!grouped[custKey].purchaseOrders[poKey]) {
+        grouped[custKey].purchaseOrders[poKey] = {
+          poNumber: poKey,
+          items: []
+        };
+      }
+      
+      grouped[custKey].purchaseOrders[poKey].items.push({
+        id: row.order_id,
+        orderId: row.display_order_id,
+        poId: row.po_id,
+        poItemId: row.po_item_id,
+        itemType: row.item_type,
+        itemId: row.item_id,
+        itemName: row.item_name,
+        specifications: row.specifications,
+        orderDate: row.order_date,
+        dueDate: row.due_date,
+        productionStatus: row.production_status,
+        currentDepartment: row.current_department,
+        isFulfilled: row.is_fulfilled,
+        layupCompletedAt: row.layup_completed_at,
+        cncCompletedAt: row.cnc_completed_at,
+        finishCompletedAt: row.finish_completed_at,
+        gunsmithCompletedAt: row.gunsmith_completed_at,
+        paintCompletedAt: row.paint_completed_at,
+        qcCompletedAt: row.qc_completed_at,
+        shippingCompletedAt: row.shipping_completed_at
+      });
+    }
+    
+    // Convert to array format
+    const result_array = Object.values(grouped).map(customer => ({
+      customerId: customer.customerId,
+      customerName: customer.customerName,
+      purchaseOrders: Object.values(customer.purchaseOrders)
+    }));
+    
+    res.json(result_array);
+  } catch (error) {
+    console.error('Error retrieving P1 PO production orders:', error);
+    res.status(500).json({
+      error: 'Failed to fetch P1 PO production orders',
+      details: (error as any).message,
+    });
+  }
+});
+
 // Get mold availability
 router.get('/mold-availability', async (req: Request, res: Response) => {
   try {

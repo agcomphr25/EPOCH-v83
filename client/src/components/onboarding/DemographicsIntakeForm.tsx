@@ -186,6 +186,7 @@ export default function DemographicsIntakeForm({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', sessionId, 'demographics'] });
     },
     onError: (error: any) => {
       toast({ 

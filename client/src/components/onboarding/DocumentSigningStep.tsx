@@ -239,14 +239,10 @@ export default function DocumentSigningStep({
       <div className="text-center py-12">
         <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
         <p className="text-xl font-medium text-green-800 mb-2">All Documents Complete</p>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600">
           {completedCount} document{completedCount !== 1 ? 's' : ''} signed
           {skippedCount > 0 && `, ${skippedCount} skipped/deferred`}
         </p>
-        <Button onClick={onAllDocumentsComplete} size="lg" className="h-14 px-8">
-          Continue to Next Step
-          <ArrowRight className="h-5 w-5 ml-2" />
-        </Button>
       </div>
     );
   }

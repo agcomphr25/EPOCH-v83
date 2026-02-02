@@ -1,0 +1,54 @@
+Your branch is behind 'origin/main' by 33 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating a35c4bc0..a98d1232
+Fast-forward
+ .autosave-20260129-205839                          |   0
+ .autosave-20260129-210752                          |   0
+ .autosave-20260130-143937                          |   0
+ .autosave-20260130-150758                          |   0
+ ...L-SA-item-type-custom-model-s_1769737071985.txt | 242 ++++++++
+ ...a4557-User-hint-undefined-202_1769721525326.txt | 120 ++++
+ ...de-Generation-Center-so-that-_1769729636594.txt | 102 ++++
+ ...l-gated-actions-for-the-Timer_1769730010564.txt | 134 +++++
+ ...Enterprise-watcher-loaded-360_1769721364746.txt | 543 ++++++++++++++++++
+ attached_assets/image_1769716108849.png            | Bin 0 -> 128250 bytes
+ attached_assets/image_1769716585981.png            | Bin 0 -> 144326 bytes
+ attached_assets/image_1769716930354.png            | Bin 0 -> 85930 bytes
+ attached_assets/image_1769718810173.png            | Bin 0 -> 116461 bytes
+ attached_assets/image_1769719294208.png            | Bin 0 -> 119423 bytes
+ attached_assets/image_1769729779882.png            | Bin 0 -> 111501 bytes
+ client/src/components/Navigation.tsx               |   6 +
+ .../src/components/auth/InlineCredentialModal.tsx  | 149 +++++
+ client/src/hooks/useActionAuth.ts                  | 148 +++++
+ client/src/pages/OnboardingFormsPage.tsx           |  13 +-
+ client/src/pages/ProductionStationDashboard.tsx    |  42 +-
+ client/src/pages/RoutingDocumentManagement.tsx     |  43 +-
+ client/src/pages/TrainingContentLibrary.tsx        | 622 ++++++++++++++++++++-
+ server/middleware/actionToken.ts                   |  67 +++
+ server/routes/nonconformance.ts                    |   6 +-
+ server/schema.ts                                   |  13 +
+ server/src/routes/auth.ts                          |  94 ++++
+ server/src/routes/index.ts                         |   4 +-
+ server/src/routes/productionTimers.ts              |   6 +-
+ server/src/routes/routingDocuments.ts              |  32 ++
+ server/src/routes/training.ts                      | 192 +++++++
+ server/utils/pdf/salesOrderPdf.ts                  |  17 +-
+ 31 files changed, 2566 insertions(+), 29 deletions(-)
+ create mode 100644 .autosave-20260129-205839
+ create mode 100644 .autosave-20260129-210752
+ create mode 100644 .autosave-20260130-143937
+ create mode 100644 .autosave-20260130-150758
+ create mode 100644 attached_assets/Pasted--id-6-item-name-AG-BM-M5BDL-SA-item-type-custom-model-s_1769737071985.txt
+ create mode 100644 attached_assets/Pasted-2026-01-29-15-18-01-19-e5da4557-User-hint-undefined-202_1769721525326.txt
+ create mode 100644 attached_assets/Pasted-Enhance-the-existing-QR-Code-Generation-Center-so-that-_1769729636594.txt
+ create mode 100644 attached_assets/Pasted-Implement-inline-credential-gated-actions-for-the-Timer_1769730010564.txt
+ create mode 100644 attached_assets/Pasted-VM107622-8-Coframe-Replit-Enterprise-watcher-loaded-360_1769721364746.txt
+ create mode 100644 attached_assets/image_1769716108849.png
+ create mode 100644 attached_assets/image_1769716585981.png
+ create mode 100644 attached_assets/image_1769716930354.png
+ create mode 100644 attached_assets/image_1769718810173.png
+ create mode 100644 attached_assets/image_1769719294208.png
+ create mode 100644 attached_assets/image_1769729779882.png
+ create mode 100644 client/src/components/auth/InlineCredentialModal.tsx
+ create mode 100644 client/src/hooks/useActionAuth.ts
+ create mode 100644 server/middleware/actionToken.ts

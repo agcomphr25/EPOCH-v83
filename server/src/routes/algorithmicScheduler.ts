@@ -1683,6 +1683,29 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
               new Date().toISOString(),
             ]
           );
+          
+          // Also create/update production_orders record for PO items
+          if (allocation.orderId.startsWith('PO-')) {
+            try {
+              // Derive stock model from mold name
+              const stockModelName = allocation.moldId?.split('-')[0] || 'Unknown';
+              
+              await pool.query(`
+                INSERT INTO production_orders (
+                  order_id, item_name, current_department, production_status,
+                  order_date, due_date, is_fulfilled, created_at, updated_at
+                ) VALUES ($1, $2, 'Layup/Plugging', 'PENDING', $3, $3, false, NOW(), NOW())
+                ON CONFLICT (order_id) DO UPDATE SET
+                  current_department = 'Layup/Plugging',
+                  item_name = COALESCE(NULLIF($2, ''), production_orders.item_name),
+                  updated_at = NOW()
+              `, [allocation.orderId, stockModelName, allocation.scheduledDate]);
+              
+              console.log(`📦 Created/updated production_orders for ${allocation.orderId}`);
+            } catch (poError) {
+              console.log(`⚠️ Could not create production_orders for ${allocation.orderId}:`, poError);
+            }
+          }
         }
 
         console.log(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -77,8 +77,11 @@ export default function SignatureAuthorizationStep({
     signMutation.mutate();
   };
 
+  const hasCalledComplete = useRef(false);
+  
   useEffect(() => {
-    if (authStatus?.signatureAuthCompleted && !isCompleted) {
+    if (authStatus?.signatureAuthCompleted && !isCompleted && !hasCalledComplete.current) {
+      hasCalledComplete.current = true;
       onComplete?.();
     }
   }, [authStatus?.signatureAuthCompleted, isCompleted, onComplete]);

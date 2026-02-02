@@ -372,7 +372,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         'ready' as productionReadinessStatus,
         0 as queuePosition,
         o.created_at as createdAt,
-        COALESCE(c.name, o.customer_name, 'Customer ' || o.customer_id) as customerName,
+        COALESCE(c.name, 'Customer ' || o.customer_id) as customerName,
         'SALES' as orderSource
       FROM all_orders o
       LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id

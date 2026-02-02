@@ -193,7 +193,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       : null;
 
     const orderData = {
-      customerId: selectedCustomer.id,
+      customerId: selectedCustomer.customerId,
       customerPONumber: poDetails?.customerPONumber,
       dueDate: poDetails?.dueDate,
       // Properly map tolerance authorizer fields

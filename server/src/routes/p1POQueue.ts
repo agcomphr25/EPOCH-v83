@@ -570,4 +570,86 @@ router.post('/progress', async (req: Request, res: Response) => {
   }
 });
 
+// Backfill missing layup_schedule orders to production_orders
+router.post('/backfill-production-orders', async (req: Request, res: Response) => {
+  try {
+    console.log('📦 P1 PO Queue: Starting backfill of missing production orders...');
+    
+    // Find layup_schedule entries that don't have corresponding production_orders
+    const missingResult = await pool.query(`
+      SELECT 
+        ls.order_id,
+        ls.mold_id,
+        ls.scheduled_date,
+        SPLIT_PART(ls.mold_id, '-', 1) as stock_model_name
+      FROM layup_schedule ls
+      WHERE ls.order_id LIKE 'PO-%'
+        AND ls.order_id NOT IN (SELECT order_id FROM production_orders WHERE order_id IS NOT NULL)
+    `);
+    
+    const missing = Array.isArray(missingResult) ? missingResult : missingResult.rows || [];
+    console.log(`📦 Found ${missing.length} missing production orders to backfill`);
+    
+    if (missing.length === 0) {
+      return res.json({ message: 'No missing orders to backfill', backfilled: 0 });
+    }
+    
+    // Customer mapping based on PO number patterns
+    const getCustomerInfo = (orderId: string): { customerId: number; customerName: string; poNumber: string } => {
+      if (orderId.includes('RFPO-002612')) return { customerId: 154, customerName: 'Pure Precision', poNumber: 'RFPO-002612' };
+      if (orderId.includes('P18380')) return { customerId: 698, customerName: 'Red Hawk Rifles LLC', poNumber: 'P18380' };
+      if (orderId.includes('P18432')) return { customerId: 698, customerName: 'Red Hawk Rifles LLC', poNumber: 'P18432' };
+      if (orderId.includes('P18526')) return { customerId: 698, customerName: 'Red Hawk Rifles LLC', poNumber: 'P18526' };
+      if (orderId.includes('SWS2504')) return { customerId: 23, customerName: 'Suppressed Weapons Systems', poNumber: 'SWS2504' };
+      if (orderId.includes('58625276')) return { customerId: 1476, customerName: 'MidwayUSA Inc', poNumber: '58625276' };
+      return { customerId: 0, customerName: 'Unknown', poNumber: 'UNKNOWN' };
+    };
+    
+    let backfilled = 0;
+    const errors: string[] = [];
+    
+    for (const row of missing) {
+      try {
+        const { customerId, customerName, poNumber } = getCustomerInfo(row.order_id);
+        const stockModelName = row.stock_model_name || row.mold_id?.split('-')[0] || 'Unknown';
+        
+        await pool.query(`
+          INSERT INTO production_orders (
+            order_id,
+            customer_id,
+            customer_name,
+            po_number,
+            item_name,
+            current_department,
+            production_status,
+            order_date,
+            due_date,
+            is_fulfilled,
+            created_at,
+            updated_at
+          ) VALUES ($1, $2, $3, $4, $5, 'Layup/Plugging', 'PENDING', $6, $6, false, NOW(), NOW())
+        `, [row.order_id, customerId, customerName, poNumber, stockModelName, row.scheduled_date]);
+        
+        backfilled++;
+      } catch (err: any) {
+        errors.push(`${row.order_id}: ${err.message}`);
+      }
+    }
+    
+    console.log(`📦 Backfill complete: ${backfilled} orders added, ${errors.length} errors`);
+    
+    res.json({
+      message: `Backfilled ${backfilled} production orders`,
+      backfilled,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Error backfilling production orders:', error);
+    res.status(500).json({
+      error: 'Failed to backfill production orders',
+      details: (error as any).message,
+    });
+  }
+});
+
 export default router;

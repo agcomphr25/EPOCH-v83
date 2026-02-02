@@ -19,6 +19,7 @@ interface SessionOverviewPanelProps {
   currentStep: string;
   signatureAuthStatus: 'completed' | 'pending';
   demographicsStatus: 'completed' | 'pending';
+  demographicsSkippedCount?: number;
   documents: SessionDocument[];
   onStepClick?: (step: string) => void;
   onDocumentClick?: (docId: string, index: number) => void;
@@ -110,6 +111,7 @@ export default function SessionOverviewPanel({
   currentStep,
   signatureAuthStatus,
   demographicsStatus,
+  demographicsSkippedCount = 0,
   documents,
   onStepClick,
   onDocumentClick,
@@ -140,13 +142,20 @@ export default function SessionOverviewPanel({
           onClick={() => onStepClick?.('signature')}
         />
 
-        <OverviewItem
-          icon={<User className="h-5 w-5 text-purple-600" />}
-          label="Demographics"
-          status={demographicsStatus}
-          isActive={currentStep === 'demographics'}
-          onClick={() => onStepClick?.('demographics')}
-        />
+        <div className="relative">
+          <OverviewItem
+            icon={<User className="h-5 w-5 text-purple-600" />}
+            label="Demographics"
+            status={demographicsSkippedCount > 0 ? 'deferred' : demographicsStatus}
+            isActive={currentStep === 'demographics'}
+            onClick={() => onStepClick?.('demographics')}
+          />
+          {demographicsSkippedCount > 0 && demographicsStatus === 'completed' && (
+            <div className="absolute -bottom-1 left-16 text-xs text-orange-600">
+              {demographicsSkippedCount} section{demographicsSkippedCount > 1 ? 's' : ''} skipped
+            </div>
+          )}
+        </div>
 
         <div className="py-2">
           <div className="flex items-center gap-2 px-1 mb-2">

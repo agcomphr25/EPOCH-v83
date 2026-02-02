@@ -365,6 +365,7 @@ export default function OnboardingSessionWizard() {
             currentStep={currentStep.id}
             signatureAuthStatus={signatureAuthCompleted || isReadOnly ? 'completed' : 'pending'}
             demographicsStatus={demographicsCompleted || isReadOnly ? 'completed' : 'pending'}
+            demographicsSkippedCount={(demographicsData as any)?.skippedSections?.length || 0}
             documents={session.documents}
             onStepClick={(step) => {
               const stepIndex = WIZARD_STEPS.findIndex(s => 

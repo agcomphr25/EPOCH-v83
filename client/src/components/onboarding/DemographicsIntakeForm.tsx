@@ -516,18 +516,43 @@ export default function DemographicsIntakeForm({
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-gray-200">
+        <Card className={`shadow-sm ${isSectionSkipped(SECTION_IDS.TRANSPORTATION) ? 'border-gray-300 bg-gray-50 opacity-75' : 'border-gray-200'}`}>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Car className="h-6 w-6 text-purple-600" />
+              <div className={`p-2 rounded-lg ${isSectionSkipped(SECTION_IDS.TRANSPORTATION) ? 'bg-gray-200' : 'bg-purple-100'}`}>
+                <Car className={`h-6 w-6 ${isSectionSkipped(SECTION_IDS.TRANSPORTATION) ? 'text-gray-500' : 'text-purple-600'}`} />
               </div>
-              <div>
-                <CardTitle className="text-xl">Transportation</CardTitle>
+              <div className="flex-1">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  Transportation
+                  {isSectionSkipped(SECTION_IDS.TRANSPORTATION) && (
+                    <span className="text-xs font-medium text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Skipped</span>
+                  )}
+                </CardTitle>
                 <CardDescription className="text-sm">Vehicle information for parking</CardDescription>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSkipSection(SECTION_IDS.TRANSPORTATION)}
+                className="h-10 px-4"
+              >
+                {isSectionSkipped(SECTION_IDS.TRANSPORTATION) ? (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    Fill Later
+                  </>
+                ) : (
+                  <>
+                    <SkipForward className="h-4 w-4 mr-1" />
+                    Skip
+                  </>
+                )}
+              </Button>
             </div>
           </CardHeader>
+          {!isSectionSkipped(SECTION_IDS.TRANSPORTATION) && (
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="space-y-2">
@@ -574,24 +599,52 @@ export default function DemographicsIntakeForm({
               </div>
             </div>
           </CardContent>
+          )}
         </Card>
 
-        <Card className="shadow-sm border-amber-200 bg-amber-50/30">
+        <Card className={`shadow-sm ${isSectionSkipped(SECTION_IDS.IDENTIFICATION) ? 'border-gray-300 bg-gray-50 opacity-75' : 'border-amber-200 bg-amber-50/30'}`}>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <IdCard className="h-6 w-6 text-amber-600" />
+              <div className={`p-2 rounded-lg ${isSectionSkipped(SECTION_IDS.IDENTIFICATION) ? 'bg-gray-200' : 'bg-amber-100'}`}>
+                <IdCard className={`h-6 w-6 ${isSectionSkipped(SECTION_IDS.IDENTIFICATION) ? 'text-gray-500' : 'text-amber-600'}`} />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-xl">Identification</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  Identification
+                  {isSectionSkipped(SECTION_IDS.IDENTIFICATION) && (
+                    <span className="text-xs font-medium text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Skipped</span>
+                  )}
+                </CardTitle>
                 <CardDescription className="text-sm">Driver's license information</CardDescription>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 rounded-full">
-                <Shield className="h-4 w-4 text-amber-700" />
-                <span className="text-sm font-medium text-amber-700">Sensitive</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleSkipSection(SECTION_IDS.IDENTIFICATION)}
+                  className="h-10 px-4"
+                >
+                  {isSectionSkipped(SECTION_IDS.IDENTIFICATION) ? (
+                    <>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Fill Later
+                    </>
+                  ) : (
+                    <>
+                      <SkipForward className="h-4 w-4 mr-1" />
+                      Skip
+                    </>
+                  )}
+                </Button>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 rounded-full">
+                  <Shield className="h-4 w-4 text-amber-700" />
+                  <span className="text-sm font-medium text-amber-700">Sensitive</span>
+                </div>
               </div>
             </div>
           </CardHeader>
+          {!isSectionSkipped(SECTION_IDS.IDENTIFICATION) && (
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="space-y-2">
@@ -656,6 +709,7 @@ export default function DemographicsIntakeForm({
               />
             </div>
           </CardContent>
+          )}
         </Card>
 
         <Card className={`shadow-sm ${isSectionSkipped(SECTION_IDS.PAYROLL) ? 'border-gray-300 bg-gray-50 opacity-75' : 'border-amber-200 bg-amber-50/30'}`}>

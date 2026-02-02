@@ -1653,4 +1653,137 @@ function checkHasHeavyFill(features: any): boolean {
   return Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
 }
 
+// One-time backfill endpoint to create missing production_orders for scheduled PO items
+router.post('/backfill-production-orders', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BACKFILL: Starting production_orders backfill for scheduled PO items...');
+    
+    const client = await pool.connect();
+    let createdCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    
+    try {
+      // Get all PO items in layup_schedule that don't have production_orders records
+      const missingResult = await client.query(`
+        SELECT ls.order_id, ls.scheduled_date, ls.created_at
+        FROM layup_schedule ls
+        WHERE ls.order_id LIKE 'PO-%'
+          AND NOT EXISTS (
+            SELECT 1 FROM production_orders prod 
+            WHERE prod.order_id = ls.order_id
+          )
+      `);
+      
+      const missingRows = missingResult.rows || [];
+      console.log(`📋 Found ${missingRows.length} missing production_orders records to backfill`);
+      
+      for (const row of missingRows) {
+        const orderId = row.order_id;
+        const parts = orderId.split('-');
+        
+        let poNumber: string;
+        let itemId: number;
+        
+        // Handle different formats:
+        // 4 parts: PO-{poNumber}-{itemId}-{unit} (e.g., PO-P18321-23-1)
+        // 5 parts: PO-{prefix}-{suffix}-{itemId}-{unit} (e.g., PO-RFPO-002481-175-1)
+        if (parts.length === 4) {
+          poNumber = parts[1];
+          itemId = parseInt(parts[2]);
+        } else if (parts.length === 5) {
+          poNumber = `${parts[1]}-${parts[2]}`;
+          itemId = parseInt(parts[3]);
+        } else {
+          console.log(`⚠️ Skipping unrecognized format: ${orderId}`);
+          skippedCount++;
+          continue;
+        }
+        
+        if (isNaN(itemId)) {
+          console.log(`⚠️ Invalid item ID for ${orderId}`);
+          skippedCount++;
+          continue;
+        }
+        
+        try {
+          // Get PO item details
+          const poItemResult = await client.query(`
+            SELECT 
+              poi.id as item_id,
+              poi.stock_model_id,
+              poi.item_name,
+              poi.item_type,
+              po.id as po_id,
+              po.po_number,
+              po.customer_id,
+              po.customer_name,
+              po.expected_delivery
+            FROM purchase_order_items poi
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE poi.id = $1 AND po.po_number = $2
+          `, [itemId, poNumber]);
+          
+          if (!poItemResult.rows || poItemResult.rows.length === 0) {
+            console.log(`⚠️ No matching PO item found for ${orderId} (poNumber=${poNumber}, itemId=${itemId})`);
+            skippedCount++;
+            continue;
+          }
+          
+          const poItem = poItemResult.rows[0];
+          
+          // Insert production_orders record
+          await client.query(`
+            INSERT INTO production_orders (
+              order_id, po_id, po_item_id, customer_id, customer_name, 
+              po_number, item_type, item_id, item_name, 
+              order_date, due_date, current_department, production_status, is_fulfilled
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (order_id) DO NOTHING
+          `, [
+            orderId,
+            poItem.po_id,
+            itemId,
+            poItem.customer_id || 'unknown',
+            poItem.customer_name || 'OEM Vendor',
+            poItem.po_number,
+            poItem.item_type || 'stock_model',
+            poItem.stock_model_id || '',
+            poItem.item_name || '',
+            row.created_at || new Date(),
+            poItem.expected_delivery || row.scheduled_date,
+            'Layup/Plugging',
+            'PENDING',
+            false
+          ]);
+          
+          createdCount++;
+        } catch (itemError) {
+          console.log(`❌ Error processing ${orderId}:`, itemError);
+          errorCount++;
+        }
+      }
+      
+      console.log(`✅ BACKFILL COMPLETE: Created ${createdCount}, Skipped ${skippedCount}, Errors ${errorCount}`);
+      
+      res.json({
+        success: true,
+        message: `Backfill complete`,
+        created: createdCount,
+        skipped: skippedCount,
+        errors: errorCount,
+        total: missingRows.length
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('❌ BACKFILL ERROR:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

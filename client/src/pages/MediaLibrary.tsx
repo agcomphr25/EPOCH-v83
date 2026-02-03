@@ -209,9 +209,9 @@ export default function MediaLibrary() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          filename: file.name,
+          name: file.name,
+          size: file.size,
           contentType: file.type,
-          folder: 'media-library',
         }),
       });
       

@@ -508,10 +508,10 @@ router.post('/finalized', async (req: Request, res: Response) => {
     const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
     const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
     
-    // If no stock, create as FINALIZED and skip signature requirement, send directly to shipping
-    // If has stock, create as PENDING_SIGNATURE and require customer confirmation
-    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'FINALIZED';
-    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping Management';
+    // If has stock: PENDING_SIGNATURE status, awaiting customer signature
+    // If no stock: IN_PROGRESS status, skip production pipeline, go directly to Shipping QC
+    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'IN_PROGRESS';
+    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping QC';
     
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
@@ -529,7 +529,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
     if (hasStock) {
       console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
     } else {
-      console.log(`📧 Order ${order.orderId} created as FINALIZED (no stock) - sending thank you email to customer...`);
+      console.log(`📧 Order ${order.orderId} created as IN_PROGRESS (no stock) - skipping production, going to Shipping QC - sending thank you email to customer...`);
     }
     
     // Track email outcome for API response (declared outside inner try block for scoping)

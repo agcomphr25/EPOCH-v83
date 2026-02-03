@@ -808,20 +808,36 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Handle bulk print all - opens all sales orders and QC checklists at once
+  // Handle bulk print all - shows modal with list and print all button
   const handleBulkPrintAll = () => {
     if (selectedOrders.size === 0) return;
 
     const orderIds = Array.from(selectedOrders);
-    // Open all PDFs immediately - sales order then QC checklist for each order
+    // Create queue with sales order first, then QC checklist for each order
+    const queue: { orderId: string; type: 'sales' | 'qc' }[] = [];
     orderIds.forEach((orderId) => {
-      window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-      window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
+      queue.push({ orderId, type: 'sales' });
+      queue.push({ orderId, type: 'qc' });
+    });
+
+    setPrintQueue(queue);
+    setCurrentPrintIndex(0);
+    setShowBulkPrintModal(true);
+  };
+
+  // Open all PDFs in the print queue at once
+  const openAllPDFs = () => {
+    printQueue.forEach((item) => {
+      const url =
+        item.type === 'sales'
+          ? `/api/shipping-pdf/sales-order/${item.orderId}`
+          : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
+      window.open(url, '_blank');
     });
 
     toast({
       title: 'Documents Opened',
-      description: `Opened ${orderIds.length * 2} documents for printing`,
+      description: `Opened ${printQueue.length} documents for printing`,
     });
   };
 
@@ -1959,67 +1975,77 @@ export default function QCShippingQueuePage() {
       {/* Bulk Print Queue Modal */}
       {showBulkPrintModal && (
         <Dialog open={showBulkPrintModal} onOpenChange={closeBulkPrintModal}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Bulk Print Queue
+                <Printer className="h-5 w-5" />
+                Print Documents ({printQueue.length})
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="text-lg font-semibold mb-2">
-                  {printQueue[currentPrintIndex]?.type === 'sales'
-                    ? 'Sales Order'
-                    : 'QC Checklist'}
-                </div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {printQueue[currentPrintIndex]?.orderId}
-                </div>
-                <div className="text-sm text-gray-500 mt-1">
-                  {currentPrintIndex + 1} of {printQueue.length}
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              {/* Print All Button at top */}
+              <Button
+                onClick={openAllPDFs}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                size="lg"
+              >
+                <Printer className="h-5 w-5 mr-2" />
+                Print All ({printQueue.length} Documents)
+              </Button>
+
+              {/* Document List */}
+              <div className="border rounded-lg overflow-y-auto flex-1 max-h-[300px]">
+                <div className="divide-y">
+                  {printQueue.map((item, index) => (
+                    <div
+                      key={`${item.orderId}-${item.type}`}
+                      className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${item.type === 'sales' ? 'bg-blue-500' : 'bg-green-500'}`} />
+                        <div>
+                          <div className="font-medium text-sm">{item.orderId}</div>
+                          <div className="text-xs text-gray-500">
+                            {item.type === 'sales' ? 'Sales Order' : 'QC Checklist'}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const url =
+                            item.type === 'sales'
+                              ? `/api/shipping-pdf/sales-order/${item.orderId}`
+                              : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={previousPDF}
-                  disabled={currentPrintIndex === 0}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-
-                <Button
-                  onClick={openCurrentPDF}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Open PDF
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={nextPDF}
-                  disabled={currentPrintIndex === printQueue.length - 1}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  Sales Order
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  QC Checklist
+                </div>
               </div>
 
               <div className="text-center">
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
                   onClick={closeBulkPrintModal}
-                  className="text-gray-500 hover:text-gray-700"
                 >
-                  <X className="h-4 w-4 mr-1" />
-                  Close Queue
+                  Close
                 </Button>
               </div>
             </div>

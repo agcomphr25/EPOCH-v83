@@ -1,0 +1,60 @@
+COPY-PASTE PROMPT #2
+Fix Discounts & Pricing on Sales Order PDF (Item #4)
+Objective:
+Fix Sales Order PDF pricing so ALL discounts are applied consistently with Order Entry UI logic.
+
+Confirmed Facts:
+- UI pricing is authoritative and calculated via calculateOrderTotalOptimized()
+- Discounts supported:
+  - Persistent discounts (persistent_discounts table, percent OR fixed)
+  - Promo codes
+  - Custom CSR discounts
+  - Price overrides
+  - Misc items (positive or negative)
+- PDF pricing logic currently:
+  - Recalculates totals independently
+  - Does NOT look up persistent_discounts
+  - Expects discountType / discountValue fields that are often empty
+  - Extracts discounts from features JSONB incorrectly
+- Order snapshots are frozen at signature time and must not be mutated.
+
+Required Fix (ARCHITECTURAL, NOT PATCHY):
+1. Introduce a shared pricing resolution function:
+   Example:
+     resolveOrderPricingSummary(orderId)
+   This function must internally call calculateOrderTotalOptimized() or reuse its logic.
+
+2. The pricing summary MUST explicitly return:
+   - basePrice (after priceOverride, if any)
+   - featuresTotal
+   - discounts[] (itemized, with source and amount)
+   - discountTotal
+   - shipping
+   - finalTotal
+
+3. Update Sales Order PDF generation to:
+   - Use the resolved pricing summary instead of recomputing totals
+   - Display discounts clearly (do not bury them in notes)
+   - Ensure subtotal → discounts → shipping → total reconcile cleanly
+
+4. Snapshot Rules:
+   - SIGNATURE_EMAIL / SIGNED_COPY must continue using the frozen snapshot
+   - CUSTOMER_VIEW / SHIPPING_PRINT must use live resolved pricing
+   - If order pricing changes after signature, CSR must send “Updated Order for Signature” (existing behavior remains)
+
+5. Remove PDF-specific discount logic that:
+   - Reads discountType / discountValue directly
+   - Extracts discounts from features JSONB
+   - Bypasses persistent_discounts lookup
+
+Acceptance Criteria:
+- Persistent discounts (e.g., GB-20) show correctly on PDF
+- Promo codes work even when discountType/discountValue are not stored on order
+- Custom discounts match UI totals exactly
+- Price overrides are respected
+- PDF totals always equal UI totals for live views
+
+Deliverables:
+- Shared pricing resolution function
+- Files modified in PDF service/template
+- Example regenerated PDF confirming correct discount math

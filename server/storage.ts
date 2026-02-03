@@ -3680,6 +3680,328 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * SHARED PRICING RESOLUTION FUNCTION
+   * Returns itemized pricing breakdown for Order Entry UI and Sales Order PDF.
+   * Uses SAME logic as calculateOrderTotalOptimized but returns detailed breakdown.
+   * 
+   * @param orderId - The order ID to resolve pricing for
+   * @returns Itemized pricing summary with discounts, features, shipping, etc.
+   */
+  async resolveOrderPricingSummary(orderId: string): Promise<{
+    basePrice: number;
+    basePriceSource: 'override' | 'standard';
+    featuresTotal: number;
+    featureBreakdown: Array<{ featureId: string; featureName: string; optionValue: string; price: number }>;
+    miscItemsTotal: number;
+    miscItems: Array<{ description: string; quantity: number; price: number; total: number }>;
+    subtotal: number;
+    discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }>;
+    discountTotal: number;
+    shipping: number;
+    finalTotal: number;
+  }> {
+    // Fetch order and cached data
+    const [order] = await db
+      .select()
+      .from(allOrders)
+      .where(eq(allOrders.orderId, orderId));
+
+    if (!order) {
+      console.warn(`[resolveOrderPricingSummary] Order ${orderId} not found`);
+      return {
+        basePrice: 0,
+        basePriceSource: 'standard',
+        featuresTotal: 0,
+        featureBreakdown: [],
+        miscItemsTotal: 0,
+        miscItems: [],
+        subtotal: 0,
+        discounts: [],
+        discountTotal: 0,
+        shipping: 0,
+        finalTotal: 0,
+      };
+    }
+
+    const stockModels = await this.getAllStockModels();
+    const allFeatures = await this.getAllFeatures();
+    const persistentDiscountsData = await this.getAllPersistentDiscounts();
+
+    // 1. Calculate base price (stock model)
+    let basePrice = 0;
+    let basePriceSource: 'override' | 'standard' = 'standard';
+    let modelName = '';
+    
+    if (order.modelId) {
+      const selectedModel = stockModels.find((model) => model.id === order.modelId);
+      if (selectedModel) {
+        modelName = selectedModel.name || '';
+        const modelPrice = Number(selectedModel.price || 0);
+        const priceOverride = order.priceOverride;
+        
+        if (priceOverride !== null && priceOverride !== undefined && !isNaN(Number(priceOverride))) {
+          basePrice = Number(priceOverride);
+          basePriceSource = 'override';
+        } else {
+          basePrice = modelPrice;
+          basePriceSource = 'standard';
+        }
+      }
+    }
+
+    // 2. Calculate features total with breakdown
+    let featuresTotal = 0;
+    const featureBreakdown: Array<{ featureId: string; featureName: string; optionValue: string; price: number }> = [];
+    const orderFeatures = order.features as any;
+
+    if (orderFeatures && typeof orderFeatures === 'object') {
+      // Standard features (excluding separately handled ones)
+      Object.entries(orderFeatures).forEach(([featureId, value]) => {
+        if (['bottom_metal', 'paint_options', 'rail_accessory', 'other_options', 'miscItems'].includes(featureId)) {
+          return;
+        }
+
+        if (value && value !== 'none') {
+          const feature = allFeatures.find((f) => f.id === featureId);
+          if (feature?.options) {
+            if (Array.isArray(value)) {
+              value.forEach((optionValue) => {
+                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+                if (option?.price) {
+                  const price = Number(option.price);
+                  if (!isNaN(price)) {
+                    featuresTotal += price;
+                    featureBreakdown.push({
+                      featureId,
+                      featureName: feature.displayName || featureId,
+                      optionValue: option.label || optionValue,
+                      price,
+                    });
+                  }
+                }
+              });
+            } else {
+              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              if (option?.price) {
+                const price = Number(option.price);
+                if (!isNaN(price)) {
+                  featuresTotal += price;
+                  featureBreakdown.push({
+                    featureId,
+                    featureName: feature.displayName || featureId,
+                    optionValue: option.label || String(value),
+                    price,
+                  });
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Paint options
+      const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
+      if (currentPaint && currentPaint !== 'none') {
+        const paintFeatures = allFeatures.filter((f) => 
+          f.displayName?.includes('Options') || f.displayName?.includes('Camo') ||
+          f.displayName?.includes('Cerakote') || f.displayName?.includes('Paint') || f.category === 'paint'
+        );
+        for (const feature of paintFeatures) {
+          if (feature.options) {
+            const option = (feature.options as any[])?.find((opt: any) => opt.value === currentPaint);
+            if (option?.price) {
+              const price = Number(option.price);
+              if (!isNaN(price)) {
+                featuresTotal += price;
+                featureBreakdown.push({
+                  featureId: feature.id,
+                  featureName: feature.displayName || 'Paint Option',
+                  optionValue: option.label || currentPaint,
+                  price,
+                });
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Bottom metal
+      if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
+        const bottomMetalFeature = allFeatures.find((f) => f.id === 'bottom_metal');
+        if (bottomMetalFeature?.options) {
+          const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
+          if (option?.price) {
+            let price = Number(option.price);
+            // Special pricing for seasonal sales
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') &&
+                orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+              price = 100;
+            }
+            if (!isNaN(price)) {
+              featuresTotal += price;
+              featureBreakdown.push({
+                featureId: 'bottom_metal',
+                featureName: 'Bottom Metal',
+                optionValue: option.label || orderFeatures.bottom_metal,
+                price,
+              });
+            }
+          }
+        }
+      }
+
+      // Rail accessory
+      if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory)) {
+        const railFeature = allFeatures.find((f) => f.id === 'rail_accessory');
+        if (railFeature?.options) {
+          orderFeatures.rail_accessory.forEach((railValue: string) => {
+            const option = (railFeature.options as any[])?.find((opt: any) => opt.value === railValue);
+            if (option?.price) {
+              const price = Number(option.price);
+              if (!isNaN(price)) {
+                featuresTotal += price;
+                featureBreakdown.push({
+                  featureId: 'rail_accessory',
+                  featureName: 'Rail Accessory',
+                  optionValue: option.label || railValue,
+                  price,
+                });
+              }
+            }
+          });
+        }
+      }
+
+      // Other options
+      if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options)) {
+        const otherOptionsFeature = allFeatures.find((f) => f.id === 'other_options');
+        if (otherOptionsFeature?.options) {
+          orderFeatures.other_options.forEach((optionValue: string) => {
+            const option = (otherOptionsFeature.options as any[])?.find((opt: any) => opt.value === optionValue);
+            if (option?.price) {
+              const price = Number(option.price);
+              if (!isNaN(price)) {
+                featuresTotal += price;
+                featureBreakdown.push({
+                  featureId: 'other_options',
+                  featureName: 'Other Options',
+                  optionValue: option.label || optionValue,
+                  price,
+                });
+              }
+            }
+          });
+        }
+      }
+    }
+
+    // 3. Misc items
+    let miscItemsTotal = 0;
+    const miscItems: Array<{ description: string; quantity: number; price: number; total: number }> = [];
+    if (orderFeatures?.miscItems && Array.isArray(orderFeatures.miscItems)) {
+      orderFeatures.miscItems.forEach((item: any) => {
+        const price = Number(item.price || 0);
+        const quantity = Number(item.quantity || 1);
+        if (!isNaN(price) && !isNaN(quantity)) {
+          const total = price * quantity;
+          miscItemsTotal += total;
+          miscItems.push({
+            description: item.description || 'Misc Item',
+            quantity,
+            price,
+            total,
+          });
+        }
+      });
+    }
+
+    // Calculate subtotal before discounts
+    const subtotal = basePrice + featuresTotal + miscItemsTotal;
+
+    // 4. Calculate discounts with itemization
+    let discountTotal = 0;
+    const discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }> = [];
+
+    // Persistent discount
+    if (order.discountCode && order.discountCode !== 'none') {
+      let discount = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        discount = persistentDiscountsData.find((d) => d.id === discountId);
+      } else {
+        discount = persistentDiscountsData.find((d) => d.name === order.discountCode);
+      }
+
+      if (discount && discount.isActive) {
+        let discountAmount = 0;
+        const isPercent = discount.percent !== null && discount.percent > 0;
+        const discountValue = isPercent ? discount.percent! : Number(discount.fixedAmount || 0) / 100;
+
+        if (discount.appliesTo === 'stock_model') {
+          discountAmount = isPercent ? (basePrice * discountValue) / 100 : discountValue;
+        } else if (discount.appliesTo === 'total_order') {
+          discountAmount = isPercent ? (subtotal * discountValue) / 100 : discountValue;
+        }
+
+        if (discountAmount > 0) {
+          discountTotal += discountAmount;
+          discounts.push({
+            source: discount.name || 'Persistent Discount',
+            type: isPercent ? 'percent' : 'fixed',
+            value: discountValue,
+            amount: discountAmount,
+            appliesTo: discount.appliesTo || 'total_order',
+          });
+        }
+      }
+    }
+
+    // Custom discount
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        const isPercent = order.customDiscountType === 'percent';
+        const afterPersistentDiscount = subtotal - discountTotal;
+        const discountAmount = isPercent 
+          ? (afterPersistentDiscount * discountValue) / 100 
+          : discountValue;
+
+        discountTotal += discountAmount;
+        discounts.push({
+          source: 'Custom Discount',
+          type: isPercent ? 'percent' : 'fixed',
+          value: discountValue,
+          amount: discountAmount,
+          appliesTo: 'total_order',
+        });
+      }
+    }
+
+    // 5. Shipping
+    const shipping = Number(order.shipping || 0);
+
+    // 6. Final total
+    const finalTotal = Math.max(0, subtotal - discountTotal + shipping);
+
+    console.log(`[resolveOrderPricingSummary] Order ${orderId}: base=${basePrice}, features=${featuresTotal}, misc=${miscItemsTotal}, discounts=${discountTotal}, shipping=${shipping}, total=${finalTotal}`);
+
+    return {
+      basePrice: Math.round(basePrice * 100) / 100,
+      basePriceSource,
+      featuresTotal: Math.round(featuresTotal * 100) / 100,
+      featureBreakdown,
+      miscItemsTotal: Math.round(miscItemsTotal * 100) / 100,
+      miscItems,
+      subtotal: Math.round(subtotal * 100) / 100,
+      discounts,
+      discountTotal: Math.round(discountTotal * 100) / 100,
+      shipping: Math.round(shipping * 100) / 100,
+      finalTotal: Math.round(finalTotal * 100) / 100,
+    };
+  }
+
   // Method to get unpaid orders for batch payment processing
   async getUnpaidOrders() {
     try {

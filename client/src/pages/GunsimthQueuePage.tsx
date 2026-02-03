@@ -24,6 +24,7 @@ import {
   Eye,
   TrendingDown,
   Zap,
+  RotateCcw,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -53,6 +54,22 @@ export default function GunsimthQueuePage() {
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
+  });
+
+  // Fetch nonconformance/return items assigned to Gunsmith department
+  const { data: nonconformanceItems = [] } = useQuery({
+    queryKey: ['/api/nonconformance', { repairDepartment: 'Gunsmith' }],
+    queryFn: async () => {
+      const result = await apiRequest('/api/nonconformance?limit=100');
+      return (result || []).filter(
+        (item: any) =>
+          item.repairDepartment?.toLowerCase() === 'gunsmith' &&
+          item.status !== 'Resolved' &&
+          item.status !== 'Closed' &&
+          item.disposition === 'Repair'
+      );
+    },
+    refetchInterval: 30000,
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -1535,6 +1552,85 @@ export default function GunsimthQueuePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Returns/Repairs Section - Nonconformance Items Assigned to Gunsmith */}
+      {(nonconformanceItems as any[]).length > 0 && (
+        <Card className="border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+              <RotateCcw className="h-5 w-5" />
+              Returns & Repairs ({(nonconformanceItems as any[]).length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {(nonconformanceItems as any[]).map((item: any) => (
+                <Card
+                  key={item.id}
+                  id={`return-${item.orderId || item.id}`}
+                  className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-800"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-300">
+                          RETURN
+                        </Badge>
+                        <span className="font-semibold">
+                          {item.orderId || `RMA-${item.id}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      {item.serialNumber && (
+                        <div className="text-gray-600 dark:text-gray-400">
+                          Serial: {item.serialNumber}
+                        </div>
+                      )}
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Customer: {item.customerName || 'N/A'}
+                      </div>
+                      {item.stockModel && (
+                        <div className="text-gray-600 dark:text-gray-400">
+                          Model: {item.stockModel}
+                        </div>
+                      )}
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Issue: {item.issueCause || 'N/A'}
+                      </div>
+                      {item.notes && (
+                        <div className="text-gray-500 dark:text-gray-500 text-xs mt-2 line-clamp-2">
+                          Notes: {item.notes}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.status === 'Open'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation('/nonconformance')}
+                          className="text-xs"
+                        >
+                          View Details
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Sales Order Modal */}

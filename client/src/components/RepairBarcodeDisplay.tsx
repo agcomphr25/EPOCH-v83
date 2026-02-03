@@ -49,30 +49,42 @@ export function RepairBarcodeDisplay({
   };
 
   useEffect(() => {
-    if (canvasRef.current && barcodeValue && isOpen) {
-      const config = getSizeConfig();
-      const format = getBarcodeFormat(barcodeValue);
+    if (!barcodeValue || !isOpen) return;
+    
+    // Small delay to ensure canvas is in DOM after dialog animation
+    const timer = setTimeout(() => {
+      if (canvasRef.current) {
+        const config = getSizeConfig();
+        const format = getBarcodeFormat(barcodeValue);
+        
+        console.log('Generating repair barcode:', { barcodeValue, format });
 
-      try {
-        JsBarcode(canvasRef.current, barcodeValue, {
-          format: format,
-          width: format === 'CODE128' ? config.width * 0.8 : config.width,
-          height: config.height,
-          displayValue: true,
-          fontSize: config.fontSize,
-          textAlign: 'center',
-          textPosition: 'bottom',
-          textMargin: 2,
-          fontOptions: 'bold',
-          font: 'monospace',
-          background: '#ffffff',
-          lineColor: '#DC2626',
-          margin: 10,
-        });
-      } catch (error) {
-        console.error('Error generating repair barcode:', error);
+        try {
+          JsBarcode(canvasRef.current, barcodeValue, {
+            format: format,
+            width: format === 'CODE128' ? config.width * 0.8 : config.width,
+            height: config.height,
+            displayValue: true,
+            fontSize: config.fontSize,
+            textAlign: 'center',
+            textPosition: 'bottom',
+            textMargin: 2,
+            fontOptions: 'bold',
+            font: 'monospace',
+            background: '#ffffff',
+            lineColor: '#DC2626',
+            margin: 10,
+          });
+          console.log('Barcode generated successfully, canvas size:', canvasRef.current.width, 'x', canvasRef.current.height);
+        } catch (error) {
+          console.error('Error generating repair barcode:', error);
+        }
+      } else {
+        console.error('Canvas ref not available');
       }
-    }
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [barcodeValue, size, isOpen]);
 
   const handleDownload = () => {

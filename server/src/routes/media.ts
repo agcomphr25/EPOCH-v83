@@ -319,8 +319,11 @@ router.get('/file/:filename', async (req, res) => {
     return res.sendFile(localFilePath);
   }
   
-  // If not found locally, return 404 (cloud files are served via /objects/ route)
-  res.status(404).json({ error: 'File not found' });
+  // Local file not found - this is a legacy file that was lost due to ephemeral storage
+  // Return a clear error message explaining the file needs to be re-uploaded
+  res.status(404).json({ 
+    error: 'File not found - this file was uploaded before cloud storage was enabled and is no longer available. Please re-upload the file.' 
+  });
 });
 
 // Serve cloud storage files by object path

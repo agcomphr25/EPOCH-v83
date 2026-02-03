@@ -1599,11 +1599,6 @@ export default function GunsimthQueuePage() {
                       <div className="text-gray-600 dark:text-gray-400">
                         Issue: {item.issueCause || 'N/A'}
                       </div>
-                      {item.notes && (
-                        <div className="text-gray-500 dark:text-gray-500 text-xs mt-2 line-clamp-2">
-                          Notes: {item.notes}
-                        </div>
-                      )}
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                         <Badge
                           variant="outline"
@@ -1615,14 +1610,26 @@ export default function GunsimthQueuePage() {
                         >
                           {item.status}
                         </Badge>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setLocation('/nonconformance')}
-                          className="text-xs"
-                        >
-                          View Details
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {item.notes && (
+                            <div className="relative group">
+                              <FileText className="h-4 w-4 text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-normal max-w-xs z-50 shadow-lg">
+                                <div className="font-semibold mb-1">Notes:</div>
+                                <div>{item.notes}</div>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                              </div>
+                            </div>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation('/nonconformance')}
+                            className="text-xs"
+                          >
+                            View Details
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>

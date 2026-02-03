@@ -367,16 +367,23 @@ export async function generateSalesOrderPDF(
   }
 
   // Render name with "Attn:" prefix if company is present, otherwise just name
-  shipCurrentY -= 15;
-  const nameDisplay = orderData.customerCompany 
-    ? `Attn: ${orderData.customerName}` 
-    : orderData.customerName;
-  page.drawText(nameDisplay, {
-    x: shipToX,
-    y: shipCurrentY,
-    size: 10,
-    font: font,
-  });
+  // Normalize: strip any existing "Attn:" prefix (case-insensitive) to prevent duplicate "Attn: Attn:"
+  const normalizedName = orderData.customerName
+    ? orderData.customerName.replace(/^attn:\s*/i, '').trim()
+    : '';
+  
+  if (normalizedName) {
+    shipCurrentY -= 15;
+    const nameDisplay = orderData.customerCompany 
+      ? `Attn: ${normalizedName}` 
+      : normalizedName;
+    page.drawText(nameDisplay, {
+      x: shipToX,
+      y: shipCurrentY,
+      size: 10,
+      font: font,
+    });
+  }
 
   if (orderData.customerAddress) {
     shipCurrentY -= 13;

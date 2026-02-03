@@ -41,6 +41,8 @@ interface PaymentManagerProps {
   customerInfo?: CustomerInfo | null;
   onPaymentsChange?: (payments: Payment[]) => void;
   isInline?: boolean;
+  isOrderSaved?: boolean;
+  onSaveForPayment?: () => Promise<{ success: boolean; orderId?: string }>;
 }
 
 export default function PaymentManager({
@@ -49,12 +51,15 @@ export default function PaymentManager({
   customerInfo,
   onPaymentsChange,
   isInline = false,
+  isOrderSaved = true,
+  onSaveForPayment,
 }: PaymentManagerProps) {
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLivePaymentModal, setShowLivePaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
+  const [isSavingForPayment, setIsSavingForPayment] = useState(false);
 
   // Form state
   const [paymentType, setPaymentType] = useState('');
@@ -204,7 +209,7 @@ export default function PaymentManager({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!paymentType || !paymentAmount) {
       toast({
         title: 'Missing Information',
@@ -214,8 +219,39 @@ export default function PaymentManager({
       return;
     }
 
-    // If "live" payment type selected, close this modal and open the live payment modal
+    // If "live" payment type selected, handle card-before-save flow
     if (paymentType === 'live') {
+      // If order isn't saved yet and we have a save callback, save first
+      if (!isOrderSaved && onSaveForPayment) {
+        setIsSavingForPayment(true);
+        try {
+          const result = await onSaveForPayment();
+          if (!result.success) {
+            toast({
+              title: 'Unable to Process Payment',
+              description: 'Order must be saved before processing credit card. Please try again.',
+              variant: 'destructive',
+            });
+            setIsSavingForPayment(false);
+            return;
+          }
+          toast({
+            title: 'Order Saved',
+            description: 'Order saved for payment processing.',
+          });
+        } catch (error) {
+          console.error('Failed to save order for payment:', error);
+          toast({
+            title: 'Save Failed',
+            description: 'Could not save order for payment processing.',
+            variant: 'destructive',
+          });
+          setIsSavingForPayment(false);
+          return;
+        }
+        setIsSavingForPayment(false);
+      }
+      
       setShowPaymentModal(false);
       setShowLivePaymentModal(true);
       return;
@@ -460,15 +496,18 @@ export default function PaymentManager({
                 onClick={handleSubmit}
                 disabled={
                   createPaymentMutation.isPending ||
-                  updatePaymentMutation.isPending
+                  updatePaymentMutation.isPending ||
+                  isSavingForPayment
                 }
               >
-                {createPaymentMutation.isPending ||
-                updatePaymentMutation.isPending
-                  ? 'Saving...'
-                  : editingPayment
-                    ? 'Update Payment'
-                    : 'Add Payment'}
+                {isSavingForPayment
+                  ? 'Saving Order...'
+                  : createPaymentMutation.isPending ||
+                    updatePaymentMutation.isPending
+                    ? 'Saving...'
+                    : editingPayment
+                      ? 'Update Payment'
+                      : 'Add Payment'}
               </Button>
             </div>
           </DialogContent>
@@ -598,15 +637,18 @@ export default function PaymentManager({
                 onClick={handleSubmit}
                 disabled={
                   createPaymentMutation.isPending ||
-                  updatePaymentMutation.isPending
+                  updatePaymentMutation.isPending ||
+                  isSavingForPayment
                 }
               >
-                {createPaymentMutation.isPending ||
-                updatePaymentMutation.isPending
-                  ? 'Saving...'
-                  : editingPayment
-                    ? 'Update Payment'
-                    : 'Add Payment'}
+                {isSavingForPayment
+                  ? 'Saving Order...'
+                  : createPaymentMutation.isPending ||
+                    updatePaymentMutation.isPending
+                    ? 'Saving...'
+                    : editingPayment
+                      ? 'Update Payment'
+                      : 'Add Payment'}
               </Button>
             </div>
           </DialogContent>

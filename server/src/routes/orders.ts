@@ -1038,6 +1038,32 @@ router.post('/finalized', async (req: Request, res: Response) => {
   }
 });
 
+// Create PENDING_PAYMENT order for card-before-save flow
+// This creates a minimal order record that can receive payment before full finalization
+router.post('/pending-payment', async (req: Request, res: Response) => {
+  try {
+    const orderData = insertAllOrderSchema.parse(req.body);
+
+    console.log(`💳 Creating PENDING_PAYMENT order ${orderData.orderId} for card-before-save flow`);
+    
+    const order = await storage.createFinalizedOrder({
+      ...orderData,
+      status: 'PENDING_PAYMENT'
+    }, req.body.createdBy);
+    
+    res.status(201).json({
+      ...order,
+      message: 'Order created with PENDING_PAYMENT status - ready for credit card processing'
+    });
+  } catch (error) {
+    console.error('Create PENDING_PAYMENT order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create pending payment order' });
+  }
+});
+
 // Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
 router.post('/draft', async (req: Request, res: Response) => {
   try {

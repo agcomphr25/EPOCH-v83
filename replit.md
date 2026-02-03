@@ -27,7 +27,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Authentication**: Hybrid JWT + Session authentication with a 3-role (ADMIN, EMPLOYEE, OWNER) capability-based access control system.
 - **UI/UX**: Modern UI using ShadCN UI, Tailwind CSS, and Framer Motion.
 - **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
-- **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, and a path-based signature email architecture to prevent URL corruption.
+- **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, path-based signature email architecture to prevent URL corruption, and card-before-save flow (PENDING_PAYMENT status) allowing credit card processing before formal order finalization.
 - **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment.
 - **Quality Control**: Nonconformance Record System and Vendor Evaluation System with automated scoring.
 - **P2 Serialized Item Tracking**: Complete serialized item tracking for P2 purchase orders with customizable workflows, barcode scanning, traceability gating, Traveler Viewer, and Electronic Signature System.

@@ -2459,6 +2459,108 @@ export default function OrderEntry() {
     generateOrderId();
   };
 
+  // Handle save-for-payment callback (card-before-save flow)
+  const handleSaveForPayment = async (): Promise<{ success: boolean; orderId?: string }> => {
+    if (!customer) {
+      return { success: false };
+    }
+
+    try {
+      const completeFeatures = {
+        ...features,
+        miscItems: miscItems,
+      };
+
+      // Extract discount metadata
+      let discountType = null;
+      let discountValue = null;
+      let discountAppliesTo = null;
+
+      if (discountCode && discountCode !== 'none') {
+        if (discountCode === 'custom' || showCustomDiscount) {
+          discountType = customDiscountType;
+          discountValue = customDiscountValue;
+          discountAppliesTo = 'total_order';
+        } else {
+          const discountDetails = discountDetailsMap[discountCode];
+          if (discountDetails) {
+            if (discountDetails.percent) {
+              discountType = 'percent';
+              discountValue = discountDetails.percent;
+            } else if (discountDetails.fixedAmount) {
+              discountType = 'fixed';
+              discountValue = discountDetails.fixedAmount / 100;
+            }
+            discountAppliesTo = discountDetails.appliesTo || 'total_order';
+          }
+        }
+      }
+
+      const orderData = {
+        customerId: customer.id.toString(),
+        modelId,
+        features: completeFeatures,
+        orderDate: orderDate.toISOString(),
+        dueDate: dueDate.toISOString(),
+        orderId,
+        customerPO: hasCustomerPO ? customerPO : '',
+        fbOrderNumber,
+        agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
+        isFlattop,
+        flattopPriceOverride,
+        shipping,
+        status: 'PENDING_PAYMENT',
+        isCustomOrder: isCustomOrder ? 'yes' : 'no',
+        notes,
+        discountCode,
+        discountType,
+        discountValue,
+        discountAppliesTo,
+        customDiscountType,
+        customDiscountValue,
+        showCustomDiscount,
+        priceOverride,
+        miscItems: miscItems,
+        featureQuantities: otherOptionsQuantities,
+        isVerified,
+        isManualDueDate,
+        isManualOrderDate,
+        hasAltShipTo,
+        altShipToCustomerId: hasAltShipTo && altShipToMode === 'existing' ? altShipToCustomerId : null,
+        altShipToName: hasAltShipTo && altShipToMode === 'manual' ? altShipToName : null,
+        altShipToCompany: hasAltShipTo && altShipToMode === 'manual' ? altShipToCompany : null,
+        altShipToEmail: hasAltShipTo && altShipToMode === 'manual' ? altShipToEmail : null,
+        altShipToPhone: hasAltShipTo && altShipToMode === 'manual' ? altShipToPhone : null,
+        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null,
+        specialShippingInternational: specialShipping.international,
+        specialShippingNextDayAir: specialShipping.nextDayAir,
+        specialShippingBillToReceiver: specialShipping.billToReceiver,
+        qdSameSideConfirmed,
+        qdSameSideConfirmedBy,
+        qdSameSideConfirmedAt: qdSameSideConfirmedAt?.toISOString() || null,
+        createdBy: username || 'system',
+      };
+
+      const response = await apiRequest('/api/orders/pending-payment', {
+        method: 'POST',
+        body: JSON.stringify(orderData),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.orderId) {
+        // Mark as saved (now in edit mode)
+        setIsEditMode(true);
+        setEditingOrderId(response.orderId);
+        return { success: true, orderId: response.orderId };
+      }
+
+      return { success: false };
+    } catch (error) {
+      console.error('Failed to save order for payment:', error);
+      return { success: false };
+    }
+  };
+
   const selectedModel = modelOptions.find((m) => m.id === modelId);
 
   return (
@@ -5964,6 +6066,8 @@ export default function OrderEntry() {
                     customerInfo={customer}
                     onPaymentsChange={setOrderPayments}
                     isInline={true}
+                    isOrderSaved={isEditMode}
+                    onSaveForPayment={handleSaveForPayment}
                   />
                 </div>
               )}

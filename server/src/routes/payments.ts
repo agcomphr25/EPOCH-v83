@@ -82,7 +82,8 @@ router.post('/credit-card', paymentRateLimiter, async (req, res) => {
       });
     }
 
-    // Verify order exists (all orders including drafts are in allOrders table)
+    // Verify order exists (all orders including drafts and PENDING_PAYMENT are in allOrders table)
+    // PENDING_PAYMENT orders are allowed for card-before-save flow
     const order = await db
       .select()
       .from(allOrders)
@@ -92,6 +93,10 @@ router.post('/credit-card', paymentRateLimiter, async (req, res) => {
     if (order.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    const orderStatus = order[0].status;
+    const isPendingPayment = orderStatus === 'PENDING_PAYMENT';
+    console.log(`💳 Order ${paymentData.orderId} status: ${orderStatus}, isPendingPayment: ${isPendingPayment}`);
 
     // Process payment via Accept.Blue
     const result = await chargeCard({
@@ -137,6 +142,7 @@ router.post('/credit-card', paymentRateLimiter, async (req, res) => {
       cvvResult: result.cvvResult,
       rawResponse: result.rawResponse,
       isTest: isTestMode,
+      wasPendingPayment: isPendingPayment,
     });
 
     res.json(processedResult);
@@ -169,6 +175,7 @@ async function processTransactionResult(data: {
   cvvResult?: string;
   rawResponse: any;
   isTest: boolean;
+  wasPendingPayment?: boolean;
 }) {
   const isApproved = data.responseCode === '1';
   const status = isApproved ? 'completed' : 'failed';
@@ -229,16 +236,25 @@ async function processTransactionResult(data: {
 
   // If payment was approved, update order status
   if (isApproved) {
+    // Build update object - always set payment fields
+    const updateFields: Record<string, any> = {
+      isPaid: true,
+      paymentType: 'credit_card',
+      paymentAmount: data.amount,
+      paymentDate: new Date(),
+      paymentTimestamp: new Date(),
+    };
+
+    // If order was PENDING_PAYMENT (card-before-save flow), finalize it
+    if (data.wasPendingPayment) {
+      updateFields.status = 'FINALIZED';
+      console.log(`✅ Finalizing PENDING_PAYMENT order ${data.orderId} after successful payment`);
+    }
+
     // Update order payment status (all orders including drafts are in allOrders table)
     await db
       .update(allOrders)
-      .set({
-        isPaid: true,
-        paymentType: 'credit_card',
-        paymentAmount: data.amount,
-        paymentDate: new Date(),
-        paymentTimestamp: new Date(),
-      })
+      .set(updateFields)
       .where(eq(allOrders.orderId, data.orderId));
   }
 
@@ -252,6 +268,7 @@ async function processTransactionResult(data: {
     cvvResult: data.cvvResult,
     payment,
     transaction,
+    orderFinalized: isApproved && data.wasPendingPayment,
   };
 }
 

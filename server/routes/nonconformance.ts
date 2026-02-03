@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 
-import { db } from '../db';
+import { db, pool } from '../db';
 import {
   nonconformanceRecords,
   insertNonconformanceRecordSchema,
@@ -27,64 +27,62 @@ router.get('/', async (req, res) => {
       offset = '0',
     } = req.query;
 
-    const baseQuery = db.select().from(nonconformanceRecords);
-    const conditions = [];
+    // Build WHERE conditions
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
 
-    // Date range filtering
     if (dateFrom) {
-      conditions.push(
-        gte(nonconformanceRecords.dispositionDate, dateFrom as string)
-      );
+      whereClauses.push(`disposition_date >= $${paramIndex++}`);
+      params.push(dateFrom);
     }
     if (dateTo) {
-      conditions.push(
-        lte(nonconformanceRecords.dispositionDate, dateTo as string)
-      );
+      whereClauses.push(`disposition_date <= $${paramIndex++}`);
+      params.push(dateTo);
     }
-
-    // Field-specific filtering
     if (stockModel) {
-      conditions.push(
-        ilike(nonconformanceRecords.stockModel, `%${stockModel}%`)
-      );
+      whereClauses.push(`stock_model ILIKE $${paramIndex++}`);
+      params.push(`%${stockModel}%`);
     }
     if (issueCause) {
-      conditions.push(
-        eq(nonconformanceRecords.issueCause, issueCause as string)
-      );
+      whereClauses.push(`issue_cause = $${paramIndex++}`);
+      params.push(issueCause);
     }
     if (status) {
-      conditions.push(eq(nonconformanceRecords.status, status as string));
+      whereClauses.push(`status = $${paramIndex++}`);
+      params.push(status);
     }
-
-    // Search across multiple fields
     if (search) {
-      const searchConditions = [
-        ilike(nonconformanceRecords.orderId, `%${search}%`),
-        ilike(nonconformanceRecords.serialNumber, `%${search}%`),
-        ilike(nonconformanceRecords.customerName, `%${search}%`),
-        ilike(nonconformanceRecords.poNumber, `%${search}%`),
-        ilike(nonconformanceRecords.stockModel, `%${search}%`),
-      ].filter(Boolean);
-
-      if (searchConditions.length > 0) {
-        conditions.push(or(...searchConditions));
-      }
+      whereClauses.push(`(order_id ILIKE $${paramIndex} OR serial_number ILIKE $${paramIndex} OR customer_name ILIKE $${paramIndex} OR po_number ILIKE $${paramIndex} OR stock_model ILIKE $${paramIndex})`);
+      params.push(`%${search}%`);
+      paramIndex++;
     }
 
-    // Apply conditions and build final query
-    let query = baseQuery;
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    
-    const result = await query
-      .orderBy(desc(nonconformanceRecords.createdAt))
-      .limit(parseInt(limit as string))
-      .offset(parseInt(offset as string));
+    // Use pg Pool directly to avoid Neon HTTP driver issues with non-Neon databases
+    const queryText = `
+      SELECT 
+        id, rma_number as "rmaNumber", order_id as "orderId", serial_number as "serialNumber",
+        customer_name as "customerName", po_number as "poNumber", stock_model as "stockModel",
+        quantity, issue_cause as "issueCause", manufacturer_defect as "manufacturerDefect",
+        disposition, auth_person as "authorization", disposition_date as "dispositionDate",
+        date_received as "dateReceived", notes, status, resolved_at as "resolvedAt",
+        repair_department as "repairDepartment", repair_notes as "repairNotes",
+        has_customer_parts_to_return as "hasCustomerPartsToReturn",
+        added_to_rts as "addedToRts", rts_added_at as "rtsAddedAt",
+        use_order_address as "useOrderAddress", repair_address as "repairAddress",
+        shipping_status as "shippingStatus", tracking_number as "trackingNumber",
+        shipping_carrier as "shippingCarrier", shipped_date as "shippedDate",
+        customer_notified as "customerNotified", created_at as "createdAt", updated_at as "updatedAt"
+      FROM nonconformance_records
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
+    `;
 
-    res.json(result);
+    const result = await pool.query(queryText, params);
+    res.json(result || []);
   } catch (error) {
     console.error('Error fetching nonconformance records:', error);
     res.status(500).json({ error: 'Failed to fetch records' });

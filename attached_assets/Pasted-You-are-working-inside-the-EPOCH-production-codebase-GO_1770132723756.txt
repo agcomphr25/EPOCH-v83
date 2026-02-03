@@ -1,0 +1,112 @@
+You are working inside the EPOCH production codebase.
+
+GOAL:
+Upgrade the Signature Authorization step (Onboarding Step 1)
+to support DRAWN signatures on tablets, while retaining typed signatures.
+
+This is an enhancement, not a redesign.
+
+---
+
+CURRENT STATE (CONFIRMED):
+
+• SignatureAuthorizationStep.tsx only allows typed names
+• It stores signature_auth_data as JSON:
+  { signedName, acknowledged, signedAt }
+• Signature canvas and draw/type logic already exist elsewhere
+• No device detection currently runs in this step
+
+---
+
+REQUIRED CHANGES (SCOPED):
+
+1) SIGNATURE AUTHORIZATION UI
+
+In SignatureAuthorizationStep.tsx:
+
+• Add signature mode selection:
+  - Draw Signature
+  - Type Full Legal Name
+
+• Default behavior:
+  - If touch device (navigator.maxTouchPoints > 0): default to DRAW
+  - Otherwise default to TYPE
+
+• If DRAW selected:
+  - Render signature canvas (reuse react-signature-canvas or the same canvas logic used in DocumentSigningStep)
+  - Support finger + stylus
+  - Provide Clear / Redo button
+  - Disable page scroll while signing
+
+• If TYPE selected:
+  - Keep existing text input exactly as-is
+
+---
+
+2) VALIDATION RULES
+
+To enable "Sign Authorization":
+
+• Acknowledgment checkbox MUST be checked
+• EITHER:
+  - typed name present
+  - OR drawn signature present
+• Do NOT require both
+
+---
+
+3) DATA MODEL UPDATE (MINIMAL)
+
+Extend signature_auth_data JSON to support drawn signatures:
+
+Example:
+{
+  acknowledged: true,
+  signedAt: timestamp,
+  signedName?: string,
+  signatureImage?: base64_png_string
+}
+
+• Do NOT remove existing fields
+• Maintain backward compatibility
+
+---
+
+4) BACKEND ROUTE UPDATE
+
+Update the existing signature authorization endpoint to:
+
+• Accept optional signatureImage
+• Preserve existing typed-only behavior
+• Store image data only when present
+• Continue recording timestamp and IP
+
+No new routes.
+
+---
+
+5) UX REQUIREMENTS (TABLET-FIRST)
+
+• Large, clear signature canvas
+• High contrast ink
+• No modals
+• Calm, professional appearance
+• Button text remains: "Sign Authorization"
+
+---
+
+CONSTRAINTS:
+
+• Reuse existing signature libraries/components
+• No schema migrations beyond JSON shape change
+• No changes to document signing flow
+• No changes to finalization logic
+
+---
+
+DELIVERABLES:
+
+• Updated SignatureAuthorizationStep.tsx
+• Backend route accepts image-based signatures
+• Tablet users can draw, desktop users can type
+• Existing sessions remain valid

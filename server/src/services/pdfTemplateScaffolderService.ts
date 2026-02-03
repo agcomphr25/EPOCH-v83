@@ -346,19 +346,25 @@ export async function scaffoldFromMediaItem(
   
   let pdfBuffer: Buffer;
   
+  // Normalize storagePath - handle both /objects/ and objects/ prefixes
+  const storagePath = mediaItem.storagePath;
+  const normalizedCloudPath = storagePath.startsWith('objects/') 
+    ? `/${storagePath}` 
+    : storagePath;
+  
   // Try local file first (for development/legacy uploads)
-  const localPath = path.join(process.cwd(), mediaItem.storagePath);
+  const localPath = path.join(process.cwd(), storagePath);
   if (fs.existsSync(localPath)) {
     console.log('[Scaffold] Reading PDF from local path:', localPath);
     pdfBuffer = fs.readFileSync(localPath);
-  } else if (mediaItem.storagePath.startsWith('/objects/')) {
+  } else if (normalizedCloudPath.startsWith('/objects/')) {
     // Try object storage for cloud-stored files
-    console.log('[Scaffold] Reading PDF from object storage:', mediaItem.storagePath);
+    console.log('[Scaffold] Reading PDF from object storage:', normalizedCloudPath);
     const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
     const objectStorage = new ObjectStorageService();
-    pdfBuffer = await objectStorage.downloadAsBuffer(mediaItem.storagePath);
+    pdfBuffer = await objectStorage.downloadAsBuffer(normalizedCloudPath);
   } else {
-    throw new Error(`PDF file not found: ${mediaItem.storagePath}`);
+    throw new Error(`PDF file not found: ${storagePath}`);
   }
   
   if (!pdfBuffer || pdfBuffer.length === 0) {

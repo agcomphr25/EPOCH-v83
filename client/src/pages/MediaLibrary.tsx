@@ -110,12 +110,16 @@ function formatFileSize(bytes: number | null) {
 function getMediaUrl(storagePath: string | null): string {
   if (!storagePath) return '';
   
-  // Cloud storage paths start with /objects/
+  // Cloud storage paths start with /objects/ (or objects/ without leading slash)
   if (storagePath.startsWith('/objects/')) {
     return storagePath;
   }
+  if (storagePath.startsWith('objects/')) {
+    // Normalize to include leading slash for proper routing
+    return `/${storagePath}`;
+  }
   
-  // Legacy local storage paths
+  // Legacy local storage paths - serve through media API
   const filename = storagePath.split('/').pop();
   return `/api/media/file/${filename}`;
 }
@@ -240,13 +244,17 @@ export default function MediaLibrary() {
       if (includeArchived) params.set('includeArchived', 'true');
       if (currentFolderId) params.set('folderId', currentFolderId);
       const res = await fetch(`/api/media?${params}`, { credentials: 'include' });
-      return res.json();
+      const data = await res.json();
+      // Ensure we always return an array even if API returns an error object
+      return Array.isArray(data) ? data : [];
     },
   });
 
+  // Safely filter items - ensure mediaItems is always an array
+  const safeMediaItems = Array.isArray(mediaItems) ? mediaItems : [];
   const filteredItems = currentFolderId 
-    ? mediaItems.filter(item => item.folderId === currentFolderId)
-    : mediaItems.filter(item => !item.folderId);
+    ? safeMediaItems.filter(item => item.folderId === currentFolderId)
+    : safeMediaItems.filter(item => !item.folderId);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; notes?: string; category?: string; isArchived?: boolean }) => {

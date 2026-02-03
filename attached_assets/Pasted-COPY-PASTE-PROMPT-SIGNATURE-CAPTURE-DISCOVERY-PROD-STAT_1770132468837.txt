@@ -1,0 +1,88 @@
+COPY-PASTE PROMPT — SIGNATURE CAPTURE DISCOVERY (PROD STATE)
+You are working inside the EPOCH production codebase.
+
+STOP building features.
+
+GOAL:
+Explain the CURRENT signature capture setup in EPOCH,
+specifically why users can only TYPE their name
+and cannot DRAW a signature on tablets.
+
+This is a DISCOVERY task only.
+
+---
+
+TASKS:
+
+1) INVENTORY SIGNATURE LOCATIONS
+
+List ALL places where signatures are captured, including:
+• Digital Signature Authorization step (Step 1 of onboarding)
+• Fillable PDF document signing
+• Any other signature or consent flows
+
+For each, explain:
+• How the signature is captured (typed vs drawn)
+• What UI component is used
+• What data is stored
+
+---
+
+2) SIGNATURE AUTHORIZATION STEP ANALYSIS
+
+Explain in detail:
+• What component renders the Signature Authorization step
+• Whether it uses:
+  - a text input
+  - a signature canvas
+  - or a custom consent form
+• Why only typed names are currently allowed
+
+Answer explicitly:
+• Is the signature canvas component reused here?
+• If not, why not?
+
+---
+
+3) DEVICE / INPUT DETECTION
+
+Explain:
+• Whether EPOCH currently detects device type (tablet vs desktop)
+• Whether signature mode is hard-coded
+• Whether touch input is disabled, ignored, or never initialized
+
+---
+
+4) DATA MODEL REVIEW
+
+Explain:
+• How typed signatures are stored
+• Whether the schema already supports:
+  - base64 signature images
+  - timestamps
+  - IP addresses
+• Whether drawn signatures are already supported elsewhere
+
+---
+
+5) CHANGE SURFACE (IMPORTANT)
+
+Identify:
+• The EXACT files/components that would need to change to:
+  - allow drawn signatures
+  - optionally default to draw on tablets
+  - keep typed signature as fallback
+
+Do NOT implement yet.
+Just list the files and what each controls.
+
+---
+
+RULES:
+• Do NOT propose new features yet
+• Do NOT refactor unrelated code
+• Do NOT assume intent — describe reality
+• Use plain language first, code references second
+
+END with a short summary:
+“Why typing is the only option today, and what must change to support drawing.”

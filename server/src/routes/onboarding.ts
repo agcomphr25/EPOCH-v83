@@ -1281,10 +1281,13 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
 router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { signedName, acknowledged, signedAt } = req.body;
+    const { signedName, signatureImage, acknowledged, signedAt } = req.body;
     
-    if (!signedName || signedName.trim().length < 2) {
-      return res.status(400).json({ error: 'Signed name is required' });
+    const hasTypedSignature = signedName && signedName.trim().length >= 2;
+    const hasDrawnSignature = signatureImage && signatureImage.startsWith('data:image/');
+    
+    if (!hasTypedSignature && !hasDrawnSignature) {
+      return res.status(400).json({ error: 'Either a typed name or drawn signature is required' });
     }
     
     if (!acknowledged) {
@@ -1305,11 +1308,21 @@ router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response)
       return res.status(400).json({ error: 'Cannot modify completed session' });
     }
     
-    const signatureAuthData = {
-      signedName: signedName.trim(),
+    const signatureAuthData: Record<string, any> = {
       acknowledged: true,
       signedAt: signedAt || new Date().toISOString(),
     };
+    
+    if (hasTypedSignature) {
+      signatureAuthData.signedName = signedName.trim();
+    }
+    
+    if (hasDrawnSignature) {
+      signatureAuthData.signatureImage = signatureImage;
+    }
+    
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    signatureAuthData.signedFromIp = Array.isArray(clientIp) ? clientIp[0] : clientIp;
     
     await pool.query(`
       UPDATE onboarding_sessions
@@ -1328,7 +1341,10 @@ router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response)
           id: (req as any).user?.id,
           username: (req as any).user?.username || 'system',
         },
-        meta: { signedName: signedName.trim() },
+        meta: { 
+          signedName: hasTypedSignature ? signedName.trim() : undefined,
+          signatureType: hasDrawnSignature ? 'drawn' : 'typed',
+        },
       });
     } catch (auditError) {
       console.warn('Audit logging failed:', auditError);
@@ -2363,8 +2379,13 @@ router.get('/sessions/:id/bundle', async (req: Request, res: Response) => {
       });
     }
     
-    const downloadUrl = session.storagePath?.startsWith('/objects/') 
-      ? session.storagePath 
+    // Normalize objects/ prefix to /objects/
+    const normalizedStoragePath = session.storagePath?.startsWith('objects/') 
+      ? `/${session.storagePath}` 
+      : session.storagePath;
+    
+    const downloadUrl = normalizedStoragePath?.startsWith('/objects/') 
+      ? normalizedStoragePath 
       : `/api/media/download/${session.bundleMediaItemId}`;
     
     res.json({
@@ -2512,9 +2533,14 @@ router.post('/sessions/:id/email-bundle', async (req: Request, res: Response) =>
     // 2. FETCH BUNDLE PDF
     let pdfBuffer: Buffer;
     try {
-      if (session.storagePath?.startsWith('/objects/')) {
+      // Normalize objects/ prefix to /objects/
+      const normalizedBundlePath = session.storagePath?.startsWith('objects/') 
+        ? `/${session.storagePath}` 
+        : session.storagePath;
+      
+      if (normalizedBundlePath?.startsWith('/objects/')) {
         // Download from object storage
-        const objectFile = await objectStorageService.getObjectEntityFile(session.storagePath);
+        const objectFile = await objectStorageService.getObjectEntityFile(normalizedBundlePath);
         const [buffer] = await objectFile.download();
         pdfBuffer = buffer;
       } else if (session.storagePath?.startsWith('uploads/')) {

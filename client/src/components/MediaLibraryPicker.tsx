@@ -63,9 +63,15 @@ function formatFileSize(bytes: number | null) {
 
 function getMediaUrl(storagePath: string | null): string {
   if (!storagePath) return '';
+  // Cloud storage paths start with /objects/ (or objects/ without leading slash)
   if (storagePath.startsWith('/objects/')) {
     return storagePath;
   }
+  if (storagePath.startsWith('objects/')) {
+    // Normalize to include leading slash for proper routing
+    return `/${storagePath}`;
+  }
+  // Legacy local storage paths - serve through media API
   const filename = storagePath.split('/').pop();
   return `/api/media/file/${filename}`;
 }

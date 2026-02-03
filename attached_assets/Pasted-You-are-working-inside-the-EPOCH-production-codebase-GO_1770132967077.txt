@@ -1,0 +1,117 @@
+You are working inside the EPOCH production codebase.
+
+GOAL:
+Analyze and fix why scaffolded Fillable PDF templates
+fail to open from the Media Library with:
+{"error":"File not found"}
+
+This must be repaired before onboarding can rely on these documents.
+
+---
+
+OBSERVED BEHAVIOR:
+
+• Media Library shows the document metadata correctly
+• Clicking “Open” on certain PDFs returns:
+  {"error":"File not found"}
+• These PDFs were scaffolded into Fillable PDF Templates
+• Download may work, but inline Open fails
+• Error appears to come from the file-serving endpoint, not the UI
+
+---
+
+TASK 1 — TRACE FILE SERVING PATH
+
+Identify the full path from UI → backend → storage when clicking “Open”:
+
+• Which frontend component triggers the Open action?
+• Which API route is called?
+• Which controller/service resolves the file path?
+• Which storage system is used (Object Storage, local FS, signed URL)?
+
+List exact files involved (frontend + backend).
+
+---
+
+TASK 2 — MEDIA LIBRARY vs STORAGE TRUTH
+
+Compare the following for the failing document:
+
+• mediaLibrary table record:
+  - id
+  - filename
+  - storage_path / object_key / url (whatever is stored)
+• Actual object storage contents:
+  - Does the file exist?
+  - Is the path/key correct?
+  - Case sensitivity issues?
+  - Folder mismatch?
+
+Answer explicitly:
+• Is the DB pointing to a file that does not exist?
+• Or is the file stored but not where the server expects?
+
+---
+
+TASK 3 — FILLABLE PDF SCAFFOLDING ANALYSIS
+
+Analyze what happens when a Fillable PDF Template is scaffolded from Media:
+
+• Does scaffolding:
+  - copy the file?
+  - move the file?
+  - reference the original media item?
+• Does it modify storage paths?
+• Does it create a new object without updating mediaLibrary?
+
+Identify:
+• Where the break occurs between scaffold and open
+
+---
+
+TASK 4 — ERROR SOURCE
+
+Explain where this error is thrown:
+
+• Which route returns {"error":"File not found"}
+• Under what condition is this thrown?
+• Is it a missing file, bad path, or permission issue?
+
+Include line numbers if possible.
+
+---
+
+TASK 5 — REPAIR STRATEGY (MINIMAL)
+
+Propose the smallest safe fix that ensures:
+
+• Media Library “Open” works for:
+  - normal PDFs
+  - fillable PDF–scaffolded documents
+• Fillable PDF Templates still reference the correct source file
+• No existing signed documents are broken
+
+Possible fixes may include:
+• Syncing storage path on scaffold
+• Fallback to original media file if template file missing
+• Repairing object_key generation
+• Normalizing file paths
+
+Do NOT refactor unrelated media code.
+
+---
+
+CONSTRAINTS:
+
+• Preserve existing media records
+• Preserve signed PDFs
+• Do NOT require re-uploading files
+• Do NOT break onboarding document selection
+
+---
+
+FINAL OUTPUT:
+
+1) Root cause explanation (plain English)
+2) Exact code locations to change
+3) Patch-level fix recommendation

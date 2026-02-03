@@ -32,8 +32,9 @@ export function RepairBarcodeDisplay({
   size = 'medium',
   showTriggerButton = true,
 }: RepairBarcodeDisplayProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [barcodeRendered, setBarcodeRendered] = useState(false);
 
   const barcodeValue = rmaNumber || orderId || serialNumber || '';
 
@@ -49,18 +50,21 @@ export function RepairBarcodeDisplay({
   };
 
   useEffect(() => {
-    if (!barcodeValue || !isOpen) return;
+    if (!barcodeValue || !isOpen) {
+      setBarcodeRendered(false);
+      return;
+    }
     
-    // Small delay to ensure canvas is in DOM after dialog animation
+    // Small delay to ensure SVG is in DOM after dialog animation
     const timer = setTimeout(() => {
-      if (canvasRef.current) {
+      if (svgRef.current) {
         const config = getSizeConfig();
         const format = getBarcodeFormat(barcodeValue);
         
-        console.log('Generating repair barcode:', { barcodeValue, format });
+        console.log('Generating repair barcode (SVG):', { barcodeValue, format });
 
         try {
-          JsBarcode(canvasRef.current, barcodeValue, {
+          JsBarcode(svgRef.current, barcodeValue, {
             format: format,
             width: format === 'CODE128' ? config.width * 0.8 : config.width,
             height: config.height,
@@ -75,163 +79,145 @@ export function RepairBarcodeDisplay({
             lineColor: '#DC2626',
             margin: 10,
           });
-          console.log('Barcode generated successfully, canvas size:', canvasRef.current.width, 'x', canvasRef.current.height);
+          setBarcodeRendered(true);
+          console.log('Barcode SVG generated successfully');
         } catch (error) {
           console.error('Error generating repair barcode:', error);
+          setBarcodeRendered(false);
         }
       } else {
-        console.error('Canvas ref not available');
+        console.error('SVG ref not available');
       }
-    }, 100);
+    }, 150);
     
     return () => clearTimeout(timer);
   }, [barcodeValue, size, isOpen]);
 
   const handleDownload = () => {
-    if (canvasRef.current) {
+    if (svgRef.current && barcodeRendered) {
+      const svgData = new XMLSerializer().serializeToString(svgRef.current);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
       const link = document.createElement('a');
-      link.download = `repair-barcode-${barcodeValue}.png`;
-      link.href = canvasRef.current.toDataURL();
+      link.download = `repair-barcode-${barcodeValue}.svg`;
+      link.href = url;
       link.click();
+      URL.revokeObjectURL(url);
     }
   };
 
   const handlePrint = () => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      
-      // Check if canvas has content (width > 0 means barcode was rendered)
-      if (canvas.width === 0 || canvas.height === 0) {
-        console.error('Canvas not rendered yet');
-        return;
-      }
-      
-      const imgDataUrl = canvas.toDataURL('image/png');
-      
-      // Verify we got valid image data (not just empty canvas)
-      if (!imgDataUrl || imgDataUrl === 'data:,') {
-        console.error('Failed to get canvas image data');
-        return;
-      }
-      
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const currentDate = new Date().toLocaleDateString('en-US', {
-          month: '2-digit',
-          day: '2-digit',
-          year: 'numeric',
-        });
+    if (!svgRef.current || !barcodeRendered) {
+      console.error('Barcode not rendered yet');
+      return;
+    }
+    
+    // Get SVG content as string
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Repair Tracking Label - ${barcodeValue}</title>
+            <style>
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+              }
 
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Repair Tracking Label - ${barcodeValue}</title>
-              <style>
-                body {
-                  margin: 0;
-                  padding: 0;
-                  font-family: Arial, sans-serif;
-                }
+              .repair-label {
+                width: 2.625in;
+                height: 1in;
+                border: 2px solid #DC2626;
+                margin: 0;
+                padding: 0.05in;
+                display: inline-block;
+                vertical-align: top;
+                box-sizing: border-box;
+                page-break-inside: avoid;
+                background: white;
+              }
 
-                .repair-label {
-                  width: 2.625in;
-                  height: 1in;
-                  border: 2px solid #DC2626;
-                  margin: 0;
-                  padding: 0.05in;
-                  display: inline-block;
-                  vertical-align: top;
-                  box-sizing: border-box;
-                  page-break-inside: avoid;
-                  background: white;
-                }
+              .label-content {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                text-align: center;
+              }
 
-                .label-content {
-                  height: 100%;
-                  display: flex;
-                  flex-direction: column;
-                  justify-content: space-between;
-                  text-align: center;
-                }
+              .repair-header {
+                font-size: 7pt;
+                font-weight: bold;
+                color: #DC2626;
+                margin-bottom: 1px;
+                text-transform: uppercase;
+              }
 
-                .repair-header {
-                  font-size: 7pt;
-                  font-weight: bold;
-                  color: #DC2626;
-                  margin-bottom: 1px;
-                  text-transform: uppercase;
-                }
+              .barcode-container {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              }
 
-                .barcode-img {
-                  max-width: 100%;
-                  max-height: 0.5in;
-                  height: auto;
-                  margin: 2px 0;
-                }
+              .barcode-container svg {
+                max-width: 100%;
+                max-height: 0.5in;
+                height: auto;
+              }
 
-                .repair-details {
-                  font-size: 6pt;
-                  line-height: 1.1;
-                  color: #333;
-                }
+              .repair-details {
+                font-size: 6pt;
+                line-height: 1.1;
+                color: #333;
+              }
 
-                .repair-dept {
-                  font-size: 6pt;
-                  font-weight: bold;
-                  color: #DC2626;
-                  background: #FEE2E2;
-                  padding: 1px 3px;
-                  margin-top: 1px;
-                }
+              .repair-dept {
+                font-size: 6pt;
+                font-weight: bold;
+                color: #DC2626;
+                background: #FEE2E2;
+                padding: 1px 3px;
+                margin-top: 1px;
+              }
 
-                .date-info {
-                  font-size: 5pt;
-                  color: #666;
-                  margin-top: 1px;
-                }
+              @media print {
+                body { margin: 0; }
+                .repair-label { margin: 0; }
+              }
 
-                @media print {
-                  body { margin: 0; }
-                  .repair-label { margin: 0; }
-                }
-
-                .labels-container {
-                  display: flex;
-                  flex-wrap: wrap;
-                  justify-content: flex-start;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="labels-container">
-                <div class="repair-label">
-                  <div class="label-content">
-                    <div class="repair-header">NONCONFORMING - REPAIR</div>
-                    <img id="barcodeImg" src="${imgDataUrl}" alt="Repair Barcode ${barcodeValue}" class="barcode-img" />
-                    <div class="repair-details">
-                      ${rmaNumber ? `<strong>RMA:</strong> ${rmaNumber}` : ''}
-                      ${orderId && orderId !== rmaNumber ? ` | <strong>Order:</strong> ${orderId}` : ''}
-                    </div>
-                    ${repairDepartment ? `<div class="repair-dept">${repairDepartment}</div>` : ''}
+              .labels-container {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="labels-container">
+              <div class="repair-label">
+                <div class="label-content">
+                  <div class="repair-header">NONCONFORMING - REPAIR</div>
+                  <div class="barcode-container">${svgData}</div>
+                  <div class="repair-details">
+                    ${rmaNumber ? `<strong>RMA:</strong> ${rmaNumber}` : ''}
+                    ${orderId && orderId !== rmaNumber ? ` | <strong>Order:</strong> ${orderId}` : ''}
                   </div>
+                  ${repairDepartment ? `<div class="repair-dept">${repairDepartment}</div>` : ''}
                 </div>
               </div>
-              <script>
-                // Wait for image to load before printing
-                var img = document.getElementById('barcodeImg');
-                if (img.complete) {
-                  setTimeout(function() { window.print(); window.close(); }, 100);
-                } else {
-                  img.onload = function() { setTimeout(function() { window.print(); window.close(); }, 100); };
-                  img.onerror = function() { alert('Failed to load barcode image'); };
-                }
-              </script>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-      }
+            </div>
+            <script>
+              setTimeout(function() { window.print(); window.close(); }, 200);
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
     }
   };
 
@@ -248,8 +234,8 @@ export function RepairBarcodeDisplay({
         </DialogTitle>
       </DialogHeader>
       <div className="flex flex-col items-center space-y-4 py-4">
-        <div className="bg-white p-4 rounded border-2 border-red-200">
-          <canvas ref={canvasRef} />
+        <div className="bg-white p-4 rounded border-2 border-red-200 min-w-[200px] min-h-[80px] flex items-center justify-center">
+          <svg ref={svgRef} />
         </div>
 
         <div className="text-center text-sm">

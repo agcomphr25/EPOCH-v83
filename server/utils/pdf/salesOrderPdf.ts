@@ -323,10 +323,33 @@ export async function generateSalesOrderPDF(
     font: font,
   });
 
-  // Customer Information Section
-  currentY -= 130;
+  // Customer Information Section - Dynamic height based on Ship-To content
+  // Calculate number of Ship-To lines to determine box height
+  const LINE_HEIGHT = 14; // Consistent spacing between lines
+  const HEADER_HEIGHT = 22; // "CUSTOMER INFORMATION" header + padding
+  const SHIP_TO_LABEL_HEIGHT = 16; // "SHIP TO:" label
+  const BOTTOM_PADDING = 12;
+  
+  // Count Ship-To lines based on available data
+  let shipToLineCount = 0;
+  if (orderData.customerCompany) shipToLineCount++;
+  const normalizedName = orderData.customerName
+    ? orderData.customerName.replace(/^attn:\s*/i, '').trim()
+    : '';
+  if (normalizedName) shipToLineCount++;
+  if (orderData.customerAddress) {
+    shipToLineCount++; // Street
+    if (orderData.customerAddress.street2) shipToLineCount++;
+    shipToLineCount++; // City/State/ZIP
+  }
+  if (orderData.customerEmail || orderData.customerPhone) shipToLineCount++;
+  
+  // Calculate dynamic box height: header + label + lines + padding
+  const customerBoxHeight = HEADER_HEIGHT + SHIP_TO_LABEL_HEIGHT + (shipToLineCount * LINE_HEIGHT) + BOTTOM_PADDING;
+  
+  // Move section up to use available whitespace (reduced from 130 to 115)
+  currentY -= 115;
   const customerBoxY = currentY;
-  const customerBoxHeight = 100;
 
   page.drawRectangle({
     x: margin,
@@ -344,9 +367,9 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  // SHIP TO - reduced top spacing from -45 to -35
+  // SHIP TO - consistent spacing from header
   const shipToX = margin + 8;
-  let shipCurrentY = customerBoxY + customerBoxHeight - 35;
+  let shipCurrentY = customerBoxY + customerBoxHeight - HEADER_HEIGHT - 12;
 
   page.drawText('SHIP TO:', {
     x: shipToX,
@@ -357,7 +380,7 @@ export async function generateSalesOrderPDF(
 
   // Render company name if present (above the attention/name line)
   if (orderData.customerCompany) {
-    shipCurrentY -= 15;
+    shipCurrentY -= LINE_HEIGHT;
     page.drawText(orderData.customerCompany, {
       x: shipToX,
       y: shipCurrentY,
@@ -368,12 +391,8 @@ export async function generateSalesOrderPDF(
 
   // Render name with "Attn:" prefix if company is present, otherwise just name
   // Normalize: strip any existing "Attn:" prefix (case-insensitive) to prevent duplicate "Attn: Attn:"
-  const normalizedName = orderData.customerName
-    ? orderData.customerName.replace(/^attn:\s*/i, '').trim()
-    : '';
-  
   if (normalizedName) {
-    shipCurrentY -= 15;
+    shipCurrentY -= LINE_HEIGHT;
     const nameDisplay = orderData.customerCompany 
       ? `Attn: ${normalizedName}` 
       : normalizedName;
@@ -386,31 +405,31 @@ export async function generateSalesOrderPDF(
   }
 
   if (orderData.customerAddress) {
-    shipCurrentY -= 13;
+    shipCurrentY -= LINE_HEIGHT;
     page.drawText(orderData.customerAddress.street, {
       x: shipToX,
       y: shipCurrentY,
-      size: 8,
+      size: 9,
       font: font,
     });
 
     if (orderData.customerAddress.street2) {
-      shipCurrentY -= 11;
+      shipCurrentY -= LINE_HEIGHT;
       page.drawText(orderData.customerAddress.street2, {
         x: shipToX,
         y: shipCurrentY,
-        size: 8,
+        size: 9,
         font: font,
       });
     }
 
-    shipCurrentY -= 11;
+    shipCurrentY -= LINE_HEIGHT;
     page.drawText(
       `${orderData.customerAddress.city}, ${orderData.customerAddress.state} ${orderData.customerAddress.zipCode}`,
       {
         x: shipToX,
         y: shipCurrentY,
-        size: 8,
+        size: 9,
         font: font,
       }
     );
@@ -418,7 +437,7 @@ export async function generateSalesOrderPDF(
 
   // Add email and phone
   if (orderData.customerEmail || orderData.customerPhone) {
-    shipCurrentY -= 13;
+    shipCurrentY -= LINE_HEIGHT;
     const contactInfo = [];
     if (orderData.customerEmail) contactInfo.push(`Email: ${orderData.customerEmail}`);
     if (orderData.customerPhone) contactInfo.push(`Phone: ${orderData.customerPhone}`);
@@ -426,7 +445,7 @@ export async function generateSalesOrderPDF(
     page.drawText(contactInfo.join(' | '), {
       x: shipToX,
       y: shipCurrentY,
-      size: 8,
+      size: 9,
       font: font,
     });
   }

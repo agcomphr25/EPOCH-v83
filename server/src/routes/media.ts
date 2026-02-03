@@ -79,7 +79,7 @@ router.post('/request-upload-url', async (req, res) => {
 // Complete upload - save metadata to database after cloud upload
 router.post('/complete-upload', async (req, res) => {
   try {
-    const { objectPath, filename, mimeType, fileSize, title, notes, tags, category } = req.body;
+    const { objectPath, filename, mimeType, fileSize, title, notes, tags, category, folderId } = req.body;
     const user = (req as any).user;
 
     if (!objectPath || !filename) {
@@ -104,6 +104,7 @@ router.post('/complete-upload', async (req, res) => {
       storagePath: objectPath, // Store the cloud object path
       mimeType: mimeType || 'application/octet-stream',
       fileSize: fileSize || 0,
+      folderId: folderId || null, // Support folder placement
       capturedById: user?.id || null,
       capturedByName: user?.username || 'Unknown',
       title: title || filename,

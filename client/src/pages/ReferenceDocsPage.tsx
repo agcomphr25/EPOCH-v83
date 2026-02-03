@@ -191,21 +191,49 @@ export default function ReferenceDocsPage() {
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('category', 'document');
-      if (uploadTitle) formData.append('title', uploadTitle);
-      if (uploadFolderId !== 'root') formData.append('folderId', uploadFolderId);
-
-      const response = await fetch('/api/media/upload', {
+      // Step 1: Get pre-signed upload URL from cloud storage
+      const urlResponse = await fetch('/api/objects/upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          folder: 'media-library',
+        }),
+      });
+      
+      if (!urlResponse.ok) throw new Error('Failed to get upload URL');
+      
+      const { uploadURL, objectPath } = await urlResponse.json();
+      
+      // Step 2: Upload file directly to cloud storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: uploadFile,
+        headers: { 'Content-Type': uploadFile.type },
+      });
+      
+      if (!uploadResponse.ok) throw new Error('Failed to upload to cloud storage');
+      
+      // Step 3: Complete upload - save metadata to database
+      const completeResponse = await fetch('/api/media/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          filename: uploadFile.name,
+          mimeType: uploadFile.type,
+          fileSize: uploadFile.size,
+          title: uploadTitle || uploadFile.name,
+          category: 'document',
+          folderId: uploadFolderId !== 'root' ? uploadFolderId : null,
+        }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || data.success === false) {
+      if (!completeResponse.ok) {
+        const data = await completeResponse.json();
         throw new Error(data.error || 'Upload failed');
       }
 

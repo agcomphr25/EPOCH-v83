@@ -698,6 +698,13 @@ export interface IStorage {
   createPayment(data: InsertPayment): Promise<Payment>;
   updatePayment(id: number, data: Partial<InsertPayment>): Promise<Payment>;
   deletePayment(id: number): Promise<void>;
+  
+  // Payment Status Resolution - shared logic for UI and PDF
+  resolvePaymentStatus(orderId: string): Promise<{
+    status: 'PAID' | 'PENDING';
+    paymentTotal: number;
+    orderTotal: number;
+  }>;
 
   // Forms CRUD
   getAllForms(): Promise<Form[]>;

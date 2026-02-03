@@ -21,8 +21,8 @@ import * as path from 'path';
 import { storage } from '../storage';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../utils/pdf/salesOrderPdf';
 import { db } from '../db';
-import { followupOrders, persistentDiscounts, creditCardTransactions } from '../schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { followupOrders, persistentDiscounts } from '../schema';
+import { eq, sql } from 'drizzle-orm';
 
 /**
  * Core order data structure - only contains guaranteed database columns.
@@ -686,20 +686,16 @@ async function fetchLiveOrderData(orderId: string, notesField: 'customer_notes' 
     }
   }
 
-  // Check payment status using a separate safe query
+  // FIXED: Use shared payment status resolver (same logic as Order Entry UI)
+  // Source of truth: payments table + calculateOrderTotalOptimized()
+  // This correctly handles cash/check/ACH payments and partial payments
   let paymentStatus: 'PAID' | 'PENDING' = 'PENDING';
   try {
-    const paymentRecords = await db
-      .select()
-      .from(creditCardTransactions)
-      .where(and(
-        eq(creditCardTransactions.orderId, orderId),
-        eq(creditCardTransactions.status, 'completed')
-      ));
-    
-    paymentStatus = paymentRecords.length > 0 ? 'PAID' : 'PENDING';
+    const paymentResult = await storage.resolvePaymentStatus(orderId);
+    paymentStatus = paymentResult.status;
+    console.log(`💰 [PDF-SERVICE] Payment status for ${orderId}: ${paymentStatus} (paid: ${paymentResult.paymentTotal}, total: ${paymentResult.orderTotal})`);
   } catch (err) {
-    console.warn(`⚠️ [PDF-SERVICE] Could not check payment status for ${orderId}:`, err);
+    console.warn(`⚠️ [PDF-SERVICE] Could not resolve payment status for ${orderId}:`, err);
     // Continue with PENDING status - won't throw
   }
 

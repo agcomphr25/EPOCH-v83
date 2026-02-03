@@ -3156,6 +3156,196 @@ router.get(
   }
 );
 
+// Bulk print endpoint - merges multiple order PDFs into one document
+router.post('/bulk-print', async (req: Request, res: Response) => {
+  try {
+    const { orderIds } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required' });
+    }
+
+    console.log(`📄 [Bulk Print] Generating merged PDF for ${orderIds.length} orders:`, orderIds);
+
+    const { storage } = await import('../../storage');
+
+    // Create merged PDF document
+    const mergedPdf = await PDFDocument.create();
+
+    for (const orderId of orderIds) {
+      try {
+        // Generate Sales Order PDF
+        const salesOrderResult = await generateOrderPdf(orderId, 'shipping_print' as PdfIntent);
+        if (salesOrderResult.buffer) {
+          const salesPdf = await PDFDocument.load(salesOrderResult.buffer);
+          const salesPages = await mergedPdf.copyPages(salesPdf, salesPdf.getPageIndices());
+          salesPages.forEach((page) => mergedPdf.addPage(page));
+          console.log(`✅ [Bulk Print] Added sales order for ${orderId}`);
+        }
+
+        // Generate QC Checklist PDF inline
+        const order = await storage.getOrderById(orderId);
+        if (order) {
+          const qcPdfDoc = await PDFDocument.create();
+          const qcPage = qcPdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+          const { width, height } = qcPage.getSize();
+          const { margin, width: printableWidth } = getPrintableArea(width, height);
+
+          const font = await qcPdfDoc.embedFont(StandardFonts.Helvetica);
+          const boldFont = await qcPdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+          let currentY = height - margin;
+
+          // Logo
+          const logo = await embedCompanyLogo(qcPdfDoc);
+          if (logo) {
+            const { width: logoWidth, height: logoHeight } = getLogoDimensions(logo);
+            qcPage.drawImage(logo, {
+              x: margin,
+              y: currentY - logoHeight,
+              width: logoWidth,
+              height: logoHeight,
+            });
+            currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
+          }
+
+          // Title
+          qcPage.drawText('Quality Control Inspection Report', {
+            x: margin,
+            y: currentY,
+            size: FONT_SIZES.TITLE_SMALL,
+            font: boldFont,
+            color: COLORS.TEXT_PRIMARY,
+          });
+
+          // Order ID box
+          const docBoxWidth = 200;
+          const docBoxX = width - margin - docBoxWidth;
+          qcPage.drawRectangle({
+            x: docBoxX,
+            y: currentY - 10,
+            width: docBoxWidth,
+            height: 80,
+            borderColor: COLORS.BORDER_BLACK,
+            borderWidth: 1,
+          });
+          qcPage.drawText(`QC-${orderId}`, {
+            x: docBoxX + 10,
+            y: currentY + 50,
+            size: FONT_SIZES.BODY_LARGE,
+            font: boldFont,
+            color: COLORS.TEXT_PRIMARY,
+          });
+          qcPage.drawText(new Date().toLocaleDateString(), {
+            x: docBoxX + 10,
+            y: currentY + 30,
+            size: FONT_SIZES.BODY_LARGE,
+            font: font,
+            color: COLORS.TEXT_SECONDARY,
+          });
+
+          currentY -= 100;
+
+          // Order info
+          qcPage.drawText('ORDER INFORMATION', {
+            x: margin,
+            y: currentY,
+            size: FONT_SIZES.SECTION_HEADER,
+            font: boldFont,
+            color: COLORS.TEXT_PRIMARY,
+          });
+          currentY -= 20;
+
+          // Get customer name from related customer record or use customerId
+          let customerName = 'Unknown';
+          if (order.customerId) {
+            const customer = await storage.getCustomerById(order.customerId);
+            customerName = customer?.name || order.customerId;
+          }
+          const modelId = order.modelId || 'N/A';
+          
+          qcPage.drawText(`Order: ${orderId}    Customer: ${customerName}    Model: ${modelId}`, {
+            x: margin,
+            y: currentY,
+            size: FONT_SIZES.BODY_LARGE,
+            font: font,
+            color: COLORS.TEXT_PRIMARY,
+          });
+          currentY -= 40;
+
+          // QC Checklist items
+          qcPage.drawText('INSPECTION CHECKLIST', {
+            x: margin,
+            y: currentY,
+            size: FONT_SIZES.SECTION_HEADER,
+            font: boldFont,
+            color: COLORS.TEXT_PRIMARY,
+          });
+          currentY -= 25;
+
+          const checklistItems = [
+            'Visual inspection - No scratches, dents, or blemishes',
+            'Dimensional check - Verify against specifications',
+            'Fit and function test - All components operate correctly',
+            'Hardware check - All screws, bolts secured properly',
+            'Finish inspection - Paint/coating quality verified',
+            'Final approval - Ready for shipping',
+          ];
+
+          for (const item of checklistItems) {
+            // Draw checkbox
+            qcPage.drawRectangle({
+              x: margin,
+              y: currentY - 4,
+              width: 12,
+              height: 12,
+              borderColor: COLORS.BORDER_BLACK,
+              borderWidth: 1,
+            });
+            qcPage.drawText(item, {
+              x: margin + 20,
+              y: currentY,
+              size: FONT_SIZES.BODY_LARGE,
+              font: font,
+              color: COLORS.TEXT_PRIMARY,
+            });
+            currentY -= 25;
+          }
+
+          // Signature line
+          currentY -= 30;
+          qcPage.drawText('Inspector Signature: ________________________    Date: ____________', {
+            x: margin,
+            y: currentY,
+            size: FONT_SIZES.BODY_LARGE,
+            font: font,
+            color: COLORS.TEXT_PRIMARY,
+          });
+
+          const qcBytes = await qcPdfDoc.save();
+          const loadedQc = await PDFDocument.load(qcBytes);
+          const qcPages = await mergedPdf.copyPages(loadedQc, loadedQc.getPageIndices());
+          qcPages.forEach((page) => mergedPdf.addPage(page));
+          console.log(`✅ [Bulk Print] Added QC checklist for ${orderId}`);
+        }
+      } catch (orderError) {
+        console.error(`❌ [Bulk Print] Error processing order ${orderId}:`, orderError);
+        // Continue with other orders
+      }
+    }
+
+    const mergedBytes = await mergedPdf.save();
+    console.log(`📄 [Bulk Print] Merged PDF complete: ${mergedBytes.length} bytes, ${mergedPdf.getPageCount()} pages`);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="bulk-print-${Date.now()}.pdf"`);
+    res.send(Buffer.from(mergedBytes));
+  } catch (error) {
+    console.error('❌ [Bulk Print] Error:', error);
+    res.status(500).json({ error: 'Failed to generate bulk print PDF' });
+  }
+});
+
 // Clear UPS token cache endpoint
 router.post('/clear-cache', (req: Request, res: Response) => {
   try {

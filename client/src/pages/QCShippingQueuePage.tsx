@@ -808,43 +808,46 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Handle bulk print all - shows modal with list and print all button
-  const handleBulkPrintAll = () => {
+  // Handle bulk print all - opens merged PDF with all sales orders and QC checklists
+  const handleBulkPrintAll = async () => {
     if (selectedOrders.size === 0) return;
 
     const orderIds = Array.from(selectedOrders);
-    // Create queue with sales order first, then QC checklist for each order
-    const queue: { orderId: string; type: 'sales' | 'qc' }[] = [];
-    orderIds.forEach((orderId) => {
-      queue.push({ orderId, type: 'sales' });
-      queue.push({ orderId, type: 'qc' });
-    });
-
-    setPrintQueue(queue);
-    setCurrentPrintIndex(0);
-    setShowBulkPrintModal(true);
-  };
-
-  // Open all PDFs in the print queue with small delays to avoid popup blocker
-  const openAllPDFs = () => {
-    let delay = 0;
-    printQueue.forEach((item, index) => {
-      const url =
-        item.type === 'sales'
-          ? `/api/shipping-pdf/sales-order/${item.orderId}`
-          : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
-      
-      // Stagger the window.open calls with 300ms delay between each
-      setTimeout(() => {
-        window.open(url, '_blank');
-      }, delay);
-      delay += 300;
-    });
-
+    
     toast({
-      title: 'Opening Documents',
-      description: `Opening ${printQueue.length} documents for printing...`,
+      title: 'Generating Documents',
+      description: `Preparing ${orderIds.length * 2} documents for printing...`,
     });
+
+    // Call the bulk print endpoint to get merged PDF
+    try {
+      const response = await fetch('/api/shipping-pdf/bulk-print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate bulk PDF');
+      }
+
+      // Create a blob URL and open it
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+
+      toast({
+        title: 'Documents Ready',
+        description: `Opened ${orderIds.length} orders (${orderIds.length * 2} pages) for printing`,
+      });
+    } catch (error) {
+      console.error('Bulk print error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate bulk print document',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Open current PDF in queue

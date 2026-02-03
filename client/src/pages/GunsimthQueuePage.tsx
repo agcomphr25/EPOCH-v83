@@ -66,7 +66,7 @@ export default function GunsimthQueuePage() {
           item.repairDepartment?.toLowerCase() === 'gunsmith' &&
           item.status !== 'Resolved' &&
           item.status !== 'Closed' &&
-          item.disposition === 'Repair'
+          (item.disposition === 'Repair' || item.disposition === 'Return')
       );
     },
     refetchInterval: 30000,

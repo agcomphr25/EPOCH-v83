@@ -35,7 +35,7 @@ import { useLocation } from 'wouter';
 
 interface Ticket {
   id: string;
-  ticketType: 'customer' | 'internal';
+  ticketType: 'customer' | 'internal' | 'technical';
   category: string | null;
   priority: 'low' | 'normal' | 'high';
   status: 'new' | 'in_progress' | 'waiting_on_customer' | 'waiting_on_production' | 'resolved' | 'closed';
@@ -102,6 +102,7 @@ const TICKET_PRIORITIES = [
 const TICKET_TYPES = [
   { value: 'customer', label: 'Customer' },
   { value: 'internal', label: 'Internal' },
+  { value: 'technical', label: 'Technical' },
 ];
 
 const CATEGORIES = [
@@ -132,7 +133,7 @@ export default function TicketsPage() {
   const [newTicket, setNewTicket] = useState({
     title: '',
     description: '',
-    ticketType: 'customer' as 'customer' | 'internal',
+    ticketType: 'customer' as 'customer' | 'internal' | 'technical',
     category: '',
     priority: 'normal' as 'low' | 'normal' | 'high',
     assignedUserIds: [] as number[],
@@ -356,7 +357,7 @@ export default function TicketsPage() {
                   <Label>Type</Label>
                   <Select
                     value={newTicket.ticketType}
-                    onValueChange={(v) => setNewTicket({ ...newTicket, ticketType: v as 'customer' | 'internal' })}
+                    onValueChange={(v) => setNewTicket({ ...newTicket, ticketType: v as 'customer' | 'internal' | 'technical' })}
                   >
                     <SelectTrigger data-testid="select-ticket-type">
                       <SelectValue />

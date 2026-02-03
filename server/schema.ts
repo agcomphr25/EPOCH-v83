@@ -10145,7 +10145,7 @@ export type InsertFieldState = typeof fieldState.$inferInsert;
 // Phase 0: Basic ticket tracking for complaints, order status, internal issues
 // ============================================================
 
-export const ticketTypeEnum = pgEnum('ticket_type', ['customer', 'internal']);
+export const ticketTypeEnum = pgEnum('ticket_type', ['customer', 'internal', 'technical']);
 export const ticketPriorityEnum = pgEnum('ticket_priority', ['low', 'normal', 'high']);
 export const ticketStatusEnum = pgEnum('ticket_status', [
   'new',

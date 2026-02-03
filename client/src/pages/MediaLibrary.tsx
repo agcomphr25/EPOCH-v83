@@ -244,13 +244,17 @@ export default function MediaLibrary() {
       if (includeArchived) params.set('includeArchived', 'true');
       if (currentFolderId) params.set('folderId', currentFolderId);
       const res = await fetch(`/api/media?${params}`, { credentials: 'include' });
-      return res.json();
+      const data = await res.json();
+      // Ensure we always return an array even if API returns an error object
+      return Array.isArray(data) ? data : [];
     },
   });
 
+  // Safely filter items - ensure mediaItems is always an array
+  const safeMediaItems = Array.isArray(mediaItems) ? mediaItems : [];
   const filteredItems = currentFolderId 
-    ? mediaItems.filter(item => item.folderId === currentFolderId)
-    : mediaItems.filter(item => !item.folderId);
+    ? safeMediaItems.filter(item => item.folderId === currentFolderId)
+    : safeMediaItems.filter(item => !item.folderId);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; notes?: string; category?: string; isArchived?: boolean }) => {

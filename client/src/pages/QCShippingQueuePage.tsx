@@ -1981,61 +1981,100 @@ export default function QCShippingQueuePage() {
       {/* Bulk Print Queue Modal */}
       {showBulkPrintModal && (
         <Dialog open={showBulkPrintModal} onOpenChange={closeBulkPrintModal}>
-          <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Printer className="h-5 w-5" />
-                Print Documents ({printQueue.length})
+                Print Documents ({currentPrintIndex + 1} of {printQueue.length})
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
-              {/* Print All Button at top */}
+            <div className="space-y-4">
+              {/* Current Document Display */}
+              {printQueue[currentPrintIndex] && (
+                <div className="text-center p-6 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium mb-3 ${
+                    printQueue[currentPrintIndex].type === 'sales' 
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' 
+                      : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                  }`}>
+                    {printQueue[currentPrintIndex].type === 'sales' ? 'Sales Order' : 'QC Checklist'}
+                  </div>
+                  <div className="text-3xl font-bold mb-2">
+                    {printQueue[currentPrintIndex].orderId}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Click the button below to open this document
+                  </div>
+                </div>
+              )}
+
+              {/* Main Action Button - Opens current document and advances */}
               <Button
-                onClick={openAllPDFs}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => {
+                  const item = printQueue[currentPrintIndex];
+                  if (item) {
+                    const url =
+                      item.type === 'sales'
+                        ? `/api/shipping-pdf/sales-order/${item.orderId}`
+                        : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
+                    window.open(url, '_blank');
+                    
+                    // Advance to next document
+                    if (currentPrintIndex < printQueue.length - 1) {
+                      setCurrentPrintIndex(currentPrintIndex + 1);
+                    }
+                  }
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 size="lg"
               >
-                <Printer className="h-5 w-5 mr-2" />
-                Print All ({printQueue.length} Documents)
+                <Download className="h-5 w-5 mr-2" />
+                {currentPrintIndex < printQueue.length - 1 
+                  ? `Open & Next (${printQueue.length - currentPrintIndex - 1} remaining)`
+                  : 'Open Last Document'}
               </Button>
 
-              {/* Document List */}
-              <div className="border rounded-lg overflow-y-auto flex-1 max-h-[300px]">
-                <div className="divide-y">
-                  {printQueue.map((item, index) => (
+              {/* Navigation Controls */}
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPrintIndex(Math.max(0, currentPrintIndex - 1))}
+                  disabled={currentPrintIndex === 0}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                
+                <div className="flex gap-1">
+                  {printQueue.map((_, idx) => (
                     <div
-                      key={`${item.orderId}-${item.type}`}
-                      className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${item.type === 'sales' ? 'bg-blue-500' : 'bg-green-500'}`} />
-                        <div>
-                          <div className="font-medium text-sm">{item.orderId}</div>
-                          <div className="text-xs text-gray-500">
-                            {item.type === 'sales' ? 'Sales Order' : 'QC Checklist'}
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const url =
-                            item.type === 'sales'
-                              ? `/api/shipping-pdf/sales-order/${item.orderId}`
-                              : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
-                          window.open(url, '_blank');
-                        }}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
+                      key={idx}
+                      className={`w-2 h-2 rounded-full cursor-pointer ${
+                        idx === currentPrintIndex 
+                          ? 'bg-blue-600' 
+                          : idx < currentPrintIndex 
+                            ? 'bg-green-500' 
+                            : 'bg-gray-300'
+                      }`}
+                      onClick={() => setCurrentPrintIndex(idx)}
+                    />
                   ))}
                 </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPrintIndex(Math.min(printQueue.length - 1, currentPrintIndex + 1))}
+                  disabled={currentPrintIndex === printQueue.length - 1}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
               </div>
 
               {/* Legend */}
-              <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+              <div className="flex items-center justify-center gap-4 text-xs text-gray-500 pt-2 border-t">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
                   Sales Order
@@ -2048,9 +2087,12 @@ export default function QCShippingQueuePage() {
 
               <div className="text-center">
                 <Button
-                  variant="outline"
+                  variant="ghost"
+                  size="sm"
                   onClick={closeBulkPrintModal}
+                  className="text-gray-500"
                 >
+                  <X className="h-4 w-4 mr-1" />
                   Close
                 </Button>
               </div>

@@ -11923,9 +11923,16 @@ export const fillablePdfInstances = pgTable('fillable_pdf_instances', {
   status: text('status').notNull().default('draft'), // draft, sent, viewed, signed, expired
   // Form values and signature
   valuesJson: jsonb('values_json').$type<Record<string, any>>().default({}),
-  signatureData: text('signature_data'), // Base64 signature image
-  signedAt: timestamp('signed_at'),
-  signedByIp: text('signed_by_ip'),
+  signatureData: text('signature_data'), // Base64 signature image (employee)
+  signedAt: timestamp('signed_at'), // Employee signature timestamp
+  signedByIp: text('signed_by_ip'), // Employee IP
+  // Employer signature fields (for dual-signer documents)
+  employerSignatureRequired: boolean('employer_signature_required').default(false),
+  employerSignatureData: text('employer_signature_data'), // Base64 employer signature
+  employerSignedAt: timestamp('employer_signed_at'),
+  employerSignedByIp: text('employer_signed_by_ip'),
+  employerSignerUserId: integer('employer_signer_user_id').references(() => users.id),
+  employerSignerName: text('employer_signer_name'), // Display name of employer signer
   // PDF paths
   pdfPath: text('pdf_path'), // Generated PDF with values (before signature)
   signedPdfPath: text('signed_pdf_path'), // Final flattened signed PDF
@@ -11962,6 +11969,30 @@ export type FillablePdfTemplate = typeof fillablePdfTemplates.$inferSelect;
 export type InsertFillablePdfTemplate = z.infer<typeof insertFillablePdfTemplateSchema>;
 export type FillablePdfInstance = typeof fillablePdfInstances.$inferSelect;
 export type InsertFillablePdfInstance = z.infer<typeof insertFillablePdfInstanceSchema>;
+
+// ============================================================================
+// AUTHORIZED EMPLOYER SIGNERS - Who can sign employer sections on onboarding documents
+// ============================================================================
+
+export const authorizedEmployerSigners = pgTable('authorized_employer_signers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull().unique(),
+  displayNameOverride: text('display_name_override'), // Optional override for signature display
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdById: integer('created_by_id').references(() => users.id),
+}, (table) => ({
+  userIdIdx: index('authorized_employer_signers_user_id_idx').on(table.userId),
+  activeIdx: index('authorized_employer_signers_active_idx').on(table.isActive),
+}));
+
+export const insertAuthorizedEmployerSignerSchema = createInsertSchema(authorizedEmployerSigners).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AuthorizedEmployerSigner = typeof authorizedEmployerSigners.$inferSelect;
+export type InsertAuthorizedEmployerSigner = z.infer<typeof insertAuthorizedEmployerSignerSchema>;
 
 // ============================================================================
 // ACCOUNTING PREP - Shipment Accounting Snapshots for QuickBooks Journal Entry Prep

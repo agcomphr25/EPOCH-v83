@@ -485,10 +485,11 @@ export async function generateSalesOrderPDF(
   }
   
   // Calculate height: header (18) + model line (14) + features (14 each) + separator (15) + subtotal (20) + [discount (20)] + shipping (20) + total (25) + padding (15)
-  // Check for discount: either custom discount OR promo code discount (type != 'none' and value > 0)
+  // Check for discount: pricing summary discounts OR custom discount OR promo code discount
   const hasCustomDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
   const hasPromoDiscount = orderData.discountType && orderData.discountType !== 'none' && orderData.discountValue && orderData.discountValue > 0;
-  const hasDiscount = hasCustomDiscount || hasPromoDiscount;
+  const hasPricingSummaryDiscount = orderData.pricingSummary && orderData.pricingSummary.discounts.length > 0;
+  const hasDiscount = hasPricingSummaryDiscount || hasCustomDiscount || hasPromoDiscount;
   const discountLineHeight = hasDiscount ? 20 : 0;
   const featuresTableHeight = 18 + (featureCount * 14) + 15 + 20 + discountLineHeight + 20 + 25 + 15;
   

@@ -79,7 +79,7 @@ router.post('/request-upload-url', async (req, res) => {
 // Complete upload - save metadata to database after cloud upload
 router.post('/complete-upload', async (req, res) => {
   try {
-    const { objectPath, filename, mimeType, fileSize, title, notes, tags, category } = req.body;
+    const { objectPath, filename, mimeType, fileSize, title, notes, tags, category, folderId } = req.body;
     const user = (req as any).user;
 
     if (!objectPath || !filename) {
@@ -104,6 +104,7 @@ router.post('/complete-upload', async (req, res) => {
       storagePath: objectPath, // Store the cloud object path
       mimeType: mimeType || 'application/octet-stream',
       fileSize: fileSize || 0,
+      folderId: folderId || null, // Support folder placement
       capturedById: user?.id || null,
       capturedByName: user?.username || 'Unknown',
       title: title || filename,
@@ -318,8 +319,11 @@ router.get('/file/:filename', async (req, res) => {
     return res.sendFile(localFilePath);
   }
   
-  // If not found locally, return 404 (cloud files are served via /objects/ route)
-  res.status(404).json({ error: 'File not found' });
+  // Local file not found - this is a legacy file that was lost due to ephemeral storage
+  // Return a clear error message explaining the file needs to be re-uploaded
+  res.status(404).json({ 
+    error: 'File not found - this file was uploaded before cloud storage was enabled and is no longer available. Please re-upload the file.' 
+  });
 });
 
 // Serve cloud storage files by object path

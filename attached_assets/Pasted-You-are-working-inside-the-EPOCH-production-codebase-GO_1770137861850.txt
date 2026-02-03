@@ -1,0 +1,114 @@
+You are working inside the EPOCH production codebase.
+
+GOAL:
+Add support for EMPLOYER signatures on onboarding documents,
+completed asynchronously on the SAME PDF as the employee signature.
+
+This must not interrupt onboarding sessions.
+
+---
+
+REQUIREMENTS (LOCKED):
+
+• Employer signatures are a second signer role
+• Same PDF, different signature fields
+• Employer may sign during or after session
+• Employer signatures may be partial (one doc at a time)
+• Session remains “in progress” until all required employer signatures complete
+• Subtle UI cues only
+
+---
+
+PART 1 — AUTHORIZATION MODEL
+
+1) Authorization logic:
+• User must:
+  - Have Admin / Owner / HR role
+  - AND be listed in Onboarding Settings → Authorized Employer Signers
+
+2) Add onboarding settings UI to manage authorized employer signers
+• Link to existing users
+• Optional display name override
+
+---
+
+PART 2 — DATA MODEL (MINIMAL)
+
+Extend fillable_pdf_instances to support multiple signers:
+
+• Add signer_role to signature records:
+  - 'EMPLOYEE'
+  - 'EMPLOYER'
+
+• Employer signature fields:
+  - signerName (required)
+  - signerUserId
+  - signedAt
+  - signedByIp
+  - signatureImage or typed signature
+
+Preserve backward compatibility.
+
+---
+
+PART 3 — DOCUMENT SIGNING UI
+
+In DocumentSigningStep:
+
+• If employee signature incomplete:
+  - Only show employee signing UI
+
+• If employee signed AND employer signature required:
+  - Show employer section status
+  - Allow authorized signer to:
+    - Sign now
+    - Mark Employer Signature Pending
+
+• Employer signing:
+  - Locks employee fields
+  - Scrolls to employer signature fields
+  - Requires explicit signer name
+
+---
+
+PART 4 — PENDING EMPLOYER SIGNATURES QUEUE
+
+Add new view under /onboarding:
+
+“Pending Employer Signatures”
+
+• Lists all documents where:
+  - employeeSigned = true
+  - employerSigned = false
+  - employerSignatureRequired = true
+
+• Clicking a row opens the document in employer-sign mode
+
+---
+
+PART 5 — SESSION STATUS LOGIC
+
+Session status must reflect:
+• Waiting on Employee
+• Waiting on Employer
+• Ready to Complete
+
+No blocking UI.
+
+---
+
+CONSTRAINTS:
+
+• No new document systems
+• No email workflows
+• No public signing links
+• No breaking existing onboarding sessions
+
+---
+
+DELIVERABLES:
+
+• Employer signature support on fillable PDFs
+• Pending Employer Signatures queue
+• Onboarding Settings → Authorized Employer Signers
+• Subtle session status indicators

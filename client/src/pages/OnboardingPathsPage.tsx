@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Edit, Trash2, Route, FileText, GripVertical, ArrowUp, ArrowDown, X, FileSignature } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Route, FileText, GripVertical, ArrowUp, ArrowDown, X, FileSignature, Settings } from 'lucide-react';
 import { Link } from 'wouter';
 
 interface OnboardingPath {
@@ -254,6 +254,12 @@ export default function OnboardingPathsPage() {
           <h1 className="text-2xl font-bold">Onboarding Paths</h1>
           <p className="text-muted-foreground">Configure onboarding workflows for different employee types</p>
         </div>
+        <Link href="/onboarding/settings">
+          <Button variant="outline" className="mr-2">
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
+          </Button>
+        </Link>
         <Button onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
           New Path

@@ -201,24 +201,56 @@ export default function MediaLibrary() {
     if (!file) return;
     
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('title', file.name);
-    formData.append('category', 'document');
-    if (currentFolderId) {
-      formData.append('folderId', currentFolderId);
-    }
     
     try {
-      const response = await fetch('/api/media/upload', {
+      // Step 1: Get pre-signed upload URL from cloud storage
+      const urlResponse = await fetch('/api/media/request-upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+      if (!urlResponse.ok) {
+        throw new Error('Failed to get upload URL');
+      }
+      
+      const { uploadURL, objectPath } = await urlResponse.json();
+      
+      // Step 2: Upload file directly to cloud storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload to cloud storage');
+      }
+      
+      // Step 3: Complete upload - save metadata to database
+      const completeResponse = await fetch('/api/media/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          filename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          title: file.name,
+          category: 'document',
+          folderId: currentFolderId || null,
+        }),
+      });
+      
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json();
+        throw new Error(errorData.error || 'Failed to complete upload');
       }
       
       await queryClient.invalidateQueries({ queryKey: ['/api/media'] });

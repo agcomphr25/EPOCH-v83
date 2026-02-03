@@ -784,7 +784,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         // Fetch template info
         const templates = await pool.query(`
-          SELECT id, name, source_media_item_id as "sourceMediaItemId"
+          SELECT id, name, source_media_item_id as "sourceMediaItemId", employer_signature_required as "employerSignatureRequired"
           FROM fillable_pdf_templates
           WHERE id = $1 AND is_active = true
         `, [templateId]);
@@ -803,10 +803,10 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         const instances = await pool.query(`
           INSERT INTO fillable_pdf_instances
-            (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
-          VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+            (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment, employer_signature_required)
+          VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev', $5)
           RETURNING id
-        `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+        `, [template.id, newSession.id, publicSignatureId, signatureToken, template.employerSignatureRequired || false]);
         
         const instanceId = instances[0].id;
         
@@ -840,7 +840,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         // Check if there's a fillable PDF template for this media item
         const templates = await pool.query(`
-          SELECT id, name
+          SELECT id, name, employer_signature_required as "employerSignatureRequired"
           FROM fillable_pdf_templates
           WHERE source_media_item_id = $1 AND is_active = true
           LIMIT 1
@@ -859,10 +859,10 @@ router.post('/sessions', async (req: Request, res: Response) => {
           
           const instances = await pool.query(`
             INSERT INTO fillable_pdf_instances
-              (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
-            VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+              (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment, employer_signature_required)
+            VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev', $5)
             RETURNING id
-          `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+          `, [template.id, newSession.id, publicSignatureId, signatureToken, template.employerSignatureRequired || false]);
           
           instanceId = instances[0].id;
         }
@@ -1677,6 +1677,21 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     const unsignedRequiredDocs = requiredDocs.filter((d: any) => d.status !== 'signed');
     if (unsignedRequiredDocs.length > 0) {
       validationErrors.push(`${unsignedRequiredDocs.length} required document(s) not signed`);
+    }
+    
+    // Check 3b: All documents requiring employer signature have been signed by employer
+    const pendingEmployerSignatures = await pool.query(`
+      SELECT osd.id, fpi.employer_signature_required, fpi.employer_signed_at
+      FROM onboarding_session_documents osd
+      JOIN fillable_pdf_instances fpi ON fpi.id = osd.instance_id
+      WHERE osd.session_id = $1
+        AND fpi.signed_at IS NOT NULL
+        AND fpi.employer_signature_required = true
+        AND fpi.employer_signed_at IS NULL
+    `, [id]);
+    
+    if (pendingEmployerSignatures && pendingEmployerSignatures.length > 0) {
+      validationErrors.push(`${pendingEmployerSignatures.length} document(s) awaiting employer signature`);
     }
     
     // Check 4: Camera captures (optional - just fetch for reference, no validation errors)
@@ -2729,6 +2744,284 @@ router.get('/sessions/:id/email-info', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching email info:', error);
     res.status(500).json({ error: 'Failed to fetch email info' });
+  }
+});
+
+// ============================================================================
+// AUTHORIZED EMPLOYER SIGNERS ENDPOINTS
+// ============================================================================
+
+// Get all authorized employer signers
+router.get('/settings/employer-signers', async (req: Request, res: Response) => {
+  try {
+    const signers = await pool.query(`
+      SELECT 
+        aes.id, aes.user_id as "userId", aes.display_name_override as "displayNameOverride",
+        aes.is_active as "isActive", aes.created_at as "createdAt",
+        u.username, u.first_name as "firstName", u.last_name as "lastName", u.role
+      FROM authorized_employer_signers aes
+      JOIN users u ON u.id = aes.user_id
+      ORDER BY u.first_name, u.last_name
+    `);
+    res.json(signers || []);
+  } catch (error) {
+    console.error('Error fetching employer signers:', error);
+    res.status(500).json({ error: 'Failed to fetch employer signers' });
+  }
+});
+
+// Add an authorized employer signer
+router.post('/settings/employer-signers', async (req: Request, res: Response) => {
+  try {
+    const { userId, displayNameOverride } = req.body;
+    const currentUser = (req as any).user;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    // Check if user exists and has appropriate role
+    const userCheck = await pool.query(
+      `SELECT id, role FROM users WHERE id = $1`,
+      [userId]
+    );
+    
+    if (!userCheck || userCheck.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userRole = userCheck[0].role;
+    if (!['ADMIN', 'OWNER'].includes(userRole)) {
+      return res.status(400).json({ error: 'User must have Admin or Owner role to be an employer signer' });
+    }
+    
+    // Check if already exists
+    const existing = await pool.query(
+      `SELECT id FROM authorized_employer_signers WHERE user_id = $1`,
+      [userId]
+    );
+    
+    if (existing && existing.length > 0) {
+      return res.status(400).json({ error: 'User is already an authorized signer' });
+    }
+    
+    const [newSigner] = await pool.query(
+      `INSERT INTO authorized_employer_signers (user_id, display_name_override, created_by_id)
+       VALUES ($1, $2, $3)
+       RETURNING id, user_id as "userId", display_name_override as "displayNameOverride", 
+                 is_active as "isActive", created_at as "createdAt"`,
+      [userId, displayNameOverride || null, currentUser?.id || null]
+    );
+    
+    res.status(201).json(newSigner);
+  } catch (error) {
+    console.error('Error adding employer signer:', error);
+    res.status(500).json({ error: 'Failed to add employer signer' });
+  }
+});
+
+// Update an authorized employer signer
+router.patch('/settings/employer-signers/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { displayNameOverride, isActive } = req.body;
+    
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramCount = 1;
+    
+    if (displayNameOverride !== undefined) {
+      updates.push(`display_name_override = $${paramCount++}`);
+      values.push(displayNameOverride || null);
+    }
+    if (isActive !== undefined) {
+      updates.push(`is_active = $${paramCount++}`);
+      values.push(isActive);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+    
+    values.push(id);
+    const [updated] = await pool.query(
+      `UPDATE authorized_employer_signers 
+       SET ${updates.join(', ')}
+       WHERE id = $${paramCount}
+       RETURNING id, user_id as "userId", display_name_override as "displayNameOverride", 
+                 is_active as "isActive", created_at as "createdAt"`,
+      values
+    );
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Signer not found' });
+    }
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating employer signer:', error);
+    res.status(500).json({ error: 'Failed to update employer signer' });
+  }
+});
+
+// Delete an authorized employer signer
+router.delete('/settings/employer-signers/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      `DELETE FROM authorized_employer_signers WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: 'Signer not found' });
+    }
+    
+    res.status(204).end();
+  } catch (error) {
+    console.error('Error deleting employer signer:', error);
+    res.status(500).json({ error: 'Failed to delete employer signer' });
+  }
+});
+
+// Check if current user is an authorized employer signer
+router.get('/settings/employer-signers/check-authorization', async (req: Request, res: Response) => {
+  try {
+    const currentUser = (req as any).user;
+    
+    if (!currentUser?.id) {
+      return res.json({ isAuthorized: false });
+    }
+    
+    // Check role and active signer status
+    const isAdminOrOwner = ['ADMIN', 'OWNER'].includes(currentUser.role);
+    
+    const signerCheck = await pool.query(
+      `SELECT id, display_name_override as "displayNameOverride" 
+       FROM authorized_employer_signers 
+       WHERE user_id = $1 AND is_active = true`,
+      [currentUser.id]
+    );
+    
+    const isAuthorized = isAdminOrOwner && signerCheck && signerCheck.length > 0;
+    const displayName = signerCheck?.[0]?.displayNameOverride || 
+      `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 
+      currentUser.username;
+    
+    res.json({ 
+      isAuthorized, 
+      displayName,
+      userId: currentUser.id 
+    });
+  } catch (error) {
+    console.error('Error checking authorization:', error);
+    res.status(500).json({ error: 'Failed to check authorization' });
+  }
+});
+
+// Get pending employer signatures (documents awaiting employer signature)
+router.get('/pending-employer-signatures', async (req: Request, res: Response) => {
+  try {
+    const pending = await pool.query(`
+      SELECT 
+        fpi.id as "instanceId",
+        fpi.recipient_name as "recipientName",
+        fpi.signed_at as "employeeSignedAt",
+        fpi.employer_signature_required as "employerSignatureRequired",
+        fpi.employer_signed_at as "employerSignedAt",
+        fpt.name as "templateName",
+        osd.session_id as "sessionId",
+        os.status as "sessionStatus",
+        e.first_name || ' ' || e.last_name as "employeeName"
+      FROM fillable_pdf_instances fpi
+      JOIN fillable_pdf_templates fpt ON fpt.id = fpi.template_id
+      LEFT JOIN onboarding_session_documents osd ON osd.instance_id = fpi.id
+      LEFT JOIN onboarding_sessions os ON os.id = osd.session_id
+      LEFT JOIN employees e ON e.id = os.employee_id
+      WHERE fpi.signed_at IS NOT NULL
+        AND fpi.employer_signature_required = true
+        AND fpi.employer_signed_at IS NULL
+      ORDER BY fpi.signed_at DESC
+    `);
+    
+    res.json(pending || []);
+  } catch (error) {
+    console.error('Error fetching pending employer signatures:', error);
+    res.status(500).json({ error: 'Failed to fetch pending employer signatures' });
+  }
+});
+
+// Submit employer signature
+router.post('/sessions/:sessionId/documents/:docId/employer-sign', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, docId } = req.params;
+    const { signatureData, signerName } = req.body;
+    const currentUser = (req as any).user;
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    
+    if (!signatureData || !signerName) {
+      return res.status(400).json({ error: 'Signature data and signer name are required' });
+    }
+    
+    // Verify user is authorized
+    const authCheck = await pool.query(
+      `SELECT id FROM authorized_employer_signers 
+       WHERE user_id = $1 AND is_active = true`,
+      [currentUser?.id]
+    );
+    
+    if (!authCheck || authCheck.length === 0) {
+      return res.status(403).json({ error: 'You are not authorized to sign as employer' });
+    }
+    
+    // Get the document and verify employee has signed
+    const doc = await pool.query(
+      `SELECT osd.instance_id, fpi.signed_at, fpi.employer_signature_required
+       FROM onboarding_session_documents osd
+       JOIN fillable_pdf_instances fpi ON fpi.id = osd.instance_id
+       WHERE osd.session_id = $1 AND osd.id = $2`,
+      [sessionId, docId]
+    );
+    
+    if (!doc || doc.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const instanceId = doc[0].instance_id;
+    
+    if (!doc[0].signed_at) {
+      return res.status(400).json({ error: 'Employee must sign first' });
+    }
+    
+    // Update with employer signature
+    await pool.query(
+      `UPDATE fillable_pdf_instances 
+       SET employer_signature_data = $1,
+           employer_signed_at = NOW(),
+           employer_signed_by_ip = $2,
+           employer_signer_user_id = $3,
+           employer_signer_name = $4
+       WHERE id = $5`,
+      [signatureData, clientIp, currentUser?.id, signerName, instanceId]
+    );
+    
+    // Audit log
+    await auditService.logOnboardingEvent({
+      eventType: 'EMPLOYER_SIGNATURE_COMPLETED',
+      sessionId,
+      userId: currentUser?.id,
+      details: {
+        documentId: docId,
+        instanceId,
+        signerName,
+      },
+    });
+    
+    res.json({ success: true, message: 'Employer signature recorded' });
+  } catch (error) {
+    console.error('Error recording employer signature:', error);
+    res.status(500).json({ error: 'Failed to record employer signature' });
   }
 });
 

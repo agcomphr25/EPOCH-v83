@@ -1,0 +1,142 @@
+You are working inside the EPOCH PRODUCTION codebase.
+
+THIS IS A BLOCKING BUG.
+STOP adding onboarding or fillable-PDF features.
+
+GOAL:
+Diagnose and repair why Media Library documents
+return {"error":"File not found"} when opened in PROD,
+even though uploads report success.
+
+This must be fixed at the storage layer.
+
+---
+
+OBSERVED PROD SYMPTOMS:
+
+• Media Library shows document metadata correctly
+• Upload reports success toast
+• Clicking “Open” shows:
+  {"error":"File not found"}
+• Happens in PROD (Chrome), dev env cannot be tested
+• Affects normal PDFs and fillable-PDF-scaffolded docs
+
+---
+
+TASK 1 — TRACE THE OPEN PATH (MANDATORY)
+
+For a failing document (e.g. Employment Agreement_HR.pdf):
+
+1. Identify the frontend component that triggers “Open”
+2. Identify the API route called
+3. Identify the backend handler
+4. Identify the storage resolver used
+5. Identify the EXACT object key/path being requested
+
+Print/log the resolved storage key.
+
+DO NOT ASSUME — TRACE IT.
+
+---
+
+TASK 2 — DATABASE VS STORAGE TRUTH (PROD)
+
+For the same document:
+
+1. Query mediaLibrary row:
+   - id
+   - filename
+   - storage_path / object_key / url fields
+   - created_at
+2. Query object storage:
+   - List objects in the expected bucket
+   - Confirm whether the object key exists EXACTLY
+   - Check case sensitivity
+   - Check folder prefixes
+
+Answer explicitly:
+• Does the object exist?
+• If not, why does the DB think it does?
+
+---
+
+TASK 3 — UPLOAD PATH ANALYSIS
+
+Trace the upload flow:
+
+• Where does the file get written?
+• Which storage bucket?
+• Which key is generated?
+• At what point is the DB record inserted?
+
+Identify whether:
+• Upload writes to one path
+• Open reads from another
+
+This is the most likely root cause.
+
+---
+
+TASK 4 — FILLABLE PDF SCAFFOLDING INTERFERENCE CHECK
+
+Confirm whether:
+
+• Scaffolding a fillable PDF:
+  - Copies the file
+  - Moves the file
+  - Or rewrites storage_path
+
+If it rewrites:
+• Does it point to a non-existent derived path?
+• Is the original PDF still intact?
+
+---
+
+TASK 5 — ERROR ORIGIN
+
+Locate the exact code that throws:
+{"error":"File not found"}
+
+• File name
+• Line number
+• Condition that triggers it
+
+Confirm whether it’s:
+• Missing object
+• Bad key
+• Wrong bucket
+• Permission issue
+
+---
+
+TASK 6 — MINIMAL, PROD-SAFE FIX
+
+Propose and implement the SMALLEST safe fix that:
+
+• Makes Media Library “Open” work reliably
+• Does NOT require re-uploading files
+• Does NOT break existing signed PDFs
+• Preserves backward compatibility
+
+Acceptable fixes include:
+• Correcting storage key generation
+• Syncing DB path to actual object path
+• Adding fallback to original upload path
+• Normalizing prefixes
+
+DO NOT:
+• Refactor media system
+• Change buckets
+• Break existing references
+
+---
+
+DELIVERABLES:
+
+1) Root cause (plain English)
+2) Exact code change(s)
+3) Why this fixes PROD specifically
+4) Confirmation that both:
+   - Download
+   - Open
+   work consistently

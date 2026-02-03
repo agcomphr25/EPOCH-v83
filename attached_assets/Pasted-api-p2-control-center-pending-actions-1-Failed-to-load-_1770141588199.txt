@@ -1,0 +1,581 @@
+api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/customers/1:1  Failed to load resource: the server responded with a status of 500 ()
+index-CIhkR0kt.js:4288 API error raw body: {"error":"Failed to update P2 customer","details":"duplicate key value violates unique constraint \"p2_customers_customer_id_key\"","code":"23505"}
+console.error @ index-CIhkR0kt.js:4288
+index-CIhkR0kt.js:4288 💥 API Request failed for /api/p2/customers/1: Error: Failed to update P2 customer
+    at He (index-CIhkR0kt.js:235:6254)
+console.error @ index-CIhkR0kt.js:4288
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2-purchase-orders-bypass 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+onSubscribe @ index-CIhkR0kt.js:51
+subscribe @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+_He @ index-CIhkR0kt.js:38
+Cre @ index-CIhkR0kt.js:40
+ZO @ index-CIhkR0kt.js:40
+n2t @ index-CIhkR0kt.js:40
+jk @ index-CIhkR0kt.js:40
+E5e @ index-CIhkR0kt.js:40
+BI @ index-CIhkR0kt.js:38
+(anonymous) @ index-CIhkR0kt.js:40
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2-purchase-orders-bypass 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+onSubscribe @ index-CIhkR0kt.js:51
+subscribe @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+_He @ index-CIhkR0kt.js:38
+Cre @ index-CIhkR0kt.js:40
+ZO @ index-CIhkR0kt.js:40
+n2t @ index-CIhkR0kt.js:40
+jk @ index-CIhkR0kt.js:40
+E5e @ index-CIhkR0kt.js:40
+BI @ index-CIhkR0kt.js:38
+(anonymous) @ index-CIhkR0kt.js:40
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  POST https://agcompepoch.xyz/api/p2-purchase-orders-bypass 500 (Internal Server Error)
+He @ index-CIhkR0kt.js:235
+mutationFn @ index-CIhkR0kt.js:2714
+fn @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+execute @ index-CIhkR0kt.js:51
+await in execute
+mutate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+w @ index-CIhkR0kt.js:2714
+jwt @ index-CIhkR0kt.js:37
+Nwt @ index-CIhkR0kt.js:37
+Cwt @ index-CIhkR0kt.js:37
+X4e @ index-CIhkR0kt.js:37
+hHe @ index-CIhkR0kt.js:37
+(anonymous) @ index-CIhkR0kt.js:37
+Oye @ index-CIhkR0kt.js:40
+F$e @ index-CIhkR0kt.js:37
+_oe @ index-CIhkR0kt.js:37
+cye @ index-CIhkR0kt.js:37
+Uwt @ index-CIhkR0kt.js:37
+index-CIhkR0kt.js:4288 API error raw body: {"_error":"Failed to create P2 purchase order via bypass route","message":"column \"created_by_id\" does not exist"}
+console.error @ index-CIhkR0kt.js:4288
+He @ index-CIhkR0kt.js:235
+await in He
+mutationFn @ index-CIhkR0kt.js:2714
+fn @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+execute @ index-CIhkR0kt.js:51
+await in execute
+mutate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+w @ index-CIhkR0kt.js:2714
+jwt @ index-CIhkR0kt.js:37
+Nwt @ index-CIhkR0kt.js:37
+Cwt @ index-CIhkR0kt.js:37
+X4e @ index-CIhkR0kt.js:37
+hHe @ index-CIhkR0kt.js:37
+(anonymous) @ index-CIhkR0kt.js:37
+Oye @ index-CIhkR0kt.js:40
+F$e @ index-CIhkR0kt.js:37
+_oe @ index-CIhkR0kt.js:37
+cye @ index-CIhkR0kt.js:37
+Uwt @ index-CIhkR0kt.js:37
+index-CIhkR0kt.js:4288 💥 API Request failed for /api/p2-purchase-orders-bypass: Error: column "created_by_id" does not exist
+    at He (index-CIhkR0kt.js:235:6254)
+    at async Object.mutationFn (index-CIhkR0kt.js:2714:152580)
+console.error @ index-CIhkR0kt.js:4288
+He @ index-CIhkR0kt.js:235
+await in He
+mutationFn @ index-CIhkR0kt.js:2714
+fn @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+execute @ index-CIhkR0kt.js:51
+await in execute
+mutate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+w @ index-CIhkR0kt.js:2714
+jwt @ index-CIhkR0kt.js:37
+Nwt @ index-CIhkR0kt.js:37
+Cwt @ index-CIhkR0kt.js:37
+X4e @ index-CIhkR0kt.js:37
+hHe @ index-CIhkR0kt.js:37
+(anonymous) @ index-CIhkR0kt.js:37
+Oye @ index-CIhkR0kt.js:40
+F$e @ index-CIhkR0kt.js:37
+_oe @ index-CIhkR0kt.js:37
+cye @ index-CIhkR0kt.js:37
+Uwt @ index-CIhkR0kt.js:37
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+index-CIhkR0kt.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CIhkR0kt.js:235
+o @ index-CIhkR0kt.js:51
+p @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.then
+(anonymous) @ index-CIhkR0kt.js:51
+Promise.catch
+p @ index-CIhkR0kt.js:51
+start @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+setInterval
+lfe @ index-CIhkR0kt.js:51
+cfe @ index-CIhkR0kt.js:51
+onQueryUpdate @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51
+batch @ index-CIhkR0kt.js:51
+PC @ index-CIhkR0kt.js:51
+fetch @ index-CIhkR0kt.js:51
+await in fetch
+O7 @ index-CIhkR0kt.js:51
+(anonymous) @ index-CIhkR0kt.js:51

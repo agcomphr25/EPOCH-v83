@@ -414,20 +414,49 @@ function CreateSignatureDialog({
 
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('category', 'document');
-      formData.append('capturedByName', employeeName);
-      
-      const res = await fetch('/api/media/upload', {
+      // Step 1: Get pre-signed upload URL from cloud storage
+      const urlResponse = await fetch('/api/objects/upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          folder: 'media-library',
+        }),
       });
       
-      if (!res.ok) throw new Error('Upload failed');
+      if (!urlResponse.ok) throw new Error('Failed to get upload URL');
       
-      const uploadedMedia = await res.json();
+      const { uploadURL, objectPath } = await urlResponse.json();
+      
+      // Step 2: Upload file directly to cloud storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadResponse.ok) throw new Error('Failed to upload to cloud storage');
+      
+      // Step 3: Complete upload - save metadata to database
+      const completeResponse = await fetch('/api/media/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          filename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          title: file.name,
+          category: 'document',
+        }),
+      });
+      
+      if (!completeResponse.ok) throw new Error('Upload failed');
+      
+      const uploadedMedia = await completeResponse.json();
       setSelectedDocument(uploadedMedia);
       queryClient.invalidateQueries({ queryKey: ['/api/media'] });
       toast({ title: 'Document uploaded successfully' });

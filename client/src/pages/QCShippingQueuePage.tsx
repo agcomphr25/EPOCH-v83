@@ -808,6 +808,23 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
+  // Handle bulk print all - both sales orders and QC checklists for all selected orders
+  const handleBulkPrintAll = () => {
+    if (selectedOrders.size === 0) return;
+
+    const orderIds = Array.from(selectedOrders);
+    // Create queue with sales order first, then QC checklist for each order
+    const queue: { orderId: string; type: 'sales' | 'qc' }[] = [];
+    orderIds.forEach((orderId) => {
+      queue.push({ orderId, type: 'sales' });
+      queue.push({ orderId, type: 'qc' });
+    });
+
+    setPrintQueue(queue);
+    setCurrentPrintIndex(0);
+    setShowBulkPrintModal(true);
+  };
+
   // Open current PDF in queue
   const openCurrentPDF = () => {
     if (currentPrintIndex >= printQueue.length) return;
@@ -1851,6 +1868,15 @@ export default function QCShippingQueuePage() {
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   Print QC Checklists ({selectedOrders.size})
+                </Button>
+                <Button
+                  onClick={handleBulkPrintAll}
+                  disabled={selectedOrders.size === 0}
+                  size="sm"
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print All ({selectedOrders.size * 2})
                 </Button>
                 <Button
                   onClick={progressToShipping}

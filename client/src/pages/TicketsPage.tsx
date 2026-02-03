@@ -20,6 +20,7 @@ import {
   AlertTriangle, 
   Clock, 
   User, 
+  Users,
   MessageSquare,
   Link2,
   X,
@@ -682,6 +683,16 @@ export default function TicketsPage() {
                         {formatDistanceToNow(new Date(ticket.createdAt), { addSuffix: true })}
                       </span>
                     </div>
+                    {ticket.assignedUserIds && ticket.assignedUserIds.length > 0 && (
+                      <div className="flex items-center gap-1 mt-2 flex-wrap">
+                        <Users className="h-3 w-3 text-gray-400" />
+                        {ticket.assignedUserIds.map((userId) => (
+                          <Badge key={userId} variant="secondary" className="text-xs py-0 px-1.5">
+                            {getUserName(userId)}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

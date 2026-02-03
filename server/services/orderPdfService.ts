@@ -435,13 +435,32 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     throw new Error(`Order ${orderId} not found and no stored snapshot available`);
   }
 
-  const customer = await storage.getCustomerById(order.customerId || '');
-  if (!customer) {
-    throw new Error(`Customer not found for order ${orderId}`);
+  let customer = await storage.getCustomerById(order.customerId || '');
+  let defaultAddress: any = null;
+  
+  // If customer found, load addresses
+  if (customer && order.customerId) {
+    const addresses = await storage.getCustomerAddresses(order.customerId);
+    defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
   }
-
-  const addresses = await storage.getCustomerAddresses(order.customerId || '');
-  const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+  
+  // If no customer found, create a fallback customer object
+  if (!customer) {
+    console.warn(`⚠️ [PDF-SERVICE] Customer not found for order ${orderId}, using fallback`);
+    // Try to get customer name from full order data if available
+    const fullOrder = await storage.getOrderById(orderId);
+    const customerName = (fullOrder as any)?.customer || 'Unknown Customer';
+    customer = {
+      id: 0,
+      name: customerName,
+      email: '',
+      phone: '',
+      company: '',
+      notes: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any;
+  }
 
   const allFeatures = await storage.getAllFeatures();
   const allStockModels = await storage.getAllStockModels();
@@ -641,10 +660,10 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     customerId: order.customerId || '',
     customerPO: order.customerPO || undefined,
     // When order has alt ship-to, use override name/company; otherwise use customer profile
-    customerName: order.hasAltShipTo && order.altShipToName ? order.altShipToName : customer.name,
-    customerEmail: order.hasAltShipTo && order.altShipToEmail ? order.altShipToEmail : (customer.email || undefined),
-    customerPhone: order.hasAltShipTo && order.altShipToPhone ? order.altShipToPhone : (customer.phone || undefined),
-    customerCompany: order.hasAltShipTo && order.altShipToCompany ? order.altShipToCompany : (customer.company || undefined),
+    customerName: order.hasAltShipTo && order.altShipToName ? order.altShipToName : (customer?.name || 'Unknown Customer'),
+    customerEmail: order.hasAltShipTo && order.altShipToEmail ? order.altShipToEmail : (customer?.email || undefined),
+    customerPhone: order.hasAltShipTo && order.altShipToPhone ? order.altShipToPhone : (customer?.phone || undefined),
+    customerCompany: order.hasAltShipTo && order.altShipToCompany ? order.altShipToCompany : (customer?.company || undefined),
     customerAddress: resolvedShipToAddress,
     modelId: order.modelId || undefined,
     modelName: stockModel?.name || undefined,

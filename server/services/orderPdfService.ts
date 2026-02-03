@@ -672,7 +672,17 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
   try {
     const pricingSummary = await storage.resolveOrderPricingSummary(orderId);
     snapshot.pricingSummary = pricingSummary;
-    console.log(`💰 [PDF-SERVICE] Pricing summary for ${orderId}: subtotal=${pricingSummary.subtotal}, discountTotal=${pricingSummary.discountTotal}, shipping=${pricingSummary.shipping}, final=${pricingSummary.finalTotal}`);
+    console.log(`💰 [PDF-SERVICE] Pricing summary for ${orderId}:`, JSON.stringify({
+      basePrice: pricingSummary.basePrice,
+      basePriceSource: pricingSummary.basePriceSource,
+      featuresTotal: pricingSummary.featuresTotal,
+      miscItemsTotal: pricingSummary.miscItemsTotal,
+      subtotal: pricingSummary.subtotal,
+      discounts: pricingSummary.discounts,
+      discountTotal: pricingSummary.discountTotal,
+      shipping: pricingSummary.shipping,
+      finalTotal: pricingSummary.finalTotal,
+    }, null, 2));
   } catch (err) {
     console.warn(`⚠️ [PDF-SERVICE] Could not resolve pricing summary for ${orderId}:`, err);
     // Continue without pricing summary - will fall back to legacy calculation in PDF

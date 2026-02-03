@@ -1,0 +1,88 @@
+Context:
+We are debugging a Sales Order PDF pricing issue where a discount appears in the body of the PDF
+(for example, in notes or feature text) but is NOT reflected in the total calculations.
+
+Important:
+The specific example (order EI193) exists in the PRODUCTION database.
+Do NOT query or mutate prod data directly.
+
+If needed, reproduce the issue by:
+- Using a sanitized copy of the order data
+- Or by mocking/logging values during PDF generation without touching prod
+
+Objective:
+I need diagnostic output ONLY. Do NOT implement fixes yet.
+
+Please gather and paste the following information so we can identify where the discount math is being dropped.
+
+---
+
+1) Final Pricing Summary Used by the Sales Order PDF
+
+Instrument the PDF generation path (generateSalesOrderPdf or equivalent) to log the FINAL pricing summary object used to compute totals.
+
+Paste the object showing:
+- basePrice
+- featuresTotal
+- discountTotal (or equivalent)
+- shipping
+- finalTotal
+- Any discount breakdown array or structure used by the PDF
+
+This must be the actual data used by the PDF, not UI calculations.
+
+---
+
+2) Discount Resolution Output (PDF Path)
+
+Log and paste the output of the discount resolution logic used by the PDF generator.
+
+Specifically confirm:
+- Which discount types are detected (persistent, promo, custom, etc.)
+- The calculated dollar amount for each discount
+- The combined discount total returned to pricing
+
+If discounts are detected only as labels/text and not converted into numeric values,
+explicitly state that.
+
+---
+
+3) Pricing Path Confirmation (Live vs Snapshot)
+
+Confirm which pricing path the Sales Order PDF is using in this scenario:
+- CUSTOMER_VIEW (live pricing)
+- SHIPPING_PRINT (live pricing)
+- SIGNATURE_EMAIL (snapshot pricing)
+- SIGNED_COPY (snapshot pricing)
+
+Also confirm:
+- Whether pricing values are computed live
+- Or read from a frozen order snapshot
+
+---
+
+4) Final Total Calculation Code
+
+Paste the exact code block where the Sales Order PDF computes the final total amount.
+
+Include:
+- File name
+- Line numbers
+- Subtotal calculation
+- Discount subtraction (or absence of it)
+- Shipping addition
+- Final total assignment
+
+---
+
+Constraints:
+- Do NOT modify database data
+- Do NOT backfill prod data
+- Do NOT “fix” the issue yet
+- This is diagnosis only
+
+Goal:
+Identify whether the discount:
+- Is never calculated
+- Is calculated but discarded
+- Or exists only as display text and never reaches the total math

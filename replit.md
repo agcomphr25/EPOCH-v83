@@ -67,6 +67,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
   - PDF bundle generation: Combines cover page, intake summary, signed documents, captured images, and audit summary into a single downloadable PDF stored in object storage with media library reference
   - Email distribution: Controlled email delivery of PDF bundles to employees with CC options (admin, HR), preflight validation, and direct attachment (no public URLs)
   - Employment Periods: First-class tracking of time-bounded employment engagements with derived active status via isEmployeeActive helper function
+  - Employer Signature System: Dual-signer workflow for HR documents requiring both employee and employer signatures. Authorized employer signers (Admin/Owner roles) are managed via Onboarding Settings. Templates can be marked as requiring employer signature, and finalization is blocked until all required employer signatures are obtained. Pending Employer Signatures queue shows documents awaiting employer signature.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

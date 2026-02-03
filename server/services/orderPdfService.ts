@@ -324,6 +324,20 @@ interface OrderSnapshot {
   customDiscountType?: string;
   customDiscountValue?: number;
   showCustomDiscount?: boolean;
+  // NEW: Resolved pricing summary for consistent UI/PDF display
+  pricingSummary?: {
+    basePrice: number;
+    basePriceSource: 'override' | 'standard';
+    featuresTotal: number;
+    featureBreakdown: Array<{ featureId: string; featureName: string; optionValue: string; price: number }>;
+    miscItemsTotal: number;
+    miscItems: Array<{ description: string; quantity: number; price: number; total: number }>;
+    subtotal: number;
+    discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }>;
+    discountTotal: number;
+    shipping: number;
+    finalTotal: number;
+  };
 }
 
 interface IntentConfig {
@@ -653,6 +667,16 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     customDiscountValue: discountFromFeatures.customDiscountValue || undefined,
     showCustomDiscount: discountFromFeatures.showCustomDiscount || false,
   };
+
+  // NEW: Add resolved pricing summary using shared function
+  try {
+    const pricingSummary = await storage.resolveOrderPricingSummary(orderId);
+    snapshot.pricingSummary = pricingSummary;
+    console.log(`💰 [PDF-SERVICE] Pricing summary for ${orderId}: subtotal=${pricingSummary.subtotal}, discountTotal=${pricingSummary.discountTotal}, shipping=${pricingSummary.shipping}, final=${pricingSummary.finalTotal}`);
+  } catch (err) {
+    console.warn(`⚠️ [PDF-SERVICE] Could not resolve pricing summary for ${orderId}:`, err);
+    // Continue without pricing summary - will fall back to legacy calculation in PDF
+  }
 
   console.log(`📸 [PDF-SERVICE] Snapshot created for ${orderId}:`, {
     customerName: snapshot.customerName,

@@ -706,6 +706,21 @@ export interface IStorage {
     orderTotal: number;
   }>;
 
+  // Pricing Summary Resolution - shared logic for UI and PDF
+  resolveOrderPricingSummary(orderId: string): Promise<{
+    basePrice: number;
+    basePriceSource: 'override' | 'standard';
+    featuresTotal: number;
+    featureBreakdown: Array<{ featureId: string; featureName: string; optionValue: string; price: number }>;
+    miscItemsTotal: number;
+    miscItems: Array<{ description: string; quantity: number; price: number; total: number }>;
+    subtotal: number;
+    discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }>;
+    discountTotal: number;
+    shipping: number;
+    finalTotal: number;
+  }>;
+
   // Forms CRUD
   getAllForms(): Promise<Form[]>;
   getForm(id: number): Promise<Form | undefined>;

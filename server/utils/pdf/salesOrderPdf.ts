@@ -60,6 +60,20 @@ interface OrderData {
   // Promo code discount fields
   discountType?: string; // 'none' | 'percent' | 'dollar'
   discountValue?: number;
+  // NEW: Resolved pricing summary for consistent UI/PDF display
+  pricingSummary?: {
+    basePrice: number;
+    basePriceSource: 'override' | 'standard';
+    featuresTotal: number;
+    featureBreakdown: Array<{ featureId: string; featureName: string; optionValue: string; price: number }>;
+    miscItemsTotal: number;
+    miscItems: Array<{ description: string; quantity: number; price: number; total: number }>;
+    subtotal: number;
+    discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }>;
+    discountTotal: number;
+    shipping: number;
+    finalTotal: number;
+  };
 }
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
@@ -771,7 +785,11 @@ export async function generateSalesOrderPDF(
 
   summaryLineY -= 15;
 
-  // Subtotal
+  // Subtotal - Use pricing summary when available for UI consistency
+  const displaySubtotal = orderData.pricingSummary 
+    ? orderData.pricingSummary.subtotal 
+    : calculatedSubtotal;
+  
   page.drawText('Subtotal:', {
     x: margin + 8,
     y: summaryLineY,
@@ -779,7 +797,7 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  page.drawText(`$${calculatedSubtotal.toFixed(2)}`, {
+  page.drawText(`$${displaySubtotal.toFixed(2)}`, {
     x: margin + printableWidth - 70,
     y: summaryLineY,
     size: 10,
@@ -789,12 +807,26 @@ export async function generateSalesOrderPDF(
   summaryLineY -= 20;
 
   // Discount (if applicable) - supports both custom discounts and promo code discounts
-  // Note: hasCustomDiscount and hasPromoDiscount are already defined earlier in the function for height calculation
+  // NEW: Use pricing summary when available for consistent UI/PDF display
   let discountAmount = 0;
   let discountLabel = '';
+  const discountItems: Array<{ label: string; amount: number }> = [];
   
-  if (hasCustomDiscount) {
-    // Custom discount logic
+  if (orderData.pricingSummary && orderData.pricingSummary.discounts.length > 0) {
+    // USE PRICING SUMMARY - single source of truth matching UI
+    console.log(`💰 [PDF] Using pricing summary for discounts: ${orderData.pricingSummary.discounts.length} discount(s)`);
+    
+    for (const discount of orderData.pricingSummary.discounts) {
+      const label = discount.type === 'percent'
+        ? `${discount.source} (${discount.value}%):`
+        : `${discount.source}:`;
+      discountItems.push({ label, amount: discount.amount });
+    }
+    discountAmount = orderData.pricingSummary.discountTotal;
+    discountLabel = discountItems.length === 1 ? discountItems[0].label : 'Total Discounts:';
+  } else if (hasCustomDiscount) {
+    // LEGACY: Custom discount logic (fallback when pricing summary not available)
+    console.log(`⚠️ [PDF] Using legacy custom discount calculation`);
     const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
       ? basePrice  // Apply only to stock model price
       : calculatedSubtotal;  // Apply to full subtotal
@@ -815,7 +847,8 @@ export async function generateSalesOrderPDF(
           ? `Discount (${orderData.customDiscountValue}%):`
           : 'Discount:';
   } else if (hasPromoDiscount) {
-    // Promo code discount logic
+    // LEGACY: Promo code discount logic (fallback when pricing summary not available)
+    console.log(`⚠️ [PDF] Using legacy promo discount calculation`);
     const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
       ? basePrice  // Apply only to stock model price
       : calculatedSubtotal;  // Apply to full subtotal
@@ -857,8 +890,10 @@ export async function generateSalesOrderPDF(
     summaryLineY -= 20;
   }
 
-  // Shipping
-  const shippingAmount = orderData.shipping || 0;
+  // Shipping - Use pricing summary when available for UI consistency
+  const shippingAmount = orderData.pricingSummary 
+    ? orderData.pricingSummary.shipping 
+    : (orderData.shipping || 0);
   page.drawText('Shipping:', {
     x: margin + 8,
     y: summaryLineY,
@@ -875,18 +910,31 @@ export async function generateSalesOrderPDF(
 
   summaryLineY -= 25;
 
-  // TOTAL
-  const totalAmount = calculatedSubtotal - discountAmount + shippingAmount;
+  // TOTAL - Use pricing summary when available for UI consistency
+  let totalAmount: number;
   
-  // Log calculation details for debugging
-  console.log('📄 [PDF] Total Calculation:', {
-    orderId: orderData.orderId,
-    calculatedSubtotal: calculatedSubtotal.toFixed(2),
-    discountAmount: discountAmount.toFixed(2),
-    shippingAmount: shippingAmount.toFixed(2),
-    totalAmount: totalAmount.toFixed(2),
-    formula: `${calculatedSubtotal.toFixed(2)} - ${discountAmount.toFixed(2)} + ${shippingAmount.toFixed(2)} = ${totalAmount.toFixed(2)}`,
-  });
+  if (orderData.pricingSummary) {
+    // USE PRICING SUMMARY - guaranteed to match UI calculation
+    totalAmount = orderData.pricingSummary.finalTotal;
+    console.log('📄 [PDF] Total from pricing summary (UI-consistent):', {
+      orderId: orderData.orderId,
+      pricingSummarySubtotal: orderData.pricingSummary.subtotal.toFixed(2),
+      pricingSummaryDiscountTotal: orderData.pricingSummary.discountTotal.toFixed(2),
+      pricingSummaryShipping: orderData.pricingSummary.shipping.toFixed(2),
+      pricingSummaryFinalTotal: orderData.pricingSummary.finalTotal.toFixed(2),
+    });
+  } else {
+    // LEGACY: Calculate from PDF values (fallback)
+    totalAmount = calculatedSubtotal - discountAmount + shippingAmount;
+    console.log('⚠️ [PDF] Total from legacy calculation:', {
+      orderId: orderData.orderId,
+      calculatedSubtotal: calculatedSubtotal.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      shippingAmount: shippingAmount.toFixed(2),
+      totalAmount: totalAmount.toFixed(2),
+      formula: `${calculatedSubtotal.toFixed(2)} - ${discountAmount.toFixed(2)} + ${shippingAmount.toFixed(2)} = ${totalAmount.toFixed(2)}`,
+    });
+  }
   
   page.drawText('TOTAL:', {
     x: margin + 8,

@@ -15985,13 +15985,27 @@ export class DatabaseStorage implements IStorage {
     `);
 
     // Format as reference data with id, name, and displayName
-    return deptRows.map((row: any, index: number) => ({
+    const departments = deptRows.map((row: any, index: number) => ({
       id: index + 1,
       name: row.current_department,
       displayName: row.current_department,
       sortOrder: index + 1,
       isActive: true
     }));
+
+    // Ensure "Awaiting Customer Signature" is always available as an option
+    const awaitingSignature = 'Awaiting Customer Signature';
+    if (!departments.some((d: any) => d.name === awaitingSignature)) {
+      departments.push({
+        id: departments.length + 1,
+        name: awaitingSignature,
+        displayName: awaitingSignature,
+        sortOrder: departments.length + 1,
+        isActive: true
+      });
+    }
+
+    return departments;
   }
 
   // Quotes CRUD

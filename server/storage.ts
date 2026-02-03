@@ -11689,13 +11689,65 @@ export class DatabaseStorage implements IStorage {
   async updateP2Customer(
     id: number,
     data: Partial<InsertP2Customer>
-  ): Promise<P2Customer> {
-    const [customer] = await db
-      .update(p2Customers)
-      .set(data)
-      .where(eq(p2Customers.id, id))
-      .returning();
-    return customer;
+  ): Promise<P2Customer | undefined> {
+    // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
+    const setClauses: string[] = [];
+    const params: any[] = [];
+    
+    // Map camelCase to snake_case for database columns
+    const columnMap: Record<string, string> = {
+      customerName: 'customer_name',
+      contactEmail: 'contact_email',
+      contactPhone: 'contact_phone',
+      billingAddress: 'billing_address',
+      shippingAddress: 'shipping_address',
+      shipToAddress: 'ship_to_address',
+      paymentTerms: 'payment_terms',
+      status: 'status',
+      notes: 'notes',
+      rfqPrefix: 'rfq_prefix',
+      rfqSequences: 'rfq_sequences',
+    };
+    
+    for (const [key, value] of Object.entries(data)) {
+      const column = columnMap[key];
+      if (column && value !== undefined) {
+        params.push(key === 'rfqSequences' ? JSON.stringify(value) : value);
+        setClauses.push(`${column} = $${params.length}`);
+      }
+    }
+    
+    if (setClauses.length === 0) {
+      // No updates to make, just return the existing customer
+      const result = await pool.query(`
+        SELECT id, customer_id as "customerId", customer_name as "customerName",
+          contact_email as "contactEmail", contact_phone as "contactPhone",
+          billing_address as "billingAddress", shipping_address as "shippingAddress",
+          ship_to_address as "shipToAddress", payment_terms as "paymentTerms",
+          status, notes, rfq_prefix as "rfqPrefix", rfq_sequences as "rfqSequences",
+          created_at as "createdAt", updated_at as "updatedAt"
+        FROM p2_customers WHERE id = $1
+      `, [id]);
+      return result[0] as P2Customer | undefined;
+    }
+    
+    // Add updated_at
+    setClauses.push(`updated_at = NOW()`);
+    params.push(id);
+    
+    const result = await pool.query(`
+      UPDATE p2_customers 
+      SET ${setClauses.join(', ')}
+      WHERE id = $${params.length}
+      RETURNING id, customer_id as "customerId", customer_name as "customerName",
+        contact_email as "contactEmail", contact_phone as "contactPhone",
+        billing_address as "billingAddress", shipping_address as "shippingAddress",
+        ship_to_address as "shipToAddress", payment_terms as "paymentTerms",
+        status, notes, rfq_prefix as "rfqPrefix", rfq_sequences as "rfqSequences",
+        created_at as "createdAt", updated_at as "updatedAt"
+    `, params);
+    
+    return result[0] as P2Customer | undefined;
   }
 
   async deleteP2Customer(id: number): Promise<void> {
@@ -11832,10 +11884,27 @@ export class DatabaseStorage implements IStorage {
 
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
-    return await db
-      .select()
-      .from(p2PurchaseOrders)
-      .orderBy(desc(p2PurchaseOrders.createdAt));
+    // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
+    const result = await pool.query(`
+      SELECT 
+        id, po_number as "poNumber", customer_id as "customerId", 
+        customer_name as "customerName", po_date as "poDate", 
+        expected_delivery as "expectedDelivery", status, notes, 
+        created_at as "createdAt", updated_at as "updatedAt",
+        attachments, tolerance_authorizer_id as "toleranceAuthorizerId",
+        tolerance_authorizer_name as "toleranceAuthorizerName",
+        tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
+        locked_at as "lockedAt", locked_by as "lockedBy",
+        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        created_by_name as "createdByName", assigned_to_id as "assignedToId",
+        assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
+        bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
+        scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
+        production_lead_name as "productionLeadName"
+      FROM p2_purchase_orders 
+      ORDER BY created_at DESC
+    `);
+    return result as P2PurchaseOrder[];
   }
 
   async getP2PurchaseOrder(
@@ -11863,8 +11932,57 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrder(
     data: InsertP2PurchaseOrder
   ): Promise<P2PurchaseOrder> {
-    const [po] = await db.insert(p2PurchaseOrders).values(data).returning();
-    return po;
+    // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
+    const result = await pool.query(`
+      INSERT INTO p2_purchase_orders (
+        po_number, customer_id, customer_name, po_date, expected_delivery,
+        status, notes, attachments, tolerance_authorizer_id, tolerance_authorizer_name,
+        tolerance_notes, bom_configured, source_quote_id, created_by_id, created_by_name,
+        assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
+        scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+      )
+      RETURNING id, po_number as "poNumber", customer_id as "customerId",
+        customer_name as "customerName", po_date as "poDate",
+        expected_delivery as "expectedDelivery", status, notes,
+        attachments, tolerance_authorizer_id as "toleranceAuthorizerId",
+        tolerance_authorizer_name as "toleranceAuthorizerName",
+        tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
+        locked_at as "lockedAt", locked_by as "lockedBy",
+        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        created_by_name as "createdByName", assigned_to_id as "assignedToId",
+        assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
+        bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
+        scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
+        production_lead_name as "productionLeadName",
+        created_at as "createdAt", updated_at as "updatedAt"
+    `, [
+      data.poNumber,
+      data.customerId,
+      data.customerName,
+      data.poDate,
+      data.expectedDelivery,
+      data.status || 'OPEN',
+      data.notes || null,
+      JSON.stringify(data.attachments || []),
+      data.toleranceAuthorizerId || null,
+      data.toleranceAuthorizerName || null,
+      data.toleranceNotes || null,
+      data.bomConfigured || false,
+      data.sourceQuoteId || null,
+      data.createdById || null,
+      data.createdByName || null,
+      data.assignedToId || null,
+      data.assignedToName || null,
+      data.bomOwnerId || null,
+      data.bomOwnerName || null,
+      data.scheduledById || null,
+      data.scheduledByName || null,
+      data.productionLeadId || null,
+      data.productionLeadName || null,
+    ]);
+    return result[0] as P2PurchaseOrder;
   }
 
   async updateP2PurchaseOrder(
@@ -12526,30 +12644,57 @@ export class DatabaseStorage implements IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]> {
-    let conditions = [];
-
+    // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
+    let whereClause = '';
+    const params: any[] = [];
+    const conditions: string[] = [];
+    
     if (filters?.poId) {
-      conditions.push(eq(p2SerializedItems.poId, filters.poId));
+      params.push(filters.poId);
+      conditions.push(`po_id = $${params.length}`);
     }
     if (filters?.poItemId) {
-      conditions.push(eq(p2SerializedItems.poItemId, filters.poItemId));
+      params.push(filters.poItemId);
+      conditions.push(`po_item_id = $${params.length}`);
     }
     if (filters?.department) {
-      conditions.push(eq(p2SerializedItems.currentDepartment, filters.department));
+      params.push(filters.department);
+      conditions.push(`current_department = $${params.length}`);
     }
     if (filters?.status) {
-      conditions.push(eq(p2SerializedItems.status, filters.status));
+      params.push(filters.status);
+      conditions.push(`status = $${params.length}`);
     }
-
-    if (conditions.length === 0) {
-      return await db.select().from(p2SerializedItems).orderBy(p2SerializedItems.createdAt);
+    
+    if (conditions.length > 0) {
+      whereClause = `WHERE ${conditions.join(' AND ')}`;
     }
-
-    return await db
-      .select()
-      .from(p2SerializedItems)
-      .where(and(...conditions))
-      .orderBy(p2SerializedItems.createdAt);
+    
+    const result = await pool.query(`
+      SELECT 
+        id, serial_number as "serialNumber", barcode,
+        po_id as "poId", po_item_id as "poItemId",
+        po_number as "poNumber", part_number as "partNumber",
+        part_name as "partName", customer_id as "customerId",
+        customer_name as "customerName", sequence_number as "sequenceNumber",
+        current_department as "currentDepartment",
+        current_stage_index as "currentStageIndex",
+        status, department_history as "departmentHistory",
+        metadata, layup_completed_at as "layupCompletedAt",
+        assemble_disassembly_completed_at as "assembleDisassemblyCompletedAt",
+        cnc_completed_at as "cncCompletedAt",
+        finish_completed_at as "finishCompletedAt",
+        paint_completed_at as "paintCompletedAt",
+        final_qc_completed_at as "finalQcCompletedAt",
+        completed_at as "completedAt",
+        hold_reason as "holdReason", hold_by as "holdBy", hold_at as "holdAt",
+        scrap_reason as "scrapReason", scrap_by as "scrapBy", scrap_at as "scrapAt",
+        notes, created_at as "createdAt", updated_at as "updatedAt"
+      FROM p2_serialized_items
+      ${whereClause}
+      ORDER BY created_at
+    `, params);
+    return result as P2SerializedItem[];
   }
 
   async getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined> {

@@ -1186,9 +1186,9 @@ router.post('/customers', async (req: Request, res: Response) => {
 
 router.put('/customers/:id', async (req: Request, res: Response) => {
   try {
-    const customerId = parseInt(req.params.id);
+    const id = parseInt(req.params.id);
     
-    console.log('📝 Updating P2 customer:', customerId);
+    console.log('📝 Updating P2 customer:', id);
     console.log('📊 Update data received:', JSON.stringify(req.body, null, 2));
     
     // Validate the update data through the schema (partial allows optional fields)
@@ -1201,10 +1201,14 @@ router.put('/customers/:id', async (req: Request, res: Response) => {
       });
     }
     
-    const updates = validation.data;
-    console.log('🔢 Validated updates:', JSON.stringify(updates, null, 2));
+    // Extract validated data and explicitly remove customerId - it's an immutable identifier
+    const { customerId, ...updates } = validation.data;
+    if (customerId !== undefined) {
+      console.log('⚠️ Ignoring customerId field in update - this field cannot be changed');
+    }
+    console.log('🔢 Validated updates (without customerId):', JSON.stringify(updates, null, 2));
     
-    const updatedCustomer = await storage.updateP2Customer(customerId, updates);
+    const updatedCustomer = await storage.updateP2Customer(id, updates);
     
     if (!updatedCustomer) {
       return res.status(404).json({ error: 'Customer not found' });

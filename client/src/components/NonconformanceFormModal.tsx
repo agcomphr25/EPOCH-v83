@@ -26,6 +26,7 @@ import {
 } from '../utils/nonconformanceUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '../lib/queryClient';
+import { RepairBarcodeDisplay } from './RepairBarcodeDisplay';
 
 interface StockModel {
   id: string;
@@ -107,6 +108,7 @@ export default function NonconformanceFormModal({
   const [orderQuery, setOrderQuery] = useState('');
   const [orderResults, setOrderResults] = useState<OrderLookup[]>([]);
   const lastSelectedOrderIdRef = useRef<string | null>(null);
+  const [savedRecord, setSavedRecord] = useState<any>(null);
 
   const [form, setForm] = useState({
     rmaNumber: '',
@@ -154,6 +156,7 @@ export default function NonconformanceFormModal({
   // Wrapper for onClose that resets the ref
   const handleClose = () => {
     lastSelectedOrderIdRef.current = null;
+    setSavedRecord(null);
     onClose();
   };
 
@@ -404,16 +407,24 @@ export default function NonconformanceFormModal({
           title: 'Success',
           description: 'Nonconformance record updated successfully',
         });
+        onSaved();
+        handleClose();
       } else {
-        await createRecord(dataToSave);
+        const createdRecord = await createRecord(dataToSave);
         toast({
           title: 'Success',
           description: 'Nonconformance record created successfully',
         });
+        onSaved();
+        
+        // If this is a repair record with a department assigned, show the barcode option
+        if (dataToSave.disposition === 'Repair' && dataToSave.repairDepartment && createdRecord?.rmaNumber) {
+          setSavedRecord(createdRecord);
+          setForm(prev => ({ ...prev, rmaNumber: createdRecord.rmaNumber }));
+        } else {
+          handleClose();
+        }
       }
-
-      onSaved();
-      handleClose();
     } catch (error) {
       console.error('Save error:', error);
       toast({
@@ -431,10 +442,50 @@ export default function NonconformanceFormModal({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? 'Edit' : 'New'} Nonconformance Record
+            {savedRecord ? 'Record Created - Print Repair Barcode' : (isEdit ? 'Edit' : 'New')} Nonconformance Record
           </DialogTitle>
         </DialogHeader>
 
+        {savedRecord ? (
+          <div className="space-y-6 py-4">
+            <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800 text-center">
+              <div className="text-green-600 dark:text-green-400 font-semibold text-lg mb-2">
+                Record Created Successfully!
+              </div>
+              <div className="text-green-700 dark:text-green-300">
+                RMA #: <span className="font-bold">{savedRecord.rmaNumber}</span>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg border-2 border-red-300 dark:border-red-700">
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-center">
+                  <h3 className="font-semibold text-red-800 dark:text-red-200 mb-1">
+                    Print Repair Tracking Barcode
+                  </h3>
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    Print a red barcode to track this item through production in {savedRecord.repairDepartment}
+                  </p>
+                </div>
+                <RepairBarcodeDisplay
+                  rmaNumber={savedRecord.rmaNumber}
+                  orderId={savedRecord.orderId}
+                  serialNumber={savedRecord.serialNumber}
+                  repairDepartment={savedRecord.repairDepartment}
+                  customerName={savedRecord.customerName}
+                  stockModel={savedRecord.stockModel}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-center pt-2">
+              <Button onClick={handleClose} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="space-y-4 py-4">
           {/* RMA Number Display */}
           {isEdit && form.rmaNumber && (
@@ -763,6 +814,29 @@ export default function NonconformanceFormModal({
                 />
               </div>
 
+              {form.repairDepartment && (isEdit || form.rmaNumber) && (
+                <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-red-800 dark:text-red-200">
+                        Repair Tracking Barcode
+                      </span>
+                      <span className="text-xs text-red-600 dark:text-red-400">
+                        Print a red barcode to track this item through production
+                      </span>
+                    </div>
+                    <RepairBarcodeDisplay
+                      rmaNumber={form.rmaNumber}
+                      orderId={form.orderId}
+                      serialNumber={form.serialNumber}
+                      repairDepartment={form.repairDepartment}
+                      customerName={form.customerName}
+                      stockModel={form.stockModel}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Address Selection */}
               <div className="space-y-4 border-t pt-4">
                 <h4 className="font-medium text-blue-900 dark:text-blue-100">
@@ -1005,6 +1079,8 @@ export default function NonconformanceFormModal({
             {loading ? 'Saving...' : 'Save'}
           </Button>
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

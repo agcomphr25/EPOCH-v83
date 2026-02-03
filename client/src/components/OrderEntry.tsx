@@ -801,6 +801,32 @@ export default function OrderEntry() {
     return result;
   }, [subtotalPrice, discountAmount]);
 
+  // Helper function to detect discount-like text in notes
+  // Used to warn CSRs when they type discounts in notes instead of using structured discount fields
+  const hasDiscountTextInNotes = useMemo(() => {
+    if (!notes) return false;
+    const discountPatterns = [
+      /\bdiscount\b/i,
+      /\d+\s*%\s*off/i,
+      /\$\s*\d+(\.\d{2})?\s*off/i,
+      /price reduction/i,
+      /\bdeduct\b/i,
+      /\brebate\b/i,
+    ];
+    return discountPatterns.some(pattern => pattern.test(notes));
+  }, [notes]);
+
+  // Check if a structured discount is active
+  const hasStructuredDiscount = useMemo(() => {
+    return (
+      (discountCode && discountCode !== 'none') ||
+      (showCustomDiscount && customDiscountValue && customDiscountValue > 0)
+    );
+  }, [discountCode, showCustomDiscount, customDiscountValue]);
+
+  // Show warning when notes mention discounts but no structured discount is applied
+  const showDiscountWarning = hasDiscountTextInNotes && !hasStructuredDiscount;
+
   // Helper function to format currency with commas
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -4776,6 +4802,20 @@ export default function OrderEntry() {
                       </div>
                     </div>
                   )}
+                  {/* CSR Warning: Discount text in notes without structured discount */}
+                  {showDiscountWarning && (
+                    <div className="mt-2 p-3 bg-orange-50 border border-orange-300 rounded-md flex items-start gap-2">
+                      <span className="text-orange-500 text-lg">⚠️</span>
+                      <div>
+                        <p className="text-sm text-orange-800 font-medium">
+                          Discount mentioned in notes, but no pricing discount applied
+                        </p>
+                        <p className="text-xs text-orange-700 mt-1">
+                          Notes do not affect order totals. Use the Discount section below to apply a pricing discount.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Miscellaneous Items */}
@@ -5864,22 +5904,29 @@ export default function OrderEntry() {
                   </span>
                 </div>
 
-                {/* Display selected discount */}
-                {discountCode &&
-                  discountCode !== 'none' &&
-                  discountAmount > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-green-600">
-                        Discount (
-                        {discountOptions.find((d) => d.value === discountCode)
-                          ?.label || 'Custom'}
-                        ):
+                {/* Display selected discount - Enhanced confirmation indicator */}
+                {hasStructuredDiscount && discountAmount > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 text-sm">✓</span>
+                      <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                        Discount Applied
                       </span>
-                      <span className="font-bold text-green-600">
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-green-700 text-sm">
+                        {showCustomDiscount && customDiscountValue 
+                          ? (customDiscountType === 'percent' 
+                              ? `Custom (${customDiscountValue}%)` 
+                              : 'Custom Discount')
+                          : discountOptions.find((d) => d.value === discountCode)?.label || 'Discount'}
+                      </span>
+                      <span className="font-bold text-green-700">
                         -{formatCurrency(discountAmount)}
                       </span>
                     </div>
-                  )}
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Shipping & Handling:</span>

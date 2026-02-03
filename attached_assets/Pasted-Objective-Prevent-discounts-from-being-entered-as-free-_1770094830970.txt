@@ -1,0 +1,95 @@
+Objective:
+Prevent discounts from being entered as free text and ensure that any discount affecting order totals
+must exist in structured discount fields.
+
+Context:
+We identified cases (e.g., EI193) where a discount appears in Sales Order PDF text or notes
+but is not applied to totals because it was never stored in structured discount fields.
+
+This is NOT a calculation bug.
+This is a data-contract and UX enforcement issue.
+
+We will enforce the rule:
+"If a discount affects price, it must be represented in structured discount fields."
+
+---
+
+PART 1 — Enforce Discount Discipline (No Free-Text Discounts)
+
+Rules:
+1. Free-text fields (customer notes, internal notes, feature descriptions) must NEVER affect pricing.
+2. Only structured fields may affect pricing:
+   - Persistent discounts (discountCode)
+   - Custom discounts (showCustomDiscount + customDiscountType + customDiscountValue)
+3. Pricing logic must remain unchanged.
+
+Implementation:
+- Do NOT parse discounts out of notes or feature text.
+- Do NOT attempt to auto-convert text into discounts.
+- Leave resolveOrderPricingSummary() exactly as-is.
+
+---
+
+PART 2 — Add CSR UX Nudge (Soft Warning, Not a Hard Block)
+
+Goal:
+Prevent CSRs from accidentally typing discounts into notes and assuming totals will update.
+
+Add a UI warning when ALL of the following are true:
+- Notes or feature descriptions contain discount-like language
+  (examples: "discount", "% off", "$ off", "price reduction")
+- AND no structured discount is active:
+  - discountCode is null/none
+  - AND showCustomDiscount is false or customDiscountValue is null
+
+Warning Behavior:
+- Display a non-blocking warning message near the notes field
+- Do NOT block saving the order
+- Do NOT auto-apply any discounts
+
+Suggested Warning Copy (exact wording optional):
+"⚠️ This order mentions a discount in notes, but no pricing discount is applied.
+Notes do not affect totals. Use the Discount section to apply pricing discounts."
+
+---
+
+PART 3 — Visual Confirmation When Discounts ARE Applied
+
+When a structured discount IS active:
+- Display a small confirmation indicator near totals:
+  Example:
+  "Discount Applied: GB-20 (20%)"
+  or
+  "Custom Discount: $57.90"
+
+Purpose:
+- Reinforce correct workflow
+- Reduce CSR confusion
+- Make pricing intent obvious before PDFs are generated
+
+---
+
+PART 4 — Safety & Constraints
+
+Constraints:
+- Do NOT modify existing order data
+- Do NOT backfill historical orders
+- Do NOT mutate snapshots
+- Do NOT change pricing math
+- Do NOT add regex-based discount parsing
+
+This is a UX and data-discipline change only.
+
+---
+
+Acceptance Criteria:
+- A discount typed only in notes does NOT affect totals
+- CSRs receive a visible warning when this occurs
+- Structured discounts continue to work exactly as before
+- Sales Order PDFs always match calculated totals
+- This class of mismatch cannot occur silently again
+
+Deliverables:
+- Files modified
+- Screenshot or description of the warning UI
+- Confirmation that pricing logic was not altered

@@ -1,0 +1,123 @@
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/po-statuses 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/pending-actions 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.then
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.catch
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.then
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.catch
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40
+index-CTFsfFEq.js:235  GET https://agcompepoch.xyz/api/p2/control-center/po-statuses 500 (Internal Server Error)
+(anonymous) @ index-CTFsfFEq.js:235
+o @ index-CTFsfFEq.js:51
+p @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.then
+(anonymous) @ index-CTFsfFEq.js:51
+Promise.catch
+p @ index-CTFsfFEq.js:51
+start @ index-CTFsfFEq.js:51
+fetch @ index-CTFsfFEq.js:51
+R7 @ index-CTFsfFEq.js:51
+onSubscribe @ index-CTFsfFEq.js:51
+subscribe @ index-CTFsfFEq.js:51
+(anonymous) @ index-CTFsfFEq.js:51
+SHe @ index-CTFsfFEq.js:38
+Sre @ index-CTFsfFEq.js:40
+tF @ index-CTFsfFEq.js:40
+r2t @ index-CTFsfFEq.js:40
+Nk @ index-CTFsfFEq.js:40
+S5e @ index-CTFsfFEq.js:40
+OI @ index-CTFsfFEq.js:38
+(anonymous) @ index-CTFsfFEq.js:40

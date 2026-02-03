@@ -108,11 +108,11 @@ export function RepairBarcodeDisplay({
                 }
 
                 .repair-label {
-                  width: 3in;
-                  height: 1.5in;
-                  border: 3px solid #DC2626;
-                  margin: 0.125in;
-                  padding: 0.1in;
+                  width: 2.625in;
+                  height: 1in;
+                  border: 2px solid #DC2626;
+                  margin: 0;
+                  padding: 0.05in;
                   display: inline-block;
                   vertical-align: top;
                   box-sizing: border-box;
@@ -129,39 +129,39 @@ export function RepairBarcodeDisplay({
                 }
 
                 .repair-header {
-                  font-size: 10pt;
+                  font-size: 7pt;
                   font-weight: bold;
                   color: #DC2626;
-                  margin-bottom: 2px;
+                  margin-bottom: 1px;
                   text-transform: uppercase;
                 }
 
                 .barcode-img {
                   max-width: 100%;
-                  max-height: 0.6in;
+                  max-height: 0.5in;
                   height: auto;
-                  margin: 4px 0;
+                  margin: 2px 0;
                 }
 
                 .repair-details {
-                  font-size: 7pt;
-                  line-height: 1.2;
+                  font-size: 6pt;
+                  line-height: 1.1;
                   color: #333;
                 }
 
                 .repair-dept {
-                  font-size: 8pt;
+                  font-size: 6pt;
                   font-weight: bold;
                   color: #DC2626;
                   background: #FEE2E2;
-                  padding: 2px 4px;
-                  margin-top: 2px;
+                  padding: 1px 3px;
+                  margin-top: 1px;
                 }
 
                 .date-info {
-                  font-size: 6pt;
+                  font-size: 5pt;
                   color: #666;
-                  margin-top: 2px;
+                  margin-top: 1px;
                 }
 
                 @media print {
@@ -178,27 +178,17 @@ export function RepairBarcodeDisplay({
             </head>
             <body>
               <div class="labels-container">
-                ${Array(4)
-                  .fill(null)
-                  .map(
-                    () => `
-                  <div class="repair-label">
-                    <div class="label-content">
-                      <div class="repair-header">REPAIR TRACKING</div>
-                      <img src="${img}" alt="Repair Barcode ${barcodeValue}" class="barcode-img" />
-                      <div class="repair-details">
-                        ${rmaNumber ? `<div><strong>RMA:</strong> ${rmaNumber}</div>` : ''}
-                        ${orderId ? `<div><strong>Order:</strong> ${orderId}</div>` : ''}
-                        ${customerName ? `<div>${customerName}</div>` : ''}
-                        ${stockModel ? `<div>${stockModel}</div>` : ''}
-                      </div>
-                      ${repairDepartment ? `<div class="repair-dept">${repairDepartment}</div>` : ''}
-                      <div class="date-info">Printed: ${currentDate}</div>
+                <div class="repair-label">
+                  <div class="label-content">
+                    <div class="repair-header">NONCONFORMING - REPAIR</div>
+                    <img src="${img}" alt="Repair Barcode ${barcodeValue}" class="barcode-img" />
+                    <div class="repair-details">
+                      ${rmaNumber ? `<strong>RMA:</strong> ${rmaNumber}` : ''}
+                      ${orderId && orderId !== rmaNumber ? ` | <strong>Order:</strong> ${orderId}` : ''}
                     </div>
+                    ${repairDepartment ? `<div class="repair-dept">${repairDepartment}</div>` : ''}
                   </div>
-                `
-                  )
-                  .join('')}
+                </div>
               </div>
             </body>
           </html>

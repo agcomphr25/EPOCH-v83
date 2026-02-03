@@ -174,11 +174,16 @@ router.delete('/:attachmentId', sessionAwareAuth, async (req, res) => {
       return res.status(404).json({ error: 'Associated project not found' });
     }
 
-    if (attachment.filePath && attachment.filePath.startsWith('/objects/')) {
+    // Normalize objects/ prefix to /objects/
+    const normalizedPath = attachment.filePath?.startsWith('objects/') 
+      ? `/${attachment.filePath}` 
+      : attachment.filePath;
+    
+    if (normalizedPath && normalizedPath.startsWith('/objects/')) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(attachment.filePath);
+        const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
         await objectFile.delete();
-        console.log(`📁 Deleted cloud file: ${attachment.filePath}`);
+        console.log(`📁 Deleted cloud file: ${normalizedPath}`);
       } catch (deleteError) {
         console.warn('Failed to delete file from cloud storage:', deleteError);
       }
@@ -213,9 +218,14 @@ router.get('/download/:attachmentId', sessionAwareAuth, async (req, res) => {
       return res.status(404).json({ error: 'Associated project not found' });
     }
 
-    if (attachment.filePath && attachment.filePath.startsWith('/objects/')) {
+    // Normalize objects/ prefix to /objects/
+    const normalizedDownloadPath = attachment.filePath?.startsWith('objects/') 
+      ? `/${attachment.filePath}` 
+      : attachment.filePath;
+    
+    if (normalizedDownloadPath && normalizedDownloadPath.startsWith('/objects/')) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(attachment.filePath);
+        const objectFile = await objectStorageService.getObjectEntityFile(normalizedDownloadPath);
         
         if (forceDownload) {
           res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.originalFileName)}"`);

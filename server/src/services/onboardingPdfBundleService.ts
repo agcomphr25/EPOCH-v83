@@ -105,9 +105,16 @@ export async function generateOnboardingBundle(sessionId: string): Promise<Bundl
       
       if (existingMedia.length > 0) {
         // Download URL is the storage path served through /objects/* route
-        const downloadUrl = existingMedia[0].storagePath.startsWith('/objects/') 
-          ? existingMedia[0].storagePath 
-          : `/api/media/download/${existingMedia[0].id}`;
+        // Handle both /objects/ and objects/ prefixes for cloud storage
+        const storagePath = existingMedia[0].storagePath;
+        let downloadUrl: string;
+        if (storagePath.startsWith('/objects/')) {
+          downloadUrl = storagePath;
+        } else if (storagePath.startsWith('objects/')) {
+          downloadUrl = `/${storagePath}`;
+        } else {
+          downloadUrl = `/api/media/download/${existingMedia[0].id}`;
+        }
         return { 
           success: true, 
           mediaItemId: session.bundleMediaItemId,
@@ -512,6 +519,11 @@ async function addCapturePage(
         let imageBytes: Buffer;
         
         // Check if it's a local path or object storage path
+        // Normalize objects/ prefix to /objects/
+        const normalizedPath = capture.storagePath.startsWith('objects/') 
+          ? `/${capture.storagePath}` 
+          : capture.storagePath;
+        
         if (capture.storagePath.startsWith('uploads/')) {
           const localPath = path.join(process.cwd(), capture.storagePath);
           if (fs.existsSync(localPath)) {
@@ -519,9 +531,9 @@ async function addCapturePage(
           } else {
             throw new Error('Local file not found');
           }
-        } else if (capture.storagePath.startsWith('/objects/')) {
+        } else if (normalizedPath.startsWith('/objects/')) {
           // Download from object storage using the file object
-          const objectFile = await objectStorageService.getObjectEntityFile(capture.storagePath);
+          const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
           const [buffer] = await objectFile.download();
           imageBytes = buffer;
         } else {

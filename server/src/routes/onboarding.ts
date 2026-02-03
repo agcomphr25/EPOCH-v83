@@ -2379,8 +2379,13 @@ router.get('/sessions/:id/bundle', async (req: Request, res: Response) => {
       });
     }
     
-    const downloadUrl = session.storagePath?.startsWith('/objects/') 
-      ? session.storagePath 
+    // Normalize objects/ prefix to /objects/
+    const normalizedStoragePath = session.storagePath?.startsWith('objects/') 
+      ? `/${session.storagePath}` 
+      : session.storagePath;
+    
+    const downloadUrl = normalizedStoragePath?.startsWith('/objects/') 
+      ? normalizedStoragePath 
       : `/api/media/download/${session.bundleMediaItemId}`;
     
     res.json({
@@ -2528,9 +2533,14 @@ router.post('/sessions/:id/email-bundle', async (req: Request, res: Response) =>
     // 2. FETCH BUNDLE PDF
     let pdfBuffer: Buffer;
     try {
-      if (session.storagePath?.startsWith('/objects/')) {
+      // Normalize objects/ prefix to /objects/
+      const normalizedBundlePath = session.storagePath?.startsWith('objects/') 
+        ? `/${session.storagePath}` 
+        : session.storagePath;
+      
+      if (normalizedBundlePath?.startsWith('/objects/')) {
         // Download from object storage
-        const objectFile = await objectStorageService.getObjectEntityFile(session.storagePath);
+        const objectFile = await objectStorageService.getObjectEntityFile(normalizedBundlePath);
         const [buffer] = await objectFile.download();
         pdfBuffer = buffer;
       } else if (session.storagePath?.startsWith('uploads/')) {

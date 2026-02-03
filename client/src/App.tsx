@@ -66,6 +66,7 @@ import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
 import OnboardingPathsPage from './pages/OnboardingPathsPage';
+import OnboardingSettingsPage from './pages/OnboardingSettingsPage';
 import OnboardingFormsPage from './pages/OnboardingFormsPage';
 import OnboardingSessionWizard from './pages/OnboardingSessionWizard';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
@@ -527,6 +528,7 @@ function App() {
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/onboarding" component={OnboardingDashboard} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
+                  <Route path="/onboarding/settings" component={OnboardingSettingsPage} />
                   {/* DEPRECATED: Form builder hidden - using fixed demographics instead */}
                   {/* <Route path="/onboarding/forms" component={OnboardingFormsPage} /> */}
                   <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />

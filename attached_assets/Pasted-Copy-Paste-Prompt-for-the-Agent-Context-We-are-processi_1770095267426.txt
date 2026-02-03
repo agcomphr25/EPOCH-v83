@@ -1,0 +1,88 @@
+Copy-Paste Prompt for the Agent
+
+Context
+We are processing live credit card payments in EPOCH using Accept.Blue.
+Current behavior requires the order to be saved first, then reopened, before a card can be entered and processed.
+This is inconsistent with all other payment types, which can be added before the order is saved.
+
+Goal
+I need to support this flow:
+
+Start a new order (unsaved)
+
+Enter and process a live credit card payment
+
+Only save the order after the card transaction is accepted
+
+Task
+Please audit the current credit-card payment flow and answer the following specific questions only (do not implement yet):
+
+1️⃣ Technical Dependency Analysis
+
+What exact fields from the order are currently required before calling Accept.Blue?
+
+Which of those fields are truly required by Accept.Blue vs. only required by our internal schema?
+
+Identify where the order ID (or order persistence) is being enforced as a prerequisite.
+
+2️⃣ Accept.Blue Constraints
+
+Does Accept.Blue require:
+
+a permanent order ID?
+
+or will it accept a temporary reference / external transaction ID?
+
+Can we process a transaction with a client-generated UUID or session-based identifier?
+
+3️⃣ Current Code Path Mapping
+
+Please identify:
+
+The frontend component(s) responsible for initiating the credit card transaction
+
+The backend route that sends the Accept.Blue request
+
+Where the system blocks or assumes order.id already exists
+
+4️⃣ Viable Architectural Options
+
+Without implementing, outline at least two viable patterns:
+
+Option A: Temporary / Draft Order + Finalize on Success
+
+Option B: Payment-First Transaction Record (detached from order)
+
+For each option, briefly list:
+
+Pros
+
+Cons
+
+Data integrity or reconciliation risks
+
+5️⃣ Accounting & Audit Safety
+
+How would each option affect:
+
+failed payments
+
+abandoned orders
+
+reconciliation with Accept.Blue settlement reports
+
+Constraints
+
+Do NOT refactor unrelated payment types
+
+Do NOT change Accept.Blue SDK behavior unless required
+
+Focus only on enabling card-before-save flow safely
+
+Output Format
+
+Bullet points
+
+File names + function names where relevant
+
+No speculative implementation unless clearly marked as such

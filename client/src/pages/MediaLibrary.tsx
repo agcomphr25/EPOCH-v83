@@ -204,7 +204,7 @@ export default function MediaLibrary() {
     
     try {
       // Step 1: Get pre-signed upload URL from cloud storage
-      const urlResponse = await fetch('/api/objects/upload-url', {
+      const urlResponse = await fetch('/api/media/request-upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

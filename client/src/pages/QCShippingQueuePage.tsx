@@ -825,19 +825,25 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Open all PDFs in the print queue at once
+  // Open all PDFs in the print queue with small delays to avoid popup blocker
   const openAllPDFs = () => {
-    printQueue.forEach((item) => {
+    let delay = 0;
+    printQueue.forEach((item, index) => {
       const url =
         item.type === 'sales'
           ? `/api/shipping-pdf/sales-order/${item.orderId}`
           : `/api/shipping-pdf/qc-checklist/${item.orderId}`;
-      window.open(url, '_blank');
+      
+      // Stagger the window.open calls with 300ms delay between each
+      setTimeout(() => {
+        window.open(url, '_blank');
+      }, delay);
+      delay += 300;
     });
 
     toast({
-      title: 'Documents Opened',
-      description: `Opened ${printQueue.length} documents for printing`,
+      title: 'Opening Documents',
+      description: `Opening ${printQueue.length} documents for printing...`,
     });
   };
 

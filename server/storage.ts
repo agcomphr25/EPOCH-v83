@@ -3605,6 +3605,74 @@ export class DatabaseStorage implements IStorage {
     return isNaN(finalTotal) ? 0 : finalTotal;
   }
 
+  /**
+   * SHARED PAYMENT STATUS RESOLVER
+   * Resolves payment status using the SAME logic as the Order Entry UI.
+   * Source of truth: payments table + calculateOrderTotalOptimized()
+   * 
+   * This function should be used by ALL code paths that need payment status,
+   * including Sales Order PDF generation.
+   * 
+   * @param orderId - The order ID to check payment status for
+   * @returns 'PAID' | 'PENDING' (and total amounts for debugging)
+   */
+  async resolvePaymentStatus(orderId: string): Promise<{
+    status: 'PAID' | 'PENDING';
+    paymentTotal: number;
+    orderTotal: number;
+  }> {
+    try {
+      // 1. Get total payments from payments table (same as UI logic)
+      const paymentResult = await db
+        .select({
+          totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, orderId));
+      
+      const paymentTotal = paymentResult.length > 0 ? Number(paymentResult[0].totalPayments) : 0;
+
+      // 2. Get order and calculate total using optimized function (same as UI logic)
+      const [order] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId));
+
+      if (!order) {
+        console.warn(`[resolvePaymentStatus] Order ${orderId} not found, returning PENDING`);
+        return { status: 'PENDING', paymentTotal: 0, orderTotal: 0 };
+      }
+
+      // Fetch cached data for optimized calculation
+      const stockModelsData = await this.getAllStockModels();
+      const features = await this.getAllFeatures();
+      const persistentDiscountsData = await this.getAllPersistentDiscounts();
+
+      const orderTotal = await this.calculateOrderTotalOptimized(
+        order,
+        stockModelsData,
+        features,
+        persistentDiscountsData
+      );
+
+      // 3. Apply same logic as UI: isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0)
+      const roundedPaymentTotal = Math.round(paymentTotal * 100) / 100;
+      const roundedOrderTotal = Math.round(orderTotal * 100) / 100;
+      const isPaid = roundedPaymentTotal >= roundedOrderTotal && roundedOrderTotal > 0;
+
+      console.log(`[resolvePaymentStatus] Order ${orderId}: payment=${roundedPaymentTotal}, total=${roundedOrderTotal}, isPaid=${isPaid}`);
+
+      return {
+        status: isPaid ? 'PAID' : 'PENDING',
+        paymentTotal: roundedPaymentTotal,
+        orderTotal: roundedOrderTotal,
+      };
+    } catch (error) {
+      console.error(`[resolvePaymentStatus] Error for order ${orderId}:`, error);
+      return { status: 'PENDING', paymentTotal: 0, orderTotal: 0 };
+    }
+  }
+
   // Method to get unpaid orders for batch payment processing
   async getUnpaidOrders() {
     try {

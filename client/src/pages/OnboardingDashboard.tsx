@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import { Route, FileText, ClipboardList, ArrowRight, Play, Pause, Eye, Plus, Loader2, Users, Pencil } from 'lucide-react';
+import { Route, FileText, ClipboardList, ArrowRight, Play, Pause, Eye, Plus, Loader2, Users, Pencil, PenTool } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -211,6 +211,12 @@ export default function OnboardingDashboard() {
           <Button variant="outline" size="lg">
             <Route className="h-5 w-5 mr-2" />
             Configure Paths
+          </Button>
+        </Link>
+        <Link href="/onboarding/employer-signatures">
+          <Button variant="outline" size="lg">
+            <PenTool className="h-5 w-5 mr-2" />
+            Employer Signatures
           </Button>
         </Link>
       </div>

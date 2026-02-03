@@ -11888,6 +11888,7 @@ export const fillablePdfTemplates = pgTable('fillable_pdf_templates', {
   sourceMediaItemId: uuid('source_media_item_id'), // Reference to media_library item this was scaffolded from
   fieldDefsJson: jsonb('field_defs_json').$type<FillableFieldDef[]>().notNull().default([]),
   requiresSignature: boolean('requires_signature').notNull().default(true),
+  employerSignatureRequired: boolean('employer_signature_required').default(false),
   signaturePlacement: jsonb('signature_placement').$type<{
     x: number;
     y: number;

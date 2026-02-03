@@ -784,7 +784,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         // Fetch template info
         const templates = await pool.query(`
-          SELECT id, name, source_media_item_id as "sourceMediaItemId"
+          SELECT id, name, source_media_item_id as "sourceMediaItemId", employer_signature_required as "employerSignatureRequired"
           FROM fillable_pdf_templates
           WHERE id = $1 AND is_active = true
         `, [templateId]);
@@ -803,10 +803,10 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         const instances = await pool.query(`
           INSERT INTO fillable_pdf_instances
-            (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
-          VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+            (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment, employer_signature_required)
+          VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev', $5)
           RETURNING id
-        `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+        `, [template.id, newSession.id, publicSignatureId, signatureToken, template.employerSignatureRequired || false]);
         
         const instanceId = instances[0].id;
         
@@ -840,7 +840,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
         
         // Check if there's a fillable PDF template for this media item
         const templates = await pool.query(`
-          SELECT id, name
+          SELECT id, name, employer_signature_required as "employerSignatureRequired"
           FROM fillable_pdf_templates
           WHERE source_media_item_id = $1 AND is_active = true
           LIMIT 1
@@ -859,10 +859,10 @@ router.post('/sessions', async (req: Request, res: Response) => {
           
           const instances = await pool.query(`
             INSERT INTO fillable_pdf_instances
-              (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment)
-            VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev')
+              (template_id, entity_type, entity_id, public_signature_id, signature_token, status, environment, employer_signature_required)
+            VALUES ($1, 'onboarding_session', $2, $3, $4, 'draft', 'dev', $5)
             RETURNING id
-          `, [template.id, newSession.id, publicSignatureId, signatureToken]);
+          `, [template.id, newSession.id, publicSignatureId, signatureToken, template.employerSignatureRequired || false]);
           
           instanceId = instances[0].id;
         }
@@ -1677,6 +1677,21 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
     const unsignedRequiredDocs = requiredDocs.filter((d: any) => d.status !== 'signed');
     if (unsignedRequiredDocs.length > 0) {
       validationErrors.push(`${unsignedRequiredDocs.length} required document(s) not signed`);
+    }
+    
+    // Check 3b: All documents requiring employer signature have been signed by employer
+    const pendingEmployerSignatures = await pool.query(`
+      SELECT osd.id, fpi.employer_signature_required, fpi.employer_signed_at
+      FROM onboarding_session_documents osd
+      JOIN fillable_pdf_instances fpi ON fpi.id = osd.instance_id
+      WHERE osd.session_id = $1
+        AND fpi.signed_at IS NOT NULL
+        AND fpi.employer_signature_required = true
+        AND fpi.employer_signed_at IS NULL
+    `, [id]);
+    
+    if (pendingEmployerSignatures && pendingEmployerSignatures.length > 0) {
+      validationErrors.push(`${pendingEmployerSignatures.length} document(s) awaiting employer signature`);
     }
     
     // Check 4: Camera captures (optional - just fetch for reference, no validation errors)

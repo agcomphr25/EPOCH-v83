@@ -86,10 +86,24 @@ export function RepairBarcodeDisplay({
 
   const handlePrint = () => {
     if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      
+      // Check if canvas has content (width > 0 means barcode was rendered)
+      if (canvas.width === 0 || canvas.height === 0) {
+        console.error('Canvas not rendered yet');
+        return;
+      }
+      
+      const imgDataUrl = canvas.toDataURL('image/png');
+      
+      // Verify we got valid image data (not just empty canvas)
+      if (!imgDataUrl || imgDataUrl === 'data:,') {
+        console.error('Failed to get canvas image data');
+        return;
+      }
+      
       const printWindow = window.open('', '_blank');
       if (printWindow) {
-        const canvas = canvasRef.current;
-        const img = canvas.toDataURL();
         const currentDate = new Date().toLocaleDateString('en-US', {
           month: '2-digit',
           day: '2-digit',
@@ -181,7 +195,7 @@ export function RepairBarcodeDisplay({
                 <div class="repair-label">
                   <div class="label-content">
                     <div class="repair-header">NONCONFORMING - REPAIR</div>
-                    <img src="${img}" alt="Repair Barcode ${barcodeValue}" class="barcode-img" />
+                    <img id="barcodeImg" src="${imgDataUrl}" alt="Repair Barcode ${barcodeValue}" class="barcode-img" />
                     <div class="repair-details">
                       ${rmaNumber ? `<strong>RMA:</strong> ${rmaNumber}` : ''}
                       ${orderId && orderId !== rmaNumber ? ` | <strong>Order:</strong> ${orderId}` : ''}
@@ -190,16 +204,21 @@ export function RepairBarcodeDisplay({
                   </div>
                 </div>
               </div>
+              <script>
+                // Wait for image to load before printing
+                var img = document.getElementById('barcodeImg');
+                if (img.complete) {
+                  setTimeout(function() { window.print(); window.close(); }, 100);
+                } else {
+                  img.onload = function() { setTimeout(function() { window.print(); window.close(); }, 100); };
+                  img.onerror = function() { alert('Failed to load barcode image'); };
+                }
+              </script>
             </body>
           </html>
         `);
         printWindow.document.close();
         printWindow.focus();
-
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 500);
       }
     }
   };

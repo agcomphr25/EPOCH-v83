@@ -1,16 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  FileText, Check, 
-  Loader2, SkipForward, Clock, Pen, Type, 
-  CheckCircle2, ArrowRight, X, AlertCircle
+  FileText, Check, Loader2, Pen,
+  CheckCircle2, ArrowRight, Clock, SkipForward, AlertCircle
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import ImmersiveDocumentSigner from './ImmersiveDocumentSigner';
 
 interface SessionDocument {
   id: string;
@@ -37,8 +35,6 @@ interface PageInitials {
   [pageNumber: number]: string;
 }
 
-type SignatureMode = 'draw' | 'type';
-
 export default function DocumentSigningStep({
   sessionId,
   documents,
@@ -46,44 +42,43 @@ export default function DocumentSigningStep({
   onAllDocumentsComplete,
 }: DocumentSigningStepProps) {
   const { toast } = useToast();
-  const [currentDocIndex, setCurrentDocIndex] = useState(0);
-  const [pageInitials, setPageInitials] = useState<PageInitials>({});
-  const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
-  const [typedSignature, setTypedSignature] = useState('');
-  const [agreedToSign, setAgreedToSign] = useState(false);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [justCompleted, setJustCompleted] = useState(false);
-  const [showSigningPanel, setShowSigningPanel] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [canvasData, setCanvasData] = useState<string | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [justCompletedDocId, setJustCompletedDocId] = useState<string | null>(null);
 
   const pendingDocs = documents.filter(d => d.status === 'pending');
-  const currentDoc = pendingDocs[currentDocIndex];
-  const completedCount = documents.filter(d => d.status === 'signed').length;
-  const skippedCount = documents.filter(d => d.status === 'skipped' || d.status === 'deferred').length;
-  
-  const totalPages = currentDoc?.pageCount || 1;
+  const completedDocs = documents.filter(d => d.status === 'signed');
+  const skippedDocs = documents.filter(d => d.status === 'skipped' || d.status === 'deferred');
 
-  // Use unified endpoint that resolves correct PDF source based on document type/status
-  const pdfUrl = currentDoc 
-    ? `/api/onboarding/sessions/${sessionId}/documents/${currentDoc.id}/pdf` 
+  const activeDocIndex = pendingDocs.findIndex(d => d.id === activeDocId);
+  const activeDoc = activeDocIndex >= 0 ? pendingDocs[activeDocIndex] : null;
+
+  const pdfUrl = activeDoc 
+    ? `/api/onboarding/sessions/${sessionId}/documents/${activeDoc.id}/pdf` 
     : null;
 
   const signDocMutation = useMutation({
-    mutationFn: async ({ docId, signatureData }: { docId: string; signatureData: string }) => {
+    mutationFn: async ({ 
+      docId, 
+      signatureData, 
+      initials 
+    }: { 
+      docId: string; 
+      signatureData: string; 
+      initials: PageInitials;
+    }) => {
       return apiRequest(`/api/onboarding/sessions/${sessionId}/documents/${docId}/sign`, {
         method: 'POST',
         body: JSON.stringify({ 
           signatureData,
-          initials: pageInitials,
+          initials,
           signedAt: new Date().toISOString(),
         }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, { docId }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', sessionId] });
-      setJustCompleted(true);
-      resetDocumentState();
+      setActiveDocId(null);
+      setJustCompletedDocId(docId);
     },
     onError: (error: any) => {
       toast({
@@ -103,136 +98,50 @@ export default function DocumentSigningStep({
     },
     onSuccess: (_, { action }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions', sessionId] });
-      toast({ title: action === 'skip' ? 'Document skipped' : 'Document deferred' });
-      handleNextDocument();
+      setActiveDocId(null);
+      toast({ 
+        title: action === 'skip' ? 'Document skipped' : 'Document deferred',
+        description: 'You can proceed with the remaining documents.'
+      });
     },
   });
 
-  const resetDocumentState = () => {
-    setPageInitials({});
-    setTypedSignature('');
-    setAgreedToSign(false);
-    setCanvasData(null);
-    setShowSigningPanel(false);
-    clearCanvas();
-  };
-
-  const handleNextDocument = () => {
-    setJustCompleted(false);
-    if (currentDocIndex < pendingDocs.length - 1) {
-      setCurrentDocIndex(prev => prev + 1);
-      resetDocumentState();
-    } else {
+  useEffect(() => {
+    if (pendingDocs.length === 0 && documents.length > 0 && completedDocs.length > 0) {
       onAllDocumentsComplete?.();
     }
+  }, [pendingDocs.length, documents.length, completedDocs.length, onAllDocumentsComplete]);
+
+  const handleSign = (signatureData: string, initials: PageInitials) => {
+    if (!activeDoc) return;
+    signDocMutation.mutate({ docId: activeDoc.id, signatureData, initials });
   };
 
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-    setCanvasData(null);
+  const handleSkip = () => {
+    if (!activeDoc) return;
+    skipDocMutation.mutate({ docId: activeDoc.id, action: 'skip' });
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = 'touches' in e ? (e.touches[0].clientX - rect.left) * scaleX : (e.clientX - rect.left) * scaleX;
-    const y = 'touches' in e ? (e.touches[0].clientY - rect.top) * scaleY : (e.clientY - rect.top) * scaleY;
-    
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.strokeStyle = '#1a1a2e';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+  const handleDefer = () => {
+    if (!activeDoc) return;
+    skipDocMutation.mutate({ docId: activeDoc.id, action: 'defer' });
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = 'touches' in e ? (e.touches[0].clientX - rect.left) * scaleX : (e.clientX - rect.left) * scaleX;
-    const y = 'touches' in e ? (e.touches[0].clientY - rect.top) * scaleY : (e.clientY - rect.top) * scaleY;
-    
-    ctx.lineTo(x, y);
-    ctx.stroke();
+  const handleCloseImmersive = () => {
+    setActiveDocId(null);
   };
 
-  const stopDrawing = () => {
-    if (isDrawing) {
-      setIsDrawing(false);
-      const canvas = canvasRef.current;
-      if (canvas) {
-        setCanvasData(canvas.toDataURL());
-      }
+  const handleContinueToNext = () => {
+    setJustCompletedDocId(null);
+    if (pendingDocs.length > 0) {
+      setActiveDocId(pendingDocs[0].id);
     }
   };
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas && signatureMode === 'draw' && showSigningPanel) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+  const startSigningFlow = () => {
+    if (pendingDocs.length > 0) {
+      setActiveDocId(pendingDocs[0].id);
     }
-  }, [signatureMode, showSigningPanel]);
-
-  const handleInitialsChange = (page: number, initials: string) => {
-    setPageInitials(prev => ({ ...prev, [page]: initials.toUpperCase().slice(0, 3) }));
-  };
-
-  const isPageInitialed = (page: number) => {
-    return pageInitials[page] && pageInitials[page].length >= 2;
-  };
-
-  const allPagesInitialed = () => {
-    if (totalPages <= 1) return true;
-    for (let i = 1; i < totalPages; i++) {
-      if (!isPageInitialed(i)) return false;
-    }
-    return true;
-  };
-
-  const hasValidSignature = () => {
-    if (signatureMode === 'draw') {
-      return canvasData !== null;
-    }
-    return typedSignature.trim().length >= 2;
-  };
-
-  const canCompleteDocument = () => {
-    return allPagesInitialed() && hasValidSignature() && agreedToSign;
-  };
-
-  const handleCompleteDocument = () => {
-    if (!currentDoc || !canCompleteDocument()) return;
-    
-    const signatureData = signatureMode === 'draw' 
-      ? canvasData || '' 
-      : `typed:${typedSignature}`;
-    
-    signDocMutation.mutate({ docId: currentDoc.id, signatureData });
   };
 
   if (documents.length === 0) {
@@ -244,295 +153,198 @@ export default function DocumentSigningStep({
     );
   }
 
-  if (pendingDocs.length === 0 || !currentDoc) {
-    return (
-      <div className="text-center py-12">
-        <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
-        <p className="text-xl font-medium text-green-800 mb-2">All Documents Complete</p>
-        <p className="text-gray-600">
-          {completedCount} document{completedCount !== 1 ? 's' : ''} signed
-          {skippedCount > 0 && `, ${skippedCount} skipped/deferred`}
-        </p>
-      </div>
-    );
-  }
+  if (justCompletedDocId) {
+    const completedDoc = documents.find(d => d.id === justCompletedDocId);
+    const hasMorePending = pendingDocs.length > 0;
 
-  if (justCompleted) {
     return (
       <div className="text-center py-12">
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6">
           <Check className="h-10 w-10 text-green-600" />
         </div>
-        <p className="text-xl font-medium text-green-800 mb-2">Document Completed</p>
+        <p className="text-xl font-medium text-green-800 mb-2">Document Signed</p>
         <p className="text-gray-600 mb-8">
-          {currentDoc.templateName || `Document ${currentDocIndex + 1}`} has been signed.
+          {completedDoc?.templateName || 'Document'} has been signed successfully.
         </p>
-        <Button onClick={handleNextDocument} size="lg" className="h-14 px-8">
-          Continue to Next Document
-          <ArrowRight className="h-5 w-5 ml-2" />
-        </Button>
+        {hasMorePending ? (
+          <Button onClick={handleContinueToNext} size="lg" className="h-14 px-8">
+            Continue to Next Document
+            <ArrowRight className="h-5 w-5 ml-2" />
+          </Button>
+        ) : (
+          <div>
+            <p className="text-green-600 font-medium mb-4">All documents have been completed!</p>
+            <Button onClick={() => setJustCompletedDocId(null)} variant="outline">
+              View Summary
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 200px)' }}>
-      <div className="absolute top-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm border-b shadow-sm px-4 py-3">
-        <div className="flex items-center justify-between max-w-full">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
-              {currentDocIndex + 1} / {pendingDocs.length}
-            </span>
-            <div className="flex gap-1">
-              {pendingDocs.map((_, idx) => (
-                <div
-                  key={idx}
-                  className={`w-6 h-1.5 rounded-full transition-colors ${
-                    idx < currentDocIndex ? 'bg-green-500' :
-                    idx === currentDocIndex ? 'bg-blue-500' : 'bg-gray-200'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-          
-          <h2 className="text-base font-semibold truncate max-w-[40%] hidden sm:block">
-            {currentDoc.templateName || `Document ${currentDocIndex + 1}`}
-          </h2>
+  if (pendingDocs.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
+        <p className="text-xl font-medium text-green-800 mb-2">All Documents Complete</p>
+        <p className="text-gray-600 mb-6">
+          {completedDocs.length} document{completedDocs.length !== 1 ? 's' : ''} signed
+          {skippedDocs.length > 0 && `, ${skippedDocs.length} skipped/deferred`}
+        </p>
 
-          {!isReadOnly && (
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'defer' })}
-                disabled={skipDocMutation.isPending}
-                className="text-gray-500 h-9 px-3"
-              >
-                <Clock className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Defer</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'skip' })}
-                disabled={skipDocMutation.isPending}
-                className="text-gray-500 h-9 px-3"
-              >
-                <SkipForward className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Skip</span>
-              </Button>
-            </div>
-          )}
-        </div>
-        <h2 className="text-base font-semibold truncate sm:hidden mt-2">
-          {currentDoc.templateName || `Document ${currentDocIndex + 1}`}
-        </h2>
-      </div>
-
-      <div className="flex-1 pt-16 sm:pt-14 pb-0 bg-gray-50">
-        {pdfUrl ? (
-          <iframe
-            src={pdfUrl}
-            className="w-full h-full border-0"
-            style={{ minHeight: 'calc(100vh - 350px)' }}
-            title={currentDoc.templateName || 'Document'}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-100">
-            <div className="text-center text-gray-500">
-              <AlertCircle className="h-12 w-12 mx-auto mb-3" />
-              <p className="text-lg font-medium">Document Not Available</p>
-              <p className="text-sm mt-1">Unable to load the PDF document</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white border-t shadow-lg">
-        {!showSigningPanel ? (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-gray-600">
-                {completedCount > 0 && (
-                  <span className="inline-flex items-center gap-1 mr-4">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    {completedCount} signed
-                  </span>
-                )}
-                {totalPages > 1 && (
-                  <span className="text-gray-500">{totalPages} pages</span>
-                )}
-              </div>
-            </div>
-            
-            {totalPages > 1 && !allPagesInitialed() && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                <p className="text-sm text-amber-800 font-medium mb-2">
-                  Initial each page before signing
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: totalPages - 1 }, (_, i) => i + 1).map(page => (
-                    <div key={page} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Page {page}:</span>
-                      <Input
-                        value={pageInitials[page] || ''}
-                        onChange={(e) => handleInitialsChange(page, e.target.value)}
-                        placeholder="ABC"
-                        maxLength={3}
-                        className="w-16 h-10 text-center text-sm font-bold uppercase"
-                        disabled={isReadOnly}
-                      />
-                      {isPageInitialed(page) && (
-                        <Check className="h-4 w-4 text-green-500" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <Button
-              onClick={() => setShowSigningPanel(true)}
-              disabled={!allPagesInitialed()}
-              size="lg"
-              className="w-full h-14 text-lg"
-            >
-              <Pen className="h-5 w-5 mr-2" />
-              {allPagesInitialed() ? 'Ready to Sign' : 'Initial All Pages First'}
-            </Button>
-          </div>
-        ) : (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-lg">Sign Document</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSigningPanel(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex items-start gap-3 bg-gray-50 p-3 rounded-lg">
-              <Checkbox
-                id="agree-sign"
-                checked={agreedToSign}
-                onCheckedChange={(checked) => setAgreedToSign(checked === true)}
-                disabled={isReadOnly}
-                className="mt-0.5 h-5 w-5"
-              />
-              <Label htmlFor="agree-sign" className="text-sm leading-relaxed cursor-pointer">
-                I agree to sign this document electronically. I understand this signature 
-                is legally binding.
-              </Label>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Label className="text-sm font-medium">Signature</Label>
-                <div className="flex rounded-md border overflow-hidden ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setSignatureMode('draw')}
-                    className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
-                      signatureMode === 'draw' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-50 text-gray-600'
-                    }`}
-                  >
-                    <Pen className="h-3 w-3" />
-                    Draw
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSignatureMode('type')}
-                    className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
-                      signatureMode === 'type' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-50 text-gray-600'
-                    }`}
-                  >
-                    <Type className="h-3 w-3" />
-                    Type
-                  </button>
-                </div>
-              </div>
-
-              {signatureMode === 'draw' ? (
-                <div className="relative">
-                  <canvas
-                    ref={canvasRef}
-                    width={600}
-                    height={120}
-                    className="w-full border-2 border-dashed border-gray-300 rounded-lg bg-white touch-none"
-                    style={{ height: '100px' }}
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={stopDrawing}
-                    onTouchStart={startDrawing}
-                    onTouchMove={draw}
-                    onTouchEnd={stopDrawing}
-                  />
-                  {canvasData && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearCanvas}
-                      className="absolute top-1 right-1 h-7 px-2"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Clear
-                    </Button>
-                  )}
-                  {!canvasData && (
-                    <p className="absolute inset-0 flex items-center justify-center text-gray-400 pointer-events-none text-sm">
-                      Sign here with finger or stylus
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <Input
-                  value={typedSignature}
-                  onChange={(e) => setTypedSignature(e.target.value)}
-                  placeholder="Type your full name"
-                  className="h-12 text-xl italic font-serif"
-                  disabled={isReadOnly}
-                />
+        <div className="max-w-md mx-auto space-y-2">
+          {documents.map((doc) => (
+            <div 
+              key={doc.id}
+              className={cn(
+                "flex items-center justify-between p-3 rounded-lg border",
+                doc.status === 'signed' ? "bg-green-50 border-green-200" :
+                doc.status === 'skipped' ? "bg-gray-50 border-gray-200" :
+                "bg-amber-50 border-amber-200"
               )}
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowSigningPanel(false)}
-                className="h-12 flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCompleteDocument}
-                disabled={!canCompleteDocument() || signDocMutation.isPending || isReadOnly}
-                className="h-12 flex-[2] bg-green-600 hover:bg-green-700 text-base"
-              >
-                {signDocMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Signing...
-                  </>
+            >
+              <div className="flex items-center gap-3">
+                {doc.status === 'signed' ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                ) : doc.status === 'skipped' ? (
+                  <SkipForward className="w-5 h-5 text-gray-400" />
                 ) : (
-                  <>
-                    <Check className="h-5 w-5 mr-2" />
-                    Complete & Sign
-                  </>
+                  <Clock className="w-5 h-5 text-amber-500" />
                 )}
-              </Button>
+                <span className="text-sm font-medium">
+                  {doc.templateName || 'Document'}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500 capitalize">
+                {doc.status}
+              </span>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
+    );
+  }
+
+  if (activeDoc && pdfUrl) {
+    return (
+      <ImmersiveDocumentSigner
+        pdfUrl={pdfUrl}
+        documentName={activeDoc.templateName || `Document ${activeDocIndex + 1}`}
+        documentIndex={activeDocIndex}
+        totalDocuments={pendingDocs.length}
+        pageCount={activeDoc.pageCount || 1}
+        isReadOnly={isReadOnly}
+        onSign={handleSign}
+        onSkip={handleSkip}
+        onDefer={handleDefer}
+        onClose={handleCloseImmersive}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          Documents Ready for Signing
+        </h3>
+        <p className="text-gray-600 text-sm">
+          {pendingDocs.length} document{pendingDocs.length !== 1 ? 's' : ''} require your signature
+          {completedDocs.length > 0 && ` (${completedDocs.length} already completed)`}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {documents.map((doc, idx) => {
+          const isPending = doc.status === 'pending';
+          const isSigned = doc.status === 'signed';
+          const isSkipped = doc.status === 'skipped' || doc.status === 'deferred';
+
+          return (
+            <div
+              key={doc.id}
+              className={cn(
+                "flex items-center justify-between p-4 rounded-xl border transition-all",
+                isPending ? "bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm" :
+                isSigned ? "bg-green-50 border-green-200" :
+                "bg-gray-50 border-gray-200"
+              )}
+            >
+              <div className="flex items-center gap-4">
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center",
+                  isPending ? "bg-blue-100" :
+                  isSigned ? "bg-green-100" :
+                  "bg-gray-100"
+                )}>
+                  {isSigned ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  ) : isSkipped ? (
+                    <SkipForward className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <FileText className="w-5 h-5 text-blue-600" />
+                  )}
+                </div>
+                <div>
+                  <p className={cn(
+                    "font-medium",
+                    isPending ? "text-gray-900" : "text-gray-600"
+                  )}>
+                    {doc.templateName || `Document ${idx + 1}`}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {doc.pageCount && doc.pageCount > 1 
+                      ? `${doc.pageCount} pages` 
+                      : '1 page'}
+                    {doc.isRequired && <span className="ml-2 text-red-500">Required</span>}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isSigned && (
+                  <span className="text-sm text-green-600 font-medium">Signed</span>
+                )}
+                {isSkipped && (
+                  <span className="text-sm text-gray-500 capitalize">{doc.status}</span>
+                )}
+                {isPending && !isReadOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveDocId(doc.id)}
+                  >
+                    Review & Sign
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {!isReadOnly && pendingDocs.length > 0 && (
+        <div className="pt-4 border-t">
+          <Button
+            onClick={startSigningFlow}
+            size="lg"
+            className="w-full h-14 text-lg"
+          >
+            <Pen className="w-5 h-5 mr-2" />
+            Begin Signing ({pendingDocs.length} document{pendingDocs.length !== 1 ? 's' : ''})
+          </Button>
+        </div>
+      )}
+
+      {signDocMutation.isPending && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 flex flex-col items-center">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-900 font-medium">Applying signature...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

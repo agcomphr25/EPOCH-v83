@@ -777,7 +777,7 @@ router.get('/oem-shipments', async (req, res) => {
     }
 
     // Main query - lightweight, no base64 blobs
-    // Use COALESCE to get customer_name from purchase_order_items when not set in shipment_records
+    // Use COALESCE to get customer_name and po_number from production_orders when not set
     const query = `
       WITH shipment_aggregates AS (
         SELECT 
@@ -785,10 +785,9 @@ router.get('/oem-shipments', async (req, res) => {
           sr.customer_id,
           COALESCE(
             NULLIF(sr.customer_name, ''),
-            (SELECT DISTINCT po.customer_name 
+            (SELECT DISTINCT prod_ord.customer_name 
              FROM shipment_items si2 
-             JOIN purchase_order_items poi ON si2.po_item_id = poi.id
-             JOIN p1_purchase_orders po ON poi.po_id = po.id
+             JOIN production_orders prod_ord ON si2.order_id = prod_ord.order_id
              WHERE si2.shipment_id = sr.id
              LIMIT 1)
           ) as customer_name,
@@ -806,20 +805,21 @@ router.get('/oem-shipments', async (req, res) => {
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
           COUNT(si.id) as item_count,
-          COUNT(DISTINCT si.po_number) as po_count,
+          COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number)) as po_count,
           json_agg(
             json_build_object(
               'id', si.id,
               'poItemId', si.po_item_id,
               'orderId', si.order_id,
               'quantity', si.quantity,
-              'description', si.description,
-              'poNumber', si.po_number,
+              'description', COALESCE(NULLIF(si.description, ''), prod_ord.item_name),
+              'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number),
               'hasPackingSlip', si.packing_slip_base64 IS NOT NULL
-            ) ORDER BY si.po_number, si.order_id
+            ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number), si.order_id
           ) as items
         FROM shipment_records sr
         LEFT JOIN shipment_items si ON sr.id = si.shipment_id
+        LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
         WHERE ${conditions.join(' AND ')}
         GROUP BY sr.id
         ORDER BY sr.created_at DESC

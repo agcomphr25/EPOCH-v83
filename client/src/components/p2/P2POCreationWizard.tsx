@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -27,6 +28,20 @@ import {
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+
+interface P2ProductItem {
+  id: string;
+  sku: string;
+  revision: string | null;
+  description: string;
+  unitPrice: string;
+  internalName: string | null;
+}
+
+interface P2InternalName {
+  id: string;
+  name: string;
+}
 
 interface P2POCreationWizardProps {
   onComplete: (poId: number) => void;
@@ -55,10 +70,12 @@ const detailsSchema = z.object({
 
 interface LineItem {
   id: string;
-  partNumber: string;
+  sku: string;
+  revision: string;
   description: string;
   quantity: number;
   unitPrice: number;
+  internalName: string;
 }
 
 export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreationWizardProps) {
@@ -67,7 +84,16 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const [poDetails, setPODetails] = useState<z.infer<typeof detailsSchema> | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<LineItem>>({});
+  const [showCreateProductDialog, setShowCreateProductDialog] = useState(false);
+  const [newProductForm, setNewProductForm] = useState({
+    sku: '',
+    revision: 'A',
+    description: '',
+    unitPrice: '',
+    internalName: '',
+  });
   const { toast } = useToast();
+  const qc = useQueryClient();
 
   const { data: p2Customers = [] } = useQuery<any[]>({
     queryKey: ['/api/p2-customers-bypass'],
@@ -75,6 +101,40 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
 
   const { data: employees = [] } = useQuery<any[]>({
     queryKey: ['/api/employees'],
+  });
+
+  const { data: productItems = [] } = useQuery<P2ProductItem[]>({
+    queryKey: ['/api/p2/product-items'],
+  });
+
+  const { data: internalNames = [] } = useQuery<P2InternalName[]>({
+    queryKey: ['/api/p2/internal-names'],
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: async (data: typeof newProductForm) => {
+      return apiRequest('/api/p2/product-items', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (newProduct: P2ProductItem) => {
+      qc.invalidateQueries({ queryKey: ['/api/p2/product-items'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/internal-names'] });
+      toast({ title: 'Product item created successfully' });
+      setNewItem({
+        sku: newProduct.sku,
+        revision: newProduct.revision || 'A',
+        description: newProduct.description,
+        unitPrice: parseFloat(newProduct.unitPrice),
+        internalName: newProduct.internalName || '',
+      });
+      setShowCreateProductDialog(false);
+      setNewProductForm({ sku: '', revision: 'A', description: '', unitPrice: '', internalName: '' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to create product item', description: error.message, variant: 'destructive' });
+    },
   });
 
   const customerForm = useForm<z.infer<typeof customerSchema>>({
@@ -140,10 +200,10 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   };
 
   const addLineItem = () => {
-    if (!newItem.partNumber || !newItem.quantity) {
+    if (!newItem.sku || !newItem.quantity) {
       toast({
         title: 'Missing Information',
-        description: 'Please enter part number and quantity',
+        description: 'Please select a product item and enter quantity',
         variant: 'destructive',
       });
       return;
@@ -151,14 +211,33 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
 
     const item: LineItem = {
       id: Date.now().toString(),
-      partNumber: newItem.partNumber || '',
+      sku: newItem.sku || '',
+      revision: newItem.revision || 'A',
       description: newItem.description || '',
       quantity: newItem.quantity || 1,
       unitPrice: newItem.unitPrice || 0,
+      internalName: newItem.internalName || '',
     };
 
     setLineItems([...lineItems, item]);
     setNewItem({});
+  };
+
+  const handleProductSelect = (value: string) => {
+    if (value === 'create-new') {
+      setShowCreateProductDialog(true);
+    } else {
+      const product = productItems.find(p => p.id === value);
+      if (product) {
+        setNewItem({
+          sku: product.sku,
+          revision: product.revision || 'A',
+          description: product.description,
+          unitPrice: parseFloat(product.unitPrice),
+          internalName: product.internalName || '',
+        });
+      }
+    }
   };
 
   const removeLineItem = (id: string) => {
@@ -213,7 +292,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
         ? `${productionLeadEmployee.firstName} ${productionLeadEmployee.lastName}`
         : null,
       lineItems: lineItems.map((item) => ({
-        partNumber: item.partNumber,
+        partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
         description: item.description,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
@@ -476,15 +555,26 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
         {/* Step 3: Line Items */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <div className="grid grid-cols-5 gap-2 items-end">
-              <div>
-                <Label>Part Number</Label>
-                <Input
-                  value={newItem.partNumber || ''}
-                  onChange={(e) => setNewItem({ ...newItem, partNumber: e.target.value })}
-                  placeholder="Part #"
-                  data-testid="input-part-number"
-                />
+            <div className="grid grid-cols-6 gap-2 items-end">
+              <div className="col-span-2">
+                <Label>P2 Product Item</Label>
+                <Select onValueChange={handleProductSelect} value="">
+                  <SelectTrigger data-testid="select-product-item">
+                    <SelectValue placeholder={newItem.sku ? `${newItem.sku}${newItem.revision ? ` Rev ${newItem.revision}` : ''}` : "Select product..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="create-new" className="text-primary font-medium">
+                      <span className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" /> Create New Item
+                      </span>
+                    </SelectItem>
+                    {productItems.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.sku} Rev {product.revision || 'A'} - {product.internalName || product.description}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Description</Label>
@@ -493,6 +583,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                   placeholder="Description"
                   data-testid="input-description"
+                  disabled={!newItem.sku}
                 />
               </div>
               <div>
@@ -514,6 +605,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
                   placeholder="$0.00"
                   data-testid="input-unit-price"
+                  disabled={!newItem.sku}
                 />
               </div>
               <Button onClick={addLineItem} data-testid="button-add-item">
@@ -533,7 +625,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Part Number</TableHead>
+                    <TableHead>SKU / Rev</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Unit Price</TableHead>
@@ -544,7 +636,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                 <TableBody>
                   {lineItems.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.partNumber}</TableCell>
+                      <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                       <TableCell>{item.description}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
@@ -626,7 +718,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Part Number</TableHead>
+                      <TableHead>SKU / Rev</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Quantity</TableHead>
                       <TableHead className="text-right">Total</TableHead>
@@ -635,7 +727,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   <TableBody>
                     {lineItems.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.partNumber}</TableCell>
+                        <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                         <TableCell>{item.description}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
                         <TableCell className="text-right">
@@ -672,6 +764,98 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
           </div>
         )}
       </CardContent>
+
+      {/* Create New Product Item Dialog */}
+      <Dialog open={showCreateProductDialog} onOpenChange={setShowCreateProductDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New P2 Product Item</DialogTitle>
+            <DialogDescription>
+              Add a new reusable product item for P2 purchase orders
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sku">SKU # *</Label>
+                <Input
+                  id="sku"
+                  value={newProductForm.sku}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, sku: e.target.value })}
+                  placeholder="e.g., GTC-1001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="revision">Rev</Label>
+                <Input
+                  id="revision"
+                  value={newProductForm.revision}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, revision: e.target.value })}
+                  placeholder="A"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description *</Label>
+              <Input
+                id="description"
+                value={newProductForm.description}
+                onChange={(e) => setNewProductForm({ ...newProductForm, description: e.target.value })}
+                placeholder="Description from drawing"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="unitPrice">Unit Price *</Label>
+              <Input
+                id="unitPrice"
+                type="number"
+                step="0.01"
+                value={newProductForm.unitPrice}
+                onChange={(e) => setNewProductForm({ ...newProductForm, unitPrice: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="internalName">Internal Name</Label>
+              <Select
+                value={newProductForm.internalName}
+                onValueChange={(value) => setNewProductForm({ ...newProductForm, internalName: value === 'custom' ? '' : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select or type new..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">Type custom name...</SelectItem>
+                  {internalNames.map((name) => (
+                    <SelectItem key={name.id} value={name.name}>
+                      {name.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {newProductForm.internalName === '' && (
+                <Input
+                  className="mt-2"
+                  value={newProductForm.internalName}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, internalName: e.target.value })}
+                  placeholder="Enter custom internal name"
+                />
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateProductDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createProductMutation.mutate(newProductForm)}
+              disabled={!newProductForm.sku || !newProductForm.description || !newProductForm.unitPrice || createProductMutation.isPending}
+            >
+              {createProductMutation.isPending ? 'Creating...' : 'Create Product'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

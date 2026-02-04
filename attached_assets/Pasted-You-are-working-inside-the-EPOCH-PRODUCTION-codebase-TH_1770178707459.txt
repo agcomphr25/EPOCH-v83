@@ -1,0 +1,99 @@
+You are working inside the EPOCH PRODUCTION codebase.
+
+THIS IS A BLOCKING BUG.
+
+GOAL:
+Fix onboarding document rendering so PDFs load correctly
+before signing, instead of returning:
+{"error":"PDF file not found"}
+
+---
+
+OBSERVED BEHAVIOR:
+
+• Onboarding document step attempts to load a PDF
+• Backend responds with JSON error: "PDF file not found"
+• This occurs BEFORE the document is signed
+• Media Library “Open” works for the same document
+
+---
+
+TASK 1 — TRACE PDF RESOLUTION PATH (MANDATORY)
+
+For an onboarding session document:
+
+1) Identify the API endpoint used to fetch the PDF
+2) Identify how the backend resolves the PDF file path
+3) Log which of the following is being used:
+   - original media library PDF path
+   - fillable PDF template path
+   - fillable PDF INSTANCE path (signed_pdf_path)
+
+Answer explicitly:
+• Which path is being used BEFORE signing?
+
+---
+
+TASK 2 — VERIFY FILE EXISTENCE
+
+For the resolved path:
+• Check if the object exists in storage
+• Confirm whether the file exists or not
+
+Expected:
+• Instance-level signed PDFs should NOT exist before signing
+
+---
+
+TASK 3 — CORRECT RESOLUTION LOGIC (CORE FIX)
+
+Implement correct source selection logic:
+
+IF document is NOT signed:
+→ load ORIGINAL media library PDF
+
+IF document IS signed:
+→ load signed_pdf_path from fillable_pdf_instances
+
+This logic must apply to:
+• employee signing flow
+• employer signing flow
+
+---
+
+TASK 4 — FAILSAFE BEHAVIOR
+
+If instance PDF is missing:
+• Fall back to original media PDF
+• Do NOT throw JSON error
+• Return a valid PDF stream
+
+---
+
+TASK 5 — CONFIRM END-TO-END
+
+Verify:
+• Onboarding documents display correctly BEFORE signing
+• Signing still works
+• Signed PDFs display AFTER signing
+• Media Library behavior is unchanged
+
+---
+
+CONSTRAINTS:
+
+• No re-uploading files
+• No schema changes
+• No breaking existing signed documents
+• Do NOT reintroduce placeholders
+
+---
+
+FINAL OUTPUT:
+
+1) Root cause explanation
+2) Exact file(s) modified
+3) Why this fixes onboarding specifically
+4) Confirmation that:
+   - pre-sign view works
+   - post-sign view works

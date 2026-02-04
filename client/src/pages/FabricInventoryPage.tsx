@@ -135,10 +135,18 @@ const emptyForm = {
   expirationDate: "",
   location: "",
   conformanceDocumentLink: "",
-  quantityInStock: "",
+  quantityInStock: "1",
   squareMeters: "",
   lowStockThreshold: "",
   notes: "",
+};
+
+type FabricType = {
+  id: string;
+  name: string;
+  isActive: boolean | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type PrintSelection = {
@@ -216,6 +224,11 @@ export default function FabricInventoryPage() {
     queryKey: ['/api/cutting-table/materials'],
   });
 
+  // Fetch fabric types from API
+  const { data: fabricTypes = [] } = useQuery<FabricType[]>({
+    queryKey: ['/api/cutting-table/fabric-types'],
+  });
+
   // Fetch inventory items from Inventory Items Management for Part Number dropdown
   const { data: inventoryItems = [], isLoading: isLoadingInventoryItems } = useQuery<{ agPartNumber: string; name: string }[]>({
     queryKey: ['/api/inventory/items/part-numbers'],
@@ -230,8 +243,9 @@ export default function FabricInventoryPage() {
   const [customFabricType, setCustomFabricType] = useState("");
   const [previousFabricType, setPreviousFabricType] = useState("");
   
-  // Predefined fabric types
-  const predefinedFabricTypes = ["Carbon Fiber", "Fiberglass"];
+  // Default fabric types (always available) + user-defined from database
+  const defaultFabricTypes = ["Carbon Fiber", "Fiberglass"];
+  const allFabricTypes = Array.from(new Set([...defaultFabricTypes, ...fabricTypes.map(ft => ft.name)]));
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
@@ -328,6 +342,22 @@ export default function FabricInventoryPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create fabric inventory items", variant: "destructive" });
+    },
+  });
+
+  // Mutation to save new fabric types to the database
+  const createFabricTypeMutation = useMutation({
+    mutationFn: async (name: string) => {
+      return apiRequest('/api/cutting-table/fabric-types', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-types'] });
+    },
+    onError: () => {
+      toast({ title: "Note", description: "Fabric type may already exist", variant: "default" });
     },
   });
 
@@ -452,9 +482,9 @@ export default function FabricInventoryPage() {
       setConformanceLinkType("url");
       setUploadedFileName("");
     }
-    // Check if current fabric type is a predefined one or custom
-    const isPredefined = predefinedFabricTypes.includes(item.fabric || "");
-    if (!isPredefined && item.fabric) {
+    // Check if current fabric type is a known one or custom
+    const isKnownType = allFabricTypes.includes(item.fabric || "");
+    if (!isKnownType && item.fabric) {
       setShowCustomFabricInput(true);
       setCustomFabricType(item.fabric);
     } else {
@@ -860,7 +890,7 @@ export default function FabricInventoryPage() {
                 <SelectValue placeholder="Select fabric type" />
               </SelectTrigger>
               <SelectContent>
-                {predefinedFabricTypes.map((type) => (
+                {allFabricTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}
                   </SelectItem>
@@ -1025,28 +1055,16 @@ export default function FabricInventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="quantityInStock">Quantity in Stock *</Label>
-          <Input
-            id="quantityInStock"
-            type="number"
-            value={form.quantityInStock}
-            onChange={(e) => setForm({ ...form, quantityInStock: e.target.value })}
-            placeholder="0"
-            data-testid="input-quantity"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="squareMeters">Square Meters</Label>
-          <Input
-            id="squareMeters"
-            value={form.squareMeters}
-            onChange={(e) => setForm({ ...form, squareMeters: e.target.value })}
-            placeholder="e.g., 100.5"
-            data-testid="input-square-meters"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="squareMeters">Square Meters</Label>
+        <Input
+          id="squareMeters"
+          value={form.squareMeters}
+          onChange={(e) => setForm({ ...form, squareMeters: e.target.value })}
+          placeholder="e.g., 100.5"
+          data-testid="input-square-meters"
+        />
+        <p className="text-xs text-muted-foreground">Each roll counts as 1 unit in stock</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -1565,6 +1583,10 @@ export default function FabricInventoryPage() {
             </Button>
             <Button
               onClick={() => {
+                // Save new fabric type if it's custom (not already in the list)
+                if (form.fabric && !allFabricTypes.includes(form.fabric)) {
+                  createFabricTypeMutation.mutate(form.fabric);
+                }
                 if (additionalRolls.length > 0) {
                   batchCreateMutation.mutate({ form, additionalRolls });
                 } else {
@@ -1598,7 +1620,13 @@ export default function FabricInventoryPage() {
               Cancel
             </Button>
             <Button
-              onClick={() => selectedItem && updateMutation.mutate({ id: selectedItem.id, data: form })}
+              onClick={() => {
+                // Save new fabric type if it's custom (not already in the list)
+                if (form.fabric && !allFabricTypes.includes(form.fabric)) {
+                  createFabricTypeMutation.mutate(form.fabric);
+                }
+                selectedItem && updateMutation.mutate({ id: selectedItem.id, data: form });
+              }}
               disabled={!form.fabric || updateMutation.isPending}
               data-testid="button-save-edit"
             >

@@ -1350,6 +1350,63 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Product Items - reusable product items for P2 PO line items
+  app.get('/api/p2/product-items', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const items = await storage.getAllP2ProductItems();
+      res.json(items);
+    } catch (_error) {
+      console.error('Get P2 product items error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 product items' });
+    }
+  });
+
+  app.post('/api/p2/product-items', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const item = await storage.createP2ProductItem(req.body);
+      res.json(item);
+    } catch (_error) {
+      console.error('Create P2 product item error:', _error);
+      res.status(500).json({ error: 'Failed to create P2 product item' });
+    }
+  });
+
+  app.put('/api/p2/product-items/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const item = await storage.updateP2ProductItem(req.params.id, req.body);
+      res.json(item);
+    } catch (_error) {
+      console.error('Update P2 product item error:', _error);
+      res.status(500).json({ error: 'Failed to update P2 product item' });
+    }
+  });
+
+  app.delete('/api/p2/product-items/:id', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      await storage.deleteP2ProductItem(req.params.id);
+      res.json({ success: true });
+    } catch (_error) {
+      console.error('Delete P2 product item error:', _error);
+      res.status(500).json({ error: 'Failed to delete P2 product item' });
+    }
+  });
+
+  // P2 Internal Names - previously used internal names for autocomplete
+  app.get('/api/p2/internal-names', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const names = await storage.getAllP2InternalNames();
+      res.json(names);
+    } catch (_error) {
+      console.error('Get P2 internal names error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 internal names' });
+    }
+  });
+
   // Quotes routes
   app.get('/api/quotes', async (req, res) => {
     try {

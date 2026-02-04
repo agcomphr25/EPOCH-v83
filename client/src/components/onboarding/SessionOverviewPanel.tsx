@@ -7,7 +7,10 @@ import { cn } from '@/lib/utils';
 
 interface SessionDocument {
   id: string;
-  templateId?: string;
+  templateId?: string | null;
+  instanceId?: string | null;
+  mediaItemId?: string | null;
+  isFillable?: boolean;
   templateName?: string;
   documentName?: string;
   status: string;

@@ -76,9 +76,11 @@ interface OnboardingSession {
 
 interface SessionDocument {
   id: string;
-  templateId: string;
+  templateId: string | null;
   templateName?: string;
   instanceId: string | null;
+  mediaItemId: string | null;
+  isFillable: boolean;
   orderIndex: number;
   status: string;
   signedAt: string | null;
@@ -399,25 +401,27 @@ export default function OnboardingSessionWizard() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-between mt-6 py-4 border-t bg-white relative z-10">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={currentStepIndex === 0}
-              className="h-12 px-6"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <Button
-              onClick={handleNext}
-              disabled={currentStepIndex === WIZARD_STEPS.length - 1}
-              className="h-12 px-6"
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+          {currentStep.id !== 'demographics' && (
+            <div className="flex justify-between mt-6 py-4 border-t bg-white relative z-10">
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                disabled={currentStepIndex === 0}
+                className="h-12 px-6"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={currentStepIndex === WIZARD_STEPS.length - 1}
+                className="h-12 px-6"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -642,6 +646,9 @@ function DocumentsStep({ session, isReadOnly }: { session: OnboardingSession; is
       documents={session.documents.map(doc => ({
         id: doc.id,
         templateId: doc.templateId,
+        instanceId: doc.instanceId,
+        mediaItemId: doc.mediaItemId,
+        isFillable: doc.isFillable,
         templateName: doc.templateName,
         status: doc.status as 'pending' | 'signed' | 'skipped' | 'deferred',
         signedAt: doc.signedAt,

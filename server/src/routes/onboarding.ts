@@ -1498,6 +1498,154 @@ router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
   }
 });
 
+// GET /sessions/:sessionId/documents/:docId/pdf - Serve document PDF with correct source resolution
+router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, docId } = req.params;
+    
+    // Fetch document with all related data for resolution
+    // Also fetch source_media_item from template as fallback for legacy paths
+    const docs = await pool.query(`
+      SELECT 
+        sd.id, sd.status, sd.template_id as "templateId",
+        sd.instance_id as "instanceId", sd.media_item_id as "mediaItemId",
+        sd.is_fillable as "isFillable",
+        i.signed_pdf_path as "signedPdfPath",
+        t.template_pdf_path as "templatePdfPath",
+        t.source_media_item_id as "sourceMediaItemId",
+        m.storage_path as "mediaStoragePath",
+        sm.storage_path as "sourceMediaStoragePath"
+      FROM onboarding_session_documents sd
+      LEFT JOIN fillable_pdf_instances i ON sd.instance_id = i.id
+      LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+      LEFT JOIN media_library m ON sd.media_item_id = m.id
+      LEFT JOIN media_library sm ON t.source_media_item_id = sm.id
+      WHERE sd.id = $1 AND sd.session_id = $2
+    `, [docId, sessionId]);
+    
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const doc = docs[0];
+    let pdfPath: string | null = null;
+    
+    // Resolution logic - prioritize object storage paths:
+    // 1. Signed PDF (if document is signed)
+    // 2. Source media from object storage (canonical for scaffolded templates)
+    // 3. Template PDF from object storage
+    // 4. Media storage from object storage
+    // 5. Legacy filesystem paths (development only)
+    
+    if (doc.status === 'signed' && doc.signedPdfPath) {
+      pdfPath = doc.signedPdfPath;
+    } else if (doc.sourceMediaStoragePath && doc.sourceMediaStoragePath.startsWith('/objects/')) {
+      pdfPath = doc.sourceMediaStoragePath;
+    } else if (doc.templatePdfPath && doc.templatePdfPath.startsWith('/objects/')) {
+      pdfPath = doc.templatePdfPath;
+    } else if (doc.mediaStoragePath && doc.mediaStoragePath.startsWith('/objects/')) {
+      pdfPath = doc.mediaStoragePath;
+    } else if (doc.templatePdfPath) {
+      pdfPath = doc.templatePdfPath;
+    } else if (doc.mediaStoragePath) {
+      pdfPath = doc.mediaStoragePath;
+    }
+    
+    if (!pdfPath) {
+      console.error('[Onboarding PDF] No valid PDF path found for document:', docId);
+      return res.status(404).json({ error: 'PDF source not available' });
+    }
+    
+    // Check if path is object storage (starts with /objects/)
+    if (pdfPath.startsWith('/objects/')) {
+      try {
+        // DIRECT BYPASS - fetch object and serve raw bytes
+        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+        const objectStorageService = new ObjectStorageService();
+        
+        console.log('[Onboarding PDF] DIRECT FETCH - getting object file for path:', pdfPath);
+        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
+        console.log('[Onboarding PDF] DIRECT FETCH - objectFile obtained:', objectFile.name);
+        
+        // Download to buffer instead of streaming
+        const [buffer] = await objectFile.download();
+        
+        // Log buffer details
+        const first20Hex = buffer.slice(0, 20).toString('hex');
+        const first20Ascii = buffer.slice(0, 20).toString('ascii');
+        console.log('[Onboarding PDF] DIRECT FETCH - buffer details:', {
+          contentLength: buffer.length,
+          first20Hex: first20Hex,
+          first20Ascii: first20Ascii,
+          startsWithPDF: first20Ascii.startsWith('%PDF')
+        });
+        
+        // Serve directly
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        
+        console.log('[Onboarding PDF] DIRECT FETCH - sending response with headers:', {
+          contentType: 'application/pdf',
+          contentLength: buffer.length
+        });
+        
+        res.send(buffer);
+        return;
+      } catch (error: any) {
+        console.error('[Onboarding PDF] DIRECT FETCH ERROR:', error.message, error.stack);
+        if (error.name === 'ObjectNotFoundError') {
+          return res.status(404).json({ error: 'PDF file not found in object storage' });
+        }
+        return res.status(500).json({ error: 'Failed to fetch PDF from object storage', details: error.message });
+      }
+    }
+    
+    // Legacy: local filesystem path
+    let resolvedPath = pdfPath;
+    if (!path.isAbsolute(pdfPath)) {
+      resolvedPath = path.resolve(process.cwd(), pdfPath);
+    }
+    
+    // Security: Ensure path is within allowed directories
+    const allowedBases = [
+      path.resolve(process.cwd(), 'uploads'),
+      '/home/runner/workspace/uploads'
+    ];
+    
+    const isAllowed = allowedBases.some(base => resolvedPath.startsWith(base));
+    if (!isAllowed) {
+      console.error('[Onboarding PDF] Path traversal attempt blocked:', pdfPath);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(resolvedPath)) {
+      console.error('[Onboarding PDF] File not found:', resolvedPath);
+      console.error('[Onboarding PDF] This is a legacy filesystem path that does not exist in production.');
+      console.error('[Onboarding PDF] Template needs to be re-uploaded to use object storage.');
+      
+      // Return a specific error so the frontend can show a helpful message
+      return res.status(404).json({ 
+        error: 'Template PDF not available',
+        code: 'LEGACY_STORAGE_PATH',
+        message: 'This template uses legacy storage. Please re-upload the template through the PDF Template Manager.',
+        templateId: doc.templateId,
+        path: pdfPath
+      });
+    }
+    
+    // Serve the PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(resolvedPath);
+    
+  } catch (error) {
+    console.error('[Onboarding PDF] Error serving document PDF:', error);
+    res.status(500).json({ error: 'Failed to serve PDF' });
+  }
+});
+
 // POST /sessions/:sessionId/documents/:docId/sign - Sign a document
 router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, res: Response) => {
   try {

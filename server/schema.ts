@@ -7474,6 +7474,35 @@ export const cuttingMaterials = pgTable('cutting_materials', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// P2 Product Items - Reusable product items for P2 PO line items
+export const p2ProductItems = pgTable('p2_product_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sku: text('sku').notNull(), // SKU# from the drawing
+  revision: text('revision').default('A'), // Rev (x)
+  description: text('description').notNull(), // Description related to the drawing
+  unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(),
+  internalName: text('internal_name'), // Internal name for reference
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P2 Internal Names - Track previously used internal names for autocomplete
+export const p2InternalNames = pgTable('p2_internal_names', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Cutting Table - Fabric Types (persist user-defined fabric types)
+export const cuttingFabricTypes = pgTable('cutting_fabric_types', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Cutting Table - Production Lines
 export const cuttingProductionLines = pgTable('cutting_production_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -7819,6 +7848,23 @@ export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).
   updatedAt: true,
 });
 
+export const insertP2ProductItemSchema = createInsertSchema(p2ProductItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertP2InternalNameSchema = createInsertSchema(p2InternalNames).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCuttingFabricTypeSchema = createInsertSchema(cuttingFabricTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertCuttingProductionLineSchema = createInsertSchema(cuttingProductionLines).omit({
   id: true,
   createdAt: true,
@@ -7931,6 +7977,15 @@ export const insertManufacturingQueueSchema = createInsertSchema(manufacturingQu
 // Cutting Table Types
 export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
 export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
+
+export type P2ProductItem = typeof p2ProductItems.$inferSelect;
+export type InsertP2ProductItem = z.infer<typeof insertP2ProductItemSchema>;
+
+export type P2InternalName = typeof p2InternalNames.$inferSelect;
+export type InsertP2InternalName = z.infer<typeof insertP2InternalNameSchema>;
+
+export type CuttingFabricType = typeof cuttingFabricTypes.$inferSelect;
+export type InsertCuttingFabricType = z.infer<typeof insertCuttingFabricTypeSchema>;
 
 export type CuttingProductionLine = typeof cuttingProductionLines.$inferSelect;
 export type InsertCuttingProductionLine = z.infer<typeof insertCuttingProductionLineSchema>;

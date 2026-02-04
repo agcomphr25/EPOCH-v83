@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -948,6 +948,7 @@ interface P2Customer {
 
 function P2CustomersTab() {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<P2Customer | null>(null);
@@ -978,7 +979,7 @@ function P2CustomersTab() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
       setShowAddDialog(false);
       resetForm();
       toast({ title: 'Customer created successfully' });
@@ -996,7 +997,7 @@ function P2CustomersTab() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
       setShowEditDialog(false);
       setSelectedCustomer(null);
       resetForm();
@@ -1012,7 +1013,7 @@ function P2CustomersTab() {
       return apiRequest(`/api/p2/customers/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
       toast({ title: 'Customer deleted successfully' });
     },
     onError: (error: Error) => {

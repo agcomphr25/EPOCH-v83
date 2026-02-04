@@ -227,7 +227,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
   // Fetch inventory items for step 3 (materials selection)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/inventory'],
+    queryKey: ['/api/inventory-items-simple'],
     enabled: open && step === 3,
   });
 

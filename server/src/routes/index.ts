@@ -1676,6 +1676,24 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get inventory items for part routing wizard (simple query)
+  app.get('/api/inventory-items-simple', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const rows = await pool.query(`
+        SELECT id, ag_part_number as "agPartNumber", name, description
+        FROM inventory_items 
+        WHERE is_active = true
+        ORDER BY ag_part_number ASC
+        LIMIT 500
+      `);
+      res.json(rows);
+    } catch (_error) {
+      console.error('Get inventory items simple error:', _error);
+      res.status(500).json({ error: 'Failed to fetch inventory items' });
+    }
+  });
+
   // SECURITY: softAuth enforces authentication in production
   app.post('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {

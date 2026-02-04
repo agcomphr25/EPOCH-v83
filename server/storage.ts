@@ -386,6 +386,12 @@ import {
   cuttingFabricTypes,
   type CuttingFabricType,
   type InsertCuttingFabricType,
+  p2ProductItems,
+  type P2ProductItem,
+  type InsertP2ProductItem,
+  p2InternalNames,
+  type P2InternalName,
+  type InsertP2InternalName,
   cuttingProductionLines,
   type CuttingProductionLine,
   type InsertCuttingProductionLine,
@@ -1963,6 +1969,17 @@ export interface IStorage {
   getAllCuttingFabricTypes(): Promise<CuttingFabricType[]>;
   createCuttingFabricType(data: InsertCuttingFabricType): Promise<CuttingFabricType>;
   deleteCuttingFabricType(id: string): Promise<void>;
+
+  // P2 Product Items CRUD
+  getAllP2ProductItems(): Promise<P2ProductItem[]>;
+  getP2ProductItem(id: string): Promise<P2ProductItem | undefined>;
+  createP2ProductItem(data: InsertP2ProductItem): Promise<P2ProductItem>;
+  updateP2ProductItem(id: string, data: Partial<InsertP2ProductItem>): Promise<P2ProductItem>;
+  deleteP2ProductItem(id: string): Promise<void>;
+
+  // P2 Internal Names CRUD
+  getAllP2InternalNames(): Promise<P2InternalName[]>;
+  createP2InternalName(name: string): Promise<P2InternalName>;
 
   // Cutting Table - Production Lines CRUD
   getAllCuttingProductionLines(): Promise<CuttingProductionLine[]>;
@@ -16061,6 +16078,56 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingFabricType(id: string): Promise<void> {
     await db.delete(cuttingFabricTypes).where(eq(cuttingFabricTypes.id, id));
+  }
+
+  // P2 Product Items CRUD
+  async getAllP2ProductItems(): Promise<P2ProductItem[]> {
+    return await db.select().from(p2ProductItems).where(eq(p2ProductItems.isActive, true)).orderBy(asc(p2ProductItems.sku));
+  }
+
+  async getP2ProductItem(id: string): Promise<P2ProductItem | undefined> {
+    const [item] = await db.select().from(p2ProductItems).where(eq(p2ProductItems.id, id));
+    return item || undefined;
+  }
+
+  async createP2ProductItem(data: InsertP2ProductItem): Promise<P2ProductItem> {
+    const [item] = await db.insert(p2ProductItems).values(data).returning();
+    // Also save the internal name if provided
+    if (data.internalName) {
+      try {
+        await db.insert(p2InternalNames).values({ name: data.internalName }).onConflictDoNothing();
+      } catch (e) {
+        // Ignore duplicate key errors
+      }
+    }
+    return item;
+  }
+
+  async updateP2ProductItem(id: string, data: Partial<InsertP2ProductItem>): Promise<P2ProductItem> {
+    const [item] = await db.update(p2ProductItems).set({ ...data, updatedAt: new Date() }).where(eq(p2ProductItems.id, id)).returning();
+    // Also save the internal name if provided
+    if (data.internalName) {
+      try {
+        await db.insert(p2InternalNames).values({ name: data.internalName }).onConflictDoNothing();
+      } catch (e) {
+        // Ignore duplicate key errors
+      }
+    }
+    return item;
+  }
+
+  async deleteP2ProductItem(id: string): Promise<void> {
+    await db.update(p2ProductItems).set({ isActive: false, updatedAt: new Date() }).where(eq(p2ProductItems.id, id));
+  }
+
+  // P2 Internal Names CRUD
+  async getAllP2InternalNames(): Promise<P2InternalName[]> {
+    return await db.select().from(p2InternalNames).orderBy(asc(p2InternalNames.name));
+  }
+
+  async createP2InternalName(name: string): Promise<P2InternalName> {
+    const [internalName] = await db.insert(p2InternalNames).values({ name }).onConflictDoNothing().returning();
+    return internalName;
   }
 
   // Cutting Table - Production Lines CRUD

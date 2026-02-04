@@ -1,0 +1,80 @@
+RETURN MERCHANDISE AUTHORIZATION (RMA) FORM
+🏷️ RMA INFORMATION
+
+(Completed by Company)
+
+Field	Value
+RMA Number	RMA-#####
+Date Issued	___ / ___ / ______
+Return Deadline	___ / ___ / ______
+Issued By	____________________
+
+Important: Returns without an RMA number may be refused.
+
+👤 CUSTOMER INFORMATION
+Field	
+Company / Customer Name	______________________________
+Contact Name	______________________________
+Phone Number	______________________________
+Email Address	______________________________
+Return Shipping Address	______________________________
+City / State / ZIP	______________________________
+📄 ORDER & PRODUCT INFORMATION
+Field	
+Original Order #	______________________________
+Invoice # (if available)	______________________________
+Purchase Date	___ / ___ / ______
+🔧 ITEM(S) BEING RETURNED
+
+(Attach additional page if needed)
+
+Qty	Part / SKU	Serial #	Description	Reason for Return
+				
+				
+
+Reason Codes (check one):
+☐ Defective ☐ Damaged in Shipping ☐ Incorrect Item
+☐ Warranty Repair ☐ Upgrade ☐ Other: __________________
+
+🛠️ REQUESTED ACTION
+
+☐ Repair
+☐ Replacement
+☐ Credit / Refund
+☐ Evaluation Only (Contact me with findings)
+
+📝 DESCRIPTION OF ISSUE
+
+(Be as detailed as possible)
+
+______________________________________________________________________
+______________________________________________________________________
+______________________________________________________________________
+
+📦 RETURN SHIPPING INSTRUCTIONS
+
+☐ Customer is responsible for return shipping
+☐ Company provided return label
+☐ Freight / Special handling required
+
+Carrier: ____________________
+Tracking #: ____________________
+
+⚠️ TERMS & CONDITIONS (Brief, Enforceable)
+
+Products must be returned with RMA number clearly marked on the outside of the package.
+
+Items must be properly packaged to prevent damage.
+
+Evaluation fees may apply if no defect is found.
+
+Unauthorized or late returns may be rejected.
+
+✍️ AUTHORIZATION
+
+I certify that the information above is accurate.
+
+Field	
+Customer Signature	______________________________
+Printed Name	______________________________
+Date	___ / ___ / ______

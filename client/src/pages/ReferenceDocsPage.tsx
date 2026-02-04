@@ -192,18 +192,20 @@ export default function ReferenceDocsPage() {
     setUploading(true);
     try {
       // Step 1: Get pre-signed upload URL from cloud storage
-      const urlResponse = await fetch('/api/objects/upload-url', {
+      const urlResponse = await fetch('/api/media/request-upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           filename: uploadFile.name,
           contentType: uploadFile.type,
-          folder: 'media-library',
         }),
       });
       
-      if (!urlResponse.ok) throw new Error('Failed to get upload URL');
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get upload URL');
+      }
       
       const { uploadURL, objectPath } = await urlResponse.json();
       

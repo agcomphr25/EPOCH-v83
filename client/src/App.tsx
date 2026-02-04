@@ -179,6 +179,7 @@ import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
 import ScrapReportPage from './pages/ScrapReportPage';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
+import RMAFormPage from './pages/RMAFormPage';
 import CreditMemoPage from './pages/CreditMemoPage';
 import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
@@ -702,6 +703,7 @@ function App() {
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/help" component={HelpCenter} />
                   <Route path="/refund-queue" component={RefundQueue} />
+                  <Route path="/rma-form" component={RMAFormPage} />
 
                   {/* Credit Memo Management */}
                   <Route path="/credit-memo" component={CreditMemoPage} />

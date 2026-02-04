@@ -1600,12 +1600,24 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       })
     );
 
-    // 2. VALIDATE: Ensure all orders from same customer (by name, since same customer can have multiple IDs)
-    const uniqueCustomerNames = new Set(orderDetails.map(d => d.customer?.name || d.po.customerName));
+    // 2. VALIDATE: Ensure all orders from same customer (by normalized name, since same customer can have multiple IDs/name variations)
+    const customerNames = orderDetails.map(d => d.customer?.name || d.po.customerName);
     const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));
     
-    // Allow if customer names match (even if IDs differ due to data inconsistency)
-    if (uniqueCustomerNames.size > 1) {
+    // Normalize customer names for comparison (lowercase, remove LLC/Inc/Corp suffixes, trim)
+    const normalizeCustomerName = (name: string): string => {
+      return name
+        .toLowerCase()
+        .replace(/\s*(llc|inc|corp|corporation|ltd|limited|co\.?)\s*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+    
+    const normalizedNames = new Set(customerNames.map(normalizeCustomerName));
+    const uniqueCustomerNames = new Set(customerNames);
+    
+    // Allow if normalized customer names match (even if exact names/IDs differ)
+    if (normalizedNames.size > 1) {
       return res.status(400).json({
         _error: 'All items must be from the same customer',
         customers: Array.from(uniqueCustomerNames),
@@ -1613,9 +1625,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       });
     }
     
-    // Log warning if same customer has multiple IDs
-    if (uniqueCustomerIds.size > 1) {
-      console.warn(`⚠️ Customer "${Array.from(uniqueCustomerNames)[0]}" has multiple IDs: ${Array.from(uniqueCustomerIds).join(', ')}`);
+    // Log warning if same customer has multiple IDs or name variations
+    if (uniqueCustomerIds.size > 1 || uniqueCustomerNames.size > 1) {
+      console.warn(`⚠️ Customer has variations - Names: ${Array.from(uniqueCustomerNames).join(', ')}, IDs: ${Array.from(uniqueCustomerIds).join(', ')}`);
     }
 
     // 3. GROUP BY PO NUMBER

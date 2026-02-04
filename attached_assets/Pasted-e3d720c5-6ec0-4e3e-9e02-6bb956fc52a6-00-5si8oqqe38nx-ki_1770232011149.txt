@@ -1,0 +1,44 @@
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/internal-names:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/product-items:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/internal-names:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/product-items:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528

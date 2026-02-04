@@ -1774,6 +1774,7 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/p2-purchase-orders/:id/lock', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const { id } = req.params;
       const { employeeId } = req.body;
       
@@ -1785,13 +1786,16 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ error: 'PO is already locked' });
       }
       
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
-        lockedAt: new Date(),
-        lockedBy: employeeId && employeeId !== '' ? parseInt(employeeId) : null
-      });
+      // Use raw SQL to avoid Drizzle null handling issues
+      const lockedByValue = employeeId && employeeId !== '' ? parseInt(employeeId) : null;
+      await pool.query(
+        'UPDATE p2_purchase_orders SET locked_at = NOW(), locked_by = $1 WHERE id = $2',
+        [lockedByValue, parseInt(id)]
+      );
       
-      console.log('🔒 Locked P2 purchase order:', po.id);
-      res.json(po);
+      const updatedPO = await storage.getP2PurchaseOrder(parseInt(id));
+      console.log('🔒 Locked P2 purchase order:', updatedPO?.id);
+      res.json(updatedPO);
     } catch (_error) {
       console.error('Lock P2 PO error:', _error);
       res.status(500).json({ error: 'Failed to lock PO' });
@@ -1802,15 +1806,18 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/p2-purchase-orders/:id/unlock', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const { id } = req.params;
       
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
-        lockedAt: null,
-        lockedBy: null
-      });
+      // Use raw SQL to avoid Drizzle null handling issues
+      await pool.query(
+        'UPDATE p2_purchase_orders SET locked_at = NULL, locked_by = NULL WHERE id = $1',
+        [parseInt(id)]
+      );
       
-      console.log('🔓 Unlocked P2 purchase order:', po.id);
-      res.json(po);
+      const updatedPO = await storage.getP2PurchaseOrder(parseInt(id));
+      console.log('🔓 Unlocked P2 purchase order:', updatedPO?.id);
+      res.json(updatedPO);
     } catch (_error) {
       console.error('Unlock P2 PO error:', _error);
       res.status(500).json({ error: 'Failed to unlock PO' });

@@ -1,0 +1,1359 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+9954129c7dd6dc22.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+C @ 9954129c7dd6dc22.js:2
+9954129c7dd6dc22.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+C @ 9954129c7dd6dc22.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Ar52%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/internal-names 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/product-items 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/internal-names 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/product-items 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+onSubscribe @ @tanstack_react-query.js?v=06c39446:1976
+subscribe @ @tanstack_react-query.js?v=06c39446:24
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3147
+subscribeToStore @ chunk-NFC5BX5N.js?v=06c39446:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=06c39446:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=06c39446:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=06c39446:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=06c39446:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=06c39446:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=06c39446:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=06c39446:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=06c39446:19416
+commitRoot @ chunk-NFC5BX5N.js?v=06c39446:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=06c39446:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=06c39446:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:18627
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ injected.js:214
+(anonymous) @ queryClient.ts:207
+fetchFn @ @tanstack_react-query.js?v=06c39446:879
+run @ @tanstack_react-query.js?v=06c39446:507
+(anonymous) @ @tanstack_react-query.js?v=06c39446:532
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=06c39446:528
+Promise.catch
+run @ @tanstack_react-query.js?v=06c39446:511
+start @ @tanstack_react-query.js?v=06c39446:550
+fetch @ @tanstack_react-query.js?v=06c39446:918
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=06c39446:2312
+updateTimers_fn @ @tanstack_react-query.js?v=06c39446:2319
+onQueryUpdate @ @tanstack_react-query.js?v=06c39446:2275
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1040
+(anonymous) @ @tanstack_react-query.js?v=06c39446:1039
+batch @ @tanstack_react-query.js?v=06c39446:598
+dispatch_fn @ @tanstack_react-query.js?v=06c39446:1038
+fetch @ @tanstack_react-query.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=06c39446:2280
+(anonymous) @ @tanstack_react-query.js?v=06c39446:2314
+injected.js:214  POST https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/product-items 500 (Internal Server Error)
+apply @ injected.js:214
+apiRequest @ queryClient.ts:110
+mutationFn @ P2POCreationWizard.tsx:116
+fn @ @tanstack_react-query.js?v=06c39446:1234
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+execute @ @tanstack_react-query.js?v=06c39446:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=06c39446:2692
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3415
+onClick @ P2POCreationWizard.tsx:851
+callCallback2 @ chunk-NFC5BX5N.js?v=06c39446:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=06c39446:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=06c39446:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=06c39446:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=06c39446:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=06c39446:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=06c39446:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=06c39446:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=06c39446:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=06c39446:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=06c39446:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=06c39446:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=06c39446:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=06c39446:5449
+injected.js:37 API error raw body: {"error":"Failed to create P2 product item"}
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:116
+await in apiRequest
+mutationFn @ P2POCreationWizard.tsx:116
+fn @ @tanstack_react-query.js?v=06c39446:1234
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+execute @ @tanstack_react-query.js?v=06c39446:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=06c39446:2692
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3415
+onClick @ P2POCreationWizard.tsx:851
+callCallback2 @ chunk-NFC5BX5N.js?v=06c39446:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=06c39446:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=06c39446:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=06c39446:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=06c39446:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=06c39446:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=06c39446:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=06c39446:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=06c39446:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=06c39446:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=06c39446:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=06c39446:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=06c39446:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=06c39446:5449
+injected.js:37 💥 API Request failed for /api/p2/product-items: Error: Failed to create P2 product item
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+apiRequest @ queryClient.ts:165
+await in apiRequest
+mutationFn @ P2POCreationWizard.tsx:116
+fn @ @tanstack_react-query.js?v=06c39446:1234
+run @ @tanstack_react-query.js?v=06c39446:507
+start @ @tanstack_react-query.js?v=06c39446:550
+execute @ @tanstack_react-query.js?v=06c39446:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=06c39446:2692
+(anonymous) @ @tanstack_react-query.js?v=06c39446:3415
+onClick @ P2POCreationWizard.tsx:851
+callCallback2 @ chunk-NFC5BX5N.js?v=06c39446:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=06c39446:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=06c39446:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=06c39446:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=06c39446:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=06c39446:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=06c39446:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=06c39446:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=06c39446:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=06c39446:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=06c39446:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=06c39446:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=06c39446:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=06c39446:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=06c39446:5449

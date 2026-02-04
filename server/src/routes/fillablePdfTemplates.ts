@@ -468,18 +468,29 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `PDF file not found: ${storagePath}` });
     }
     
-    // Save to templates directory
-    const timestamp = Date.now();
-    const safeName = mediaItem.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const templateFilename = `template-${timestamp}-${safeName}`;
-    const templatePath = path.join(TEMPLATES_DIR, templateFilename);
+    // Determine the template PDF path
+    // If source is in object storage, use that path directly (no copy needed)
+    // This ensures the template works in production where filesystem doesn't persist
+    let templatePdfPath: string;
     
-    fs.writeFileSync(templatePath, pdfBuffer);
+    if (normalizedCloudPath.startsWith('/objects/')) {
+      // Source is in object storage - use it directly
+      console.log('[Scaffold Create] Using object storage path directly:', normalizedCloudPath);
+      templatePdfPath = normalizedCloudPath;
+    } else {
+      // Legacy: local file - save a copy to templates directory
+      const timestamp = Date.now();
+      const safeName = mediaItem.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const templateFilename = `template-${timestamp}-${safeName}`;
+      const templatePath = path.join(TEMPLATES_DIR, templateFilename);
+      fs.writeFileSync(templatePath, pdfBuffer);
+      templatePdfPath = templatePath;
+    }
     
     // Create the template with source media item reference
     const template = await createTemplate({
       name: templateName,
-      templatePdfPath: templatePath,
+      templatePdfPath: templatePdfPath,
       sourceMediaItemId: mediaItemId,
       fieldDefsJson,
       requiresSignature,

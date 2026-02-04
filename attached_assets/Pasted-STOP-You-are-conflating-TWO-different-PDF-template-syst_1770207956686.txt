@@ -1,0 +1,83 @@
+STOP. You are conflating TWO different PDF template systems.
+
+I need you to reconcile the CURRENT system that I am using, not legacy ones.
+
+FACTS (do not contradict these):
+
+1) I am creating fillable PDFs using the NEW UI at:
+   /fillable-pdf-templates
+   via the “Scaffold from Media” button.
+
+2) I am NOT using the old PDF Templates system at:
+   /pdf-templates
+   and I will NOT re-upload documents there.
+
+3) The source PDFs are uploaded to Media Library and ARE stored in object storage.
+
+4) After scaffolding from Media Library, a Fillable PDF Template record EXISTS.
+
+5) I then:
+   - Create a new onboarding path
+   - Select that Fillable PDF Template
+   - Start a new onboarding session
+   - Click “Ready to Sign”
+   - Receive “Unable to Load Document”
+
+YOUR TASKS:
+
+A) SYSTEM ALIGNMENT CHECK
+List ALL systems involved and clearly separate them:
+
+• Media Library
+• Fillable PDF Templates (/fillable-pdf-templates)
+• Legacy PDF Templates (/pdf-templates)
+• Onboarding document loader
+
+For EACH system, specify:
+• Which table it writes to
+• Which column contains the PDF storage path
+• Whether that path is object storage or filesystem
+
+B) TRACE THE ACTUAL PATH USED
+For a Fillable PDF created via “Scaffold from Media”:
+
+1) Which column should contain the PDF path?
+   (fillable_pdf_templates.template_pdf_path? media_library.storage_path? something else?)
+
+2) When onboarding calls:
+   GET /api/onboarding/sessions/:sessionId/documents/:docId/pdf
+
+   EXACTLY which column is it trying to read?
+
+3) Why is that column empty, incorrect, or pointing to a filesystem path?
+
+C) IDENTIFY THE BREAK
+Answer this explicitly:
+
+Is the “Scaffold from Media” flow FAILING TO COPY the object-storage PDF path
+into the column that onboarding expects to read?
+
+If yes:
+• Identify the missing write
+• Identify the incorrect assumption
+• Identify the exact fix
+
+D) SINGLE SOURCE OF TRUTH
+Decide and state clearly:
+
+Which column is the canonical PDF source for onboarding signing when using
+fillable-pdf-templates created from Media Library?
+
+There must be ONE answer.
+
+E) NO LEGACY ADVICE
+Do NOT suggest:
+• Re-uploading in /pdf-templates
+• Legacy filesystem paths
+• Manual workarounds
+
+Only address the CURRENT system:
+Media Library → Scaffold → Fillable PDF Template → Onboarding
+
+END WITH:
+“One sentence stating exactly why onboarding cannot load the PDF right now and what single code change will fix it.”

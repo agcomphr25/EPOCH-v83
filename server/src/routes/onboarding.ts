@@ -1530,6 +1530,20 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
     const doc = docs[0];
     let pdfPath: string | null = null;
     
+    // DETAILED PRE-RESOLUTION LOGGING
+    console.log('[Onboarding PDF] PRE-RESOLUTION VALUES:', {
+      docId,
+      sessionId,
+      signedPdfPath: doc.signedPdfPath,
+      sourceMediaStoragePath: doc.sourceMediaStoragePath,
+      templatePdfPath: doc.templatePdfPath,
+      mediaStoragePath: doc.mediaStoragePath,
+      status: doc.status,
+      isFillable: doc.isFillable,
+      templateId: doc.templateId,
+      instanceId: doc.instanceId
+    });
+    
     // Resolution logic (with fallbacks for legacy filesystem paths):
     // 1. If document is signed and has signed_pdf_path, use it
     // 2. If document has template (fillable), use template PDF
@@ -1537,45 +1551,34 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
     //    - Fallback to source_media_item if template path is legacy filesystem
     // 3. If document is from media library, use media storage path
     
+    let branchChosen = 'NONE';
+    
     if (doc.status === 'signed' && doc.signedPdfPath) {
-      // Use signed PDF from instance
+      branchChosen = 'SIGNED_PDF';
       pdfPath = doc.signedPdfPath;
     } else if (doc.sourceMediaStoragePath && doc.sourceMediaStoragePath.startsWith('/objects/')) {
-      // ALWAYS prefer source media from object storage - this is the canonical PDF location
-      // This ensures scaffolded templates work regardless of template_pdf_path format
-      console.log('[Onboarding PDF] Using source media (canonical):', doc.sourceMediaStoragePath);
+      branchChosen = 'SOURCE_MEDIA_CANONICAL';
       pdfPath = doc.sourceMediaStoragePath;
     } else if (doc.templatePdfPath && doc.templatePdfPath.startsWith('/objects/')) {
-      // Template is in object storage - use it directly
+      branchChosen = 'TEMPLATE_OBJECT_STORAGE';
       pdfPath = doc.templatePdfPath;
     } else if (doc.mediaStoragePath && doc.mediaStoragePath.startsWith('/objects/')) {
-      // Use media library PDF (object storage)
+      branchChosen = 'MEDIA_OBJECT_STORAGE';
       pdfPath = doc.mediaStoragePath;
     } else if (doc.templatePdfPath) {
-      // Legacy: try the template path (may work in development)
-      console.log('[Onboarding PDF] Using legacy template path:', doc.templatePdfPath);
+      branchChosen = 'TEMPLATE_LEGACY_FILESYSTEM';
       pdfPath = doc.templatePdfPath;
     } else if (doc.mediaStoragePath) {
-      // Legacy: try media path
+      branchChosen = 'MEDIA_LEGACY';
       pdfPath = doc.mediaStoragePath;
     }
+    
+    console.log('[Onboarding PDF] BRANCH CHOSEN:', branchChosen, '| PATH:', pdfPath);
     
     if (!pdfPath) {
       console.error('[Onboarding PDF] No valid PDF path found for document:', docId);
       return res.status(404).json({ error: 'PDF source not available' });
     }
-    
-    // Debug logging for PDF resolution
-    console.log('[Onboarding PDF] Resolution complete:', {
-      docId,
-      sessionId,
-      resolvedPath: pdfPath,
-      templatePdfPath: doc.templatePdfPath,
-      sourceMediaStoragePath: doc.sourceMediaStoragePath,
-      mediaStoragePath: doc.mediaStoragePath,
-      signedPdfPath: doc.signedPdfPath,
-      status: doc.status
-    });
     
     // Check if path is object storage (starts with /objects/)
     if (pdfPath.startsWith('/objects/')) {

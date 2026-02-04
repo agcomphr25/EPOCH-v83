@@ -1,0 +1,115 @@
+You are now acting as a senior backend + frontend debugging engineer.
+
+We have a CRITICAL production issue in the onboarding document signing flow.
+Do NOT touch UX or layout. This task is ONLY about why documents fail to load.
+
+USER-VISIBLE ERROR (PROD):
+“Unable to Load Document”
+Route: /onboarding/session/:id
+Triggered when clicking “Ready to Sign” on a newly created onboarding session
+This happens AFTER:
+- A new PDF was uploaded
+- A new Fillable PDF Template was scaffolded
+- A new Onboarding Path was created
+- A new session was started successfully
+
+This is NOT a browser issue. This is a broken document pipeline.
+
+YOUR JOB:
+Trace the document end-to-end and identify exactly where it breaks.
+
+━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — TRACE THE DATA MODEL
+━━━━━━━━━━━━━━━━━━━━━━
+Starting from the onboarding session ID:
+
+1. Identify the onboarding_session_documents record
+   - session_id
+   - document_id
+   - template_id (if any)
+   - fillable_pdf_instance_id (if created)
+2. Confirm whether a fillable_pdf_instance exists
+3. Confirm which ID the frontend is using when “Ready to Sign” is clicked
+
+Explicitly answer:
+- Is the frontend trying to load:
+  a) the original media PDF?
+  b) the fillable template source PDF?
+  c) the fillable_pdf_instance output PDF?
+  d) a signed_pdf_path that does not yet exist?
+
+━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — TRACE STORAGE
+━━━━━━━━━━━━━━━━━━━━━━
+For the document that fails to load:
+
+1. Identify the expected storage path
+2. Verify whether the file exists in object storage
+3. Verify whether the path stored in the DB matches reality
+
+Check for:
+- Null or empty file paths
+- Incorrect bucket names
+- Using signed_pdf_path before signing
+- Using source_media_item_id incorrectly
+- Assuming a PDF exists when only a template exists
+
+━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — TRACE THE API
+━━━━━━━━━━━━━━━━━━━━━━
+Identify the exact API endpoint the frontend calls when loading the document.
+
+Answer:
+- Which route serves the PDF?
+- What parameters does it receive?
+- What DB query does it run?
+- What file path does it attempt to read?
+- What error does the server actually throw?
+
+You MUST:
+- Add logging if necessary
+- Surface the real error (not just “Unable to load document”)
+
+━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — FRONTEND CONTRACT VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━
+Verify whether the frontend is violating the document lifecycle contract.
+
+Explicitly confirm:
+- Is the UI attempting to load a PDF before it exists?
+- Is “Ready to Sign” assuming a rendered PDF instead of a template-backed instance?
+- Is the UI incorrectly treating:
+  - template PDF
+  - instance PDF
+  - signed PDF
+  as interchangeable?
+
+If so, identify the exact incorrect assumption.
+
+━━━━━━━━━━━━━━━━━━━━━━
+STEP 5 — ROOT CAUSE + FIX
+━━━━━━━━━━━━━━━━━━━━━━
+Provide:
+1. The precise root cause (one sentence)
+2. The minimal fix required (no refactors)
+3. Whether this is:
+   - a path resolution bug
+   - a missing instance creation step
+   - a bad API assumption
+   - a storage timing issue
+   - a frontend contract violation
+
+DO NOT:
+- Redesign the UX
+- Change layout
+- Add new features
+- Mask the error
+
+OUTPUT FORMAT (MANDATORY):
+1. What the frontend THINKS it is loading
+2. What actually EXISTS at that moment
+3. Why they don’t match
+4. The exact code location(s) responsible
+5. The fix
+
+If you are not 100% certain, say so and explain what additional evidence is needed.

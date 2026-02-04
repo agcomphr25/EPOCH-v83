@@ -1504,6 +1504,7 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
     const { sessionId, docId } = req.params;
     
     // Fetch document with all related data for resolution
+    // Also fetch source_media_item from template as fallback for legacy paths
     const docs = await pool.query(`
       SELECT 
         sd.id, sd.status, sd.template_id as "templateId",
@@ -1511,11 +1512,14 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
         sd.is_fillable as "isFillable",
         i.signed_pdf_path as "signedPdfPath",
         t.template_pdf_path as "templatePdfPath",
-        m.storage_path as "mediaStoragePath"
+        t.source_media_item_id as "sourceMediaItemId",
+        m.storage_path as "mediaStoragePath",
+        sm.storage_path as "sourceMediaStoragePath"
       FROM onboarding_session_documents sd
       LEFT JOIN fillable_pdf_instances i ON sd.instance_id = i.id
       LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
       LEFT JOIN media_library m ON sd.media_item_id = m.id
+      LEFT JOIN media_library sm ON t.source_media_item_id = sm.id
       WHERE sd.id = $1 AND sd.session_id = $2
     `, [docId, sessionId]);
     
@@ -1526,20 +1530,36 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
     const doc = docs[0];
     let pdfPath: string | null = null;
     
-    // Resolution logic:
+    // Resolution logic (with fallbacks for legacy filesystem paths):
     // 1. If document is signed and has signed_pdf_path, use it
     // 2. If document has template (fillable), use template PDF
+    //    - Prefer object storage paths (/objects/)
+    //    - Fallback to source_media_item if template path is legacy filesystem
     // 3. If document is from media library, use media storage path
     
     if (doc.status === 'signed' && doc.signedPdfPath) {
       // Use signed PDF from instance
       pdfPath = doc.signedPdfPath;
     } else if (doc.templatePdfPath) {
-      // Use original template PDF for pre-signing view
-      pdfPath = doc.templatePdfPath;
+      // Check if template path is object storage or legacy filesystem
+      if (doc.templatePdfPath.startsWith('/objects/')) {
+        // Template is in object storage - use it directly
+        pdfPath = doc.templatePdfPath;
+      } else if (doc.sourceMediaStoragePath && doc.sourceMediaStoragePath.startsWith('/objects/')) {
+        // Template has legacy filesystem path but source media is in object storage
+        // Use source media as fallback
+        console.log('[Onboarding PDF] Using source media fallback for legacy template path:', doc.templatePdfPath);
+        pdfPath = doc.sourceMediaStoragePath;
+      } else {
+        // Try the template path (may work in development)
+        pdfPath = doc.templatePdfPath;
+      }
     } else if (doc.mediaStoragePath) {
       // Use media library PDF
       pdfPath = doc.mediaStoragePath;
+    } else if (doc.sourceMediaStoragePath) {
+      // Fallback: use source media from template if available
+      pdfPath = doc.sourceMediaStoragePath;
     }
     
     if (!pdfPath) {
@@ -1597,22 +1617,17 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
     // Check if file exists
     if (!fs.existsSync(resolvedPath)) {
       console.error('[Onboarding PDF] File not found:', resolvedPath);
+      console.error('[Onboarding PDF] This is a legacy filesystem path that does not exist in production.');
+      console.error('[Onboarding PDF] Template needs to be re-uploaded to use object storage.');
       
-      // Failsafe: Try to fall back to template PDF if signed PDF is missing
-      if (doc.status === 'signed' && doc.templatePdfPath) {
-        let fallbackPath = doc.templatePdfPath;
-        if (!path.isAbsolute(fallbackPath)) {
-          fallbackPath = path.resolve(process.cwd(), fallbackPath);
-        }
-        if (fs.existsSync(fallbackPath)) {
-          console.log('[Onboarding PDF] Falling back to template PDF:', fallbackPath);
-          resolvedPath = fallbackPath;
-        } else {
-          return res.status(404).json({ error: 'PDF file not found' });
-        }
-      } else {
-        return res.status(404).json({ error: 'PDF file not found' });
-      }
+      // Return a specific error so the frontend can show a helpful message
+      return res.status(404).json({ 
+        error: 'Template PDF not available',
+        code: 'LEGACY_STORAGE_PATH',
+        message: 'This template uses legacy storage. Please re-upload the template through the PDF Template Manager.',
+        templateId: doc.templateId,
+        path: pdfPath
+      });
     }
     
     // Serve the PDF

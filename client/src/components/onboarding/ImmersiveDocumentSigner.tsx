@@ -95,6 +95,23 @@ export default function ImmersiveDocumentSigner({
     setError(null);
     
     try {
+      // First check if the PDF endpoint returns an error
+      const checkResponse = await fetch(pdfUrl, { method: 'HEAD' });
+      if (!checkResponse.ok) {
+        // Try to get the error details from a GET request
+        const errorResponse = await fetch(pdfUrl);
+        if (!errorResponse.ok) {
+          const errorData = await errorResponse.json().catch(() => null);
+          if (errorData?.code === 'LEGACY_STORAGE_PATH') {
+            setError('This document template needs to be re-uploaded by an administrator. The template uses legacy storage that is not available in production.');
+          } else {
+            setError('Unable to load the document. Please contact an administrator.');
+          }
+          setLoading(false);
+          return;
+        }
+      }
+      
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdf = await loadingTask.promise;
       setPdfDoc(pdf);

@@ -14,6 +14,7 @@ import {
 import { and, gte, lte, eq, desc, ilike } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
+  insertCuttingFabricTypeSchema,
   insertCuttingProductionLineSchema,
   insertCuttingProductCategorySchema,
   insertCuttingComponentSchema,
@@ -85,6 +86,38 @@ router.delete('/materials/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting cutting material:', error);
     res.status(500).json({ error: 'Failed to delete material' });
+  }
+});
+
+// Fabric Types endpoints
+router.get('/fabric-types', async (req, res) => {
+  try {
+    const fabricTypes = await storage.getAllCuttingFabricTypes();
+    res.json(fabricTypes);
+  } catch (error) {
+    console.error('Error fetching fabric types:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric types' });
+  }
+});
+
+router.post('/fabric-types', async (req, res) => {
+  try {
+    const validatedData = insertCuttingFabricTypeSchema.parse(req.body);
+    const fabricType = await storage.createCuttingFabricType(validatedData);
+    res.json(fabricType);
+  } catch (error) {
+    console.error('Error creating fabric type:', error);
+    res.status(400).json({ error: 'Failed to create fabric type' });
+  }
+});
+
+router.delete('/fabric-types/:id', async (req, res) => {
+  try {
+    await storage.deleteCuttingFabricType(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting fabric type:', error);
+    res.status(500).json({ error: 'Failed to delete fabric type' });
   }
 });
 

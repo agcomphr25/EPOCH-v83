@@ -7474,6 +7474,15 @@ export const cuttingMaterials = pgTable('cutting_materials', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Cutting Table - Fabric Types (persist user-defined fabric types)
+export const cuttingFabricTypes = pgTable('cutting_fabric_types', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Cutting Table - Production Lines
 export const cuttingProductionLines = pgTable('cutting_production_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -7819,6 +7828,12 @@ export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).
   updatedAt: true,
 });
 
+export const insertCuttingFabricTypeSchema = createInsertSchema(cuttingFabricTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertCuttingProductionLineSchema = createInsertSchema(cuttingProductionLines).omit({
   id: true,
   createdAt: true,
@@ -7931,6 +7946,9 @@ export const insertManufacturingQueueSchema = createInsertSchema(manufacturingQu
 // Cutting Table Types
 export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
 export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
+
+export type CuttingFabricType = typeof cuttingFabricTypes.$inferSelect;
+export type InsertCuttingFabricType = z.infer<typeof insertCuttingFabricTypeSchema>;
 
 export type CuttingProductionLine = typeof cuttingProductionLines.$inferSelect;
 export type InsertCuttingProductionLine = z.infer<typeof insertCuttingProductionLineSchema>;

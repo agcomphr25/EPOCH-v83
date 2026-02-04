@@ -383,6 +383,9 @@ import {
   cuttingMaterials,
   type CuttingMaterial,
   type InsertCuttingMaterial,
+  cuttingFabricTypes,
+  type CuttingFabricType,
+  type InsertCuttingFabricType,
   cuttingProductionLines,
   type CuttingProductionLine,
   type InsertCuttingProductionLine,
@@ -1955,6 +1958,11 @@ export interface IStorage {
   createCuttingMaterial(data: InsertCuttingMaterial): Promise<CuttingMaterial>;
   updateCuttingMaterial(id: string, data: Partial<InsertCuttingMaterial>): Promise<CuttingMaterial>;
   deleteCuttingMaterial(id: string): Promise<void>;
+
+  // Cutting Table - Fabric Types CRUD
+  getAllCuttingFabricTypes(): Promise<CuttingFabricType[]>;
+  createCuttingFabricType(data: InsertCuttingFabricType): Promise<CuttingFabricType>;
+  deleteCuttingFabricType(id: string): Promise<void>;
 
   // Cutting Table - Production Lines CRUD
   getAllCuttingProductionLines(): Promise<CuttingProductionLine[]>;
@@ -16039,6 +16047,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingMaterial(id: string): Promise<void> {
     await db.delete(cuttingMaterials).where(eq(cuttingMaterials.id, id));
+  }
+
+  // Cutting Table - Fabric Types CRUD
+  async getAllCuttingFabricTypes(): Promise<CuttingFabricType[]> {
+    return await db.select().from(cuttingFabricTypes).orderBy(asc(cuttingFabricTypes.name));
+  }
+
+  async createCuttingFabricType(data: InsertCuttingFabricType): Promise<CuttingFabricType> {
+    const [fabricType] = await db.insert(cuttingFabricTypes).values(data).returning();
+    return fabricType;
+  }
+
+  async deleteCuttingFabricType(id: string): Promise<void> {
+    await db.delete(cuttingFabricTypes).where(eq(cuttingFabricTypes.id, id));
   }
 
   // Cutting Table - Production Lines CRUD

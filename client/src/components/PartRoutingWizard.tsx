@@ -129,9 +129,10 @@ interface PartRoutingWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editRouting?: PartRouting | null;
+  poId?: number; // When provided, show only PO line items instead of inventory
 }
 
-export default function PartRoutingWizard({ open, onOpenChange, editRouting }: PartRoutingWizardProps) {
+export default function PartRoutingWizard({ open, onOpenChange, editRouting, poId }: PartRoutingWizardProps) {
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(editRouting?.departmentSequence || []);
@@ -221,8 +222,38 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   // Fetch inventory items for step 1 and step 3 (materials)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
-    enabled: open && (step === 1 || step === 3),
+    enabled: open && (step === 1 || step === 3) && !poId,
   });
+
+  // Fetch PO line items when poId is provided
+  const { data: poItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2-purchase-order-items', poId],
+    enabled: open && (step === 1 || step === 3) && !!poId,
+  });
+
+  // Transform PO items to match InventoryItem interface for the UI
+  const poItemsAsInventory: InventoryItem[] = poItems.map((item: any) => ({
+    id: String(item.id),
+    agPartNumber: item.partNumber,
+    name: item.partName,
+    description: item.specifications || '',
+    sku: item.partNumber,
+    category: 'P2 Product',
+    subcategory: '',
+    primaryVendor: '',
+    uom: 'EA',
+    countingMethod: 'unit',
+    qohOnHand: item.quantity || 0,
+    qohAllocated: 0,
+    qohAvailable: item.quantity || 0,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    updatedBy: null,
+    unitCost: item.unitPrice || 0,
+  }));
+
+  // Use PO items if poId is provided, otherwise use inventory items
+  const displayItems = poId ? poItemsAsInventory : inventoryItems;
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -243,13 +274,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   });
 
   // Filter inventory items by search
-  const filteredItems = inventoryItems.filter(item =>
+  const filteredItems = displayItems.filter(item =>
     (item.agPartNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
     (item.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   // Selected inventory item
-  const selectedItem = inventoryItems.find(item => item.id === selectedItemId);
+  const selectedItem = displayItems.find(item => item.id === selectedItemId);
 
   // Create/Update mutation
   const saveMutation = useMutation({

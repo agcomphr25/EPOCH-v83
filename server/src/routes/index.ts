@@ -1645,6 +1645,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get PO line items by PO ID (for part routing wizard)
+  app.get('/api/p2-purchase-order-items/:poId', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      const items = await storage.getP2PurchaseOrderItems(parseInt(poId));
+      res.json(items);
+    } catch (_error) {
+      console.error('Get P2 PO items error:', _error);
+      res.status(500).json({ error: 'Failed to fetch PO items' });
+    }
+  });
+
   // SECURITY: softAuth enforces authentication in production
   app.post('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {

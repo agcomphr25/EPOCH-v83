@@ -1063,6 +1063,92 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/po-orders/oem-shipments/:id/return-to-qc
+// Return all items from a shipment back to Shipping QC for reprinting/editing
+router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    
+    console.log(`🔄 Returning shipment ${id} to Shipping QC. Reason: ${reason || 'Not specified'}`);
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ _error: 'Invalid shipment ID format' });
+    }
+
+    // Get all items in this shipment
+    const itemsResult = await pool.query(
+      'SELECT order_id FROM shipment_items WHERE shipment_id = $1',
+      [id]
+    );
+    const items = itemsResult.rows || itemsResult;
+
+    if (items.length === 0) {
+      return res.status(404).json({ _error: 'Shipment not found or has no items' });
+    }
+
+    const orderIds = items.map((item: any) => item.order_id);
+    console.log(`🔄 Regressing ${orderIds.length} orders back to Shipping QC: ${orderIds.join(', ')}`);
+
+    // Update production_orders status back to QC_PASSED (ready for shipping QC)
+    const updateResult = await pool.query(`
+      UPDATE production_orders 
+      SET production_status = 'QC_PASSED',
+          current_department = 'Shipping QC',
+          shipped_at = NULL,
+          is_fulfilled = false,
+          fulfilled_date = NULL,
+          updated_at = NOW()
+      WHERE order_id = ANY($1::text[])
+      RETURNING order_id, production_status, current_department
+    `, [orderIds]);
+
+    const updated = updateResult.rows || updateResult;
+    console.log(`✅ Updated ${updated.length} production orders to Shipping QC`);
+
+    // Also update all_orders if they exist there
+    await pool.query(`
+      UPDATE all_orders 
+      SET current_department = 'Shipping QC',
+          status = 'IN_PROGRESS',
+          updated_at = NOW()
+      WHERE order_id = ANY($1::text[])
+    `, [orderIds]);
+
+    // Optionally delete or archive the shipment record
+    // For now, we'll keep the shipment record but clear the label
+    await pool.query(`
+      UPDATE shipment_records 
+      SET shipping_label_base64 = NULL,
+          notification_metadata = jsonb_set(
+            COALESCE(notification_metadata, '{}'::jsonb),
+            '{returnedToQC}',
+            $2::jsonb
+          )
+      WHERE id = $1
+    `, [id, JSON.stringify({ at: new Date().toISOString(), reason: reason || 'Returned for reprocessing' })]);
+
+    // Clear packing slips from items
+    await pool.query(`
+      UPDATE shipment_items 
+      SET packing_slip_base64 = NULL
+      WHERE shipment_id = $1
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: `Returned ${updated.length} orders to Shipping QC`,
+      orderIds: orderIds,
+      updatedCount: updated.length,
+    });
+  } catch (error: any) {
+    console.error('❌ Error returning shipment to QC:', error);
+    res.status(500).json({ _error: 'Failed to return shipment to QC', details: error.message });
+  }
+});
+
 // POST /api/po-orders/toggle-fulfilled
 // Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
 // Supports both single orderId and batch orderIds array

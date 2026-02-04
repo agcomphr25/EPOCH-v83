@@ -15,6 +15,7 @@ import {
   X,
   Pencil,
   Check,
+  Undo2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -294,6 +295,32 @@ export default function OEMShipmentsPage() {
     setAddItemOrderId('');
     setAddItemPoNumber('');
     setAddItemDialogOpen(true);
+  };
+
+  const returnToQCMutation = useMutation({
+    mutationFn: async ({ shipmentId, reason }: { shipmentId: string; reason?: string }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/return-to-qc`, { 
+        method: 'POST', 
+        body: { reason } 
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: 'Returned to Shipping QC', description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Failed to return to QC', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const handleReturnToQC = (shipmentId: string) => {
+    if (confirm('Are you sure you want to return this shipment to Shipping QC? This will allow reprinting shipping labels and packing slips.')) {
+      returnToQCMutation.mutate({ shipmentId, reason: 'Reprint/edit required' });
+    }
   };
 
   const closeAddItemDialog = () => {
@@ -631,6 +658,17 @@ export default function OEMShipmentsPage() {
                               </div>
 
                               <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-orange-600 hover:bg-orange-50 border-orange-300"
+                                  onClick={() => handleReturnToQC(shipment.id.toString())}
+                                  disabled={returnToQCMutation.isPending}
+                                  title="Return to Shipping QC for reprint/edit"
+                                >
+                                  <Undo2 className="h-4 w-4 mr-1" />
+                                  Return to QC
+                                </Button>
                                 {shipment.has_shipping_label && (
                                   <Button
                                     size="sm"
@@ -929,6 +967,19 @@ export default function OEMShipmentsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {/* Return to QC */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-orange-600 hover:bg-orange-50 border-orange-300"
+                        onClick={() => handleReturnToQC(shipment.id.toString())}
+                        disabled={returnToQCMutation.isPending}
+                        title="Return to Shipping QC for reprint/edit"
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        Return to QC
+                      </Button>
+
                       {/* Download Label */}
                       {shipment.has_shipping_label && (
                         <Button

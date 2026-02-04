@@ -1726,7 +1726,7 @@ export function registerRoutes(app: Express): Server {
           await storage.createP2PurchaseOrderItem({
             poId: po.id,
             partNumber: item.partNumber,
-            description: item.description,
+            partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
             unitPrice: item.unitPrice || 0,
           });

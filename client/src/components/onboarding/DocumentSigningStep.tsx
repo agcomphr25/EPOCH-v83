@@ -14,10 +14,10 @@ import {
 
 interface SessionDocument {
   id: string;
-  templateId?: string | null;
-  instanceId?: string | null;
-  mediaItemId?: string | null;
-  isFillable?: boolean;
+  templateId: string | null;
+  instanceId: string | null;
+  mediaItemId: string | null;
+  isFillable: boolean;
   templateName?: string;
   status: 'pending' | 'signed' | 'skipped' | 'deferred';
   signedAt?: string | null;

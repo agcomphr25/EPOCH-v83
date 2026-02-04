@@ -1180,11 +1180,11 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
 // POST /api/po-orders/toggle-fulfilled
 // Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
 // Supports both single orderId and batch orderIds array
-// Now also creates OEM shipment record when fulfilling items
+// This removes items from the Shipping QC queue - shipment records are created by process-shipment
 router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   try {
     // Support both single orderId and batch orderIds
-    const { orderId, orderIds, isFulfilled, fulfilled, trackingNumber: providedTracking } = req.body;
+    const { orderId, orderIds, isFulfilled, fulfilled } = req.body;
     const shouldFulfill = isFulfilled ?? fulfilled ?? true;
     
     // Normalize to array of order IDs
@@ -1202,17 +1202,8 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     console.log(`📦 ${shouldFulfill ? 'Marking' : 'Unmarking'} ${idsToProcess.length} item(s) as fulfilled...`);
 
     const { storage } = await import('../../storage');
-    const crypto = await import('crypto');
     const results: any[] = [];
     const shippedAt = new Date();
-    
-    // Collect order details for shipment record creation
-    const orderDetailsForShipment: Array<{
-      order: any;
-      poItem: any;
-      po: any;
-      orderId: string;
-    }> = [];
     
     for (const id of idsToProcess) {
       // Check if this is a PO item (non-stock/metal accessory) or a production order
@@ -1227,31 +1218,6 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
               stockStatus: shouldFulfill ? 'SHIPPED' : 'IN_STOCK',
             });
             console.log(`✅ PO Item ${poItemId} marked as ${shouldFulfill ? 'SHIPPED' : 'IN_STOCK'}`);
-            
-            // Get PO item and PO details for shipment record
-            if (shouldFulfill) {
-              try {
-                const poItem = await storage.getPurchaseOrderItem(poItemId);
-                if (poItem) {
-                  const po = await storage.getPurchaseOrder(poItem.poId);
-                  if (po) {
-                    orderDetailsForShipment.push({
-                      order: { 
-                        orderId: id, 
-                        poItemId, 
-                        customerId: po.customerId,
-                        itemName: poItem.stockModelName || poItem.itemName 
-                      },
-                      poItem,
-                      po,
-                      orderId: id,
-                    });
-                  }
-                }
-              } catch (e) {
-                console.log(`⚠️ Could not get PO details for shipment record: ${(e as Error).message}`);
-              }
-            }
             
             results.push({
               orderId: id,
@@ -1282,26 +1248,6 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
         shippedAt: shouldFulfill ? shippedAt : null,
       });
 
-      // Get PO details for shipment record
-      if (shouldFulfill && order.poItemId) {
-        try {
-          const poItem = await storage.getPurchaseOrderItem(order.poItemId);
-          if (poItem) {
-            const po = await storage.getPurchaseOrder(poItem.poId);
-            if (po) {
-              orderDetailsForShipment.push({
-                order: { ...order, orderId: id },
-                poItem,
-                po,
-                orderId: id,
-              });
-            }
-          }
-        } catch (e) {
-          console.log(`⚠️ Could not get PO details for shipment record: ${(e as Error).message}`);
-        }
-      }
-
       console.log(`✅ ${id} fulfillment status updated: ${shouldFulfill}`);
       results.push({
         orderId: id,
@@ -1310,103 +1256,14 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create OEM shipment record when fulfilling items
-    let shipmentId: string | null = null;
-    if (shouldFulfill && orderDetailsForShipment.length > 0) {
-      try {
-        shipmentId = crypto.randomUUID();
-        
-        // Group by customer and PO
-        const firstDetail = orderDetailsForShipment[0];
-        const customerId = firstDetail.po?.customerId || firstDetail.order?.customerId;
-        const customerName = firstDetail.po?.customerName || 'Unknown Customer';
-        
-        // Collect unique PO numbers
-        const poNumbers = [...new Set(orderDetailsForShipment.map(d => d.po?.poNumber).filter(Boolean))];
-        const referenceNumber = poNumbers.join(',').substring(0, 35);
-        
-        // Generate tracking number if not provided
-        const trackingNumber = providedTracking || `FULFILLED-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
-        
-        // Get customer address
-        let customerAddress = null;
-        try {
-          if (customerId) {
-            customerAddress = await storage.getCustomerDefaultAddress(String(customerId));
-          }
-        } catch (e) {
-          console.log(`⚠️ Could not get customer address: ${(e as Error).message}`);
-        }
-        
-        const shipmentRecord = {
-          id: shipmentId,
-          createdBy: req.user?.username || 'system',
-          reference: referenceNumber,
-          poNumbers: poNumbers.join(', '),
-          shippedAt,
-          carrier: 'MANUAL',
-          serviceLevel: 'FULFILLED',
-          serviceCode: 'FULFILLED',
-          billType: 'SENDER' as const,
-          masterTrackingNumber: trackingNumber,
-          packageCount: 1,
-          thirdPartyAccount: null,
-          customerId: String(customerId || ''),
-          customerName: customerName,
-          customerAddress: customerAddress?.street || '',
-          customerCity: customerAddress?.city || '',
-          customerState: customerAddress?.state || '',
-          customerZip: customerAddress?.zipCode || '',
-          shippingLabelBase64: null,
-          shipFromSnapshot: {
-            name: process.env.SHIP_FROM_NAME || 'AG Composites',
-            street: process.env.SHIP_FROM_ADDRESS1 || '',
-            city: process.env.SHIP_FROM_CITY || '',
-            state: process.env.SHIP_FROM_STATE || '',
-            postalCode: process.env.SHIP_FROM_POSTAL || '',
-            country: process.env.SHIP_FROM_COUNTRY || 'US',
-          },
-          shipToSnapshot: {
-            name: customerName,
-            street: customerAddress?.street || '',
-            street2: customerAddress?.street2 || null,
-            city: customerAddress?.city || '',
-            state: customerAddress?.state || '',
-            postalCode: customerAddress?.zipCode || '',
-            country: customerAddress?.country || 'US',
-          },
-          totalWeightLbs: orderDetailsForShipment.length * 5,
-          documents: [],
-          notificationMetadata: { fulfilledManually: true },
-        };
-
-        const shipmentItemsData = orderDetailsForShipment.map((detail) => ({
-          poItemId: detail.poItem?.id || detail.order.poItemId,
-          orderId: detail.orderId,
-          quantity: 1,
-          weightLbs: 5,
-          description: detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.itemName || detail.poItem?.item_name || '',
-          poNumber: detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '',
-        }));
-
-        await storage.createShipment({
-          shipment: shipmentRecord,
-          items: shipmentItemsData,
-        });
-
-        console.log(`✅ OEM Shipment record created: ${shipmentId} with tracking ${trackingNumber}`);
-      } catch (shipmentError: any) {
-        // Log but don't fail - the orders were still marked as fulfilled
-        console.error(`⚠️ Failed to create shipment record (orders still marked fulfilled): ${shipmentError.message}`);
-      }
-    }
+    // Note: Shipment records are created by process-shipment endpoint, not here
+    // This endpoint only updates order status to remove items from Shipping QC queue
 
     res.json({
       success: true,
       processed: results.length,
       results,
       shippedAt: shouldFulfill ? shippedAt.toISOString() : null,
-      shipmentId,
     });
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);

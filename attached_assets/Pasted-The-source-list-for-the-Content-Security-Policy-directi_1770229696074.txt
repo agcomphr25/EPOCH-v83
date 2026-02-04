@@ -1,0 +1,93 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-02-04-1?replId=e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+9954129c7dd6dc22.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+C @ 9954129c7dd6dc22.js:2
+9954129c7dd6dc22.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+C @ 9954129c7dd6dc22.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Ar52%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/customers:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:37 API error raw body: {"error":"Failed to create P2 customer","message":"column \"rfq_prefix\" of relation \"p2_customers\" does not exist"}
+(anonymous) @ injected.js:37
+injected.js:37 💥 API Request failed for /api/p2/customers: Error: column "rfq_prefix" of relation "p2_customers" does not exist
+    at apiRequest (queryClient.ts:145:13)
+(anonymous) @ injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-customers-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)

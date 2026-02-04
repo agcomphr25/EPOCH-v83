@@ -12072,6 +12072,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // P2 Purchase Order Items CRUD
+  async getAllP2PurchaseOrderItems(): Promise<P2PurchaseOrderItem[]> {
+    return await db
+      .select()
+      .from(p2PurchaseOrderItems)
+      .orderBy(p2PurchaseOrderItems.createdAt);
+  }
+
   async getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]> {
     return await db
       .select()

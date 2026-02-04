@@ -1645,6 +1645,18 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get all P2 PO line items (for part routing wizard)
+  app.get('/api/p2-purchase-order-items', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const items = await storage.getAllP2PurchaseOrderItems();
+      res.json(items);
+    } catch (_error) {
+      console.error('Get all P2 PO items error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 PO items' });
+    }
+  });
+
   // Get PO line items by PO ID (for part routing wizard)
   app.get('/api/p2-purchase-order-items/:poId', async (req, res) => {
     try {

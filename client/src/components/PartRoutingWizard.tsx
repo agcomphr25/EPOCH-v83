@@ -219,10 +219,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     }
   }, [selectedDepartments, open]);
 
-  // Fetch P2 product items for step 1 (part selection)
-  const { data: p2ProductItems = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2/product-items'],
-    enabled: open && step === 1 && !poId,
+  // Fetch all P2 PO items for step 1 (part selection)
+  const { data: p2PoItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2-purchase-order-items'],
+    enabled: open && step === 1,
   });
 
   // Fetch inventory items for step 3 (materials selection)
@@ -231,30 +231,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     enabled: open && step === 3,
   });
 
-  // Fetch PO line items when poId is provided
-  const { data: poItems = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2-purchase-order-items', poId],
-    enabled: open && (step === 1 || step === 3) && !!poId,
-  });
-
-  // Transform P2 product items to match InventoryItem interface for the UI
-  const p2ProductItemsAsInventory: InventoryItem[] = p2ProductItems.map((item: any) => ({
-    id: String(item.id),
-    agPartNumber: item.sku,
-    name: item.description,
-    description: item.internalName || '',
-  }));
-
-  // Transform PO items to match InventoryItem interface for the UI
-  const poItemsAsInventory: InventoryItem[] = poItems.map((item: any) => ({
+  // Transform P2 PO items to match InventoryItem interface for the UI
+  const displayItems: InventoryItem[] = p2PoItems.map((item: any) => ({
     id: String(item.id),
     agPartNumber: item.partNumber,
     name: item.partName,
     description: item.specifications || '',
   }));
-
-  // Use PO items if poId is provided, otherwise use P2 product items for step 1
-  const displayItems = poId ? poItemsAsInventory : p2ProductItemsAsInventory;
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({

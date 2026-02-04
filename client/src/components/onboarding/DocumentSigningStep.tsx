@@ -14,7 +14,10 @@ import {
 
 interface SessionDocument {
   id: string;
-  templateId: string;
+  templateId?: string | null;
+  instanceId?: string | null;
+  mediaItemId?: string | null;
+  isFillable?: boolean;
   templateName?: string;
   status: 'pending' | 'signed' | 'skipped' | 'deferred';
   signedAt?: string | null;
@@ -61,8 +64,9 @@ export default function DocumentSigningStep({
   
   const totalPages = currentDoc?.pageCount || 1;
 
-  const pdfUrl = currentDoc?.templateId 
-    ? `/api/fillable-pdf-templates/${currentDoc.templateId}/pdf` 
+  // Use unified endpoint that resolves correct PDF source based on document type/status
+  const pdfUrl = currentDoc 
+    ? `/api/onboarding/sessions/${sessionId}/documents/${currentDoc.id}/pdf` 
     : null;
 
   const signDocMutation = useMutation({

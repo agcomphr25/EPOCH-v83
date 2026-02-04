@@ -76,9 +76,11 @@ interface OnboardingSession {
 
 interface SessionDocument {
   id: string;
-  templateId: string;
+  templateId: string | null;
   templateName?: string;
   instanceId: string | null;
+  mediaItemId: string | null;
+  isFillable: boolean;
   orderIndex: number;
   status: string;
   signedAt: string | null;
@@ -644,6 +646,9 @@ function DocumentsStep({ session, isReadOnly }: { session: OnboardingSession; is
       documents={session.documents.map(doc => ({
         id: doc.id,
         templateId: doc.templateId,
+        instanceId: doc.instanceId,
+        mediaItemId: doc.mediaItemId,
+        isFillable: doc.isFillable,
         templateName: doc.templateName,
         status: doc.status as 'pending' | 'signed' | 'skipped' | 'deferred',
         signedAt: doc.signedAt,

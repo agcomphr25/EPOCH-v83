@@ -1498,6 +1498,105 @@ router.patch('/sessions/:id/step', async (req: Request, res: Response) => {
   }
 });
 
+// GET /sessions/:sessionId/documents/:docId/pdf - Serve document PDF with correct source resolution
+router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, docId } = req.params;
+    
+    // Fetch document with all related data for resolution
+    const docs = await pool.query(`
+      SELECT 
+        sd.id, sd.status, sd.template_id as "templateId",
+        sd.instance_id as "instanceId", sd.media_item_id as "mediaItemId",
+        sd.is_fillable as "isFillable",
+        i.signed_pdf_path as "signedPdfPath",
+        t.template_pdf_path as "templatePdfPath",
+        m.storage_path as "mediaStoragePath"
+      FROM onboarding_session_documents sd
+      LEFT JOIN fillable_pdf_instances i ON sd.instance_id = i.id
+      LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+      LEFT JOIN media_library m ON sd.media_item_id = m.id
+      WHERE sd.id = $1 AND sd.session_id = $2
+    `, [docId, sessionId]);
+    
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const doc = docs[0];
+    let pdfPath: string | null = null;
+    
+    // Resolution logic:
+    // 1. If document is signed and has signed_pdf_path, use it
+    // 2. If document has template (fillable), use template PDF
+    // 3. If document is from media library, use media storage path
+    
+    if (doc.status === 'signed' && doc.signedPdfPath) {
+      // Use signed PDF from instance
+      pdfPath = doc.signedPdfPath;
+    } else if (doc.templatePdfPath) {
+      // Use original template PDF for pre-signing view
+      pdfPath = doc.templatePdfPath;
+    } else if (doc.mediaStoragePath) {
+      // Use media library PDF
+      pdfPath = doc.mediaStoragePath;
+    }
+    
+    if (!pdfPath) {
+      console.error('[Onboarding PDF] No valid PDF path found for document:', docId);
+      return res.status(404).json({ error: 'PDF source not available' });
+    }
+    
+    // Resolve the path - handle both absolute and relative paths
+    let resolvedPath = pdfPath;
+    if (!path.isAbsolute(pdfPath)) {
+      resolvedPath = path.resolve(process.cwd(), pdfPath);
+    }
+    
+    // Security: Ensure path is within allowed directories
+    const allowedBases = [
+      path.resolve(process.cwd(), 'uploads'),
+      '/home/runner/workspace/uploads'
+    ];
+    
+    const isAllowed = allowedBases.some(base => resolvedPath.startsWith(base));
+    if (!isAllowed) {
+      console.error('[Onboarding PDF] Path traversal attempt blocked:', pdfPath);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(resolvedPath)) {
+      console.error('[Onboarding PDF] File not found:', resolvedPath);
+      
+      // Failsafe: Try to fall back to template PDF if signed PDF is missing
+      if (doc.status === 'signed' && doc.templatePdfPath) {
+        let fallbackPath = doc.templatePdfPath;
+        if (!path.isAbsolute(fallbackPath)) {
+          fallbackPath = path.resolve(process.cwd(), fallbackPath);
+        }
+        if (fs.existsSync(fallbackPath)) {
+          console.log('[Onboarding PDF] Falling back to template PDF:', fallbackPath);
+          resolvedPath = fallbackPath;
+        } else {
+          return res.status(404).json({ error: 'PDF file not found' });
+        }
+      } else {
+        return res.status(404).json({ error: 'PDF file not found' });
+      }
+    }
+    
+    // Serve the PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(resolvedPath);
+    
+  } catch (error) {
+    console.error('[Onboarding PDF] Error serving document PDF:', error);
+    res.status(500).json({ error: 'Failed to serve PDF' });
+  }
+});
+
 // POST /sessions/:sessionId/documents/:docId/sign - Sign a document
 router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, res: Response) => {
   try {

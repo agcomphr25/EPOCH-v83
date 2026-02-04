@@ -1350,6 +1350,48 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Customer CRUD routes (POST, PUT, DELETE)
+  app.post('/api/p2/customers', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER CREATE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const customer = await storage.createP2Customer(req.body);
+      console.log('🔧 Created P2 customer:', customer.id, customer.customerName);
+      res.status(201).json(customer);
+    } catch (_error: any) {
+      console.error('Create P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to create P2 customer', message: _error?.message });
+    }
+  });
+
+  app.put('/api/p2/customers/:id', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER UPDATE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id, 10);
+      const customer = await storage.updateP2Customer(id, req.body);
+      console.log('🔧 Updated P2 customer:', customer.id);
+      res.json(customer);
+    } catch (_error: any) {
+      console.error('Update P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to update P2 customer', message: _error?.message });
+    }
+  });
+
+  app.delete('/api/p2/customers/:id', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER DELETE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id, 10);
+      await storage.deleteP2Customer(id);
+      console.log('🔧 Deleted P2 customer:', id);
+      res.json({ success: true });
+    } catch (_error: any) {
+      console.error('Delete P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to delete P2 customer', message: _error?.message });
+    }
+  });
+
   // P2 Product Items - reusable product items for P2 PO line items
   app.get('/api/p2/product-items', softAuth, async (req, res) => {
     try {

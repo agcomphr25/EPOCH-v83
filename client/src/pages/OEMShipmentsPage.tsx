@@ -588,6 +588,30 @@ export default function OEMShipmentsPage() {
                                     {shipment.item_count} Item{shipment.item_count !== 1 ? 's' : ''}
                                   </Badge>
                                 </div>
+                                
+                                {/* PO Numbers and Items Summary */}
+                                <div className="mt-2 p-2 bg-white dark:bg-gray-900 rounded border text-sm">
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    <span className="text-gray-500 font-medium">POs:</span>
+                                    {Array.from(new Set(shipment.items.map(i => i.poNumber))).map((poNum) => (
+                                      <Badge key={poNum} variant="outline" className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200">
+                                        {poNum}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  <div className="text-gray-600 dark:text-gray-400">
+                                    <span className="font-medium text-gray-500">Items: </span>
+                                    {shipment.items.slice(0, 3).map((item, idx) => (
+                                      <span key={item.id}>
+                                        {item.description || item.orderId}
+                                        {idx < Math.min(shipment.items.length, 3) - 1 ? ', ' : ''}
+                                      </span>
+                                    ))}
+                                    {shipment.items.length > 3 && (
+                                      <span className="text-gray-400"> +{shipment.items.length - 3} more</span>
+                                    )}
+                                  </div>
+                                </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                   <div>
@@ -919,6 +943,30 @@ export default function OEMShipmentsPage() {
                         <Badge variant="outline">
                           {shipment.item_count} Item{shipment.item_count !== 1 ? 's' : ''}
                         </Badge>
+                      </div>
+
+                      {/* PO Numbers and Items Summary */}
+                      <div className="mt-2 p-2 bg-white dark:bg-gray-900 rounded border text-sm">
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <span className="text-gray-500 font-medium">POs:</span>
+                          {Array.from(new Set(shipment.items.map(i => i.poNumber))).map((poNum) => (
+                            <Badge key={poNum} variant="outline" className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200">
+                              {poNum}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-500">Items: </span>
+                          {shipment.items.slice(0, 3).map((item, idx) => (
+                            <span key={item.id}>
+                              {item.description || item.orderId}
+                              {idx < Math.min(shipment.items.length, 3) - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                          {shipment.items.length > 3 && (
+                            <span className="text-gray-400"> +{shipment.items.length - 3} more</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">

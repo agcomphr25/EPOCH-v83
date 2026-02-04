@@ -357,7 +357,7 @@ export default function DemographicsIntakeForm({
   const isRehire = fetchedData?.isRehire || false;
 
   return (
-    <div className="pb-28">
+    <div className="pb-40">
       {isRehire && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
           <div className="flex items-start gap-3">

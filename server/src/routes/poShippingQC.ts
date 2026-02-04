@@ -820,9 +820,13 @@ router.get('/oem-shipments', async (req, res) => {
         FROM shipment_records sr
         LEFT JOIN shipment_items si ON sr.id = si.shipment_id
         LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
-        LEFT JOIN purchase_order_items poi ON si.order_id LIKE 'PO-%' 
-          AND SPLIT_PART(si.order_id, '-', 2) ~ '^[0-9]+$' 
-          AND poi.id = CAST(SPLIT_PART(si.order_id, '-', 2) AS INTEGER)
+        LEFT JOIN purchase_order_items poi ON poi.id = (
+          CASE 
+            WHEN si.order_id LIKE 'PO-%' AND SPLIT_PART(si.order_id, '-', 2) ~ '^[0-9]+$' 
+            THEN CAST(SPLIT_PART(si.order_id, '-', 2) AS INTEGER)
+            ELSE NULL 
+          END
+        )
         LEFT JOIN purchase_orders po ON poi.po_id = po.id
         WHERE ${conditions.join(' AND ')}
         GROUP BY sr.id

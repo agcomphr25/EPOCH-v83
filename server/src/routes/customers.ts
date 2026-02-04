@@ -71,25 +71,8 @@ router.post(
         return res.status(400).json({ error: 'Customer not found' });
       }
       
-      // Generate unique PO number based on customer ID prefix (e.g., STR-001, STR-002)
-      const customerPrefix = customer.customerId.split('-')[0]; // Extract prefix like "STR" from "STR-001"
-      const allPOs = await storage.getAllP2PurchaseOrders();
-      
-      // Find the highest number for this customer prefix
-      const maxPoNum = allPOs.reduce((max, po) => {
-        // Match PO numbers with this customer's prefix (e.g., STR-001, STR-002)
-        const regex = new RegExp(`^${customerPrefix}-(\\d+)$`);
-        const match = po.poNumber?.match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          return num > max ? num : max;
-        }
-        return max;
-      }, 0);
-      
-      // Generate next PO number with customer prefix
-      const nextNum = maxPoNum + 1;
-      const poNumber = `${customerPrefix}-${String(nextNum).padStart(3, '0')}`;
+      // Use the customer-provided PO number directly
+      const poNumber = customerPONumber;
       
       // Build the complete PO data with all required fields
       const poData = {

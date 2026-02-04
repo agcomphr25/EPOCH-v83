@@ -777,7 +777,7 @@ router.get('/oem-shipments', async (req, res) => {
     }
 
     // Main query - lightweight, no base64 blobs
-    // Use COALESCE to get customer_name and po_number from production_orders when not set
+    // Use COALESCE to get customer_name, description and po_number from production_orders or purchase_order_items when not set
     const query = `
       WITH shipment_aggregates AS (
         SELECT 
@@ -805,21 +805,23 @@ router.get('/oem-shipments', async (req, res) => {
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
           COUNT(si.id) as item_count,
-          COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number)) as po_count,
+          COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)) as po_count,
           json_agg(
             json_build_object(
               'id', si.id,
               'poItemId', si.po_item_id,
               'orderId', si.order_id,
               'quantity', si.quantity,
-              'description', COALESCE(NULLIF(si.description, ''), prod_ord.item_name),
-              'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number),
+              'description', COALESCE(NULLIF(si.description, ''), prod_ord.item_name, COALESCE(poi.stock_model_name, poi.item_name)),
+              'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
               'hasPackingSlip', si.packing_slip_base64 IS NOT NULL
-            ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number), si.order_id
+            ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
         LEFT JOIN shipment_items si ON sr.id = si.shipment_id
         LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
+        LEFT JOIN purchase_order_items poi ON si.order_id LIKE 'PO-%' AND poi.id = CAST(SPLIT_PART(si.order_id, '-', 2) AS INTEGER)
+        LEFT JOIN purchase_orders po ON poi.po_id = po.id
         WHERE ${conditions.join(' AND ')}
         GROUP BY sr.id
         ORDER BY sr.created_at DESC
@@ -1673,12 +1675,12 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         };
 
         const shipmentItemsData = orderDetails.map((detail) => ({
-          poItemId: detail.order.poItemId!,
-          orderId: detail.order.orderId,
+          poItemId: detail.order.poItemId || detail.order.po_item_id,
+          orderId: detail.order.orderId || detail.order.order_id,
           quantity: detail.quantity,
           weightLbs: weightPerItemLbs * detail.quantity,
-          description: detail.order.itemName || detail.poItem?.itemName || '',
-          poNumber: detail.po?.poNumber || '',
+          description: detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '',
+          poNumber: detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '',
         }));
 
         await storage.createShipment({

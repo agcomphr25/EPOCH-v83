@@ -219,41 +219,25 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     }
   }, [selectedDepartments, open]);
 
-  // Fetch inventory items for step 1 and step 3 (materials)
+  // Fetch all P2 PO items for step 1 (part selection)
+  const { data: p2PoItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2-purchase-order-items'],
+    enabled: open && step === 1,
+  });
+
+  // Fetch inventory items for step 3 (materials selection)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
-    enabled: open && (step === 1 || step === 3) && !poId,
+    enabled: open && step === 3,
   });
 
-  // Fetch PO line items when poId is provided
-  const { data: poItems = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2-purchase-order-items', poId],
-    enabled: open && (step === 1 || step === 3) && !!poId,
-  });
-
-  // Transform PO items to match InventoryItem interface for the UI
-  const poItemsAsInventory: InventoryItem[] = poItems.map((item: any) => ({
+  // Transform P2 PO items to match InventoryItem interface for the UI
+  const displayItems: InventoryItem[] = p2PoItems.map((item: any) => ({
     id: String(item.id),
     agPartNumber: item.partNumber,
     name: item.partName,
     description: item.specifications || '',
-    sku: item.partNumber,
-    category: 'P2 Product',
-    subcategory: '',
-    primaryVendor: '',
-    uom: 'EA',
-    countingMethod: 'unit',
-    qohOnHand: item.quantity || 0,
-    qohAllocated: 0,
-    qohAvailable: item.quantity || 0,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    updatedBy: null,
-    unitCost: item.unitPrice || 0,
   }));
-
-  // Use PO items if poId is provided, otherwise use inventory items
-  const displayItems = poId ? poItemsAsInventory : inventoryItems;
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -351,7 +335,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     if (step === 1 && !selectedItemId) {
       toast({
         title: 'Selection Required',
-        description: 'Please select an inventory item',
+        description: 'Please select a P2 product',
         variant: 'destructive',
       });
       return;
@@ -938,54 +922,49 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         </div>
 
         <ScrollArea className="h-[50vh] max-h-[500px] pr-4">
-          {/* Step 1: Select Inventory Item */}
+          {/* Step 1: Select P2 Product Item */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Step 1: Select Inventory Item</h3>
+                <h3 className="text-lg font-semibold mb-2">Step 1: Select P2 Product</h3>
                 <p className="text-sm text-muted-foreground">
-                  Choose the part that needs a custom routing workflow
+                  Choose the P2 product that needs a custom routing workflow
                 </p>
               </div>
 
               <div>
-                <Label htmlFor="item-search">Search Parts</Label>
-                <Input
-                  id="item-search"
-                  data-testid="input-item-search"
-                  placeholder="Search by part number or name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <Label htmlFor="product-select">P2 Product</Label>
+                <Select
+                  value={selectedItemId}
+                  onValueChange={(value) => setSelectedItemId(value)}
+                >
+                  <SelectTrigger id="product-select" data-testid="select-p2-product">
+                    <SelectValue placeholder="Select a P2 product..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {displayItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.agPartNumber} - {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-2">
-                {filteredItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={`cursor-pointer transition-colors ${
-                      selectedItemId === item.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedItemId(item.id)}
-                    data-testid={`card-inventory-item-${item.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-mono font-semibold">{item.agPartNumber}</p>
-                          <p className="text-sm">{item.name}</p>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
-                          )}
-                        </div>
-                        {selectedItemId === item.id && (
-                          <Check className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {selectedItem && (
+                <Card className="bg-muted/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
+                      <span className="text-sm">- {selectedItem.name}</span>
+                    </div>
+                    {selectedItem.description && (
+                      <p className="text-xs text-muted-foreground mt-2">{selectedItem.description}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 

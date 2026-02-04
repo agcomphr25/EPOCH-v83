@@ -274,8 +274,9 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
         // Create orders in all_orders table with Layup/Plugging department
         for (let i = 0; i < quantity; i++) {
-          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
-          const orderId = await storage.generateNextOrderId();
+          // Use PO-format order ID for consistency with other PO releases
+          // Format: PO-{po_number}-{po_item_id}-{sequence}
+          const orderId = `PO-${item.po_number}-${poItemId}-${i + 1}`;
           const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
           const features = JSON.stringify({
             po_item_id: poItemId,

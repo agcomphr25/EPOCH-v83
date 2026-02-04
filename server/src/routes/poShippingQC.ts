@@ -1148,25 +1148,21 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
       WHERE order_id = ANY($1::text[])
     `, [orderIds]);
 
-    // Optionally delete or archive the shipment record
-    // For now, we'll keep the shipment record but clear the label
-    await pool.query(`
-      UPDATE shipment_records 
-      SET shipping_label_base64 = NULL,
-          notification_metadata = jsonb_set(
-            COALESCE(notification_metadata, '{}'::jsonb),
-            '{returnedToQC}',
-            $2::jsonb
-          )
-      WHERE id = $1
-    `, [id, JSON.stringify({ at: new Date().toISOString(), reason: reason || 'Returned for reprocessing' })]);
-
-    // Clear packing slips from items
-    await pool.query(`
-      UPDATE shipment_items 
-      SET packing_slip_base64 = NULL
+    // Delete shipment_items so they don't appear in OEM Shipments anymore
+    const deleteItemsResult = await pool.query(`
+      DELETE FROM shipment_items 
       WHERE shipment_id = $1
+      RETURNING id
     `, [id]);
+    const deletedItems = deleteItemsResult.rows || deleteItemsResult;
+    console.log(`🗑️ Deleted ${deletedItems.length} shipment_items`);
+
+    // Delete the shipment record since it's now empty
+    await pool.query(`
+      DELETE FROM shipment_records 
+      WHERE id = $1
+    `, [id]);
+    console.log(`🗑️ Deleted shipment record ${id}`);
 
     res.json({
       success: true,

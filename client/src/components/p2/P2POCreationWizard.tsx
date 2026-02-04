@@ -85,6 +85,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<LineItem>>({});
   const [showCreateProductDialog, setShowCreateProductDialog] = useState(false);
+  const [isCustomInternalName, setIsCustomInternalName] = useState(false);
   const [newProductForm, setNewProductForm] = useState({
     sku: '',
     revision: 'A',
@@ -131,6 +132,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       });
       setShowCreateProductDialog(false);
       setNewProductForm({ sku: '', revision: 'A', description: '', unitPrice: '', internalName: '' });
+      setIsCustomInternalName(false);
     },
     onError: (error: Error) => {
       toast({ title: 'Failed to create product item', description: error.message, variant: 'destructive' });
@@ -818,8 +820,16 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
             <div className="space-y-2">
               <Label htmlFor="internalName">Internal Name</Label>
               <Select
-                value={newProductForm.internalName}
-                onValueChange={(value) => setNewProductForm({ ...newProductForm, internalName: value === 'custom' ? '' : value })}
+                value={isCustomInternalName ? 'custom' : newProductForm.internalName}
+                onValueChange={(value) => {
+                  if (value === 'custom') {
+                    setIsCustomInternalName(true);
+                    setNewProductForm({ ...newProductForm, internalName: '' });
+                  } else {
+                    setIsCustomInternalName(false);
+                    setNewProductForm({ ...newProductForm, internalName: value });
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select or type new..." />
@@ -833,7 +843,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   ))}
                 </SelectContent>
               </Select>
-              {newProductForm.internalName === '' && (
+              {isCustomInternalName && (
                 <Input
                   className="mt-2"
                   value={newProductForm.internalName}

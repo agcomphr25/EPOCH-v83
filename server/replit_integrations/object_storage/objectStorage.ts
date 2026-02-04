@@ -238,6 +238,37 @@ export class ObjectStorageService {
     });
   }
 
+  // Uploads a buffer to object storage and returns the normalized path
+  async uploadBuffer(buffer: Buffer, filename: string, contentType: string = 'application/octet-stream'): Promise<string> {
+    try {
+      const privateObjectDir = this.getPrivateObjectDir();
+      if (!privateObjectDir) {
+        throw new Error('PRIVATE_OBJECT_DIR not set');
+      }
+
+      const objectId = randomUUID();
+      const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fullPath = `${privateObjectDir}/pdf-templates/${objectId}-${safeFilename}`;
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      await file.save(buffer, {
+        contentType,
+        metadata: {
+          cacheControl: 'public, max-age=31536000',
+        },
+      });
+
+      // Return normalized path that can be used with getObjectEntityFile
+      return `/objects/pdf-templates/${objectId}-${safeFilename}`;
+    } catch (error) {
+      console.error('[ObjectStorage] Error uploading buffer:', error);
+      throw error;
+    }
+  }
+
   // Downloads an object as a buffer by storage path
   async downloadAsBuffer(storagePath: string): Promise<Buffer> {
     try {

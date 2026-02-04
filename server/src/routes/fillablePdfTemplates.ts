@@ -156,7 +156,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/fillable-pdf-templates/:id/pdf
  * Serve the template PDF file for viewing (used in onboarding iframe)
- * Security: Path is sandboxed to uploads directory, requires valid template ID
+ * Supports both legacy local paths and object storage paths
  */
 router.get('/:id/pdf', async (req: Request, res: Response) => {
   try {
@@ -182,24 +182,43 @@ router.get('/:id/pdf', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Template not found' });
     }
     
-    // Resolve and sandbox path to prevent path traversal
-    const pdfPath = path.resolve(process.cwd(), template.templatePdfPath);
+    const pdfPath = template.templatePdfPath;
+    
+    // Check if path is object storage (starts with /objects/)
+    if (pdfPath.startsWith('/objects/')) {
+      try {
+        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+        const objectStorageService = new ObjectStorageService();
+        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
+        await objectStorageService.downloadObject(objectFile, res);
+        return;
+      } catch (error: any) {
+        console.error('[API] Object storage error:', error);
+        if (error.name === 'ObjectNotFoundError') {
+          return res.status(404).json({ error: 'PDF file not found' });
+        }
+        throw error;
+      }
+    }
+    
+    // Legacy: local filesystem path
+    const resolvedPath = path.resolve(process.cwd(), pdfPath);
     const allowedBase = path.resolve(process.cwd(), 'uploads');
     
     // Ensure the resolved path is within the uploads directory
-    if (!pdfPath.startsWith(allowedBase)) {
-      console.error('[API] PDF path traversal attempt blocked:', template.templatePdfPath);
+    if (!resolvedPath.startsWith(allowedBase)) {
+      console.error('[API] PDF path traversal attempt blocked:', pdfPath);
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    if (!fs.existsSync(pdfPath)) {
-      console.error('[API] Template PDF file not found:', pdfPath);
+    if (!fs.existsSync(resolvedPath)) {
+      console.error('[API] Template PDF file not found:', resolvedPath);
       return res.status(404).json({ error: 'PDF file not found' });
     }
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(pdfPath);
+    res.sendFile(resolvedPath);
   } catch (error) {
     console.error('[API] Error serving template PDF:', error);
     res.status(500).json({ error: 'Failed to serve PDF' });
@@ -209,6 +228,7 @@ router.get('/:id/pdf', async (req: Request, res: Response) => {
 /**
  * POST /api/pdf-templates
  * Upload PDF and create template (admin)
+ * Now stores PDF in object storage for persistence across deployments
  */
 router.post('/', upload.single('templatePdf'), async (req: Request, res: Response) => {
   try {
@@ -230,7 +250,25 @@ router.post('/', upload.single('templatePdf'), async (req: Request, res: Respons
       });
     }
 
-    const templatePdfPath = path.relative(process.cwd(), req.file.path);
+    // Upload PDF to object storage for persistence across deployments
+    let templatePdfPath: string;
+    try {
+      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+      const objectStorageService = new ObjectStorageService();
+      const fileBuffer = fs.readFileSync(req.file.path);
+      templatePdfPath = await objectStorageService.uploadBuffer(
+        fileBuffer, 
+        req.file.originalname, 
+        'application/pdf'
+      );
+      console.log(`[API] Uploaded template PDF to object storage: ${templatePdfPath}`);
+      // Clean up local file after successful upload
+      fs.unlinkSync(req.file.path);
+    } catch (uploadError) {
+      console.error('[API] Object storage upload failed, falling back to local:', uploadError);
+      // Fallback to local storage if object storage fails
+      templatePdfPath = path.relative(process.cwd(), req.file.path);
+    }
     
     const template = await createTemplate({
       name: templateData.name,

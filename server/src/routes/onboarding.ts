@@ -1547,7 +1547,36 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
       return res.status(404).json({ error: 'PDF source not available' });
     }
     
-    // Resolve the path - handle both absolute and relative paths
+    // Check if path is object storage (starts with /objects/)
+    if (pdfPath.startsWith('/objects/')) {
+      try {
+        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+        const objectStorageService = new ObjectStorageService();
+        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
+        await objectStorageService.downloadObject(objectFile, res);
+        return;
+      } catch (error: any) {
+        console.error('[Onboarding PDF] Object storage error:', error);
+        if (error.name === 'ObjectNotFoundError') {
+          // Try fallback to template if this was a signed PDF
+          if (doc.status === 'signed' && doc.templatePdfPath && doc.templatePdfPath.startsWith('/objects/')) {
+            try {
+              const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+              const objectStorageService = new ObjectStorageService();
+              const fallbackFile = await objectStorageService.getObjectEntityFile(doc.templatePdfPath);
+              await objectStorageService.downloadObject(fallbackFile, res);
+              return;
+            } catch (fallbackError) {
+              console.error('[Onboarding PDF] Fallback also failed:', fallbackError);
+            }
+          }
+          return res.status(404).json({ error: 'PDF file not found' });
+        }
+        throw error;
+      }
+    }
+    
+    // Legacy: local filesystem path
     let resolvedPath = pdfPath;
     if (!path.isAbsolute(pdfPath)) {
       resolvedPath = path.resolve(process.cwd(), pdfPath);

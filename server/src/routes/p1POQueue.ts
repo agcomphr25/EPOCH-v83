@@ -81,7 +81,7 @@ router.get('/production-orders', async (req: Request, res: Response) => {
       ORDER BY po.customer_name, po.po_number, po.order_id
     `);
     
-    const rows = Array.isArray(result) ? result : result.rows || [];
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
     console.log(`📦 P1 PO Queue: Returning ${rows.length} production orders`);
     
     // Group by customer and PO number for better display
@@ -588,7 +588,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
         AND ls.order_id NOT IN (SELECT order_id FROM production_orders WHERE order_id IS NOT NULL)
     `);
     
-    const missing = Array.isArray(missingResult) ? missingResult : missingResult.rows || [];
+    const missing = Array.isArray(missingResult) ? missingResult : (missingResult as any).rows || [];
     console.log(`📦 Found ${missing.length} missing production orders to backfill`);
     
     if (missing.length === 0) {

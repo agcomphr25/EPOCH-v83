@@ -1,0 +1,339 @@
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+5290ea6cb2b7e71f.js:14 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ 5290ea6cb2b7e71f.js:14
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+p2-control-center:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+p2-control-center:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+pending-actions:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+p2-control-center:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+p2-control-center:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/employees:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+VM8 injected.js:37 API error raw body: {"_error":"Failed to create P2 purchase order via bypass route","message":"null value in column \"part_name\" of relation \"p2_purchase_order_items\" violates not-null constraint"}
+(anonymous) @ VM8 injected.js:37
+VM8 injected.js:37 💥 API Request failed for /api/p2-purchase-orders-bypass: Error: null value in column "part_name" of relation "p2_purchase_order_items" violates not-null constraint
+    at apiRequest (VM31 queryClient.ts:86:13)
+    at async Object.mutationFn (VM423 P2POCreationWizard.tsx:139:18)
+(anonymous) @ VM8 injected.js:37
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+stats:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+VM8 injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ VM8 injected.js:214
+(anonymous) @ VM31 queryClient.ts:124
+fetchFn @ VM21 @tanstack_react-query.js:879
+run @ VM21 @tanstack_react-query.js:507
+start @ VM21 @tanstack_react-query.js:550
+fetch @ VM21 @tanstack_react-query.js:918
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ e3d720c5-6ec0-4e3e-9…ols/injected.js:214
+(anonymous) @ e3d720c5-6ec0-4e3e-9…/queryClient.ts:124
+fetchFn @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:879
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:507
+start @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:550
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:918
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+VM8 injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ VM8 injected.js:214
+(anonymous) @ VM31 queryClient.ts:124
+fetchFn @ VM21 @tanstack_react-query.js:879
+run @ VM21 @tanstack_react-query.js:507
+(anonymous) @ VM21 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM21 @tanstack_react-query.js:528
+Promise.catch
+run @ VM21 @tanstack_react-query.js:511
+start @ VM21 @tanstack_react-query.js:550
+fetch @ VM21 @tanstack_react-query.js:918
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ e3d720c5-6ec0-4e3e-9…ols/injected.js:214
+(anonymous) @ e3d720c5-6ec0-4e3e-9…/queryClient.ts:124
+fetchFn @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:879
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:507
+(anonymous) @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:532
+Promise.then
+(anonymous) @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:528
+Promise.catch
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:511
+start @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:550
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:918
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+VM8 injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ VM8 injected.js:214
+(anonymous) @ VM31 queryClient.ts:124
+fetchFn @ VM21 @tanstack_react-query.js:879
+run @ VM21 @tanstack_react-query.js:507
+start @ VM21 @tanstack_react-query.js:550
+fetch @ VM21 @tanstack_react-query.js:918
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+setInterval
+updateRefetchInterval_fn @ VM21 @tanstack_react-query.js:2312
+updateTimers_fn @ VM21 @tanstack_react-query.js:2319
+onQueryUpdate @ VM21 @tanstack_react-query.js:2275
+(anonymous) @ VM21 @tanstack_react-query.js:1040
+(anonymous) @ VM21 @tanstack_react-query.js:1039
+batch @ VM21 @tanstack_react-query.js:598
+dispatch_fn @ VM21 @tanstack_react-query.js:1038
+fetch @ VM21 @tanstack_react-query.js:951
+await in fetch
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ e3d720c5-6ec0-4e3e-9…ols/injected.js:214
+(anonymous) @ e3d720c5-6ec0-4e3e-9…/queryClient.ts:124
+fetchFn @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:879
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:507
+start @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:550
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:918
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2312
+updateTimers_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2319
+onQueryUpdate @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2275
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1040
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1039
+batch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:598
+dispatch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1038
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+VM8 injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ VM8 injected.js:214
+(anonymous) @ VM31 queryClient.ts:124
+fetchFn @ VM21 @tanstack_react-query.js:879
+run @ VM21 @tanstack_react-query.js:507
+(anonymous) @ VM21 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM21 @tanstack_react-query.js:528
+Promise.catch
+run @ VM21 @tanstack_react-query.js:511
+start @ VM21 @tanstack_react-query.js:550
+fetch @ VM21 @tanstack_react-query.js:918
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+setInterval
+updateRefetchInterval_fn @ VM21 @tanstack_react-query.js:2312
+updateTimers_fn @ VM21 @tanstack_react-query.js:2319
+onQueryUpdate @ VM21 @tanstack_react-query.js:2275
+(anonymous) @ VM21 @tanstack_react-query.js:1040
+(anonymous) @ VM21 @tanstack_react-query.js:1039
+batch @ VM21 @tanstack_react-query.js:598
+dispatch_fn @ VM21 @tanstack_react-query.js:1038
+fetch @ VM21 @tanstack_react-query.js:951
+await in fetch
+executeFetch_fn @ VM21 @tanstack_react-query.js:2280
+(anonymous) @ VM21 @tanstack_react-query.js:2314
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/api/p2/control-center/stats 500 (Internal Server Error)
+apply @ e3d720c5-6ec0-4e3e-9…ols/injected.js:214
+(anonymous) @ e3d720c5-6ec0-4e3e-9…/queryClient.ts:124
+fetchFn @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:879
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:507
+(anonymous) @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:532
+Promise.then
+(anonymous) @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:528
+Promise.catch
+run @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:511
+start @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:550
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:918
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+setInterval
+updateRefetchInterval_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2312
+updateTimers_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2319
+onQueryUpdate @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2275
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1040
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1039
+batch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:598
+dispatch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:1038
+fetch @ e3d720c5-6ec0-4e3e-9…y.js?v=06c39446:951
+await in fetch
+executeFetch_fn @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2280
+(anonymous) @ e3d720c5-6ec0-4e3e-9….js?v=06c39446:2314
+VM8 injected.js:214  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/ 502 (Bad Gateway)
+apply @ VM8 injected.js:214
+ping @ VM1594 client:736
+waitForSuccessfulPing @ VM1594 client:749
+(anonymous) @ VM1594 client:561
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/ 502 (Bad Gateway)
+apply @ e3d720c5-6ec0-4e3e-9…ols/injected.js:214
+ping @ e3d720c5-6ec0-4e3e-9…ev/@vite/client:736
+waitForSuccessfulPing @ e3d720c5-6ec0-4e3e-9…ev/@vite/client:749
+(anonymous) @ e3d720c5-6ec0-4e3e-9…ev/@vite/client:561
+VM1594 client:562  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/p2-control-center 502 (Bad Gateway)
+(anonymous) @ VM1594 client:562
+  GET https://e3d720c5-6ec0-4e3e-9e02-6bb956fc52a6-00-5si8oqqe38nx.kirk.replit.dev/p2-control-center 502 (Bad Gateway)
+(anonymous) @ e3d720c5-6ec0-4e3e-9…ev/@vite/client:562

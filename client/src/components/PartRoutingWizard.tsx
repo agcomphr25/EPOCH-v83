@@ -219,10 +219,16 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     }
   }, [selectedDepartments, open]);
 
-  // Fetch inventory items for step 1 and step 3 (materials)
+  // Fetch P2 product items for step 1 (part selection)
+  const { data: p2ProductItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2/product-items'],
+    enabled: open && step === 1 && !poId,
+  });
+
+  // Fetch inventory items for step 3 (materials selection)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
-    enabled: open && (step === 1 || step === 3) && !poId,
+    enabled: open && step === 3,
   });
 
   // Fetch PO line items when poId is provided
@@ -231,29 +237,24 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     enabled: open && (step === 1 || step === 3) && !!poId,
   });
 
+  // Transform P2 product items to match InventoryItem interface for the UI
+  const p2ProductItemsAsInventory: InventoryItem[] = p2ProductItems.map((item: any) => ({
+    id: String(item.id),
+    agPartNumber: item.sku,
+    name: item.description,
+    description: item.internalName || '',
+  }));
+
   // Transform PO items to match InventoryItem interface for the UI
   const poItemsAsInventory: InventoryItem[] = poItems.map((item: any) => ({
     id: String(item.id),
     agPartNumber: item.partNumber,
     name: item.partName,
     description: item.specifications || '',
-    sku: item.partNumber,
-    category: 'P2 Product',
-    subcategory: '',
-    primaryVendor: '',
-    uom: 'EA',
-    countingMethod: 'unit',
-    qohOnHand: item.quantity || 0,
-    qohAllocated: 0,
-    qohAvailable: item.quantity || 0,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    updatedBy: null,
-    unitCost: item.unitPrice || 0,
   }));
 
-  // Use PO items if poId is provided, otherwise use inventory items
-  const displayItems = poId ? poItemsAsInventory : inventoryItems;
+  // Use PO items if poId is provided, otherwise use P2 product items for step 1
+  const displayItems = poId ? poItemsAsInventory : p2ProductItemsAsInventory;
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({

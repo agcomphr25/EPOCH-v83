@@ -1385,8 +1385,8 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
           orderId: detail.orderId,
           quantity: 1,
           weightLbs: 5,
-          description: detail.order.itemName || detail.poItem?.stockModelName || detail.poItem?.itemName || '',
-          poNumber: detail.po?.poNumber || '',
+          description: detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.itemName || detail.poItem?.item_name || '',
+          poNumber: detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '',
         }));
 
         await storage.createShipment({

@@ -12024,27 +12024,44 @@ export class DatabaseStorage implements IStorage {
 
   async deleteP2PurchaseOrder(id: number): Promise<void> {
     // Delete/nullify related records first to avoid foreign key constraint violations
+    // Using raw SQL to avoid Drizzle schema/database mismatches
     
     // 1. Nullify project step references (FK constraint on projectSteps.linkedP2OrderId)
-    await db.update(projectSteps)
-      .set({ linkedP2OrderId: null })
-      .where(eq(projectSteps.linkedP2OrderId, id));
+    try {
+      await pool.query('UPDATE project_steps SET linked_p2_order_id = NULL WHERE linked_p2_order_id = $1', [id]);
+    } catch (e) {
+      console.log('Note: project_steps update skipped (table may not exist or have different schema):', e);
+    }
     
     // 2. Nullify manufacturing queue references
-    await db.update(manufacturingQueue)
-      .set({ p2PoId: null, p2PoItemId: null })
-      .where(eq(manufacturingQueue.p2PoId, id));
+    try {
+      await pool.query('UPDATE manufacturing_queue SET p2_po_id = NULL, p2_po_item_id = NULL WHERE p2_po_id = $1', [id]);
+    } catch (e) {
+      console.log('Note: manufacturing_queue update skipped:', e);
+    }
     
     // 3. Delete serialized items that reference this PO directly
-    await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poId, id));
+    try {
+      await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poId, id));
+    } catch (e) {
+      console.log('Note: p2SerializedItems delete by poId skipped:', e);
+    }
     
     // 4. Delete production orders for this PO (uses p2PoId column)
-    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.p2PoId, id));
+    try {
+      await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.p2PoId, id));
+    } catch (e) {
+      console.log('Note: p2ProductionOrders delete skipped:', e);
+    }
     
     // 5. Get all PO items and delete their remaining serialized items by poItemId
-    const items = await this.getP2PurchaseOrderItems(id);
-    for (const item of items) {
-      await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
+    try {
+      const items = await this.getP2PurchaseOrderItems(id);
+      for (const item of items) {
+        await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
+      }
+    } catch (e) {
+      console.log('Note: p2SerializedItems delete by poItemId skipped:', e);
     }
     
     // 6. Delete PO items

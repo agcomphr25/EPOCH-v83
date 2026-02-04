@@ -1350,6 +1350,48 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Customer CRUD routes (POST, PUT, DELETE)
+  app.post('/api/p2/customers', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER CREATE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const customer = await storage.createP2Customer(req.body);
+      console.log('🔧 Created P2 customer:', customer.id, customer.customerName);
+      res.status(201).json(customer);
+    } catch (_error: any) {
+      console.error('Create P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to create P2 customer', message: _error?.message });
+    }
+  });
+
+  app.put('/api/p2/customers/:id', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER UPDATE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id, 10);
+      const customer = await storage.updateP2Customer(id, req.body);
+      console.log('🔧 Updated P2 customer:', customer.id);
+      res.json(customer);
+    } catch (_error: any) {
+      console.error('Update P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to update P2 customer', message: _error?.message });
+    }
+  });
+
+  app.delete('/api/p2/customers/:id', softAuth, async (req, res) => {
+    try {
+      console.log('🔧 P2 CUSTOMER DELETE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id, 10);
+      await storage.deleteP2Customer(id);
+      console.log('🔧 Deleted P2 customer:', id);
+      res.json({ success: true });
+    } catch (_error: any) {
+      console.error('Delete P2 customer error:', _error);
+      res.status(500).json({ error: 'Failed to delete P2 customer', message: _error?.message });
+    }
+  });
+
   // P2 Product Items - reusable product items for P2 PO line items
   app.get('/api/p2/product-items', softAuth, async (req, res) => {
     try {
@@ -1603,6 +1645,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get PO line items by PO ID (for part routing wizard)
+  app.get('/api/p2-purchase-order-items/:poId', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      const items = await storage.getP2PurchaseOrderItems(parseInt(poId));
+      res.json(items);
+    } catch (_error) {
+      console.error('Get P2 PO items error:', _error);
+      res.status(500).json({ error: 'Failed to fetch PO items' });
+    }
+  });
+
   // SECURITY: softAuth enforces authentication in production
   app.post('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {
@@ -1622,35 +1677,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ error: 'Customer not found' });
       }
       
-      // Generate unique PO number (AAA-001 format: 3 letters + 3 numbers)
-      const allPOs = await storage.getAllP2PurchaseOrders();
-      const maxPoNum = allPOs.reduce((max: number, po: any) => {
-        // Match both old format (P2PO-XXXX) and new format (AAA-NNN)
-        const oldMatch = po.poNumber?.match(/P2PO-(\d+)/);
-        const newMatch = po.poNumber?.match(/^([A-Z]{3})-(\d{3})$/);
-        if (oldMatch) {
-          const num = parseInt(oldMatch[1], 10);
-          return num > max ? num : max;
-        }
-        if (newMatch) {
-          // Convert letter prefix to number (AAA=0, AAB=1, etc.) * 1000 + numeric part
-          const letters = newMatch[1];
-          const letterValue = (letters.charCodeAt(0) - 65) * 676 + (letters.charCodeAt(1) - 65) * 26 + (letters.charCodeAt(2) - 65);
-          const num = letterValue * 1000 + parseInt(newMatch[2], 10);
-          return num > max ? num : max;
-        }
-        return max;
-      }, 0);
-      
-      // Generate next PO number in AAA-001 format
-      const nextNum = maxPoNum + 1;
-      const letterValue = Math.floor(nextNum / 1000);
-      const numericPart = (nextNum % 1000) || 1000; // Use 1000 if divisible (wraps to next letter set)
-      const adjustedLetterValue = numericPart === 1000 ? letterValue - 1 : letterValue;
-      const letter1 = String.fromCharCode(65 + Math.floor(adjustedLetterValue / 676) % 26);
-      const letter2 = String.fromCharCode(65 + Math.floor(adjustedLetterValue / 26) % 26);
-      const letter3 = String.fromCharCode(65 + adjustedLetterValue % 26);
-      const poNumber = `${letter1}${letter2}${letter3}-${String(numericPart === 1000 ? 1000 : numericPart).padStart(3, '0')}`;
+      // Use the customer-provided PO number directly
+      const poNumber = customerPONumber;
       
       // Build the complete PO data with all required fields
       const poData = {
@@ -1684,7 +1712,7 @@ export function registerRoutes(app: Express): Server {
           await storage.createP2PurchaseOrderItem({
             poId: po.id,
             partNumber: item.partNumber,
-            description: item.description,
+            partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
             unitPrice: item.unitPrice || 0,
           });
@@ -1759,6 +1787,7 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/p2-purchase-orders/:id/lock', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const { id } = req.params;
       const { employeeId } = req.body;
       
@@ -1770,13 +1799,16 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ error: 'PO is already locked' });
       }
       
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
-        lockedAt: new Date(),
-        lockedBy: employeeId || null
-      });
+      // Use raw SQL to avoid Drizzle null handling issues
+      const lockedByValue = employeeId && employeeId !== '' ? parseInt(employeeId) : null;
+      await pool.query(
+        'UPDATE p2_purchase_orders SET locked_at = NOW(), locked_by = $1 WHERE id = $2',
+        [lockedByValue, parseInt(id)]
+      );
       
-      console.log('🔒 Locked P2 purchase order:', po.id);
-      res.json(po);
+      const updatedPO = await storage.getP2PurchaseOrder(parseInt(id));
+      console.log('🔒 Locked P2 purchase order:', updatedPO?.id);
+      res.json(updatedPO);
     } catch (_error) {
       console.error('Lock P2 PO error:', _error);
       res.status(500).json({ error: 'Failed to lock PO' });
@@ -1787,15 +1819,18 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/p2-purchase-orders/:id/unlock', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const { id } = req.params;
       
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
-        lockedAt: null,
-        lockedBy: null
-      });
+      // Use raw SQL to avoid Drizzle null handling issues
+      await pool.query(
+        'UPDATE p2_purchase_orders SET locked_at = NULL, locked_by = NULL WHERE id = $1',
+        [parseInt(id)]
+      );
       
-      console.log('🔓 Unlocked P2 purchase order:', po.id);
-      res.json(po);
+      const updatedPO = await storage.getP2PurchaseOrder(parseInt(id));
+      console.log('🔓 Unlocked P2 purchase order:', updatedPO?.id);
+      res.json(updatedPO);
     } catch (_error) {
       console.error('Unlock P2 PO error:', _error);
       res.status(500).json({ error: 'Failed to unlock PO' });

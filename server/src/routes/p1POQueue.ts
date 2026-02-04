@@ -81,7 +81,7 @@ router.get('/production-orders', async (req: Request, res: Response) => {
       ORDER BY po.customer_name, po.po_number, po.order_id
     `);
     
-    const rows = Array.isArray(result) ? result : result.rows || [];
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
     console.log(`📦 P1 PO Queue: Returning ${rows.length} production orders`);
     
     // Group by customer and PO number for better display
@@ -274,8 +274,9 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
         // Create orders in all_orders table with Layup/Plugging department
         for (let i = 0; i < quantity; i++) {
-          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
-          const orderId = await storage.generateNextOrderId();
+          // Use PO-format order ID for consistency with other PO releases
+          // Format: PO-{po_number}-{po_item_id}-{sequence}
+          const orderId = `PO-${item.po_number}-${poItemId}-${i + 1}`;
           const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
           const features = JSON.stringify({
             po_item_id: poItemId,
@@ -587,7 +588,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
         AND ls.order_id NOT IN (SELECT order_id FROM production_orders WHERE order_id IS NOT NULL)
     `);
     
-    const missing = Array.isArray(missingResult) ? missingResult : missingResult.rows || [];
+    const missing = Array.isArray(missingResult) ? missingResult : (missingResult as any).rows || [];
     console.log(`📦 Found ${missing.length} missing production orders to backfill`);
     
     if (missing.length === 0) {

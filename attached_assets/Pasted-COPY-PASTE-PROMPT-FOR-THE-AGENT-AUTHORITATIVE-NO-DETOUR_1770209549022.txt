@@ -1,0 +1,121 @@
+COPY-PASTE PROMPT FOR THE AGENT (AUTHORITATIVE / NO DETOURS)
+
+Context (read carefully before acting):
+I am blocked from completing employee onboarding in production.
+
+I followed this exact flow after your reported fix was deployed:
+
+Upload NEW PDF to Media Library (object storage confirmed)
+
+Go to /fillable-pdf-templates
+
+Click Scaffold from Media
+
+Create a NEW onboarding path using the NEW fillable template
+
+Start a NEW onboarding session
+
+Click Begin Signing
+
+Result: “Unable to Load Document”
+
+This is NOT a legacy template. This is NOT an old path. This is NOT /pdf-templates.
+This is the current supported workflow and it is still broken.
+
+TASK 1 — TRACE THE REAL CODE PATH (NO ASSUMPTIONS)
+
+Starting from the Begin Signing button:
+
+Identify the exact frontend route that is loaded
+
+Identify the exact API endpoint called
+
+Identify the exact SQL query used to resolve the PDF
+
+Log ALL resolved values for:
+
+template_id
+
+template_pdf_path
+
+source_media_item_id
+
+media_library.storage_path
+
+final resolved path used to serve the PDF
+
+I want concrete evidence, not expectations.
+
+TASK 2 — VERIFY STORAGE INVARIANTS
+
+For the NEW template created via Scaffold from Media, answer YES/NO with proof:
+
+Is fillable_pdf_templates.template_pdf_path pointing to:
+
+object storage (/objects/...) OR
+
+filesystem (/home/runner/...)
+
+Is fillable_pdf_templates.source_media_item_id populated?
+
+Does onboarding ALWAYS prefer template_pdf_path even when it is invalid?
+
+TASK 3 — IDENTIFY THE BREAK (ONE SENTENCE)
+
+In ONE sentence, explain why a brand-new scaffolded template still fails in production.
+
+No background. No history. One sentence.
+
+TASK 4 — APPLY THE MINIMUM FIX (TODAY)
+
+I need a fix that:
+
+Requires no re-uploads
+
+Requires no admin migrations
+
+Requires no UX changes
+
+Works for existing and future scaffolded templates
+
+Acceptable fixes:
+
+Always resolve onboarding PDFs from source_media_item.storage_path
+
+OR persist scaffolded PDFs directly to object storage
+
+OR change precedence order if template_pdf_path is non-object-storage
+
+Implement the smallest safe change that guarantees:
+
+Media Library → Scaffold → Path → Session → Sign
+
+
+works 100% of the time.
+
+TASK 5 — PROVE IT
+
+After applying the fix:
+
+Create a NEW template via Scaffold from Media
+
+Create a NEW onboarding session
+
+Load signing view
+
+Confirm PDF renders successfully
+
+If this cannot be proven, STOP and report why.
+
+CONSTRAINTS
+
+Do NOT mention legacy /pdf-templates
+
+Do NOT require re-uploading PDFs
+
+Do NOT redesign the system
+
+Do NOT add new admin workflows
+
+This is a production-blocking bug.
+Solve it or clearly state why the current architecture cannot support this workflow.

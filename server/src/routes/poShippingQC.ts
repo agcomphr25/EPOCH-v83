@@ -1600,13 +1600,22 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       })
     );
 
-    // 2. VALIDATE: Ensure all orders from same customer
+    // 2. VALIDATE: Ensure all orders from same customer (by name, since same customer can have multiple IDs)
+    const uniqueCustomerNames = new Set(orderDetails.map(d => d.customer?.name || d.po.customerName));
     const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));
-    if (uniqueCustomerIds.size > 1) {
+    
+    // Allow if customer names match (even if IDs differ due to data inconsistency)
+    if (uniqueCustomerNames.size > 1) {
       return res.status(400).json({
         _error: 'All items must be from the same customer',
-        customers: Array.from(uniqueCustomerIds),
+        customers: Array.from(uniqueCustomerNames),
+        customerIds: Array.from(uniqueCustomerIds),
       });
+    }
+    
+    // Log warning if same customer has multiple IDs
+    if (uniqueCustomerIds.size > 1) {
+      console.warn(`⚠️ Customer "${Array.from(uniqueCustomerNames)[0]}" has multiple IDs: ${Array.from(uniqueCustomerIds).join(', ')}`);
     }
 
     // 3. GROUP BY PO NUMBER

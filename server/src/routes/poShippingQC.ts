@@ -1092,7 +1092,35 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
     const orderIds = items.map((item: any) => item.order_id);
     console.log(`🔄 Regressing ${orderIds.length} orders back to Shipping QC: ${orderIds.join(', ')}`);
 
-    // Update production_orders status back to QC_PASSED (ready for shipping QC)
+    // Parse order IDs to extract PO item IDs
+    // Format is "PO-{poItemId}-{unitNumber}" e.g., "PO-93-1"
+    const poItemIds: number[] = [];
+    for (const orderId of orderIds) {
+      const match = orderId.match(/^PO-(\d+)-\d+$/);
+      if (match) {
+        poItemIds.push(parseInt(match[1], 10));
+      }
+    }
+    const uniquePoItemIds = [...new Set(poItemIds)];
+    console.log(`🔄 Extracted PO item IDs: ${uniquePoItemIds.join(', ')}`);
+
+    let totalUpdated = 0;
+
+    // Update purchase_order_items.stock_status back to null (ready for shipping QC)
+    if (uniquePoItemIds.length > 0) {
+      const poItemResult = await pool.query(`
+        UPDATE purchase_order_items 
+        SET stock_status = NULL,
+            updated_at = NOW()
+        WHERE id = ANY($1::int[])
+        RETURNING id, stock_status
+      `, [uniquePoItemIds]);
+      const poItemsUpdated = poItemResult.rows || poItemResult;
+      console.log(`✅ Updated ${poItemsUpdated.length} purchase_order_items to null stock_status`);
+      totalUpdated += poItemsUpdated.length;
+    }
+
+    // Also try to update production_orders if they exist
     const updateResult = await pool.query(`
       UPDATE production_orders 
       SET production_status = 'QC_PASSED',
@@ -1106,7 +1134,10 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
     `, [orderIds]);
 
     const updated = updateResult.rows || updateResult;
-    console.log(`✅ Updated ${updated.length} production orders to Shipping QC`);
+    if (updated.length > 0) {
+      console.log(`✅ Updated ${updated.length} production orders to Shipping QC`);
+      totalUpdated += updated.length;
+    }
 
     // Also update all_orders if they exist there
     await pool.query(`
@@ -1139,9 +1170,10 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
 
     res.json({
       success: true,
-      message: `Returned ${updated.length} orders to Shipping QC`,
+      message: `Returned ${totalUpdated} items to Shipping QC`,
       orderIds: orderIds,
-      updatedCount: updated.length,
+      poItemIds: uniquePoItemIds,
+      updatedCount: totalUpdated,
     });
   } catch (error: any) {
     console.error('❌ Error returning shipment to QC:', error);

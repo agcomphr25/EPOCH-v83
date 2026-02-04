@@ -1814,7 +1814,7 @@ export function registerRoutes(app: Express): Server {
       
       const po = await storage.updateP2PurchaseOrder(parseInt(id), {
         lockedAt: new Date(),
-        lockedBy: employeeId || null
+        lockedBy: employeeId && employeeId !== '' ? parseInt(employeeId) : null
       });
       
       console.log('🔒 Locked P2 purchase order:', po.id);

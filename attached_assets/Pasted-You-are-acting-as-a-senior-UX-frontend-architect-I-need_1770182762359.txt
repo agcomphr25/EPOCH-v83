@@ -1,0 +1,60 @@
+You are acting as a senior UX + frontend architect.
+
+I need you to STOP fixing bugs and instead first understand and redesign the UX architecture for onboarding document signing.
+
+CURRENT STATE (DO NOT ASSUME ANYTHING DIFFERENT):
+- Route: /onboarding/session/:id
+- Component: DocumentSigningStep.tsx
+- PDFs are currently rendered using an <iframe> pointing to the PDF file
+- This causes Chrome’s native PDF viewer UI to appear
+- The PDF is visually small, surrounded by wasted whitespace
+- The document feels like a preview instead of the primary task
+- The signing CTA (“Ready to Sign”) is disconnected from the document
+- This is happening on DESKTOP (not tablet, not mobile)
+- The UI still shows a sidebar, cards, and wizard framing while signing
+
+KNOWN FACTS:
+- The original onboarding document UI used a hardcoded placeholder (FileText icon)
+- That placeholder was replaced with iframe-based PDF embedding
+- iframe rendering is not acceptable for a professional HR signing flow
+- pdf.js is already used elsewhere in the codebase (PdfCanvas.tsx, PDFSignatureTool.tsx)
+- The signing experience must feel calm, focused, and intentional
+- Wasted screen space is unacceptable
+- This is an in-person, admin-led onboarding flow (not self-service)
+
+YOUR TASK (IN ORDER):
+1. Audit the CURRENT rendering pipeline end-to-end:
+   - Where the PDF URL comes from
+   - How it is embedded
+   - Which layout containers constrain its size
+   - Why so much whitespace exists
+2. Identify ALL layout constraints that make the document feel secondary
+3. Explain clearly (in plain English) WHY the current UI feels broken and unprofessional
+4. Propose a NEW document-first layout model that:
+   - Makes the PDF the dominant visual element
+   - Uses available viewport width effectively on desktop
+   - Reduces chrome, cards, and unnecessary framing during signing
+5. Propose ONE primary rendering strategy (choose, don’t list):
+   - iframe OR pdf.js OR canvas-based renderer
+   - Justify the choice in terms of UX control and professionalism
+6. Describe how signing controls should be presented:
+   - Where the signature / initials UI lives
+   - How the user knows what to do next
+   - How to avoid cognitive overload
+7. BEFORE writing any code, ask me clarifying questions about:
+   - Desired “ceremony” vs “guided review” feel
+   - Whether the wizard chrome should disappear during signing
+   - How much control the admin should have mid-document
+   - Desktop vs tablet priority
+
+IMPORTANT RULES:
+- Do NOT implement partial fixes
+- Do NOT tweak CSS blindly
+- Do NOT keep the iframe if it cannot meet UX goals
+- Treat this as redesigning a critical HR workflow, not a PDF preview
+
+OUTPUT FORMAT:
+- Section 1: Current UX diagnosis (brief but direct)
+- Section 2: Root causes (structural, not cosmetic)
+- Section 3: Proposed UX architecture (one clear direction)
+- Section 4: Clarifying questions (numbered, concise)

@@ -1,0 +1,119 @@
+You are working inside the EPOCH production codebase.
+
+GOAL:
+Replace the onboarding document placeholder UI
+with a full-screen, professional PDF viewing experience
+suitable for in-person tablet-based onboarding.
+
+This is a UX + rendering fix, not a workflow change.
+
+---
+
+CURRENT STATE (CONFIRMED):
+
+• DocumentSigningStep.tsx renders a hardcoded placeholder:
+  "PDF Page X – Document preview placeholder"
+• No PDF is actually rendered
+• Container is constrained (min-h + max-w card)
+• This results in tiny, unprofessional document previews
+
+---
+
+TARGET UX (LOCKED):
+
+• PDF is the primary focus
+• Full-width, full-height viewing area
+• Continuous vertical scrolling
+• No thumbnails
+• No placeholder UI
+• Actions appear as floating overlays
+• Signing UI lives BELOW the PDF (not overlaid)
+
+---
+
+IMPLEMENTATION PLAN:
+
+PART 1 — REMOVE PLACEHOLDER
+
+In DocumentSigningStep.tsx:
+
+• Remove the placeholder <div> entirely
+• Do not keep any preview icon or text
+• This area must render the REAL PDF
+
+---
+
+PART 2 — RENDER REAL PDF
+
+• Render the document using an <iframe>
+• Source URL must be the actual PDF for:
+  - the onboarding document
+  - or the fillable PDF instance (if applicable)
+
+Use the SAME approach as Media Library “Open”.
+
+Requirements:
+• iframe fills available viewport width
+• iframe height fills remaining screen space
+• iframe allows native scrolling
+• No fixed min-height constraints
+• No max-width container
+
+---
+
+PART 3 — LAYOUT RESTRUCTURE
+
+Restructure DocumentSigningStep layout to:
+
+┌───────────────────────────────────────┐
+│ Floating top overlay (doc name, admin)│
+├───────────────────────────────────────┤
+│                                       │
+│  FULL PDF DOCUMENT (iframe)           │
+│  - scrollable                          │
+│  - readable                            │
+│                                       │
+├───────────────────────────────────────┤
+│ Signing / Initialing Area (fixed)     │
+│  - agreement checkbox                 │
+│  - initials input (per page)          │
+│  - signature input                    │
+│                                       │
+└───────────────────────────────────────┘
+
+---
+
+PART 4 — FLOATING CONTROLS
+
+• Floating overlay should include:
+  - Document title
+  - Admin actions (Skip / Defer / Sign as Employer if authorized)
+• Overlay must not resize or constrain PDF
+• Subtle styling, no heavy panels
+
+---
+
+PART 5 — TABLET FIRST
+
+• Must work well on iPad / Android tablets
+• Large tap targets
+• No hover-only UI
+• No reliance on zoom gestures
+
+---
+
+CONSTRAINTS:
+
+• Do NOT introduce pdf.js here
+• Do NOT overlay signature canvas on PDF
+• Do NOT change signing logic or validation
+• Do NOT change onboarding session state logic
+
+---
+
+DELIVERABLE:
+
+• Updated DocumentSigningStep.tsx
+• Real PDF rendering via iframe
+• Full-screen, professional document experience
+• No placeholders, no tiny previews

@@ -1,17 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  FileText, Check, ChevronLeft, ChevronRight, 
+  FileText, Check, 
   Loader2, SkipForward, Clock, Pen, Type, 
-  CheckCircle2, ArrowRight, X
+  CheckCircle2, ArrowRight, X, AlertCircle
 } from 'lucide-react';
 
 interface SessionDocument {
@@ -46,13 +44,13 @@ export default function DocumentSigningStep({
 }: DocumentSigningStepProps) {
   const { toast } = useToast();
   const [currentDocIndex, setCurrentDocIndex] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [pageInitials, setPageInitials] = useState<PageInitials>({});
   const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
   const [typedSignature, setTypedSignature] = useState('');
   const [agreedToSign, setAgreedToSign] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [showSigningPanel, setShowSigningPanel] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasData, setCanvasData] = useState<string | null>(null);
 
@@ -62,6 +60,10 @@ export default function DocumentSigningStep({
   const skippedCount = documents.filter(d => d.status === 'skipped' || d.status === 'deferred').length;
   
   const totalPages = currentDoc?.pageCount || 1;
+
+  const pdfUrl = currentDoc?.templateId 
+    ? `/api/fillable-pdf-templates/${currentDoc.templateId}/pdf` 
+    : null;
 
   const signDocMutation = useMutation({
     mutationFn: async ({ docId, signatureData }: { docId: string; signatureData: string }) => {
@@ -103,11 +105,11 @@ export default function DocumentSigningStep({
   });
 
   const resetDocumentState = () => {
-    setCurrentPage(1);
     setPageInitials({});
     setTypedSignature('');
     setAgreedToSign(false);
     setCanvasData(null);
+    setShowSigningPanel(false);
     clearCanvas();
   };
 
@@ -141,8 +143,10 @@ export default function DocumentSigningStep({
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = 'touches' in e ? (e.touches[0].clientX - rect.left) * scaleX : (e.clientX - rect.left) * scaleX;
+    const y = 'touches' in e ? (e.touches[0].clientY - rect.top) * scaleY : (e.clientY - rect.top) * scaleY;
     
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -160,8 +164,10 @@ export default function DocumentSigningStep({
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = 'touches' in e ? (e.touches[0].clientX - rect.left) * scaleX : (e.clientX - rect.left) * scaleX;
+    const y = 'touches' in e ? (e.touches[0].clientY - rect.top) * scaleY : (e.clientY - rect.top) * scaleY;
     
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -179,14 +185,14 @@ export default function DocumentSigningStep({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas && signatureMode === 'draw') {
+    if (canvas && signatureMode === 'draw' && showSigningPanel) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
     }
-  }, [signatureMode]);
+  }, [signatureMode, showSigningPanel]);
 
   const handleInitialsChange = (page: number, initials: string) => {
     setPageInitials(prev => ({ ...prev, [page]: initials.toUpperCase().slice(0, 3) }));
@@ -265,318 +271,263 @@ export default function DocumentSigningStep({
     );
   }
 
-  const isFinalPage = currentPage === totalPages;
-
   return (
-    <div className="flex flex-col h-full min-h-[70vh]">
-      <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-600">
-            Document {currentDocIndex + 1} of {pendingDocs.length}
-          </span>
-          <div className="flex gap-1">
-            {pendingDocs.map((_, idx) => (
-              <div
-                key={idx}
-                className={`w-8 h-2 rounded-full ${
-                  idx < currentDocIndex ? 'bg-green-500' :
-                  idx === currentDocIndex ? 'bg-blue-500' : 'bg-gray-200'
-                }`}
-              />
-            ))}
+    <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 200px)' }}>
+      <div className="absolute top-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm border-b shadow-sm px-4 py-3">
+        <div className="flex items-center justify-between max-w-full">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+              {currentDocIndex + 1} / {pendingDocs.length}
+            </span>
+            <div className="flex gap-1">
+              {pendingDocs.map((_, idx) => (
+                <div
+                  key={idx}
+                  className={`w-6 h-1.5 rounded-full transition-colors ${
+                    idx < currentDocIndex ? 'bg-green-500' :
+                    idx === currentDocIndex ? 'bg-blue-500' : 'bg-gray-200'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
+          
+          <h2 className="text-base font-semibold truncate max-w-[40%] hidden sm:block">
+            {currentDoc.templateName || `Document ${currentDocIndex + 1}`}
+          </h2>
+
+          {!isReadOnly && (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'defer' })}
+                disabled={skipDocMutation.isPending}
+                className="text-gray-500 h-9 px-3"
+              >
+                <Clock className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Defer</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'skip' })}
+                disabled={skipDocMutation.isPending}
+                className="text-gray-500 h-9 px-3"
+              >
+                <SkipForward className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Skip</span>
+              </Button>
+            </div>
+          )}
         </div>
-        
-        <h2 className="text-lg font-semibold hidden md:block">
+        <h2 className="text-base font-semibold truncate sm:hidden mt-2">
           {currentDoc.templateName || `Document ${currentDocIndex + 1}`}
         </h2>
+      </div>
 
-        {!isReadOnly && (
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'defer' })}
-              disabled={skipDocMutation.isPending}
-              className="text-gray-500"
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              Defer
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => skipDocMutation.mutate({ docId: currentDoc.id, action: 'skip' })}
-              disabled={skipDocMutation.isPending}
-              className="text-gray-500"
-            >
-              <SkipForward className="h-4 w-4 mr-1" />
-              Skip
-            </Button>
+      <div className="flex-1 pt-16 sm:pt-14 pb-0 bg-gray-50">
+        {pdfUrl ? (
+          <iframe
+            src={pdfUrl}
+            className="w-full h-full border-0"
+            style={{ minHeight: 'calc(100vh - 350px)' }}
+            title={currentDoc.templateName || 'Document'}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+            <div className="text-center text-gray-500">
+              <AlertCircle className="h-12 w-12 mx-auto mb-3" />
+              <p className="text-lg font-medium">Document Not Available</p>
+              <p className="text-sm mt-1">Unable to load the PDF document</p>
+            </div>
           </div>
         )}
       </div>
 
-      <h2 className="text-lg font-semibold px-4 py-2 md:hidden border-b">
-        {currentDoc.templateName || `Document ${currentDocIndex + 1}`}
-      </h2>
-
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-20 md:w-24 bg-gray-50 border-r overflow-y-auto flex-shrink-0">
-          <div className="p-2 space-y-2">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`w-full aspect-[3/4] rounded border-2 flex flex-col items-center justify-center text-xs transition-all ${
-                  currentPage === page 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <span className="font-medium">{page}</span>
-                {page < totalPages && isPageInitialed(page) && (
-                  <Check className="h-3 w-3 text-green-500 mt-1" />
+      <div className="bg-white border-t shadow-lg">
+        {!showSigningPanel ? (
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-gray-600">
+                {completedCount > 0 && (
+                  <span className="inline-flex items-center gap-1 mr-4">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    {completedCount} signed
+                  </span>
                 )}
-                {page === totalPages && hasValidSignature() && (
-                  <Pen className="h-3 w-3 text-green-500 mt-1" />
+                {totalPages > 1 && (
+                  <span className="text-gray-500">{totalPages} pages</span>
                 )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
-          <Card className="max-w-3xl mx-auto shadow-lg">
-            <CardContent className="p-6 md:p-8">
-              <div className="bg-gray-50 border rounded-lg min-h-[400px] md:min-h-[500px] flex items-center justify-center mb-6">
-                <div className="text-center text-gray-400">
-                  <FileText className="h-16 w-16 mx-auto mb-4" />
-                  <p className="text-lg">PDF Page {currentPage}</p>
-                  <p className="text-sm mt-1">Document preview placeholder</p>
-                </div>
               </div>
-
-              {!isFinalPage ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <Label className="text-base font-medium text-amber-800 mb-3 block">
-                    Initial this page to continue
-                  </Label>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      value={pageInitials[currentPage] || ''}
-                      onChange={(e) => handleInitialsChange(currentPage, e.target.value)}
-                      placeholder="ABC"
-                      maxLength={3}
-                      className="w-24 h-14 text-center text-2xl font-bold uppercase bg-white"
-                      disabled={isReadOnly}
-                    />
-                    {isPageInitialed(currentPage) && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <Check className="h-5 w-5" />
-                        <span className="text-sm font-medium">Page initialed</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-between mt-6">
-                    <Button
-                      variant="outline"
-                      onClick={() => setCurrentPage(prev => prev - 1)}
-                      disabled={currentPage === 1}
-                      className="h-12"
-                    >
-                      <ChevronLeft className="h-5 w-5 mr-1" />
-                      Previous
-                    </Button>
-                    <Button
-                      onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={!isPageInitialed(currentPage)}
-                      className="h-12"
-                    >
-                      Next Page
-                      <ChevronRight className="h-5 w-5 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {!allPagesInitialed() && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                      <p className="text-amber-800">
-                        Please initial all previous pages before signing.
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2"
-                        onClick={() => {
-                          for (let i = 1; i < totalPages; i++) {
-                            if (!isPageInitialed(i)) {
-                              setCurrentPage(i);
-                              break;
-                            }
-                          }
-                        }}
-                      >
-                        Go to first unsigned page
-                      </Button>
-                    </div>
-                  )}
-
-                  <div className="border-t pt-6">
-                    <div className="flex items-start gap-3 mb-6">
-                      <Checkbox
-                        id="agree-sign"
-                        checked={agreedToSign}
-                        onCheckedChange={(checked) => setAgreedToSign(checked === true)}
+            </div>
+            
+            {totalPages > 1 && !allPagesInitialed() && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                <p className="text-sm text-amber-800 font-medium mb-2">
+                  Initial each page before signing
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: totalPages - 1 }, (_, i) => i + 1).map(page => (
+                    <div key={page} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Page {page}:</span>
+                      <Input
+                        value={pageInitials[page] || ''}
+                        onChange={(e) => handleInitialsChange(page, e.target.value)}
+                        placeholder="ABC"
+                        maxLength={3}
+                        className="w-16 h-10 text-center text-sm font-bold uppercase"
                         disabled={isReadOnly}
-                        className="mt-1 h-6 w-6"
                       />
-                      <Label htmlFor="agree-sign" className="text-base leading-relaxed cursor-pointer">
-                        I agree to sign this document electronically. I understand this signature 
-                        is legally binding and has the same effect as a handwritten signature.
-                      </Label>
-                    </div>
-
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Label className="text-base font-medium">Signature</Label>
-                        <div className="flex rounded-lg border overflow-hidden ml-auto">
-                          <button
-                            onClick={() => setSignatureMode('draw')}
-                            className={`px-4 py-2 text-sm flex items-center gap-1 ${
-                              signatureMode === 'draw' 
-                                ? 'bg-blue-500 text-white' 
-                                : 'bg-gray-50 text-gray-600'
-                            }`}
-                          >
-                            <Pen className="h-4 w-4" />
-                            Draw
-                          </button>
-                          <button
-                            onClick={() => setSignatureMode('type')}
-                            className={`px-4 py-2 text-sm flex items-center gap-1 ${
-                              signatureMode === 'type' 
-                                ? 'bg-blue-500 text-white' 
-                                : 'bg-gray-50 text-gray-600'
-                            }`}
-                          >
-                            <Type className="h-4 w-4" />
-                            Type
-                          </button>
-                        </div>
-                      </div>
-
-                      {signatureMode === 'draw' ? (
-                        <div className="relative">
-                          <canvas
-                            ref={canvasRef}
-                            width={600}
-                            height={150}
-                            className="w-full border-2 border-dashed border-gray-300 rounded-lg bg-white touch-none"
-                            onMouseDown={startDrawing}
-                            onMouseMove={draw}
-                            onMouseUp={stopDrawing}
-                            onMouseLeave={stopDrawing}
-                            onTouchStart={startDrawing}
-                            onTouchMove={draw}
-                            onTouchEnd={stopDrawing}
-                          />
-                          {canvasData && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearCanvas}
-                              className="absolute top-2 right-2"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Clear
-                            </Button>
-                          )}
-                          {!canvasData && (
-                            <p className="absolute inset-0 flex items-center justify-center text-gray-400 pointer-events-none">
-                              Sign here with finger or stylus
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <Input
-                          value={typedSignature}
-                          onChange={(e) => setTypedSignature(e.target.value)}
-                          placeholder="Type your full name"
-                          className="h-16 text-2xl italic font-serif"
-                          disabled={isReadOnly}
-                        />
+                      {isPageInitialed(page) && (
+                        <Check className="h-4 w-4 text-green-500" />
                       )}
                     </div>
-
-                    <div className="flex items-center gap-4 mb-6">
-                      <div>
-                        <Label className="text-sm text-gray-500">Date</Label>
-                        <p className="text-lg font-medium">
-                          {new Date().toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setCurrentPage(totalPages - 1)}
-                        className="h-14"
-                      >
-                        <ChevronLeft className="h-5 w-5 mr-1" />
-                        Previous
-                      </Button>
-                      <Button
-                        onClick={handleCompleteDocument}
-                        disabled={!canCompleteDocument() || signDocMutation.isPending || isReadOnly}
-                        className="flex-1 h-14 text-lg bg-green-600 hover:bg-green-700"
-                      >
-                        {signDocMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                            Signing...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-5 w-5 mr-2" />
-                            Complete Document
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      <div className="bg-gray-50 border-t px-4 py-3">
-        <div className="flex items-center justify-between max-w-3xl mx-auto">
-          <div className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-sm text-gray-600">{completedCount} signed</span>
-            </div>
-            {skippedCount > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gray-400" />
-                <span className="text-sm text-gray-600">{skippedCount} skipped</span>
               </div>
             )}
+
+            <Button
+              onClick={() => setShowSigningPanel(true)}
+              disabled={!allPagesInitialed()}
+              size="lg"
+              className="w-full h-14 text-lg"
+            >
+              <Pen className="h-5 w-5 mr-2" />
+              {allPagesInitialed() ? 'Ready to Sign' : 'Initial All Pages First'}
+            </Button>
           </div>
-        </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">Sign Document</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSigningPanel(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-start gap-3 bg-gray-50 p-3 rounded-lg">
+              <Checkbox
+                id="agree-sign"
+                checked={agreedToSign}
+                onCheckedChange={(checked) => setAgreedToSign(checked === true)}
+                disabled={isReadOnly}
+                className="mt-0.5 h-5 w-5"
+              />
+              <Label htmlFor="agree-sign" className="text-sm leading-relaxed cursor-pointer">
+                I agree to sign this document electronically. I understand this signature 
+                is legally binding.
+              </Label>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Label className="text-sm font-medium">Signature</Label>
+                <div className="flex rounded-md border overflow-hidden ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setSignatureMode('draw')}
+                    className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                      signatureMode === 'draw' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <Pen className="h-3 w-3" />
+                    Draw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignatureMode('type')}
+                    className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                      signatureMode === 'type' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <Type className="h-3 w-3" />
+                    Type
+                  </button>
+                </div>
+              </div>
+
+              {signatureMode === 'draw' ? (
+                <div className="relative">
+                  <canvas
+                    ref={canvasRef}
+                    width={600}
+                    height={120}
+                    className="w-full border-2 border-dashed border-gray-300 rounded-lg bg-white touch-none"
+                    style={{ height: '100px' }}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                  />
+                  {canvasData && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearCanvas}
+                      className="absolute top-1 right-1 h-7 px-2"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                  {!canvasData && (
+                    <p className="absolute inset-0 flex items-center justify-center text-gray-400 pointer-events-none text-sm">
+                      Sign here with finger or stylus
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <Input
+                  value={typedSignature}
+                  onChange={(e) => setTypedSignature(e.target.value)}
+                  placeholder="Type your full name"
+                  className="h-12 text-xl italic font-serif"
+                  disabled={isReadOnly}
+                />
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowSigningPanel(false)}
+                className="h-12 flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCompleteDocument}
+                disabled={!canCompleteDocument() || signDocMutation.isPending || isReadOnly}
+                className="h-12 flex-[2] bg-green-600 hover:bg-green-700 text-base"
+              >
+                {signDocMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Signing...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-5 w-5 mr-2" />
+                    Complete & Sign
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

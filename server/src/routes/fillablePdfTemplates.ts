@@ -154,6 +154,59 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/fillable-pdf-templates/:id/pdf
+ * Serve the template PDF file for viewing (used in onboarding iframe)
+ * Security: Path is sandboxed to uploads directory, requires valid template ID
+ */
+router.get('/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate UUID format to prevent injection
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid template ID format' });
+    }
+    
+    const { db } = await import('../../db');
+    const { fillablePdfTemplates } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    
+    const [template] = await db
+      .select()
+      .from(fillablePdfTemplates)
+      .where(eq(fillablePdfTemplates.id, id))
+      .limit(1);
+    
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    // Resolve and sandbox path to prevent path traversal
+    const pdfPath = path.resolve(process.cwd(), template.templatePdfPath);
+    const allowedBase = path.resolve(process.cwd(), 'uploads');
+    
+    // Ensure the resolved path is within the uploads directory
+    if (!pdfPath.startsWith(allowedBase)) {
+      console.error('[API] PDF path traversal attempt blocked:', template.templatePdfPath);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!fs.existsSync(pdfPath)) {
+      console.error('[API] Template PDF file not found:', pdfPath);
+      return res.status(404).json({ error: 'PDF file not found' });
+    }
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(pdfPath);
+  } catch (error) {
+    console.error('[API] Error serving template PDF:', error);
+    res.status(500).json({ error: 'Failed to serve PDF' });
+  }
+});
+
+/**
  * POST /api/pdf-templates
  * Upload PDF and create template (admin)
  */

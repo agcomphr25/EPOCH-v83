@@ -1,0 +1,125 @@
+You are working inside the EPOCH production codebase.
+
+STOP implementing features.
+
+GOAL:
+Explain why onboarding documents are rendered as a small,
+placeholder-like PDF preview instead of a full, readable document,
+and identify what must change to support a world-class UX.
+
+This is a DISCOVERY task only.
+
+---
+
+OBSERVED ISSUE (PROD):
+
+• In onboarding session document step:
+  - PDF appears shrunken
+  - Looks like a placeholder instead of the actual form
+  - Takes up a small portion of the screen
+  - Does not feel professional or readable
+• This is unacceptable for in-person, tablet-based onboarding
+
+---
+
+TASK 1 — RENDERING PIPELINE INVENTORY
+
+Trace the full rendering path for onboarding PDFs:
+
+1) Which React component renders the PDF?
+2) Does it use:
+   - iframe
+   - object/embed
+   - pdf.js
+   - custom canvas renderer
+3) Is this the same renderer used in:
+   - Media Library “Open”
+   - Fillable PDF signing
+   - Or is it onboarding-specific?
+
+List exact component files.
+
+---
+
+TASK 2 — PLACEHOLDER vs REAL PDF
+
+Explain clearly:
+
+• Is the PDF actually being rendered?
+• Or is this a placeholder state (intentional or fallback)?
+• Under what condition does the placeholder appear?
+
+Answer explicitly:
+• What triggers “PDF Page 1 – Document preview placeholder”?
+
+---
+
+TASK 3 — LAYOUT & CONSTRAINT ANALYSIS
+
+Inspect the layout:
+
+• What container controls PDF size?
+• Is width/height constrained by:
+  - parent flex layout
+  - fixed dimensions
+  - max-width / max-height
+• Is the PDF renderer responsive or fixed-size?
+
+Explain why the PDF ends up visually small.
+
+---
+
+TASK 4 — ONBOARDING VS OTHER PDF UX
+
+Compare:
+
+| Location | PDF UX |
+|-------|--------|
+| Media Library | ? |
+| Fillable PDF signing | ? |
+| Onboarding documents | ? |
+
+Explain:
+• Why onboarding PDFs are rendered differently
+• Whether this was intentional or incidental
+
+---
+
+TASK 5 — DEVICE ASSUMPTIONS
+
+Explain current assumptions:
+
+• Is the onboarding document UI designed for:
+  - desktop?
+  - tablet?
+• Is there any device-based layout logic?
+• Is zoom/pan supported?
+
+---
+
+TASK 6 — CONSTRAINTS & LIMITATIONS
+
+Identify any constraints that may have led to this design:
+• Performance concerns?
+• PDF rendering complexity?
+• Fear of scroll / signature overlap?
+
+Do not justify — just explain.
+
+---
+
+RULES:
+
+• Do NOT propose fixes yet
+• Do NOT redesign anything
+• Do NOT assume desired UX
+• Describe reality as it exists in PROD
+
+---
+
+FINAL OUTPUT:
+
+1) Why the PDF looks like a placeholder today
+2) Why it is small
+3) Which components are responsible
+4) What must be changed to allow a full-size, professional PDF experience

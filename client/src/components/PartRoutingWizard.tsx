@@ -352,7 +352,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     if (step === 1 && !selectedItemId) {
       toast({
         title: 'Selection Required',
-        description: 'Please select an inventory item',
+        description: 'Please select a P2 product',
         variant: 'destructive',
       });
       return;
@@ -939,54 +939,49 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         </div>
 
         <ScrollArea className="h-[50vh] max-h-[500px] pr-4">
-          {/* Step 1: Select Inventory Item */}
+          {/* Step 1: Select P2 Product Item */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Step 1: Select Inventory Item</h3>
+                <h3 className="text-lg font-semibold mb-2">Step 1: Select P2 Product</h3>
                 <p className="text-sm text-muted-foreground">
-                  Choose the part that needs a custom routing workflow
+                  Choose the P2 product that needs a custom routing workflow
                 </p>
               </div>
 
               <div>
-                <Label htmlFor="item-search">Search Parts</Label>
-                <Input
-                  id="item-search"
-                  data-testid="input-item-search"
-                  placeholder="Search by part number or name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <Label htmlFor="product-select">P2 Product</Label>
+                <Select
+                  value={selectedItemId}
+                  onValueChange={(value) => setSelectedItemId(value)}
+                >
+                  <SelectTrigger id="product-select" data-testid="select-p2-product">
+                    <SelectValue placeholder="Select a P2 product..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {displayItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.agPartNumber} - {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-2">
-                {filteredItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={`cursor-pointer transition-colors ${
-                      selectedItemId === item.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedItemId(item.id)}
-                    data-testid={`card-inventory-item-${item.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-mono font-semibold">{item.agPartNumber}</p>
-                          <p className="text-sm">{item.name}</p>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
-                          )}
-                        </div>
-                        {selectedItemId === item.id && (
-                          <Check className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {selectedItem && (
+                <Card className="bg-muted/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
+                      <span className="text-sm">- {selectedItem.name}</span>
+                    </div>
+                    {selectedItem.description && (
+                      <p className="text-xs text-muted-foreground mt-2">{selectedItem.description}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 

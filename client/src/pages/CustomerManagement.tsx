@@ -2306,14 +2306,14 @@ export default function CustomerManagement() {
                       }
                     >
                       <SelectTrigger id="edit-country">
-                        <SelectValue />
+                        <SelectValue placeholder="Select country" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="United States">
-                          United States
-                        </SelectItem>
-                        <SelectItem value="Canada">Canada</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        {SUPPORTED_COUNTRIES.map((country) => (
+                          <SelectItem key={country.code} value={country.name}>
+                            {country.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

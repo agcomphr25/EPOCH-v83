@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  getAddressConfigForCountry,
+  SUPPORTED_COUNTRIES,
+  validatePostalCode,
+} from '@/lib/countryAddressConfig';
 import {
   Dialog,
   DialogContent,
@@ -371,7 +376,7 @@ const CustomerFormFields = ({
           </Label>
         </div>
         <p className="text-xs text-gray-500 ml-6">
-          Check this to allow full state/province names and alphanumeric postal codes
+          Check this to allow free-form text entry for state/province instead of dropdown selection
         </p>
       </div>
 
@@ -524,38 +529,50 @@ const CustomerFormFields = ({
 
         <div className="space-y-2">
           <Label htmlFor="state" className="text-sm font-medium">
-            State
+            {(() => {
+              const config = getAddressConfigForCountry(formData.country);
+              return config.stateLabel;
+            })()}
           </Label>
-          <Input
-            id="state"
-            data-testid="input-state"
-            value={formData.state}
-            onChange={(e) =>
-              handleCustomerAddressChange(
-                'state',
-                formData.isInternational
-                  ? e.target.value
-                  : formData.country === 'United States'
-                  ? e.target.value.toUpperCase().slice(0, 2)
-                  : e.target.value
-              )
+          {(() => {
+            const config = getAddressConfigForCountry(formData.country);
+            const hasStates = config.states.length > 0;
+            
+            if (hasStates && !formData.isInternational) {
+              return (
+                <Select
+                  value={formData.state}
+                  onValueChange={(value) => handleCustomerAddressChange('state', value)}
+                >
+                  <SelectTrigger 
+                    id="state"
+                    data-testid="input-state"
+                    className={formErrors.state ? 'border-red-500' : ''}
+                  >
+                    <SelectValue placeholder={`Select ${config.stateLabel.toLowerCase()}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {config.states.map((state) => (
+                      <SelectItem key={state.code} value={state.code}>
+                        {state.name} ({state.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              );
             }
-            className={formErrors.state ? 'border-red-500' : ''}
-            placeholder={
-              formData.isInternational 
-                ? 'State/Province (full name allowed)' 
-                : formData.country === 'United States' 
-                ? 'SC' 
-                : 'State/Province'
-            }
-            maxLength={
-              formData.isInternational 
-                ? undefined 
-                : formData.country === 'United States' 
-                ? 2 
-                : undefined
-            }
-          />
+            
+            return (
+              <Input
+                id="state"
+                data-testid="input-state"
+                value={formData.state}
+                onChange={(e) => handleCustomerAddressChange('state', e.target.value)}
+                className={formErrors.state ? 'border-red-500' : ''}
+                placeholder={config.stateLabel}
+              />
+            );
+          })()}
           {formErrors.state && (
             <p className="text-sm text-red-500">{formErrors.state}</p>
           )}
@@ -564,22 +581,29 @@ const CustomerFormFields = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="zipCode" className="text-sm font-medium">
-            {formData.isInternational ? 'Postal Code' : 'ZIP Code'}
-          </Label>
-          <Input
-            id="zipCode"
-            data-testid="input-zipcode"
-            value={formData.zipCode}
-            onChange={(e) =>
-              handleCustomerAddressChange('zipCode', e.target.value)
-            }
-            className={formErrors.zipCode ? 'border-red-500' : ''}
-            placeholder={formData.isInternational ? 'K1A 0B1' : '29406'}
-          />
-          {formErrors.zipCode && (
-            <p className="text-sm text-red-500">{formErrors.zipCode}</p>
-          )}
+          {(() => {
+            const config = getAddressConfigForCountry(formData.country);
+            return (
+              <>
+                <Label htmlFor="zipCode" className="text-sm font-medium">
+                  {config.postalCodeLabel}
+                </Label>
+                <Input
+                  id="zipCode"
+                  data-testid="input-zipcode"
+                  value={formData.zipCode}
+                  onChange={(e) =>
+                    handleCustomerAddressChange('zipCode', e.target.value)
+                  }
+                  className={formErrors.zipCode ? 'border-red-500' : ''}
+                  placeholder={config.postalCodePlaceholder}
+                />
+                {formErrors.zipCode && (
+                  <p className="text-sm text-red-500">{formErrors.zipCode}</p>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         <div className="space-y-2">
@@ -588,17 +612,23 @@ const CustomerFormFields = ({
           </Label>
           <Select
             value={formData.country}
-            onValueChange={(value) =>
-              setFormData((prev) => ({ ...prev, country: value }))
-            }
+            onValueChange={(value) => {
+              setFormData((prev) => ({ 
+                ...prev, 
+                country: value,
+                state: '',
+              }));
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select country" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="United States">United States</SelectItem>
-              <SelectItem value="Canada">Canada</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
+              {SUPPORTED_COUNTRIES.map((country) => (
+                <SelectItem key={country.code} value={country.name}>
+                  {country.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1156,6 +1186,13 @@ export default function CustomerManagement() {
       errors.phone = 'Please enter a valid phone number';
     }
 
+    if (formData.zipCode && formData.zipCode.trim()) {
+      const config = getAddressConfigForCountry(formData.country);
+      if (!validatePostalCode(formData.zipCode, formData.country)) {
+        errors.zipCode = config.postalCodeErrorMessage;
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -1339,6 +1376,18 @@ export default function CustomerManagement() {
   const handleCreateAddress = () => {
     if (!selectedCustomer) return;
 
+    if (addressFormData.zipCode && addressFormData.zipCode.trim()) {
+      const config = getAddressConfigForCountry(addressFormData.country);
+      if (!validatePostalCode(addressFormData.zipCode, addressFormData.country)) {
+        toast({
+          title: 'Validation Error',
+          description: config.postalCodeErrorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const addressData = {
       ...addressFormData,
       customerId: selectedCustomer.id.toString(),
@@ -1349,6 +1398,18 @@ export default function CustomerManagement() {
 
   const handleUpdateAddress = () => {
     if (!selectedAddress) return;
+
+    if (addressFormData.zipCode && addressFormData.zipCode.trim()) {
+      const config = getAddressConfigForCountry(addressFormData.country);
+      if (!validatePostalCode(addressFormData.zipCode, addressFormData.country)) {
+        toast({
+          title: 'Validation Error',
+          description: config.postalCodeErrorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
 
     const addressData = {
       ...addressFormData,
@@ -2503,57 +2564,90 @@ export default function CustomerManagement() {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="state" className="text-right">
-                State
-              </Label>
-              <Input
-                id="state"
-                value={addressFormData.state}
-                onChange={(e) =>
-                  handleAddressFieldChange(
-                    'state',
-                    addressFormData.country === 'United States'
-                      ? e.target.value.toUpperCase().slice(0, 2)
-                      : e.target.value
-                  )
-                }
-                className="col-span-3"
-                placeholder={addressFormData.country === 'United States' ? 'CA' : 'State/Province'}
-                maxLength={addressFormData.country === 'United States' ? 2 : undefined}
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="zipCode" className="text-right">
-                ZIP Code
-              </Label>
-              <Input
-                id="zipCode"
-                value={addressFormData.zipCode}
-                onChange={(e) =>
-                  handleAddressFieldChange('zipCode', e.target.value)
-                }
-                className="col-span-3"
-                placeholder="94101"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="country" className="text-right">
                 Country
               </Label>
-              <Input
-                id="country"
+              <Select
                 value={addressFormData.country}
-                onChange={(e) =>
+                onValueChange={(value) => {
                   setAddressFormData((prev) => ({
                     ...prev,
-                    country: e.target.value,
-                  }))
-                }
-                className="col-span-3"
-                placeholder="United States"
-              />
+                    country: value,
+                    state: '',
+                  }));
+                }}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_COUNTRIES.map((country) => (
+                    <SelectItem key={country.code} value={country.name}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              {(() => {
+                const config = getAddressConfigForCountry(addressFormData.country);
+                return (
+                  <>
+                    <Label htmlFor="state" className="text-right">
+                      {config.stateLabel}
+                    </Label>
+                    {config.states.length > 0 ? (
+                      <Select
+                        value={addressFormData.state}
+                        onValueChange={(value) => handleAddressFieldChange('state', value)}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder={`Select ${config.stateLabel.toLowerCase()}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {config.states.map((state) => (
+                            <SelectItem key={state.code} value={state.code}>
+                              {state.name} ({state.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="state"
+                        value={addressFormData.state}
+                        onChange={(e) => handleAddressFieldChange('state', e.target.value)}
+                        className="col-span-3"
+                        placeholder={config.stateLabel}
+                      />
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              {(() => {
+                const config = getAddressConfigForCountry(addressFormData.country);
+                return (
+                  <>
+                    <Label htmlFor="zipCode" className="text-right">
+                      {config.postalCodeLabel}
+                    </Label>
+                    <Input
+                      id="zipCode"
+                      value={addressFormData.zipCode}
+                      onChange={(e) =>
+                        handleAddressFieldChange('zipCode', e.target.value)
+                      }
+                      className="col-span-3"
+                      placeholder={config.postalCodePlaceholder}
+                    />
+                  </>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
@@ -2667,57 +2761,90 @@ export default function CustomerManagement() {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editState" className="text-right">
-                State
-              </Label>
-              <Input
-                id="editState"
-                value={addressFormData.state}
-                onChange={(e) =>
-                  handleAddressFieldChange(
-                    'state',
-                    addressFormData.country === 'United States'
-                      ? e.target.value.toUpperCase().slice(0, 2)
-                      : e.target.value
-                  )
-                }
-                className="col-span-3"
-                placeholder={addressFormData.country === 'United States' ? 'CA' : 'State/Province'}
-                maxLength={addressFormData.country === 'United States' ? 2 : undefined}
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editZipCode" className="text-right">
-                ZIP Code
-              </Label>
-              <Input
-                id="editZipCode"
-                value={addressFormData.zipCode}
-                onChange={(e) =>
-                  handleAddressFieldChange('zipCode', e.target.value)
-                }
-                className="col-span-3"
-                placeholder="94101"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="editCountry" className="text-right">
                 Country
               </Label>
-              <Input
-                id="editCountry"
+              <Select
                 value={addressFormData.country}
-                onChange={(e) =>
+                onValueChange={(value) => {
                   setAddressFormData((prev) => ({
                     ...prev,
-                    country: e.target.value,
-                  }))
-                }
-                className="col-span-3"
-                placeholder="United States"
-              />
+                    country: value,
+                    state: '',
+                  }));
+                }}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_COUNTRIES.map((country) => (
+                    <SelectItem key={country.code} value={country.name}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              {(() => {
+                const config = getAddressConfigForCountry(addressFormData.country);
+                return (
+                  <>
+                    <Label htmlFor="editState" className="text-right">
+                      {config.stateLabel}
+                    </Label>
+                    {config.states.length > 0 ? (
+                      <Select
+                        value={addressFormData.state}
+                        onValueChange={(value) => handleAddressFieldChange('state', value)}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder={`Select ${config.stateLabel.toLowerCase()}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {config.states.map((state) => (
+                            <SelectItem key={state.code} value={state.code}>
+                              {state.name} ({state.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="editState"
+                        value={addressFormData.state}
+                        onChange={(e) => handleAddressFieldChange('state', e.target.value)}
+                        className="col-span-3"
+                        placeholder={config.stateLabel}
+                      />
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              {(() => {
+                const config = getAddressConfigForCountry(addressFormData.country);
+                return (
+                  <>
+                    <Label htmlFor="editZipCode" className="text-right">
+                      {config.postalCodeLabel}
+                    </Label>
+                    <Input
+                      id="editZipCode"
+                      value={addressFormData.zipCode}
+                      onChange={(e) =>
+                        handleAddressFieldChange('zipCode', e.target.value)
+                      }
+                      className="col-span-3"
+                      placeholder={config.postalCodePlaceholder}
+                    />
+                  </>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">

@@ -516,12 +516,12 @@ export default function RMAFormPage() {
   });
 
   const { data: p2Customers = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2_customers'],
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const allCustomers = [
     ...p1Customers.map(c => ({ ...c, type: 'P1' as const })),
-    ...p2Customers.map(c => ({ ...c, type: 'P2' as const })),
+    ...p2Customers.map(c => ({ ...c, name: c.customerName, type: 'P2' as const })),
   ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const handleCustomerSelect = (customerId: string) => {

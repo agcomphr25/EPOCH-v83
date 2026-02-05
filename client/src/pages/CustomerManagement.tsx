@@ -997,8 +997,8 @@ export default function CustomerManagement() {
         }),
       });
 
-      // Create address if address fields are provided
-      if (data.street && data.city && data.state) {
+      // Create address if address fields are provided (state optional for international)
+      if (data.street && data.city) {
         await apiRequest('/api/addresses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1007,7 +1007,7 @@ export default function CustomerManagement() {
             street: data.street,
             street2: data.street2,
             city: data.city,
-            state: data.state,
+            state: data.state || '',
             zipCode: data.zipCode || '',
             country: data.country,
             type: data.addressType,
@@ -1881,8 +1881,9 @@ export default function CustomerManagement() {
                               )}
                             </div>
                             <div className="text-gray-600">
-                              {defaultAddress.city}, {defaultAddress.state}{' '}
-                              {defaultAddress.zipCode}
+                              {defaultAddress.city}
+                              {defaultAddress.state && `, ${defaultAddress.state}`}
+                              {defaultAddress.zipCode && ` ${defaultAddress.zipCode}`}
                             </div>
                             <div className="text-gray-500">
                               {defaultAddress.country}

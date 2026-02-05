@@ -7989,7 +7989,7 @@ export function registerRoutes(app: Express): Server {
         LEFT JOIN all_orders o ON p.order_id = o.order_id
         LEFT JOIN customers c ON CASE WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer ELSE NULL END = c.id
         WHERE p.payment_date >= $1 AND p.payment_date <= $2
-          AND p.payment_type IN ('credit_card', 'aaaa')
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
         ORDER BY p.payment_date DESC
       `;
       
@@ -8003,7 +8003,7 @@ export function registerRoutes(app: Express): Server {
       const averagePerOrder = transactionCount > 0 ? totalAmount / transactionCount : 0;
       
       const phonePayments = payments.filter((p: any) => p.payment_type === 'credit_card');
-      const onlinePayments = payments.filter((p: any) => p.payment_type === 'aaaa');
+      const onlinePayments = payments.filter((p: any) => p.payment_type === 'aaaa' || p.payment_type === 'agr');
       
       const phoneTotal = phonePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
       const onlineTotal = onlinePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
@@ -8026,7 +8026,7 @@ export function registerRoutes(app: Express): Server {
           }
           return 'Phone';
         }
-        if (type === 'aaaa') return 'Online';
+        if (type === 'aaaa' || type === 'agr') return 'Online';
         return type;
       };
       

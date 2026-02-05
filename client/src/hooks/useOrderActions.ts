@@ -155,6 +155,30 @@ export function useOrderActions(options: UseOrderActionsOptions = {}) {
     },
   });
 
+  const setUrgencyMutation = useMutation({
+    mutationFn: async ({ orderId, urgency }: { orderId: string; urgency: string }) => {
+      return apiRequest(`/api/orders/${orderId}/urgency`, {
+        method: 'PUT',
+        body: JSON.stringify({ urgency }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: 'Priority Updated',
+        description: variables.urgency === 'critical' ? 'Order marked as urgent' : 'Urgent priority removed',
+      });
+      invalidateOrderQueries();
+      options.onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: 'Failed to update urgency: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   return {
     progressOrderMutation,
     cancelOrderMutation,
@@ -162,12 +186,14 @@ export function useOrderActions(options: UseOrderActionsOptions = {}) {
     resendSignatureEmailMutation,
     sendUpdatedOrderMutation,
     emailPdfCopyMutation,
+    setUrgencyMutation,
     isAnyPending:
       progressOrderMutation.isPending ||
       cancelOrderMutation.isPending ||
       undoCancelMutation.isPending ||
       resendSignatureEmailMutation.isPending ||
       sendUpdatedOrderMutation.isPending ||
-      emailPdfCopyMutation.isPending,
+      emailPdfCopyMutation.isPending ||
+      setUrgencyMutation.isPending,
   };
 }

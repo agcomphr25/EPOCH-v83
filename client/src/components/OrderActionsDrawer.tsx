@@ -24,7 +24,6 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import {
   MoreHorizontal,
-  Edit,
   ArrowRight,
   FileText,
   AlertTriangle,
@@ -32,16 +31,28 @@ import {
   FileDown,
   XCircle,
   Mail,
-  ExternalLink,
+  Download,
+  Link2,
+  Copy,
+  CopyPlus,
+  Eraser,
+  Zap,
+  History,
+  Clock,
+  FileCheck,
 } from 'lucide-react';
 import { useOrderActions } from '@/hooks/useOrderActions';
-import { Link } from 'wouter';
+import { duplicateOrder } from '@/lib/queryClient';
+import LinkOrdersDialog from '@/components/LinkOrdersDialog';
+import AuditDrawer from '@/components/AuditDrawer';
+import toast from 'react-hot-toast';
 
 interface OrderActionsDrawerProps {
   orderId: string;
   orderStatus?: string;
   currentDepartment?: string;
   isCancelled?: boolean;
+  urgency?: string;
   onViewSalesOrder?: () => void;
   onOrderUpdated?: () => void;
 }
@@ -73,6 +84,7 @@ export function OrderActionsDrawer({
   orderStatus,
   currentDepartment,
   isCancelled = false,
+  urgency,
   onViewSalesOrder,
   onOrderUpdated,
 }: OrderActionsDrawerProps) {
@@ -80,6 +92,7 @@ export function OrderActionsDrawer({
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [sendToRts, setSendToRts] = useState(true);
+  const [linkOrdersOpen, setLinkOrdersOpen] = useState(false);
   const [, setLocation] = useLocation();
 
   const {
@@ -89,6 +102,7 @@ export function OrderActionsDrawer({
     resendSignatureEmailMutation,
     sendUpdatedOrderMutation,
     emailPdfCopyMutation,
+    setUrgencyMutation,
   } = useOrderActions({
     onSuccess: () => {
       setOpen(false);
@@ -104,6 +118,7 @@ export function OrderActionsDrawer({
   const isInShipping = currentDepartment === 'Shipping';
   const isPendingSignature = orderStatus?.toUpperCase() === 'PENDING_SIGNATURE';
   const isFinalized = orderStatus?.toUpperCase() === 'FINALIZED';
+  const isUrgent = urgency === 'high' || urgency === 'critical';
 
   const handleProgressOrder = () => {
     if (isInShipping && !nextDept) {
@@ -129,6 +144,81 @@ export function OrderActionsDrawer({
     setOpen(false);
   };
 
+  const handleDownloadSalesOrder = () => {
+    window.open(`/api/orders/${orderId}/pdf?download=true`, '_blank');
+    setOpen(false);
+  };
+
+  const handleDuplicateOrder = async () => {
+    try {
+      const res = await duplicateOrder(orderId);
+      toast.success(`Duplicated → ${res.newOrderId}`);
+      setLocation(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
+      setOpen(false);
+    } catch (error) {
+      toast.error('Failed to duplicate order');
+    }
+  };
+
+  const handleDuplicateXN = async () => {
+    const countStr = prompt('How many duplicates? (enter number 1-50)');
+    if (!countStr) return;
+    const count = parseInt(countStr, 10);
+    if (isNaN(count) || count < 1 || count > 50) {
+      toast.error('Please enter a valid number between 1 and 50');
+      return;
+    }
+    try {
+      const res = await duplicateOrder(orderId, { count });
+      if (res.created) {
+        toast.success(`${res.created.length} duplicates created`);
+      } else {
+        toast.success(`Duplicated → ${res.newOrderId}`);
+      }
+      setOpen(false);
+      onOrderUpdated?.();
+    } catch (error) {
+      toast.error('Failed to duplicate order');
+    }
+  };
+
+  const handleDuplicateClearSpecs = async () => {
+    try {
+      const res = await duplicateOrder(orderId);
+      toast.success(`Duplicated (Specs Cleared) → ${res.newOrderId}`);
+      setLocation(`/order-entry?duplicate=${res.newOrderId}&clearSpecs=true&editMode=true`);
+      setOpen(false);
+    } catch (error) {
+      toast.error('Failed to duplicate order');
+    }
+  };
+
+  const handleSetUrgency = (newUrgency: string) => {
+    setUrgencyMutation.mutate({ orderId, urgency: newUrgency });
+  };
+
+  const handleViewTimeline = () => {
+    setLocation(`/order-timeline/p1_order/${orderId}`);
+    setOpen(false);
+  };
+
+  const handleViewSignedConfirmation = async () => {
+    try {
+      const response = await fetch(`/api/followup-orders/signature-info/${orderId}`);
+      const data = await response.json();
+      if (data.hasSignature && data.signedPdfAvailable) {
+        window.open(`/api/followup-orders/signed-pdf/${orderId}`, '_blank');
+      } else if (data.hasSignature) {
+        toast.error('Signed PDF file not found on server');
+      } else {
+        toast.error('Order has not been signed by customer yet');
+      }
+    } catch (error) {
+      toast.error('Failed to check signature status');
+    }
+    setOpen(false);
+  };
+
   return (
     <>
       <Sheet open={open} onOpenChange={setOpen}>
@@ -138,7 +228,7 @@ export function OrderActionsDrawer({
             Actions
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[400px] sm:w-[450px]">
+        <SheetContent side="right" className="w-[400px] sm:w-[450px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               Order Actions
@@ -150,19 +240,6 @@ export function OrderActionsDrawer({
 
           <div className="mt-6 space-y-4">
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-muted-foreground">Navigation</h4>
-              <Link href={`/order-entry?draft=${orderId}`}>
-                <Button variant="outline" className="w-full justify-start gap-2">
-                  <Edit className="h-4 w-4" />
-                  Edit Order
-                  <ExternalLink className="h-3 w-3 ml-auto opacity-50" />
-                </Button>
-              </Link>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
               <h4 className="text-sm font-medium text-muted-foreground">Documents</h4>
               <Button
                 variant="outline"
@@ -172,6 +249,82 @@ export function OrderActionsDrawer({
                 <FileText className="h-4 w-4" />
                 View Sales Order
               </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDownloadSalesOrder}
+              >
+                <Download className="h-4 w-4" />
+                Download Sales Order
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground">Order Management</h4>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => {
+                  setLinkOrdersOpen(true);
+                  setOpen(false);
+                }}
+              >
+                <Link2 className="h-4 w-4" />
+                Link Orders
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDuplicateOrder}
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate Order
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDuplicateXN}
+              >
+                <CopyPlus className="h-4 w-4" />
+                Duplicate xN
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDuplicateClearSpecs}
+              >
+                <Eraser className="h-4 w-4" />
+                Duplicate (Clear Specs)
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground">Priority</h4>
+              {isUrgent ? (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 text-gray-600"
+                  onClick={() => handleSetUrgency('medium')}
+                  disabled={setUrgencyMutation.isPending}
+                >
+                  <Zap className="h-4 w-4" />
+                  {setUrgencyMutation.isPending ? 'Updating...' : 'Remove Urgent Priority'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 text-red-600 hover:text-red-700"
+                  onClick={() => handleSetUrgency('critical')}
+                  disabled={setUrgencyMutation.isPending}
+                >
+                  <Zap className="h-4 w-4" />
+                  {setUrgencyMutation.isPending ? 'Updating...' : 'Set as Urgent'}
+                </Button>
+              )}
             </div>
 
             <Separator />
@@ -241,10 +394,48 @@ export function OrderActionsDrawer({
               <Button
                 variant="outline"
                 className="w-full justify-start gap-2"
-                onClick={() => setLocation('/kickback-tracking')}
+                onClick={() => {
+                  setLocation('/kickback-tracking');
+                  setOpen(false);
+                }}
               >
                 <AlertTriangle className="h-4 w-4" />
                 Report Kickback
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground">History & Tracking</h4>
+              <AuditDrawer
+                entityType="p1_order"
+                entityId={orderId}
+                trigger={
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                  >
+                    <History className="h-4 w-4" />
+                    View Audit Trail
+                  </Button>
+                }
+              />
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleViewTimeline}
+              >
+                <Clock className="h-4 w-4" />
+                View Timeline
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleViewSignedConfirmation}
+              >
+                <FileCheck className="h-4 w-4" />
+                View Signed Confirmation
               </Button>
             </div>
 
@@ -318,6 +509,13 @@ export function OrderActionsDrawer({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <LinkOrdersDialog
+        orderId={orderId}
+        isOpen={linkOrdersOpen}
+        onClose={() => setLinkOrdersOpen(false)}
+        currentUser="System"
+      />
     </>
   );
 }

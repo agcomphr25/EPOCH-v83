@@ -151,6 +151,7 @@ export default function OrderEntry() {
   const [orderStatus, setOrderStatus] = useState<string | undefined>(undefined);
   const [currentDepartment, setCurrentDepartment] = useState<string | undefined>(undefined);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [urgency, setUrgency] = useState<string | undefined>(undefined);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -1451,6 +1452,7 @@ export default function OrderEntry() {
         setOrderStatus(order.status);
         setCurrentDepartment(order.currentDepartment);
         setIsCancelled(order.isCancelled || order.status === 'CANCELLED');
+        setUrgency(order.urgency);
 
         // Load special shipping state from saved order data
         setSpecialShipping({
@@ -2602,6 +2604,7 @@ export default function OrderEntry() {
                     orderStatus={orderStatus}
                     currentDepartment={currentDepartment}
                     isCancelled={isCancelled}
+                    urgency={urgency}
                     onOrderUpdated={() => {
                       if (orderId) {
                         loadExistingOrder(orderId);

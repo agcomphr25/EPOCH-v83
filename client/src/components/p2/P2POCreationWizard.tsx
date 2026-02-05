@@ -843,14 +843,12 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                   ))}
                 </SelectContent>
               </Select>
-              {isCustomInternalName && (
-                <Input
-                  className="mt-2"
-                  value={newProductForm.internalName}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, internalName: e.target.value })}
-                  placeholder="Enter custom internal name"
-                />
-              )}
+              <Input
+                className={`mt-2 ${isCustomInternalName ? '' : 'hidden'}`}
+                value={newProductForm.internalName}
+                onChange={(e) => setNewProductForm({ ...newProductForm, internalName: e.target.value })}
+                placeholder="Enter custom internal name"
+              />
             </div>
           </div>
           <DialogFooter>

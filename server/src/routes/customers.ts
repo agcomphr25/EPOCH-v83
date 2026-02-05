@@ -1146,10 +1146,25 @@ router.post('/:id/communications', async (req: Request, res: Response) => {
 router.post('/customers', async (req: Request, res: Response) => {
   try {
     const customerData = insertP2CustomerSchema.parse(req.body);
+    
+    // Check if customerId already exists
+    const existingCustomer = await storage.getP2CustomerByCustomerId(customerData.customerId);
+    if (existingCustomer) {
+      return res.status(400).json({ 
+        error: `Customer ID "${customerData.customerId}" already exists. Please use a different ID.` 
+      });
+    }
+    
     const newCustomer = await storage.createP2Customer(customerData);
     res.status(201).json(newCustomer);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create P2 customer error:', error);
+    // Handle duplicate key constraint
+    if (error?.code === '23505' || error?.message?.includes('duplicate key')) {
+      return res.status(400).json({ 
+        error: 'This Customer ID is already in use. Please choose a different ID.' 
+      });
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }

@@ -253,7 +253,7 @@ export function P2CustomerManager() {
               Add P2 Customer
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <DialogHeader>
               <DialogTitle>
                 {selectedCustomer ? 'Edit P2 Customer' : 'Add P2 Customer'}

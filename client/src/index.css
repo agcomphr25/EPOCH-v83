@@ -211,6 +211,12 @@
     color: #9a3412;
   }
   
+  .layup-badge-stiller {
+    background: #fef3c7;
+    border-color: #d97706;
+    color: #92400e;
+  }
+  
   /* Signature section */
   .layup-signature {
     display: flex;

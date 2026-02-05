@@ -1341,8 +1341,9 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 DIRECT P2 CUSTOMERS BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
-      const p2Customers = await storage.getAllP2Customers();
-      console.log('🔧 Found P2 customers:', p2Customers.length);
+      const includeInactive = req.query.includeInactive === 'true';
+      const p2Customers = await storage.getAllP2Customers(includeInactive);
+      console.log('🔧 Found P2 customers:', p2Customers.length, '(includeInactive:', includeInactive, ')');
       res.json(p2Customers);
     } catch (_error) {
       console.error('Get P2 customers _error:', _error);

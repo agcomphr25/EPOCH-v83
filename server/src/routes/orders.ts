@@ -4027,6 +4027,42 @@ router.get('/heat-map', async (req: Request, res: Response) => {
   }
 });
 
+// View or download Sales Order PDF
+router.get('/:orderId/pdf', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const download = req.query.download === 'true';
+    
+    // Generate PDF
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.VIEW);
+    const pdfPath = pdfResult.filePath;
+    
+    if (!pdfPath) {
+      return res.status(404).json({ error: 'Failed to generate PDF for order' });
+    }
+    
+    // Read the PDF file
+    const fs = await import('fs/promises');
+    const pdfBuffer = await fs.readFile(pdfPath);
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', 'application/pdf');
+    if (download) {
+      res.setHeader('Content-Disposition', `attachment; filename="SalesOrder-${orderId}.pdf"`);
+    } else {
+      res.setHeader('Content-Disposition', `inline; filename="SalesOrder-${orderId}.pdf"`);
+    }
+    
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating order PDF:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate PDF',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get customer's default address for an order (for nonconformance repair address)
 router.get('/:orderId/customer-address', async (req: Request, res: Response) => {
   try {

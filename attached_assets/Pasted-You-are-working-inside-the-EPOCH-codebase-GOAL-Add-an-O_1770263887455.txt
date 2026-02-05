@@ -1,0 +1,66 @@
+You are working inside the EPOCH codebase.
+
+GOAL:
+Add an “Order Actions Drawer” to the Order Entry / Order Detail page so that the same inline action buttons currently available on the All Orders list are also accessible from within an individual order page.
+
+IMPORTANT:
+Do NOT assume how things are wired. First, inspect and explain the current setup before implementing anything.
+
+PHASE 1 — DISCOVERY (REQUIRED)
+1. Locate the All Orders list page.
+   - Identify the file(s) where inline order action buttons are rendered.
+   - List each action button (label, icon, purpose).
+   - Identify what component owns them.
+   - Identify what handlers, API routes, or mutations they call.
+
+2. Locate the Order Entry / Order Detail page.
+   - Identify the main component and route.
+   - Note whether it already uses drawers, modals, or panels.
+   - Identify where an action drawer could logically live without breaking layout.
+
+3. Report findings clearly:
+   - Files involved
+   - Shared logic opportunities
+   - Any duplicated business logic that should be refactored
+
+DO NOT CODE YET.
+
+PHASE 2 — DESIGN
+Design an Order Actions Drawer with the following requirements:
+
+- Drawer lives INSIDE the Order Entry page
+- Drawer is accessible via a single “Actions” button in the order header
+- Drawer contents mirror the All Orders inline actions exactly
+- Drawer should:
+  - Slide in from the right
+  - Be keyboard accessible
+  - Close on ESC and backdrop click
+  - Respect existing permissions / role checks
+
+Explain:
+- Whether actions should be refactored into a shared component
+- How state is managed (local vs global)
+- How orderId is passed safely
+- How to avoid logic duplication
+
+PHASE 3 — IMPLEMENTATION
+1. Refactor inline order actions into a reusable component if appropriate
+2. Implement the Order Actions Drawer component
+3. Wire it into the Order Entry page
+4. Ensure existing All Orders behavior remains unchanged
+5. Add minimal styling consistent with EPOCH UI
+
+PHASE 4 — SAFETY & AUDIT
+- Ensure all actions are auditable (log events if logging exists)
+- Ensure drawer actions cannot bypass validation or permissions
+- Confirm no regression on All Orders list
+
+OUTPUT REQUIREMENTS:
+- Clear explanation of changes
+- List of files modified
+- Any new components created
+- Any future improvement suggestions (optional)
+
+DO NOT SKIP DISCOVERY.
+DO NOT DUPLICATE BUSINESS LOGIC.
+DO NOT BREAK EXISTING FLOWS.

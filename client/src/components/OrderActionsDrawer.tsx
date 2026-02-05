@@ -138,9 +138,7 @@ export function OrderActionsDrawer({
   };
 
   const handleViewSalesOrder = () => {
-    if (onViewSalesOrder) {
-      onViewSalesOrder();
-    }
+    window.open(`/api/orders/${orderId}/pdf`, '_blank');
     setOpen(false);
   };
 

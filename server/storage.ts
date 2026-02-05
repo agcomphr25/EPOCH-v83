@@ -11679,7 +11679,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // P2 Customers CRUD
-  async getAllP2Customers(): Promise<P2Customer[]> {
+  async getAllP2Customers(includeInactive: boolean = false): Promise<P2Customer[]> {
+    if (includeInactive) {
+      return await db
+        .select()
+        .from(p2Customers)
+        .orderBy(p2Customers.customerName);
+    }
     return await db
       .select()
       .from(p2Customers)

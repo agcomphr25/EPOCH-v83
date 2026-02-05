@@ -935,7 +935,13 @@ interface P2Customer {
   contactEmail: string | null;
   contactPhone: string | null;
   billingAddress: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingZip: string | null;
   shippingAddress: string | null;
+  shippingCity: string | null;
+  shippingState: string | null;
+  shippingZip: string | null;
   shipToAddress: string | null;
   paymentTerms: string;
   status: string;
@@ -946,19 +952,45 @@ interface P2Customer {
   updatedAt: string;
 }
 
+interface P2CustomerContact {
+  id: number;
+  customerId: number;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+}
+
 function P2CustomersTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<P2Customer | null>(null);
+  const [editTab, setEditTab] = useState<'details' | 'contacts'>('details');
+  const [showAddContactDialog, setShowAddContactDialog] = useState(false);
+  const [editingContact, setEditingContact] = useState<P2CustomerContact | null>(null);
+  const [contactFormData, setContactFormData] = useState({
+    name: '',
+    title: '',
+    email: '',
+    phone: '',
+    isPrimary: false,
+  });
   const [formData, setFormData] = useState({
     customerId: '',
     customerName: '',
     contactEmail: '',
     contactPhone: '',
     billingAddress: '',
+    billingCity: '',
+    billingState: '',
+    billingZip: '',
     shippingAddress: '',
+    shippingCity: '',
+    shippingState: '',
+    shippingZip: '',
     shipToAddress: '',
     paymentTerms: 'NET_30',
     status: 'ACTIVE',
@@ -1021,6 +1053,76 @@ function P2CustomersTab() {
     },
   });
 
+  const { data: contacts = [], refetch: refetchContacts } = useQuery<P2CustomerContact[]>({
+    queryKey: ['/api/p2/customers', selectedCustomer?.id, 'contacts'],
+    queryFn: async () => {
+      if (!selectedCustomer?.id) return [];
+      const response = await fetch(`/api/p2/customers/${selectedCustomer.id}/contacts`);
+      if (!response.ok) throw new Error('Failed to fetch contacts');
+      return response.json();
+    },
+    enabled: !!selectedCustomer?.id && showEditDialog && editTab === 'contacts',
+  });
+
+  const createContactMutation = useMutation({
+    mutationFn: async (data: typeof contactFormData & { customerId: number }) => {
+      return apiRequest(`/api/p2/customers/${data.customerId}/contacts`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      refetchContacts();
+      setShowAddContactDialog(false);
+      resetContactForm();
+      toast({ title: 'Contact added successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to add contact', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: typeof contactFormData }) => {
+      return apiRequest(`/api/p2/customers/${selectedCustomer?.id}/contacts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      refetchContacts();
+      setEditingContact(null);
+      resetContactForm();
+      toast({ title: 'Contact updated successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to update contact', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/p2/customers/${selectedCustomer?.id}/contacts/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      refetchContacts();
+      toast({ title: 'Contact deleted successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete contact', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const resetContactForm = () => {
+    setContactFormData({
+      name: '',
+      title: '',
+      email: '',
+      phone: '',
+      isPrimary: false,
+    });
+  };
+
   const resetForm = () => {
     setFormData({
       customerId: '',
@@ -1028,7 +1130,13 @@ function P2CustomersTab() {
       contactEmail: '',
       contactPhone: '',
       billingAddress: '',
+      billingCity: '',
+      billingState: '',
+      billingZip: '',
       shippingAddress: '',
+      shippingCity: '',
+      shippingState: '',
+      shippingZip: '',
       shipToAddress: '',
       paymentTerms: 'NET_30',
       status: 'ACTIVE',
@@ -1039,13 +1147,20 @@ function P2CustomersTab() {
 
   const openEditDialog = (customer: P2Customer) => {
     setSelectedCustomer(customer);
+    setEditTab('details');
     setFormData({
       customerId: customer.customerId,
       customerName: customer.customerName,
       contactEmail: customer.contactEmail || '',
       contactPhone: customer.contactPhone || '',
       billingAddress: customer.billingAddress || '',
+      billingCity: customer.billingCity || '',
+      billingState: customer.billingState || '',
+      billingZip: customer.billingZip || '',
       shippingAddress: customer.shippingAddress || '',
+      shippingCity: customer.shippingCity || '',
+      shippingState: customer.shippingState || '',
+      shippingZip: customer.shippingZip || '',
       shipToAddress: customer.shipToAddress || '',
       paymentTerms: customer.paymentTerms || 'NET_30',
       status: customer.status,
@@ -1254,25 +1369,95 @@ function P2CustomersTab() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="col-span-2 border-t pt-4 mt-2">
+              <Label className="text-base font-medium">Billing Address</Label>
+            </div>
             <div className="col-span-2 space-y-2">
-              <Label htmlFor="billingAddress">Billing Address</Label>
+              <Label htmlFor="billingAddress">Street Address</Label>
               <Input
                 id="billingAddress"
-                placeholder="123 Main St, City, State ZIP"
+                placeholder="123 Main St"
                 value={formData.billingAddress}
                 onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
                 data-testid="input-billing-address"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="billingCity">City</Label>
+              <Input
+                id="billingCity"
+                placeholder="City"
+                value={formData.billingCity}
+                onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
+                data-testid="input-billing-city"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="billingState">State</Label>
+                <Input
+                  id="billingState"
+                  placeholder="State"
+                  value={formData.billingState}
+                  onChange={(e) => setFormData({ ...formData, billingState: e.target.value })}
+                  data-testid="input-billing-state"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billingZip">ZIP</Label>
+                <Input
+                  id="billingZip"
+                  placeholder="ZIP"
+                  value={formData.billingZip}
+                  onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
+                  data-testid="input-billing-zip"
+                />
+              </div>
+            </div>
+            <div className="col-span-2 border-t pt-4 mt-2">
+              <Label className="text-base font-medium">Shipping Address</Label>
+            </div>
             <div className="col-span-2 space-y-2">
-              <Label htmlFor="shippingAddress">Shipping Address</Label>
+              <Label htmlFor="shippingAddress">Street Address</Label>
               <Input
                 id="shippingAddress"
-                placeholder="456 Warehouse Rd, City, State ZIP"
+                placeholder="456 Warehouse Rd"
                 value={formData.shippingAddress}
                 onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
                 data-testid="input-shipping-address"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shippingCity">City</Label>
+              <Input
+                id="shippingCity"
+                placeholder="City"
+                value={formData.shippingCity}
+                onChange={(e) => setFormData({ ...formData, shippingCity: e.target.value })}
+                data-testid="input-shipping-city"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="shippingState">State</Label>
+                <Input
+                  id="shippingState"
+                  placeholder="State"
+                  value={formData.shippingState}
+                  onChange={(e) => setFormData({ ...formData, shippingState: e.target.value })}
+                  data-testid="input-shipping-state"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shippingZip">ZIP</Label>
+                <Input
+                  id="shippingZip"
+                  placeholder="ZIP"
+                  value={formData.shippingZip}
+                  onChange={(e) => setFormData({ ...formData, shippingZip: e.target.value })}
+                  data-testid="input-shipping-zip"
+                />
+              </div>
             </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="notes">Notes</Label>
@@ -1299,125 +1484,426 @@ function P2CustomersTab() {
       </Dialog>
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit P2 Customer</DialogTitle>
+            <DialogTitle>Edit P2 Customer: {selectedCustomer?.customerName}</DialogTitle>
             <DialogDescription>
-              Update customer details
+              Update customer details or manage additional contacts
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          
+          <Tabs value={editTab} onValueChange={(v) => setEditTab(v as 'details' | 'contacts')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Customer Details</TabsTrigger>
+              <TabsTrigger value="contacts">Additional Contacts</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="details" className="mt-4">
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-customerId">Customer ID</Label>
+                  <Input
+                    id="edit-customerId"
+                    value={formData.customerId}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-customerName">Customer Name *</Label>
+                  <Input
+                    id="edit-customerName"
+                    value={formData.customerName}
+                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                    data-testid="input-edit-customer-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contactEmail">Contact Email</Label>
+                  <Input
+                    id="edit-contactEmail"
+                    type="email"
+                    value={formData.contactEmail}
+                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                    data-testid="input-edit-contact-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contactPhone">Contact Phone</Label>
+                  <Input
+                    id="edit-contactPhone"
+                    value={formData.contactPhone}
+                    onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                    data-testid="input-edit-contact-phone"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-rfqPrefix">RFQ Prefix (3 letters)</Label>
+                  <Input
+                    id="edit-rfqPrefix"
+                    maxLength={3}
+                    value={formData.rfqPrefix}
+                    onChange={(e) => setFormData({ ...formData, rfqPrefix: e.target.value.toUpperCase() })}
+                    data-testid="input-edit-rfq-prefix"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-paymentTerms">Payment Terms</Label>
+                  <Select value={formData.paymentTerms} onValueChange={(v) => setFormData({ ...formData, paymentTerms: v })}>
+                    <SelectTrigger data-testid="select-edit-payment-terms">
+                      <SelectValue placeholder="Select terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NET_15">Net 15</SelectItem>
+                      <SelectItem value="NET_30">Net 30</SelectItem>
+                      <SelectItem value="NET_45">Net 45</SelectItem>
+                      <SelectItem value="NET_60">Net 60</SelectItem>
+                      <SelectItem value="DUE_ON_RECEIPT">Due on Receipt</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                    <SelectTrigger data-testid="select-edit-status">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="INACTIVE">Inactive</SelectItem>
+                      <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 border-t pt-4 mt-2">
+                  <Label className="text-base font-medium">Billing Address</Label>
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="edit-billingAddress">Street Address</Label>
+                  <Input
+                    id="edit-billingAddress"
+                    value={formData.billingAddress}
+                    onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
+                    data-testid="input-edit-billing-address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-billingCity">City</Label>
+                  <Input
+                    id="edit-billingCity"
+                    value={formData.billingCity}
+                    onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
+                    data-testid="input-edit-billing-city"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-billingState">State</Label>
+                    <Input
+                      id="edit-billingState"
+                      value={formData.billingState}
+                      onChange={(e) => setFormData({ ...formData, billingState: e.target.value })}
+                      data-testid="input-edit-billing-state"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-billingZip">ZIP</Label>
+                    <Input
+                      id="edit-billingZip"
+                      value={formData.billingZip}
+                      onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
+                      data-testid="input-edit-billing-zip"
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2 border-t pt-4 mt-2">
+                  <Label className="text-base font-medium">Shipping Address</Label>
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="edit-shippingAddress">Street Address</Label>
+                  <Input
+                    id="edit-shippingAddress"
+                    value={formData.shippingAddress}
+                    onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
+                    data-testid="input-edit-shipping-address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-shippingCity">City</Label>
+                  <Input
+                    id="edit-shippingCity"
+                    value={formData.shippingCity}
+                    onChange={(e) => setFormData({ ...formData, shippingCity: e.target.value })}
+                    data-testid="input-edit-shipping-city"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-shippingState">State</Label>
+                    <Input
+                      id="edit-shippingState"
+                      value={formData.shippingState}
+                      onChange={(e) => setFormData({ ...formData, shippingState: e.target.value })}
+                      data-testid="input-edit-shipping-state"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-shippingZip">ZIP</Label>
+                    <Input
+                      id="edit-shippingZip"
+                      value={formData.shippingZip}
+                      onChange={(e) => setFormData({ ...formData, shippingZip: e.target.value })}
+                      data-testid="input-edit-shipping-zip"
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Input
+                    id="edit-notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    data-testid="input-edit-notes"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+                <Button 
+                  onClick={handleUpdate} 
+                  disabled={updateMutation.isPending}
+                  data-testid="button-update-customer"
+                >
+                  {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="contacts" className="mt-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Manage additional contacts for this customer
+                  </p>
+                  <Button 
+                    size="sm" 
+                    onClick={() => { resetContactForm(); setShowAddContactDialog(true); }}
+                    data-testid="button-add-contact"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Contact
+                  </Button>
+                </div>
+                
+                {contacts.length === 0 ? (
+                  <div className="text-center py-8 border rounded-lg bg-muted/50">
+                    <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No additional contacts</p>
+                    <p className="text-sm text-muted-foreground">Add contacts to track multiple points of communication</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contacts.map((contact) => (
+                        <TableRow key={contact.id}>
+                          <TableCell className="font-medium">
+                            {contact.name}
+                            {contact.isPrimary && (
+                              <Badge variant="secondary" className="ml-2 text-xs">Primary</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{contact.title || '-'}</TableCell>
+                          <TableCell>
+                            {contact.email ? (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Mail className="h-3 w-3" />
+                                {contact.email}
+                              </div>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {contact.phone ? (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Phone className="h-3 w-3" />
+                                {contact.phone}
+                              </div>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingContact(contact);
+                                  setContactFormData({
+                                    name: contact.name,
+                                    title: contact.title || '',
+                                    email: contact.email || '',
+                                    phone: contact.phone || '',
+                                    isPrimary: contact.isPrimary,
+                                  });
+                                }}
+                                data-testid={`button-edit-contact-${contact.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive"
+                                onClick={() => {
+                                  if (confirm(`Delete contact ${contact.name}?`)) {
+                                    deleteContactMutation.mutate(contact.id);
+                                  }
+                                }}
+                                data-testid={`button-delete-contact-${contact.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)}>Close</Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddContactDialog} onOpenChange={setShowAddContactDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Contact</DialogTitle>
+            <DialogDescription>Add a new contact for {selectedCustomer?.customerName}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-customerId">Customer ID</Label>
+              <Label htmlFor="contact-name">Name *</Label>
               <Input
-                id="edit-customerId"
-                value={formData.customerId}
-                disabled
-                className="bg-muted"
+                id="contact-name"
+                value={contactFormData.name}
+                onChange={(e) => setContactFormData({ ...contactFormData, name: e.target.value })}
+                data-testid="input-contact-name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-customerName">Customer Name *</Label>
+              <Label htmlFor="contact-title">Title</Label>
               <Input
-                id="edit-customerName"
-                value={formData.customerName}
-                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                data-testid="input-edit-customer-name"
+                id="contact-title"
+                placeholder="e.g., Purchasing Manager"
+                value={contactFormData.title}
+                onChange={(e) => setContactFormData({ ...contactFormData, title: e.target.value })}
+                data-testid="input-contact-title"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-contactEmail">Contact Email</Label>
+              <Label htmlFor="contact-email">Email</Label>
               <Input
-                id="edit-contactEmail"
+                id="contact-email"
                 type="email"
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                data-testid="input-edit-contact-email"
+                value={contactFormData.email}
+                onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                data-testid="input-contact-email"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-contactPhone">Contact Phone</Label>
+              <Label htmlFor="contact-phone">Phone</Label>
               <Input
-                id="edit-contactPhone"
-                value={formData.contactPhone}
-                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                data-testid="input-edit-contact-phone"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-rfqPrefix">RFQ Prefix (3 letters)</Label>
-              <Input
-                id="edit-rfqPrefix"
-                maxLength={3}
-                value={formData.rfqPrefix}
-                onChange={(e) => setFormData({ ...formData, rfqPrefix: e.target.value.toUpperCase() })}
-                data-testid="input-edit-rfq-prefix"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-paymentTerms">Payment Terms</Label>
-              <Select value={formData.paymentTerms} onValueChange={(v) => setFormData({ ...formData, paymentTerms: v })}>
-                <SelectTrigger data-testid="select-edit-payment-terms">
-                  <SelectValue placeholder="Select terms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NET_15">Net 15</SelectItem>
-                  <SelectItem value="NET_30">Net 30</SelectItem>
-                  <SelectItem value="NET_45">Net 45</SelectItem>
-                  <SelectItem value="NET_60">Net 60</SelectItem>
-                  <SelectItem value="DUE_ON_RECEIPT">Due on Receipt</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-status">Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                <SelectTrigger data-testid="select-edit-status">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="edit-billingAddress">Billing Address</Label>
-              <Input
-                id="edit-billingAddress"
-                value={formData.billingAddress}
-                onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
-                data-testid="input-edit-billing-address"
-              />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="edit-shippingAddress">Shipping Address</Label>
-              <Input
-                id="edit-shippingAddress"
-                value={formData.shippingAddress}
-                onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
-                data-testid="input-edit-shipping-address"
-              />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Input
-                id="edit-notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                data-testid="input-edit-notes"
+                id="contact-phone"
+                value={contactFormData.phone}
+                onChange={(e) => setContactFormData({ ...contactFormData, phone: e.target.value })}
+                data-testid="input-contact-phone"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={handleUpdate} 
-              disabled={updateMutation.isPending}
-              data-testid="button-update-customer"
+            <Button variant="outline" onClick={() => setShowAddContactDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!contactFormData.name || !selectedCustomer) return;
+                createContactMutation.mutate({ ...contactFormData, customerId: selectedCustomer.id });
+              }}
+              disabled={createContactMutation.isPending || !contactFormData.name}
+              data-testid="button-save-contact"
             >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {createContactMutation.isPending ? 'Adding...' : 'Add Contact'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingContact} onOpenChange={(open) => !open && setEditingContact(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Contact</DialogTitle>
+            <DialogDescription>Update contact information</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact-name">Name *</Label>
+              <Input
+                id="edit-contact-name"
+                value={contactFormData.name}
+                onChange={(e) => setContactFormData({ ...contactFormData, name: e.target.value })}
+                data-testid="input-edit-contact-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact-title">Title</Label>
+              <Input
+                id="edit-contact-title"
+                value={contactFormData.title}
+                onChange={(e) => setContactFormData({ ...contactFormData, title: e.target.value })}
+                data-testid="input-edit-contact-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact-email">Email</Label>
+              <Input
+                id="edit-contact-email"
+                type="email"
+                value={contactFormData.email}
+                onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                data-testid="input-edit-contact-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact-phone">Phone</Label>
+              <Input
+                id="edit-contact-phone"
+                value={contactFormData.phone}
+                onChange={(e) => setContactFormData({ ...contactFormData, phone: e.target.value })}
+                data-testid="input-edit-contact-phone"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingContact(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingContact || !contactFormData.name) return;
+                updateContactMutation.mutate({ id: editingContact.id, data: contactFormData });
+              }}
+              disabled={updateContactMutation.isPending || !contactFormData.name}
+              data-testid="button-update-contact"
+            >
+              {updateContactMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

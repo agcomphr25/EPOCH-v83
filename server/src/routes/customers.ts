@@ -24,8 +24,9 @@ const router = Router();
 // SECURITY: softAuth enforces authentication in production
 router.get('/p2-customers-bypass', softAuth, async (req: Request, res: Response) => {
   try {
-    console.log('🔧 P2 CUSTOMERS BYPASS ROUTE CALLED');
-    const p2Customers = await storage.getAllP2Customers();
+    const includeInactive = req.query.includeInactive === 'true';
+    console.log('🔧 P2 CUSTOMERS BYPASS ROUTE CALLED, includeInactive:', includeInactive);
+    const p2Customers = await storage.getAllP2Customers(includeInactive);
     console.log('🔧 Found P2 customers:', p2Customers.length);
     res.json(p2Customers);
   } catch (error) {

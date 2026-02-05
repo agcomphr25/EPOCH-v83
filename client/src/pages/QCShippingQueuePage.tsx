@@ -94,9 +94,25 @@ export default function QCShippingQueuePage() {
 
   // Get ALL P1 PO orders with full item status (for comprehensive view)
   // Fetch immediately to populate the tab count badge
-  const { data: poOrders = [] } = useQuery({
+  const { data: rawPoOrders = [] } = useQuery({
     queryKey: ['/api/po-orders/all-p1-with-status'],
   });
+
+  // Filter out fulfilled items from P1 PO Orders
+  // Once items are marked as fulfilled/shipped, they should not appear in the queue
+  const poOrders = useMemo(() => {
+    return (rawPoOrders as any[])
+      .map((customer: any) => ({
+        ...customer,
+        pos: customer.pos
+          .map((po: any) => ({
+            ...po,
+            items: po.items.filter((item: any) => !item.isFulfilled),
+          }))
+          .filter((po: any) => po.items.length > 0), // Remove POs with no remaining items
+      }))
+      .filter((customer: any) => customer.pos.length > 0); // Remove customers with no remaining POs
+  }, [rawPoOrders]);
 
   // Get features for order customization display
   const { data: features = [] } = useQuery({

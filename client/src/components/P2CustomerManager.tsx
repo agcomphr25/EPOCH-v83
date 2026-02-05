@@ -38,7 +38,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Building2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Building2, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { apiRequest } from '@/lib/queryClient';
 
 const p2CustomerSchema = z.object({
@@ -69,11 +70,13 @@ export function P2CustomerManager() {
     null
   );
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: customers = [], isLoading } = useQuery<P2Customer[]>({
-    queryKey: ['/api/p2-customers-bypass'],
+    queryKey: ['/api/p2-customers-bypass', { includeInactive: showInactive }],
+    queryFn: () => fetch(`/api/p2-customers-bypass?includeInactive=${showInactive}`).then(r => r.json()),
   });
 
   const form = useForm<P2CustomerForm>({
@@ -149,13 +152,35 @@ export function P2CustomerManager() {
       queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
       toast({
         title: 'Success',
-        description: 'P2 Customer deleted successfully',
+        description: 'P2 Customer deactivated successfully',
       });
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete P2 customer',
+        description: error.message || 'Failed to deactivate P2 customer',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/p2/customers/${id}`, {
+        method: 'PUT',
+        body: { status: 'ACTIVE' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      toast({
+        title: 'Success',
+        description: 'P2 Customer reactivated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reactivate P2 customer',
         variant: 'destructive',
       });
     },
@@ -246,14 +271,26 @@ export function P2CustomerManager() {
             Manage customers for P2 operations
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add P2 Customer
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
+              onCheckedChange={setShowInactive}
+            />
+            <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1">
+              {showInactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              Show Inactive
+            </Label>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreateDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add P2 Customer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <DialogHeader>
               <DialogTitle>
                 {selectedCustomer ? 'Edit P2 Customer' : 'Add P2 Customer'}
@@ -499,7 +536,8 @@ export function P2CustomerManager() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -519,34 +557,53 @@ export function P2CustomerManager() {
           </Card>
         ) : (
           customers.map((customer) => (
-            <Card key={customer.id}>
+            <Card key={customer.id} className={customer.status === 'INACTIVE' ? 'opacity-60 border-dashed' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Building2 className="h-5 w-5" />
                       {customer.customerName}
+                      {customer.status === 'INACTIVE' && (
+                        <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+                          INACTIVE
+                        </span>
+                      )}
                     </CardTitle>
                     <CardDescription>
                       ID: {customer.customerId} • Status: {customer.status}
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditDialog(customer)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(customer.id)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {customer.status === 'INACTIVE' ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => reactivateMutation.mutate(customer.id)}
+                        disabled={reactivateMutation.isPending}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Reactivate
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(customer)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(customer.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardHeader>

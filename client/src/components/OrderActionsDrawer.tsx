@@ -27,7 +27,6 @@ import {
   Edit,
   ArrowRight,
   FileText,
-  Download,
   AlertTriangle,
   RefreshCw,
   FileDown,
@@ -44,6 +43,7 @@ interface OrderActionsDrawerProps {
   currentDepartment?: string;
   isCancelled?: boolean;
   onViewSalesOrder?: () => void;
+  onOrderUpdated?: () => void;
 }
 
 const DEPARTMENT_ORDER = [
@@ -74,6 +74,7 @@ export function OrderActionsDrawer({
   currentDepartment,
   isCancelled = false,
   onViewSalesOrder,
+  onOrderUpdated,
 }: OrderActionsDrawerProps) {
   const [open, setOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -93,6 +94,7 @@ export function OrderActionsDrawer({
       setOpen(false);
       setCancelDialogOpen(false);
       setCancelReason('');
+      onOrderUpdated?.();
     },
   });
 
@@ -169,14 +171,6 @@ export function OrderActionsDrawer({
               >
                 <FileText className="h-4 w-4" />
                 View Sales Order
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={handleViewSalesOrder}
-              >
-                <Download className="h-4 w-4" />
-                Download Sales Order
               </Button>
             </div>
 

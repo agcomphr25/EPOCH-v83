@@ -1578,18 +1578,25 @@ export default function QCShippingQueuePage() {
                                 const completionPercentage = Math.round((po.completedUnits / po.totalUnits) * 100);
                                 
                                 // Separate metal accessories (itemType is NOT "stock_model" or "stock") from regular stock items
-                                // Metal accessories include custom_model, feature_item, or any non-stock item
+                                // Metal accessories include custom_model, feature_item, ARCA rails, or any non-stock item
                                 const isStockItem = (itemType: string | null | undefined) => {
                                   if (!itemType) return true; // Default to stock if no type
                                   const type = itemType.toLowerCase();
                                   return type === 'stock_model' || type === 'stock';
                                 };
-                                const metalAccessories = po.items.filter((item: any) => 
-                                  item.itemType && !isStockItem(item.itemType)
-                                );
-                                const regularItems = po.items.filter((item: any) => 
-                                  isStockItem(item.itemType)
-                                );
+                                // Check if item is a metal accessory (ARCA rails, pic rails, bottom metal, etc.)
+                                const isMetalAccessory = (item: any) => {
+                                  // Check by itemType first
+                                  if (item.itemType && !isStockItem(item.itemType)) return true;
+                                  // Check by item name for ARCA rails and similar items
+                                  const name = (item.itemName || item.description || '').toLowerCase();
+                                  const stockModel = (item.stockModel || '').toLowerCase();
+                                  if (name.includes('arca') || name.includes('pic rail') || name.includes('bottom metal')) return true;
+                                  if (stockModel.includes('arca') || stockModel.includes('pic_rail')) return true;
+                                  return false;
+                                };
+                                const metalAccessories = po.items.filter((item: any) => isMetalAccessory(item));
+                                const regularItems = po.items.filter((item: any) => !isMetalAccessory(item));
                                 const accessoriesReadyCount = metalAccessories.filter((item: any) => item.isReadyToShip).length;
                                 const regularReadyCount = regularItems.filter((item: any) => item.isReadyToShip).length;
                                 
@@ -1692,7 +1699,7 @@ export default function QCShippingQueuePage() {
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
                                                   <div className="flex items-center gap-2">
                                                     {/* Metal Accessory indicator */}
-                                                    {(item.itemType && !isStockItem(item.itemType)) && (
+                                                    {isMetalAccessory(item) && (
                                                       <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
                                                         <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                                                       </span>
@@ -1710,7 +1717,7 @@ export default function QCShippingQueuePage() {
                                                     {item.description || 'No description'}
                                                   </div>
                                                   <div className="text-gray-600 dark:text-gray-400">
-                                                    {(item.itemType && !isStockItem(item.itemType)) ? (
+                                                    {isMetalAccessory(item) ? (
                                                       <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
                                                     ) : (
                                                       item.stockModel || 'Unknown'

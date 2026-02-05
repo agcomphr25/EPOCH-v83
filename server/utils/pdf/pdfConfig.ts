@@ -278,6 +278,7 @@ export const COLORS = {
   ACCENT_RED: rgb(0.8, 0, 0),
   ACCENT_BLUE: rgb(0, 0, 0.8),
   ACCENT_GREEN: rgb(0, 0.6, 0),
+  ACCENT_ORANGE: rgb(0.85, 0.55, 0.15), // Amber/orange for Stiller badge
 };
 
 // ============================================

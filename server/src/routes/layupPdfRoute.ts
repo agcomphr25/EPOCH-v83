@@ -238,6 +238,28 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       return false;
     };
 
+    const getStillerDisplay = (orderFeatures, actionLength) => {
+      if (!orderFeatures) return false;
+      
+      // Only show Stiller badge for Medium Action (MA)
+      if (actionLength !== 'MA') return false;
+      
+      // Get the action inlet value
+      const actionInlet = (orderFeatures.action_inlet || '').toLowerCase();
+      if (!actionInlet) return false;
+      
+      // List of inlet patterns that indicate Stiller (same as LayupSchedulePreview.tsx)
+      const stillerInlets = [
+        'xm+', 'xm_plus', 'xmplus', 
+        'lone peak', 'lone_peak', 'lonepeak', 
+        'stiller', 
+        'bighorn', 'big_horn', 'big horn'
+      ];
+      
+      // Check if the action inlet matches any Stiller pattern
+      return stillerInlets.some(pattern => actionInlet.includes(pattern));
+    };
+
     // Create PDF document (landscape for card layout)
     const pdfDoc = await PDFDocument.create();
     let page = pdfDoc.addPage(PAGE_SIZES.LETTER_LANDSCAPE);
@@ -341,6 +363,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const actionLength = getActionLength(order.features);
       const lopDisplay = getLOPDisplay(order.features);
       const heavyFill = getHeavyFillDisplay(order.features);
+      const showStiller = getStillerDisplay(order.features, actionLength);
       const modelDisplay = getModelDisplayName(modelId);
 
       // Determine card color based on source (using standard colors where possible)
@@ -465,6 +488,18 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
         textY -= lineHeight;
       }
 
+      // Stiller badge (for Medium Action with specific inlets)
+      if (showStiller) {
+        page.drawText('Stiller', {
+          x: cardX + SPACING.BOX_PADDING_SMALL,
+          y: textY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: boldFont,
+          color: COLORS.ACCENT_ORANGE,
+        });
+        textY -= lineHeight;
+      }
+
       // Customer and Due Date at bottom
       const customer =
         (order.customer || 'Unknown').length > 15
@@ -520,6 +555,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       'Action: SA = Short Action, LA = Long Action, MA = Medium Action',
       'LOP: Length of Pull (only shown if non-standard)',
       'Heavy Fill: Special manufacturing option requiring extra attention',
+      'Stiller: Medium Action with Stiller/XM+/Lone Peak/Bighorn inlet',
       'Each card shows the same information displayed in the Layup Scheduler',
     ];
 

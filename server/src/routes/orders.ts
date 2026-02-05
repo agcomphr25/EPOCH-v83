@@ -4033,17 +4033,8 @@ router.get('/:orderId/pdf', async (req: Request, res: Response) => {
     const { orderId } = req.params;
     const download = req.query.download === 'true';
     
-    // Generate PDF
-    const pdfResult = await generateOrderPdf(orderId, PdfIntent.VIEW);
-    const pdfPath = pdfResult.filePath;
-    
-    if (!pdfPath) {
-      return res.status(404).json({ error: 'Failed to generate PDF for order' });
-    }
-    
-    // Read the PDF file
-    const fs = await import('fs/promises');
-    const pdfBuffer = await fs.readFile(pdfPath);
+    // Generate PDF using CUSTOMER_VIEW intent (live data, no signature box)
+    const pdfResult = await generateOrderPdf(orderId, PdfIntent.CUSTOMER_VIEW);
     
     // Set appropriate headers
     res.setHeader('Content-Type', 'application/pdf');
@@ -4053,7 +4044,8 @@ router.get('/:orderId/pdf', async (req: Request, res: Response) => {
       res.setHeader('Content-Disposition', `inline; filename="SalesOrder-${orderId}.pdf"`);
     }
     
-    res.send(pdfBuffer);
+    // Send the buffer directly (CUSTOMER_VIEW doesn't store to disk)
+    res.send(pdfResult.buffer);
   } catch (error) {
     console.error('Error generating order PDF:', error);
     res.status(500).json({ 

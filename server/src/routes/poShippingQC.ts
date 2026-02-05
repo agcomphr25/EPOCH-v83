@@ -1071,6 +1071,57 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/po-orders/oem-shipments/cleanup-duplicates
+// Remove FULFILLED-* shipments where the same orders already have real tracking numbers
+router.post('/oem-shipments/cleanup-duplicates', authenticateToken, async (req, res) => {
+  try {
+    console.log('🧹 Starting duplicate shipment cleanup...');
+    
+    // Find and delete FULFILLED-* shipments where orders also exist with real tracking
+    const result = await pool.query(`
+      WITH order_shipments AS (
+        SELECT 
+          si.order_id,
+          sr.id as shipment_id,
+          sr.master_tracking_number,
+          CASE WHEN sr.master_tracking_number LIKE 'FULFILLED-%' THEN 'fulfilled' ELSE 'real' END as tracking_type
+        FROM shipment_items si
+        JOIN shipment_records sr ON si.shipment_id = sr.id
+      ),
+      orders_with_both_types AS (
+        SELECT order_id
+        FROM order_shipments
+        GROUP BY order_id
+        HAVING COUNT(DISTINCT tracking_type) > 1
+      ),
+      fulfilled_shipments_to_delete AS (
+        SELECT DISTINCT os.shipment_id
+        FROM order_shipments os
+        WHERE os.order_id IN (SELECT order_id FROM orders_with_both_types)
+          AND os.tracking_type = 'fulfilled'
+      )
+      DELETE FROM shipment_records
+      WHERE id IN (SELECT shipment_id FROM fulfilled_shipments_to_delete)
+      RETURNING id, master_tracking_number
+    `);
+    
+    const deletedShipments = result.rows || result || [];
+    console.log(`✅ Cleaned up ${deletedShipments.length} duplicate FULFILLED-* shipments`);
+    
+    res.json({
+      success: true,
+      deletedCount: deletedShipments.length,
+      deletedShipments: deletedShipments.map((s: any) => ({
+        id: s.id,
+        trackingNumber: s.master_tracking_number
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ Error cleaning up duplicate shipments:', error);
+    res.status(500).json({ _error: 'Failed to cleanup duplicates', details: error.message });
+  }
+});
+
 // POST /api/po-orders/oem-shipments/:id/return-to-qc
 // Return all items from a shipment back to Shipping QC for reprinting/editing
 router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, res) => {

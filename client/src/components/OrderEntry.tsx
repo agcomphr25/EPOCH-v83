@@ -68,6 +68,7 @@ import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
 import CustomerCreditIndicator from '@/components/CustomerCreditIndicator';
 import OrderRefundsSection from '@/components/OrderRefundsSection';
+import { OrderActionsDrawer } from '@/components/OrderActionsDrawer';
 import type { Customer } from '@shared/schema';
 import {
   useFeatureValidation,
@@ -145,6 +146,12 @@ export default function OrderEntry() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isDuplicateMode, setIsDuplicateMode] = useState(false);
+  
+  // Track order status for actions drawer
+  const [orderStatus, setOrderStatus] = useState<string | undefined>(undefined);
+  const [currentDepartment, setCurrentDepartment] = useState<string | undefined>(undefined);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const [urgency, setUrgency] = useState<string | undefined>(undefined);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -1440,6 +1447,12 @@ export default function OrderEntry() {
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
         setIsVerified(order.isVerified || false);
+        
+        // Load order status for actions drawer
+        setOrderStatus(order.status);
+        setCurrentDepartment(order.currentDepartment);
+        setIsCancelled(order.isCancelled || order.status === 'CANCELLED');
+        setUrgency(order.urgency);
 
         // Load special shipping state from saved order data
         setSpecialShipping({
@@ -2570,13 +2583,36 @@ export default function OrderEntry() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Order Entry
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Create new stock order
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Order Entry
+                    {isEditMode && orderId && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        - {orderId}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {isEditMode ? 'Edit existing order' : 'Create new stock order'}
+                  </p>
+                </div>
+                {isEditMode && orderId && (
+                  <OrderActionsDrawer
+                    orderId={orderId}
+                    orderStatus={orderStatus}
+                    currentDepartment={currentDepartment}
+                    isCancelled={isCancelled}
+                    urgency={urgency}
+                    onOrderUpdated={() => {
+                      if (orderId) {
+                        loadExistingOrder(orderId);
+                      }
+                    }}
+                  />
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">

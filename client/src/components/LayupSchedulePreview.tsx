@@ -355,6 +355,11 @@ export function LayupSchedulePreview({
       border-color: #ea580c; 
       color: #9a3412;
     }
+    .badge-stiller { 
+      background: linear-gradient(to bottom, #fef3c7, #fde68a);
+      border-color: #d97706; 
+      color: #92400e;
+    }
     .signature { 
       display: flex; 
       gap: 12px; 
@@ -442,13 +447,23 @@ export function LayupSchedulePreview({
                 <div class="field-value">${item.actionLength || '-'} / ${item.material || '-'}</div>
               </div>
             </div>
-            ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
+            ${(() => {
+              const actionLength = (item.actionLength || '').toLowerCase().trim();
+              const actionInlet = (item.actionInlet || '').toLowerCase().trim();
+              const isMA = actionLength === 'ma' || actionLength === 'medium';
+              const stillerInlets = ['xm+', 'xm_plus', 'xmplus', 'lone peak', 'lone_peak', 'lonepeak', 'stiller', 'bighorn', 'big_horn', 'big horn'];
+              const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
+              const showStiller = isMA && hasStillerInlet;
+              const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller;
+              return hasBadges ? `
               <div class="badges">
                 ${item.hasLOP ? `<div class="badge badge-lop">LOP ${item.lopValue || ''}</div>` : ''}
                 ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
                 ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
+                ${showStiller ? '<div class="badge badge-stiller">Stiller</div>' : ''}
               </div>
-            ` : ''}
+            ` : '';
+            })()}
           </div>
         `).join('')}
         <div class="signature">
@@ -644,13 +659,23 @@ export function LayupSchedulePreview({
                       </div>
                     </div>
                     
-                    {(item.hasLOP || item.hasADL || item.hasHeavyFill) && (
-                      <div className="layup-badges">
-                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP {item.lopValue || ''}</span>}
-                        {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
-                        {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
-                      </div>
-                    )}
+                    {(() => {
+                      const actionLength = (item.actionLength || '').toLowerCase().trim();
+                      const actionInlet = (item.actionInlet || '').toLowerCase().trim();
+                      const isMA = actionLength === 'ma' || actionLength === 'medium';
+                      const stillerInlets = ['xm+', 'xm_plus', 'xmplus', 'lone peak', 'lone_peak', 'lonepeak', 'stiller', 'bighorn', 'big_horn', 'big horn'];
+                      const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
+                      const showStiller = isMA && hasStillerInlet;
+                      const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller;
+                      return hasBadges ? (
+                        <div className="layup-badges">
+                          {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP {item.lopValue || ''}</span>}
+                          {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
+                          {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
+                          {showStiller && <span className="layup-badge layup-badge-stiller">Stiller</span>}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 ))}
                 

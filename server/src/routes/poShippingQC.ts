@@ -1330,6 +1330,151 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/po-orders/fulfilled-items
+// Get all fulfilled items for a specific customer (admin tool to find incorrectly fulfilled items)
+router.get('/fulfilled-items', authenticateToken, async (req, res) => {
+  try {
+    const { customerName } = req.query;
+    
+    console.log(`🔍 Fetching fulfilled items${customerName ? ` for customer: ${customerName}` : ''}...`);
+    
+    // Query production_orders for fulfilled items
+    let query = `
+      SELECT 
+        prod.id,
+        prod.order_id,
+        prod.production_status,
+        prod.current_department,
+        prod.shipped_at,
+        prod.is_fulfilled,
+        prod.fulfilled_date,
+        poi.item_name,
+        poi.stock_model_name,
+        poi.quantity,
+        po.po_number,
+        po.customer_name
+      FROM production_orders prod
+      JOIN purchase_order_items poi ON prod.po_item_id = poi.id
+      JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE (prod.production_status = 'Shipped' OR prod.is_fulfilled = true)
+    `;
+    
+    const params: any[] = [];
+    if (customerName) {
+      query += ` AND po.customer_name ILIKE $1`;
+      params.push(`%${customerName}%`);
+    }
+    
+    query += ` ORDER BY po.customer_name, po.po_number, prod.order_id`;
+    
+    const result = await pool.query(query, params);
+    const items = result.rows || result || [];
+    
+    console.log(`📊 Found ${items.length} fulfilled items`);
+    
+    res.json({
+      success: true,
+      count: items.length,
+      items: items.map((item: any) => ({
+        id: item.id,
+        orderId: item.order_id,
+        productionStatus: item.production_status,
+        currentDepartment: item.current_department,
+        shippedAt: item.shipped_at,
+        isFulfilled: item.is_fulfilled,
+        fulfilledDate: item.fulfilled_date,
+        itemName: item.item_name,
+        stockModel: item.stock_model_name,
+        quantity: item.quantity,
+        poNumber: item.po_number,
+        customerName: item.customer_name,
+      })),
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching fulfilled items:', error);
+    res.status(500).json({ _error: 'Failed to fetch fulfilled items', details: error.message });
+  }
+});
+
+// POST /api/po-orders/reset-fulfilled
+// Reset fulfilled status for specific items (admin tool to fix incorrectly fulfilled items)
+router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
+  try {
+    const { orderIds, customerName, poNumber } = req.body;
+    
+    if (!orderIds && !customerName && !poNumber) {
+      return res.status(400).json({ 
+        _error: 'Provide orderIds array, customerName, or poNumber to reset fulfilled items' 
+      });
+    }
+    
+    console.log(`🔄 Resetting fulfilled status...`);
+    
+    let updateQuery = `
+      UPDATE production_orders 
+      SET 
+        production_status = 'QC_PASSED',
+        current_department = 'Shipping QC',
+        shipped_at = NULL,
+        is_fulfilled = false,
+        fulfilled_date = NULL,
+        updated_at = NOW()
+      WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+    `;
+    
+    const params: any[] = [];
+    
+    if (orderIds && Array.isArray(orderIds) && orderIds.length > 0) {
+      updateQuery += ` AND order_id = ANY($1::text[])`;
+      params.push(orderIds);
+    } else if (customerName || poNumber) {
+      // Reset by customer or PO
+      updateQuery = `
+        UPDATE production_orders 
+        SET 
+          production_status = 'QC_PASSED',
+          current_department = 'Shipping QC',
+          shipped_at = NULL,
+          is_fulfilled = false,
+          fulfilled_date = NULL,
+          updated_at = NOW()
+        WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+        AND po_item_id IN (
+          SELECT poi.id FROM purchase_order_items poi
+          JOIN purchase_orders po ON poi.po_id = po.id
+          WHERE 1=1
+      `;
+      
+      if (customerName) {
+        params.push(`%${customerName}%`);
+        updateQuery += ` AND po.customer_name ILIKE $${params.length}`;
+      }
+      if (poNumber) {
+        params.push(poNumber);
+        updateQuery += ` AND po.po_number = $${params.length}`;
+      }
+      
+      updateQuery += `)`;
+    }
+    
+    updateQuery += ` RETURNING order_id, production_status`;
+    
+    const result = await pool.query(updateQuery, params);
+    const resetItems = result.rows || result || [];
+    
+    console.log(`✅ Reset ${resetItems.length} items to Shipping QC`);
+    
+    res.json({
+      success: true,
+      resetCount: resetItems.length,
+      resetItems: resetItems.map((item: any) => item.order_id),
+    });
+  } catch (error: any) {
+    console.error('❌ Error resetting fulfilled status:', error);
+    res.status(500).json({ _error: 'Failed to reset fulfilled status', details: error.message });
+  }
+});
+
 // POST /api/po-orders/process-shipment
 // Comprehensive shipment processing: validates items, generates 1 UPS label + multiple packing slips, updates status, persists shipment
 router.post('/process-shipment', authenticateToken, async (req, res) => {

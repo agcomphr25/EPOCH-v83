@@ -217,6 +217,12 @@
     color: #92400e;
   }
   
+  .layup-badge-smr {
+    background: #f3e8ff;
+    border-color: #9333ea;
+    color: #6b21a8;
+  }
+  
   /* Signature section */
   .layup-signature {
     display: flex;

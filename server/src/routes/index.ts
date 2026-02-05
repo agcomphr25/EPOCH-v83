@@ -1411,6 +1411,55 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Customer Contacts Routes
+  app.get('/api/p2/customers/:customerId/contacts', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const customerId = parseInt(req.params.customerId, 10);
+      const contacts = await storage.getP2CustomerContacts(customerId);
+      res.json(contacts);
+    } catch (_error) {
+      console.error('Get P2 customer contacts error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 customer contacts' });
+    }
+  });
+
+  app.post('/api/p2/customers/:customerId/contacts', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const customerId = parseInt(req.params.customerId, 10);
+      const contact = await storage.createP2CustomerContact({ ...req.body, customerId });
+      res.json(contact);
+    } catch (_error: any) {
+      console.error('Create P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to create P2 customer contact', message: _error?.message });
+    }
+  });
+
+  app.put('/api/p2/customers/:customerId/contacts/:contactId', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const contactId = parseInt(req.params.contactId, 10);
+      const contact = await storage.updateP2CustomerContact(contactId, req.body);
+      res.json(contact);
+    } catch (_error: any) {
+      console.error('Update P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to update P2 customer contact', message: _error?.message });
+    }
+  });
+
+  app.delete('/api/p2/customers/:customerId/contacts/:contactId', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const contactId = parseInt(req.params.contactId, 10);
+      await storage.deleteP2CustomerContact(contactId);
+      res.json({ success: true });
+    } catch (_error: any) {
+      console.error('Delete P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to delete P2 customer contact', message: _error?.message });
+    }
+  });
+
   // P2 Product Items - reusable product items for P2 PO line items
   app.get('/api/p2/product-items', softAuth, async (req, res) => {
     try {

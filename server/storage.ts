@@ -44,6 +44,7 @@ import {
   purchaseOrderItems,
   productionOrders,
   p2Customers,
+  p2CustomerContacts,
   p2PurchaseOrders,
   p2PurchaseOrderItems,
   p2ProductionOrders,
@@ -260,6 +261,8 @@ import {
   type P1POQueueCustomer,
   type P2Customer,
   type InsertP2Customer,
+  type P2CustomerContact,
+  type InsertP2CustomerContact,
   type P2PurchaseOrder,
   type InsertP2PurchaseOrder,
   type P2PurchaseOrderItem,
@@ -1248,6 +1251,12 @@ export interface IStorage {
     id: number,
     config: { rfqPrefix?: string; rfqSequences?: Record<string, number> }
   ): Promise<P2Customer>;
+  
+  // P2 Customer Contacts CRUD
+  getP2CustomerContacts(customerId: number): Promise<P2CustomerContact[]>;
+  createP2CustomerContact(data: InsertP2CustomerContact): Promise<P2CustomerContact>;
+  updateP2CustomerContact(id: number, data: Partial<InsertP2CustomerContact>): Promise<P2CustomerContact>;
+  deleteP2CustomerContact(id: number): Promise<void>;
   
   reserveNextRFQNumber(
     customerId: string,
@@ -11848,6 +11857,33 @@ export class DatabaseStorage implements IStorage {
       year: yearSuffix,
       sequence,
     };
+  }
+
+  // P2 Customer Contacts CRUD
+  async getP2CustomerContacts(customerId: number): Promise<P2CustomerContact[]> {
+    return await db
+      .select()
+      .from(p2CustomerContacts)
+      .where(eq(p2CustomerContacts.customerId, customerId))
+      .orderBy(p2CustomerContacts.name);
+  }
+
+  async createP2CustomerContact(data: InsertP2CustomerContact): Promise<P2CustomerContact> {
+    const [contact] = await db.insert(p2CustomerContacts).values(data).returning();
+    return contact;
+  }
+
+  async updateP2CustomerContact(id: number, data: Partial<InsertP2CustomerContact>): Promise<P2CustomerContact> {
+    const [contact] = await db
+      .update(p2CustomerContacts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2CustomerContacts.id, id))
+      .returning();
+    return contact;
+  }
+
+  async deleteP2CustomerContact(id: number): Promise<void> {
+    await db.delete(p2CustomerContacts).where(eq(p2CustomerContacts.id, id));
   }
 
   // RFQ Risk Assessments CRUD

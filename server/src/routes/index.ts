@@ -1341,8 +1341,9 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 DIRECT P2 CUSTOMERS BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
-      const p2Customers = await storage.getAllP2Customers();
-      console.log('🔧 Found P2 customers:', p2Customers.length);
+      const includeInactive = req.query.includeInactive === 'true';
+      const p2Customers = await storage.getAllP2Customers(includeInactive);
+      console.log('🔧 Found P2 customers:', p2Customers.length, '(includeInactive:', includeInactive, ')');
       res.json(p2Customers);
     } catch (_error) {
       console.error('Get P2 customers _error:', _error);
@@ -1355,11 +1356,29 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 P2 CUSTOMER CREATE ROUTE CALLED');
       const { storage } = await import('../../storage');
+      
+      // Check if customerId already exists
+      if (req.body.customerId) {
+        const existingCustomer = await storage.getP2CustomerByCustomerId(req.body.customerId);
+        if (existingCustomer) {
+          return res.status(400).json({ 
+            error: `Customer ID "${req.body.customerId}" already exists. Please use a different ID.` 
+          });
+        }
+      }
+      
       const customer = await storage.createP2Customer(req.body);
       console.log('🔧 Created P2 customer:', customer.id, customer.customerName);
       res.status(201).json(customer);
     } catch (_error: any) {
       console.error('Create P2 customer error:', _error);
+      // Handle duplicate key constraint
+      const errorString = JSON.stringify(_error) + (_error?.message || '');
+      if (_error?.code === '23505' || errorString.includes('duplicate key') || errorString.includes('unique constraint')) {
+        return res.status(400).json({ 
+          error: 'This Customer ID is already in use. Please choose a different ID.' 
+        });
+      }
       res.status(500).json({ error: 'Failed to create P2 customer', message: _error?.message });
     }
   });
@@ -1389,6 +1408,55 @@ export function registerRoutes(app: Express): Server {
     } catch (_error: any) {
       console.error('Delete P2 customer error:', _error);
       res.status(500).json({ error: 'Failed to delete P2 customer', message: _error?.message });
+    }
+  });
+
+  // P2 Customer Contacts Routes
+  app.get('/api/p2/customers/:customerId/contacts', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const customerId = parseInt(req.params.customerId, 10);
+      const contacts = await storage.getP2CustomerContacts(customerId);
+      res.json(contacts);
+    } catch (_error) {
+      console.error('Get P2 customer contacts error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 customer contacts' });
+    }
+  });
+
+  app.post('/api/p2/customers/:customerId/contacts', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const customerId = parseInt(req.params.customerId, 10);
+      const contact = await storage.createP2CustomerContact({ ...req.body, customerId });
+      res.json(contact);
+    } catch (_error: any) {
+      console.error('Create P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to create P2 customer contact', message: _error?.message });
+    }
+  });
+
+  app.put('/api/p2/customers/:customerId/contacts/:contactId', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const contactId = parseInt(req.params.contactId, 10);
+      const contact = await storage.updateP2CustomerContact(contactId, req.body);
+      res.json(contact);
+    } catch (_error: any) {
+      console.error('Update P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to update P2 customer contact', message: _error?.message });
+    }
+  });
+
+  app.delete('/api/p2/customers/:customerId/contacts/:contactId', softAuth, async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const contactId = parseInt(req.params.contactId, 10);
+      await storage.deleteP2CustomerContact(contactId);
+      res.json({ success: true });
+    } catch (_error: any) {
+      console.error('Delete P2 customer contact error:', _error);
+      res.status(500).json({ error: 'Failed to delete P2 customer contact', message: _error?.message });
     }
   });
 
@@ -7921,7 +7989,7 @@ export function registerRoutes(app: Express): Server {
         LEFT JOIN all_orders o ON p.order_id = o.order_id
         LEFT JOIN customers c ON CASE WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer ELSE NULL END = c.id
         WHERE p.payment_date >= $1 AND p.payment_date <= $2
-          AND p.payment_type IN ('credit_card', 'aaaa')
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
         ORDER BY p.payment_date DESC
       `;
       
@@ -7935,7 +8003,7 @@ export function registerRoutes(app: Express): Server {
       const averagePerOrder = transactionCount > 0 ? totalAmount / transactionCount : 0;
       
       const phonePayments = payments.filter((p: any) => p.payment_type === 'credit_card');
-      const onlinePayments = payments.filter((p: any) => p.payment_type === 'aaaa');
+      const onlinePayments = payments.filter((p: any) => p.payment_type === 'aaaa' || p.payment_type === 'agr');
       
       const phoneTotal = phonePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
       const onlineTotal = onlinePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
@@ -7958,7 +8026,7 @@ export function registerRoutes(app: Express): Server {
           }
           return 'Phone';
         }
-        if (type === 'aaaa') return 'Online';
+        if (type === 'aaaa' || type === 'agr') return 'Online';
         return type;
       };
       

@@ -997,8 +997,8 @@ export default function CustomerManagement() {
         }),
       });
 
-      // Create address if address fields are provided
-      if (data.street && data.city && data.state) {
+      // Create address if address fields are provided (state optional for international)
+      if (data.street && data.city) {
         await apiRequest('/api/addresses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1007,7 +1007,7 @@ export default function CustomerManagement() {
             street: data.street,
             street2: data.street2,
             city: data.city,
-            state: data.state,
+            state: data.state || '',
             zipCode: data.zipCode || '',
             country: data.country,
             type: data.addressType,
@@ -1881,8 +1881,9 @@ export default function CustomerManagement() {
                               )}
                             </div>
                             <div className="text-gray-600">
-                              {defaultAddress.city}, {defaultAddress.state}{' '}
-                              {defaultAddress.zipCode}
+                              {defaultAddress.city}
+                              {defaultAddress.state && `, ${defaultAddress.state}`}
+                              {defaultAddress.zipCode && ` ${defaultAddress.zipCode}`}
                             </div>
                             <div className="text-gray-500">
                               {defaultAddress.country}
@@ -2266,53 +2267,89 @@ export default function CustomerManagement() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="edit-state">State</Label>
-                    <Input
-                      id="edit-state"
-                      value={formData.state}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          state: e.target.value,
-                        }))
-                      }
-                      maxLength={2}
-                      placeholder="SC"
-                    />
+                    {(() => {
+                      const config = getAddressConfigForCountry(formData.country);
+                      const hasStates = config.states.length > 0;
+                      
+                      return (
+                        <>
+                          <Label htmlFor="edit-state">{config.stateLabel}</Label>
+                          {hasStates ? (
+                            <Select
+                              value={formData.state}
+                              onValueChange={(value) =>
+                                setFormData((prev) => ({ ...prev, state: value }))
+                              }
+                            >
+                              <SelectTrigger id="edit-state">
+                                <SelectValue placeholder={`Select ${config.stateLabel.toLowerCase()}`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {config.states.map((state) => (
+                                  <SelectItem key={state.code} value={state.code}>
+                                    {state.name} ({state.code})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              id="edit-state"
+                              value={formData.state}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  state: e.target.value,
+                                }))
+                              }
+                              placeholder={config.stateLabel}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-zipCode">ZIP Code</Label>
-                    <Input
-                      id="edit-zipCode"
-                      value={formData.zipCode}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          zipCode: e.target.value,
-                        }))
-                      }
-                    />
+                    {(() => {
+                      const config = getAddressConfigForCountry(formData.country);
+                      return (
+                        <>
+                          <Label htmlFor="edit-zipCode">{config.postalCodeLabel}</Label>
+                          <Input
+                            id="edit-zipCode"
+                            value={formData.zipCode}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                zipCode: e.target.value,
+                              }))
+                            }
+                            placeholder={config.postalCodePlaceholder}
+                          />
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <Label htmlFor="edit-country">Country</Label>
                     <Select
                       value={formData.country}
                       onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, country: value }))
+                        setFormData((prev) => ({ ...prev, country: value, state: '' }))
                       }
                     >
                       <SelectTrigger id="edit-country">
-                        <SelectValue />
+                        <SelectValue placeholder="Select country" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="United States">
-                          United States
-                        </SelectItem>
-                        <SelectItem value="Canada">Canada</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        {SUPPORTED_COUNTRIES.map((country) => (
+                          <SelectItem key={country.code} value={country.name}>
+                            {country.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

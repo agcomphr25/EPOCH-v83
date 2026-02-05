@@ -4036,13 +4036,32 @@ export const p2Customers = pgTable('p2_customers', {
   contactEmail: text('contact_email'),
   contactPhone: text('contact_phone'),
   billingAddress: text('billing_address'),
+  billingCity: text('billing_city'),
+  billingState: text('billing_state'),
+  billingZip: text('billing_zip'),
   shippingAddress: text('shipping_address'),
+  shippingCity: text('shipping_city'),
+  shippingState: text('shipping_state'),
+  shippingZip: text('shipping_zip'),
   shipToAddress: text('ship_to_address'), // New field for ship-to information
   paymentTerms: text('payment_terms').default('NET_30'),
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
   notes: text('notes'),
   rfqPrefix: text('rfq_prefix'), // 3-letter prefix for RFQ numbers (e.g., "STR" for Strata-G)
   rfqSequences: jsonb('rfq_sequences').default('{}'), // Tracks RFQ sequence by year: {"2025": 15, "2024": 50}
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P2 Customer Contacts - Additional contacts for P2 customers
+export const p2CustomerContacts = pgTable('p2_customer_contacts', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id').notNull(),
+  name: text('name').notNull(),
+  title: text('title'),
+  email: text('email'),
+  phone: text('phone'),
+  isPrimary: boolean('is_primary').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -5077,13 +5096,35 @@ export const insertP2CustomerSchema = createInsertSchema(p2Customers)
     contactEmail: z.string().email().optional().nullable(),
     contactPhone: z.string().optional().nullable(),
     billingAddress: z.string().optional().nullable(),
+    billingCity: z.string().optional().nullable(),
+    billingState: z.string().optional().nullable(),
+    billingZip: z.string().optional().nullable(),
     shippingAddress: z.string().optional().nullable(),
+    shippingCity: z.string().optional().nullable(),
+    shippingState: z.string().optional().nullable(),
+    shippingZip: z.string().optional().nullable(),
     shipToAddress: z.string().optional().nullable(),
     paymentTerms: z.string().default('NET_30'),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
     notes: z.string().optional().nullable(),
     rfqPrefix: z.string().length(3).optional().nullable(),
     rfqSequences: z.any().optional().nullable(),
+  });
+
+// P2 Customer Contacts Insert Schema
+export const insertP2CustomerContactSchema = createInsertSchema(p2CustomerContacts)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    customerId: z.number().int(),
+    name: z.string().min(1, 'Contact name is required'),
+    title: z.string().optional().nullable(),
+    email: z.string().email().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    isPrimary: z.boolean().default(false),
   });
 
 // P2 Purchase Order Insert Schemas
@@ -5278,6 +5319,8 @@ export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 // P2 Purchase Order Types
 export type InsertP2Customer = z.infer<typeof insertP2CustomerSchema>;
 export type P2Customer = typeof p2Customers.$inferSelect;
+export type InsertP2CustomerContact = z.infer<typeof insertP2CustomerContactSchema>;
+export type P2CustomerContact = typeof p2CustomerContacts.$inferSelect;
 export type InsertP2PurchaseOrder = z.infer<typeof insertP2PurchaseOrderSchema>;
 export type P2PurchaseOrder = typeof p2PurchaseOrders.$inferSelect;
 export type InsertP2PurchaseOrderItem = z.infer<

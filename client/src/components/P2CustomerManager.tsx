@@ -262,7 +262,7 @@ export function P2CustomerManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">
             P2 Customer Management
@@ -271,14 +271,14 @@ export function P2CustomerManager() {
             Manage customers for P2 operations
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-md border">
             <Switch
               id="show-inactive"
               checked={showInactive}
               onCheckedChange={setShowInactive}
             />
-            <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1">
+            <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1 font-medium">
               {showInactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               Show Inactive
             </Label>

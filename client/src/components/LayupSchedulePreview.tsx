@@ -360,6 +360,11 @@ export function LayupSchedulePreview({
       border-color: #d97706; 
       color: #92400e;
     }
+    .badge-smr { 
+      background: linear-gradient(to bottom, #f3e8ff, #e9d5ff);
+      border-color: #9333ea; 
+      color: #6b21a8;
+    }
     .signature { 
       display: flex; 
       gap: 12px; 
@@ -454,13 +459,15 @@ export function LayupSchedulePreview({
               const stillerInlets = ['xm+', 'xm_plus', 'xmplus', 'lone peak', 'lone_peak', 'lonepeak', 'stiller', 'bighorn', 'big_horn', 'big horn'];
               const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
               const showStiller = isMA && hasStillerInlet;
-              const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller;
+              const showSMR = isMA && !hasStillerInlet;
+              const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller || showSMR;
               return hasBadges ? `
               <div class="badges">
                 ${item.hasLOP ? `<div class="badge badge-lop">LOP ${item.lopValue || ''}</div>` : ''}
                 ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
                 ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
                 ${showStiller ? '<div class="badge badge-stiller">Stiller</div>' : ''}
+                ${showSMR ? '<div class="badge badge-smr">SMR</div>' : ''}
               </div>
             ` : '';
             })()}
@@ -616,11 +623,17 @@ export function LayupSchedulePreview({
                                   </Badge>
                                 );
                               }
+                              if (isMA && !hasStillerInlet) {
+                                return (
+                                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                    SMR
+                                  </Badge>
+                                );
+                              }
                               return null;
                             })()}
                             {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && !(
-                              ((item.actionLength || '').toLowerCase() === 'ma' || (item.actionLength || '').toLowerCase() === 'medium') &&
-                              ['xm+', 'xm_plus', 'lone_peak', 'stiller', 'bighorn'].some(p => (item.actionInlet || '').toLowerCase().includes(p))
+                              (item.actionLength || '').toLowerCase() === 'ma' || (item.actionLength || '').toLowerCase() === 'medium'
                             ) && (
                               <span className="text-gray-400 text-xs">-</span>
                             )}
@@ -666,13 +679,15 @@ export function LayupSchedulePreview({
                       const stillerInlets = ['xm+', 'xm_plus', 'xmplus', 'lone peak', 'lone_peak', 'lonepeak', 'stiller', 'bighorn', 'big_horn', 'big horn'];
                       const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
                       const showStiller = isMA && hasStillerInlet;
-                      const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller;
+                      const showSMR = isMA && !hasStillerInlet;
+                      const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller || showSMR;
                       return hasBadges ? (
                         <div className="layup-badges">
                           {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP {item.lopValue || ''}</span>}
                           {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
                           {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
                           {showStiller && <span className="layup-badge layup-badge-stiller">Stiller</span>}
+                          {showSMR && <span className="layup-badge layup-badge-smr">SMR</span>}
                         </div>
                       ) : null;
                     })()}

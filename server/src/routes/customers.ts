@@ -1160,8 +1160,9 @@ router.post('/customers', async (req: Request, res: Response) => {
     res.status(201).json(newCustomer);
   } catch (error: any) {
     console.error('Create P2 customer error:', error);
-    // Handle duplicate key constraint
-    if (error?.code === '23505' || error?.message?.includes('duplicate key')) {
+    // Handle duplicate key constraint - check multiple error formats
+    const errorString = JSON.stringify(error) + (error?.message || '') + (error?.detail || '');
+    if (error?.code === '23505' || errorString.includes('duplicate key') || errorString.includes('unique constraint')) {
       return res.status(400).json({ 
         error: 'This Customer ID is already in use. Please choose a different ID.' 
       });

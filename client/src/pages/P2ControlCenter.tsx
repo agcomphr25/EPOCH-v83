@@ -1225,8 +1225,6 @@ function P2CustomersTab() {
                 <TableHead>Customer ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>RFQ Prefix</TableHead>
-                <TableHead>Payment Terms</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -1252,14 +1250,6 @@ function P2CustomersTab() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    {customer.rfqPrefix ? (
-                      <Badge variant="outline">{customer.rfqPrefix}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{customer.paymentTerms || 'NET_30'}</TableCell>
                   <TableCell>
                     <Badge variant={customer.status === 'ACTIVE' ? 'default' : 'secondary'}>
                       {customer.status}

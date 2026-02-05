@@ -290,8 +290,8 @@ export function P2CustomerManager() {
                 Add P2 Customer
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <DialogHeader>
+            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>
                 {selectedCustomer ? 'Edit P2 Customer' : 'Add P2 Customer'}
               </DialogTitle>
@@ -301,6 +301,7 @@ export function P2CustomerManager() {
                   : 'Add a new P2 customer to the system'}
               </DialogDescription>
             </DialogHeader>
+            <div className="flex-1 overflow-y-auto pr-2">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(handleSubmit)}
@@ -535,6 +536,7 @@ export function P2CustomerManager() {
                 </div>
               </form>
             </Form>
+            </div>
           </DialogContent>
           </Dialog>
         </div>

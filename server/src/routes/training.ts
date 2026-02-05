@@ -1943,12 +1943,12 @@ router.get('/p2-certifications/part-numbers', async (req, res) => {
   try {
     const items = await db
       .select({
-        partNumber: poProducts.productName,
-        partName: poProducts.productName,
+        partNumber: p2PurchaseOrderItems.partNumber,
+        partName: p2PurchaseOrderItems.partName,
       })
-      .from(poProducts)
-      .where(sql`${poProducts.productName} IS NOT NULL AND ${poProducts.productName} != '' AND ${poProducts.isActive} = true`)
-      .orderBy(poProducts.productName);
+      .from(p2PurchaseOrderItems)
+      .where(sql`${p2PurchaseOrderItems.partNumber} IS NOT NULL AND ${p2PurchaseOrderItems.partNumber} != ''`)
+      .orderBy(p2PurchaseOrderItems.partNumber);
     
     const uniqueItems = Array.from(
       new Map(items.map(item => [item.partNumber, item])).values()

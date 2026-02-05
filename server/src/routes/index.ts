@@ -1355,11 +1355,29 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 P2 CUSTOMER CREATE ROUTE CALLED');
       const { storage } = await import('../../storage');
+      
+      // Check if customerId already exists
+      if (req.body.customerId) {
+        const existingCustomer = await storage.getP2CustomerByCustomerId(req.body.customerId);
+        if (existingCustomer) {
+          return res.status(400).json({ 
+            error: `Customer ID "${req.body.customerId}" already exists. Please use a different ID.` 
+          });
+        }
+      }
+      
       const customer = await storage.createP2Customer(req.body);
       console.log('🔧 Created P2 customer:', customer.id, customer.customerName);
       res.status(201).json(customer);
     } catch (_error: any) {
       console.error('Create P2 customer error:', _error);
+      // Handle duplicate key constraint
+      const errorString = JSON.stringify(_error) + (_error?.message || '');
+      if (_error?.code === '23505' || errorString.includes('duplicate key') || errorString.includes('unique constraint')) {
+        return res.status(400).json({ 
+          error: 'This Customer ID is already in use. Please choose a different ID.' 
+        });
+      }
       res.status(500).json({ error: 'Failed to create P2 customer', message: _error?.message });
     }
   });

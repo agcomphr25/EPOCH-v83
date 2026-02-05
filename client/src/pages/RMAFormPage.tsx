@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Printer, Plus, Trash2, Download } from 'lucide-react';
+import { Printer, Plus, Trash2, Download, ChevronDown, Check } from 'lucide-react';
 import {
   Document,
   Page,
@@ -15,6 +15,20 @@ import {
   pdf,
 } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface ReturnItem {
   qty: string;
@@ -189,8 +203,6 @@ interface RMAPDFProps {
   contactName: string;
   phoneNumber: string;
   emailAddress: string;
-  returnAddress: string;
-  cityStateZip: string;
   originalOrderNumber: string;
   invoiceNumber: string;
   purchaseDate: string;
@@ -200,7 +212,6 @@ interface RMAPDFProps {
     damagedInShipping: boolean;
     incorrectItem: boolean;
     warrantyRepair: boolean;
-    upgrade: boolean;
     other: boolean;
     otherText: string;
   };
@@ -283,16 +294,6 @@ const RMAPDFDocument = (props: RMAPDFProps) => (
               <Text style={pdfStyles.fieldValue}>{props.emailAddress || ' '}</Text>
             </View>
           </View>
-          <View style={pdfStyles.row}>
-            <View style={pdfStyles.field}>
-              <Text style={pdfStyles.fieldLabel}>Return Shipping Address</Text>
-              <Text style={pdfStyles.fieldValue}>{props.returnAddress || ' '}</Text>
-            </View>
-            <View style={pdfStyles.field}>
-              <Text style={pdfStyles.fieldLabel}>City / State / ZIP</Text>
-              <Text style={pdfStyles.fieldValue}>{props.cityStateZip || ' '}</Text>
-            </View>
-          </View>
         </View>
       </View>
 
@@ -361,10 +362,6 @@ const RMAPDFDocument = (props: RMAPDFProps) => (
                 <Text style={pdfStyles.checkboxLabel}>Warranty Repair</Text>
               </View>
               <View style={pdfStyles.checkboxItem}>
-                <View style={props.reasonCodes.upgrade ? pdfStyles.checkboxChecked : pdfStyles.checkbox} />
-                <Text style={pdfStyles.checkboxLabel}>Upgrade</Text>
-              </View>
-              <View style={pdfStyles.checkboxItem}>
                 <View style={props.reasonCodes.other ? pdfStyles.checkboxChecked : pdfStyles.checkbox} />
                 <Text style={pdfStyles.checkboxLabel}>Other: {props.reasonCodes.otherText}</Text>
               </View>
@@ -399,6 +396,8 @@ const RMAPDFDocument = (props: RMAPDFProps) => (
         </View>
       </View>
 
+    </Page>
+    <Page size="LETTER" style={pdfStyles.page}>
       <View style={pdfStyles.section}>
         <View style={pdfStyles.sectionHeader}>
           <Text style={pdfStyles.sectionTitle}>DESCRIPTION OF ISSUE</Text>
@@ -449,10 +448,8 @@ const RMAPDFDocument = (props: RMAPDFProps) => (
         </View>
         <View style={pdfStyles.sectionContent}>
           <View style={pdfStyles.termsList}>
-            <Text style={pdfStyles.termItem}>• Products must be returned with RMA number clearly marked on the outside of the package.</Text>
+            <Text style={pdfStyles.termItem}>• Please return item with the RMA # clearly marked on the outside of the package.</Text>
             <Text style={pdfStyles.termItem}>• Items must be properly packaged to prevent damage.</Text>
-            <Text style={pdfStyles.termItem}>• Evaluation fees may apply if no defect is found.</Text>
-            <Text style={pdfStyles.termItem}>• Unauthorized or late returns may be rejected.</Text>
           </View>
         </View>
       </View>
@@ -490,12 +487,12 @@ export default function RMAFormPage() {
   const [returnDeadline, setReturnDeadline] = useState('');
   const [issuedBy, setIssuedBy] = useState('');
 
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [contactName, setContactName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [emailAddress, setEmailAddress] = useState('');
-  const [returnAddress, setReturnAddress] = useState('');
-  const [cityStateZip, setCityStateZip] = useState('');
 
   const [originalOrderNumber, setOriginalOrderNumber] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -510,10 +507,34 @@ export default function RMAFormPage() {
     damagedInShipping: false,
     incorrectItem: false,
     warrantyRepair: false,
-    upgrade: false,
     other: false,
     otherText: ''
   });
+
+  const { data: p1Customers = [] } = useQuery<any[]>({
+    queryKey: ['/api/customers'],
+  });
+
+  const { data: p2Customers = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2_customers'],
+  });
+
+  const allCustomers = [
+    ...p1Customers.map(c => ({ ...c, type: 'P1' as const })),
+    ...p2Customers.map(c => ({ ...c, type: 'P2' as const })),
+  ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = allCustomers.find(c => String(c.id) === customerId);
+    if (customer) {
+      setSelectedCustomerId(customerId);
+      setCompanyName(customer.name || '');
+      setContactName(customer.contact || '');
+      setPhoneNumber(customer.phone || '');
+      setEmailAddress(customer.email || '');
+    }
+    setCustomerDropdownOpen(false);
+  };
 
   const [requestedAction, setRequestedAction] = useState({
     repair: false,
@@ -571,8 +592,6 @@ export default function RMAFormPage() {
           contactName={contactName}
           phoneNumber={phoneNumber}
           emailAddress={emailAddress}
-          returnAddress={returnAddress}
-          cityStateZip={cityStateZip}
           originalOrderNumber={originalOrderNumber}
           invoiceNumber={invoiceNumber}
           purchaseDate={formatDate(purchaseDate)}
@@ -668,6 +687,68 @@ export default function RMAFormPage() {
             </CardHeader>
             <CardContent className="pt-4">
               <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label>Select Customer</Label>
+                  <Popover open={customerDropdownOpen} onOpenChange={setCustomerDropdownOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={customerDropdownOpen}
+                        className="w-full justify-between"
+                      >
+                        {selectedCustomerId
+                          ? allCustomers.find(c => String(c.id) === selectedCustomerId)?.name || 'Select customer...'
+                          : 'Select customer...'}
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search customers..." />
+                        <CommandList>
+                          <CommandEmpty>No customer found.</CommandEmpty>
+                          <CommandGroup heading="P1 Customers">
+                            {allCustomers
+                              .filter(c => c.type === 'P1')
+                              .map((customer) => (
+                                <CommandItem
+                                  key={`p1-${customer.id}`}
+                                  value={customer.name}
+                                  onSelect={() => handleCustomerSelect(String(customer.id))}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      selectedCustomerId === String(customer.id) ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                  />
+                                  {customer.name}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                          <CommandGroup heading="P2 Customers">
+                            {allCustomers
+                              .filter(c => c.type === 'P2')
+                              .map((customer) => (
+                                <CommandItem
+                                  key={`p2-${customer.id}`}
+                                  value={customer.name}
+                                  onSelect={() => handleCustomerSelect(String(customer.id))}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      selectedCustomerId === String(customer.id) ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                  />
+                                  {customer.name}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Company / Customer Name</Label>
                   <Input 
@@ -699,22 +780,6 @@ export default function RMAFormPage() {
                     type="email"
                     value={emailAddress} 
                     onChange={(e) => setEmailAddress(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="returnAddress">Return Shipping Address</Label>
-                  <Input 
-                    id="returnAddress" 
-                    value={returnAddress} 
-                    onChange={(e) => setReturnAddress(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cityStateZip">City / State / ZIP</Label>
-                  <Input 
-                    id="cityStateZip" 
-                    value={cityStateZip} 
-                    onChange={(e) => setCityStateZip(e.target.value)}
                   />
                 </div>
               </div>
@@ -869,14 +934,6 @@ export default function RMAFormPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox 
-                      id="upgrade" 
-                      checked={reasonCodes.upgrade}
-                      onCheckedChange={(checked) => setReasonCodes({...reasonCodes, upgrade: !!checked})}
-                    />
-                    <Label htmlFor="upgrade">Upgrade</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
                       id="other" 
                       checked={reasonCodes.other}
                       onCheckedChange={(checked) => setReasonCodes({...reasonCodes, other: !!checked})}
@@ -1011,10 +1068,8 @@ export default function RMAFormPage() {
             </CardHeader>
             <CardContent className="pt-4">
               <ul className="list-disc pl-5 space-y-2 text-sm">
-                <li>Products must be returned with RMA number clearly marked on the outside of the package.</li>
+                <li>Please return item with the RMA # clearly marked on the outside of the package.</li>
                 <li>Items must be properly packaged to prevent damage.</li>
-                <li>Evaluation fees may apply if no defect is found.</li>
-                <li>Unauthorized or late returns may be rejected.</li>
               </ul>
             </CardContent>
           </Card>

@@ -11683,6 +11683,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(p2Customers)
+      .where(eq(p2Customers.status, 'ACTIVE'))
       .orderBy(p2Customers.customerName);
   }
 
@@ -11776,7 +11777,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteP2Customer(id: number): Promise<void> {
-    await db.delete(p2Customers).where(eq(p2Customers.id, id));
+    // Soft delete - mark as INACTIVE instead of hard delete
+    // This prevents foreign key constraint violations from p2_purchase_orders and rfq_risk_assessments
+    await db
+      .update(p2Customers)
+      .set({ status: 'INACTIVE' })
+      .where(eq(p2Customers.id, id));
   }
 
   async updateP2CustomerRFQConfig(

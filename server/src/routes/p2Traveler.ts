@@ -14,9 +14,19 @@ import {
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
 } from '../../schema';
-import { eq, and, desc, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray } from 'drizzle-orm';
 
 const router = Router();
+
+// Department name aliases for matching certifications with routing names
+const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  'Assemble/Disassembly': ['Assembly/Disassembly', 'Assemble/Disassembly'],
+  'Assembly/Disassembly': ['Assembly/Disassembly', 'Assemble/Disassembly'],
+};
+
+function getDepartmentVariants(department: string): string[] {
+  return DEPARTMENT_ALIASES[department] || [department];
+}
 
 // GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
 // Verify employee certification for part's next department
@@ -68,12 +78,13 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const nextDepartment = departmentSequence[currentIndex];
 
-    // Check if employee is certified for this department and part
+    // Check if employee is certified for this department and part (handle department name variants)
+    const deptVariants = getDepartmentVariants(nextDepartment);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, employee.id),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        eq(p2EmployeePartCertifications.department, nextDepartment),
+        inArray(p2EmployeePartCertifications.department, deptVariants),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)
@@ -242,11 +253,12 @@ router.post('/start-task', async (req: Request, res: Response) => {
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
+    const startDeptVariants = getDepartmentVariants(department);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, parseInt(employeeId)),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        eq(p2EmployeePartCertifications.department, department),
+        inArray(p2EmployeePartCertifications.department, startDeptVariants),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)

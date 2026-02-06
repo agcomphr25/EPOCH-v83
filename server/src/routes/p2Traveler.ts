@@ -393,7 +393,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Only the assigned technician can complete this task' });
     }
 
-    if (workTask.barcode !== barcode) {
+    if (workTask.barcode.toLowerCase() !== barcode.toLowerCase()) {
       return res.status(400).json({ error: 'Barcode does not match the started task' });
     }
 

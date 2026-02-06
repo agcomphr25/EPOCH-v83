@@ -562,7 +562,7 @@ export default function ProductionStationDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 pb-24 md:pb-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -574,28 +574,28 @@ export default function ProductionStationDashboard() {
               Production process timers
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <Link href="/app/dashboard">
-              <Button variant="outline" size="sm" className="h-9">
-                <Home className="w-4 h-4 mr-1.5" />
-                Dashboard
+              <Button variant="outline" size="sm" className="h-9 px-2.5 md:px-3" title="Dashboard">
+                <Home className="w-4 h-4 md:mr-1.5" />
+                <span className="hidden md:inline">Dashboard</span>
               </Button>
             </Link>
             <Link href="/app/production/timer-programs">
-              <Button variant="outline" size="sm" className="h-9">
-                <Settings className="w-4 h-4 mr-1.5" />
-                Programs
+              <Button variant="outline" size="sm" className="h-9 px-2.5 md:px-3" title="Programs">
+                <Settings className="w-4 h-4 md:mr-1.5" />
+                <span className="hidden md:inline">Programs</span>
               </Button>
             </Link>
             <Link href="/app/production/timer-history">
-              <Button variant="outline" size="sm" className="h-9">
-                <History className="w-4 h-4 mr-1.5" />
-                History
+              <Button variant="outline" size="sm" className="h-9 px-2.5 md:px-3" title="History">
+                <History className="w-4 h-4 md:mr-1.5" />
+                <span className="hidden md:inline">History</span>
               </Button>
             </Link>
             <Button
               size="sm"
-              className="h-9 bg-emerald-600 hover:bg-emerald-700"
+              className="hidden md:inline-flex h-9 bg-emerald-600 hover:bg-emerald-700"
               onClick={() => setStartModalOpen(true)}
             >
               <Plus className="w-4 h-4 mr-1.5" />
@@ -604,17 +604,18 @@ export default function ProductionStationDashboard() {
             <Button
               size="sm"
               variant={notificationPrefs.audibleAlertsEnabled ? "outline" : "secondary"}
-              className={`h-9 ${notificationPrefs.audibleAlertsEnabled ? '' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              className={`h-9 px-2.5 md:px-3 ${notificationPrefs.audibleAlertsEnabled ? '' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
               onClick={toggleAudibleAlerts}
+              title={notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}
             >
               {notificationPrefs.audibleAlertsEnabled ? (
-                <Volume2 className="w-4 h-4 mr-1.5" />
+                <Volume2 className="w-4 h-4 md:mr-1.5" />
               ) : (
-                <VolumeX className="w-4 h-4 mr-1.5" />
+                <VolumeX className="w-4 h-4 md:mr-1.5" />
               )}
-              {notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}
+              <span className="hidden md:inline">{notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}</span>
             </Button>
-            <div className="text-right border-l pl-3 ml-1">
+            <div className="hidden sm:block text-right border-l pl-3 ml-1">
               <p className="text-lg font-mono font-semibold text-slate-700 dark:text-slate-200">
                 {new Date().toLocaleTimeString()}
               </p>
@@ -650,8 +651,18 @@ export default function ProductionStationDashboard() {
           </div>
         )}
       </div>
+
+      <div className="fixed bottom-0 left-0 right-0 md:hidden z-50 p-4 bg-gradient-to-t from-slate-50 via-slate-50 to-slate-50/0 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950/0 pt-8">
+        <Button
+          size="lg"
+          className="w-full h-14 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 shadow-lg rounded-xl"
+          onClick={() => setStartModalOpen(true)}
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Start Timer
+        </Button>
+      </div>
       
-      {/* Inline Credential Modal for action authentication */}
       <InlineCredentialModal
         isOpen={showAuthModal}
         onClose={handleAuthModalClose}

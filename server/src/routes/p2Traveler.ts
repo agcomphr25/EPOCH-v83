@@ -22,7 +22,8 @@ const router = Router();
 // Verify employee certification for part's next department
 router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {
   try {
-    const { employeeCode, barcode } = req.params;
+    const { employeeCode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
     // Get employee
     const employee = await db.query.employees.findFirst({
@@ -121,7 +122,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 // Get part info and next department requirements
 router.get('/part-info/:barcode', async (req: Request, res: Response) => {
   try {
-    const { barcode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(

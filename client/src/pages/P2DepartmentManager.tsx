@@ -131,6 +131,79 @@ interface MaterialTraceabilityData {
   [partId: string]: TraceabilityData;
 }
 
+function TravelerBarcodeCell({ item }: { item: P2SerializedItem }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(item.travelerBarcode || '');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setValue(item.travelerBarcode || '');
+  }, [item.travelerBarcode]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (travelerBarcode: string) => {
+      return apiRequest(`/api/p2-traveler-viewer/item/${item.id}/traveler-barcode`, {
+        method: 'PATCH',
+        body: { travelerBarcode },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      toast({ title: 'Saved', description: 'Traveler barcode linked' });
+      setEditing(false);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to save', variant: 'destructive' });
+    },
+  });
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-7 text-xs w-44"
+          placeholder="Scan or type barcode..."
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveMutation.mutate(value.trim());
+            if (e.key === 'Escape') { setEditing(false); setValue(item.travelerBarcode || ''); }
+          }}
+        />
+        <Button size="sm" variant="ghost" className="h-7 px-1" onClick={() => saveMutation.mutate(value.trim())} disabled={saveMutation.isPending}>
+          <CheckCircle className="h-3 w-3 text-green-600" />
+        </Button>
+      </div>
+    );
+  }
+
+  if (item.travelerBarcode) {
+    return (
+      <div
+        className="cursor-pointer text-xs font-mono hover:text-primary"
+        onClick={() => setEditing(true)}
+        title="Click to edit physical traveler barcode"
+      >
+        {item.travelerBarcode}
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="h-6 px-2 text-xs text-muted-foreground"
+      onClick={() => setEditing(true)}
+    >
+      <Scan className="h-3 w-3 mr-1" />
+      Link barcode
+    </Button>
+  );
+}
+
 export default function P2DepartmentManager() {
   const [selectedDepartment, setSelectedDepartment] = useState<Department>('Layup');
   const [selectedItem, setSelectedItem] = useState<P2SerializedItem | null>(null);
@@ -790,7 +863,8 @@ export default function P2DepartmentManager() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Serial Number</TableHead>
-                        <TableHead>Barcode</TableHead>
+                        <TableHead>System Barcode</TableHead>
+                        <TableHead>Traveler Barcode</TableHead>
                         <TableHead>Part Number</TableHead>
                         <TableHead>Part Name</TableHead>
                         <TableHead>PO Number</TableHead>
@@ -809,6 +883,9 @@ export default function P2DepartmentManager() {
                         >
                           <TableCell className="font-mono text-sm">{item.serialNumber}</TableCell>
                           <TableCell className="font-mono text-xs">{item.barcode}</TableCell>
+                          <TableCell>
+                            <TravelerBarcodeCell item={item} />
+                          </TableCell>
                           <TableCell className="font-mono">{item.partNumber}</TableCell>
                           <TableCell>{item.partName}</TableCell>
                           <TableCell>{item.poNumber}</TableCell>

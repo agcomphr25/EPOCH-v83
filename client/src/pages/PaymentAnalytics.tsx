@@ -51,6 +51,7 @@ export default function PaymentAnalytics() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [isMTD, setIsMTD] = useState(true);
+  const [typeFilter, setTypeFilter] = useState<'all' | 'phone' | 'online'>('all');
 
   const { data, isLoading, error } = useQuery<PaymentAnalyticsResponse>({
     queryKey: ['/api/finance/payment-analytics', month, year, isMTD],
@@ -191,11 +192,37 @@ export default function PaymentAnalytics() {
                       <TrendingUp className="h-5 w-5" />
                       <span className="font-semibold">Transaction Details</span>
                       <span className="text-sm text-muted-foreground ml-2">
-                        ({data.payments.length} transactions)
+                        ({(typeFilter === 'all' ? data.payments : data.payments.filter(p => typeFilter === 'phone' ? p.paymentLabel === 'Phone' : (p.paymentLabel === 'Live' || p.paymentLabel === 'Online'))).length} transactions)
                       </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-sm text-muted-foreground mr-1">Filter by type:</span>
+                      <Button
+                        variant={typeFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTypeFilter('all')}
+                      >
+                        All
+                      </Button>
+                      <Button
+                        variant={typeFilter === 'phone' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTypeFilter('phone')}
+                      >
+                        <Phone className="h-3 w-3 mr-1" />
+                        Phone
+                      </Button>
+                      <Button
+                        variant={typeFilter === 'online' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTypeFilter('online')}
+                      >
+                        <Globe className="h-3 w-3 mr-1" />
+                        Online
+                      </Button>
+                    </div>
                     {data.payments.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
                     ) : (
@@ -210,7 +237,11 @@ export default function PaymentAnalytics() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.payments.map((payment) => (
+                          {data.payments.filter(p => {
+                            if (typeFilter === 'all') return true;
+                            if (typeFilter === 'phone') return p.paymentLabel === 'Phone';
+                            return p.paymentLabel === 'Live' || p.paymentLabel === 'Online';
+                          }).map((payment) => (
                             <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
                               <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
                               <TableCell>

@@ -180,13 +180,14 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     );
   }
 
+  // Always allow public routes immediately - no auth check needed
+  if (isPublicRoute(location)) {
+    return <>{children}</>;
+  }
+
   // After loading completes, if accessChecked hasn't been set yet by useEffect,
   // compute access synchronously to avoid white screen on auth failure
   if (!accessChecked) {
-    // Public routes - allow access
-    if (isPublicRoute(location)) {
-      return <>{children}</>;
-    }
     // No user after auth check = auth failure, show Access Denied
     if (!currentUser) {
       return <AccessDenied />;
@@ -201,10 +202,6 @@ export default function RouteGuard({ children }: RouteGuardProps) {
         </div>
       </div>
     );
-  }
-
-  if (isPublicRoute(location)) {
-    return <>{children}</>;
   }
 
   if (!hasAccess) {

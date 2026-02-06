@@ -83,7 +83,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
 
     // Check if QR code is active
     if (!qrCode.isActive) {
-      await auditService.logEvent({
+      auditService.logEvent({
         entityType: 'qr_code',
         entityId: qrCode.id,
         action: 'QR_SCANNED',
@@ -100,7 +100,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
         },
         ipAddress: ipAddress || undefined,
         userAgent: userAgent || undefined,
-      });
+      }).catch(e => console.error('[QR] Audit log error (disabled):', e?.message));
       return res.redirect(`/qr-error?reason=disabled&code=${encodeURIComponent(code)}`);
     }
 
@@ -108,7 +108,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
     // Skip environment check for 'custom' entity types (internal page redirects work in any environment)
     if (qrCode.entityType !== 'custom' && qrCode.environment !== currentEnv) {
       console.warn(`[QR] Environment mismatch: QR is for ${qrCode.environment}, current is ${currentEnv}`);
-      await auditService.logEvent({
+      auditService.logEvent({
         entityType: 'qr_code',
         entityId: qrCode.id,
         action: 'QR_ENV_MISMATCH',
@@ -124,13 +124,13 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
         },
         ipAddress: ipAddress || undefined,
         userAgent: userAgent || undefined,
-      });
+      }).catch(e => console.error('[QR] Audit log error (env_mismatch):', e?.message));
       return res.redirect(`/qr-error?reason=environment_mismatch&code=${encodeURIComponent(code)}`);
     }
 
     // Check expiration
     if (qrCode.expiresAt && new Date(qrCode.expiresAt) < new Date()) {
-      await auditService.logEvent({
+      auditService.logEvent({
         entityType: 'qr_code',
         entityId: qrCode.id,
         action: 'QR_SCANNED',
@@ -147,7 +147,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
         },
         ipAddress: ipAddress || undefined,
         userAgent: userAgent || undefined,
-      });
+      }).catch(e => console.error('[QR] Audit log error (expired):', e?.message));
       return res.redirect(`/qr-error?reason=expired&code=${encodeURIComponent(code)}`);
     }
 
@@ -163,7 +163,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
     // Handle resolver failure
     if (!resolverResult.success || !resolverResult.route) {
       console.error(`[QR] Resolver failed for ${code}: ${resolverResult.error}`);
-      await auditService.logEvent({
+      auditService.logEvent({
         entityType: 'qr_code',
         entityId: qrCode.id,
         action: 'QR_SCANNED',
@@ -180,14 +180,14 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
         },
         ipAddress: ipAddress || undefined,
         userAgent: userAgent || undefined,
-      });
+      }).catch(e => console.error('[QR] Audit log error (resolver_failed):', e?.message));
       return res.redirect(`/qr-error?reason=resolver_failed&code=${encodeURIComponent(code)}&error=${encodeURIComponent(resolverResult.error || '')}`);
     }
 
     const resolvedUrl = resolverResult.route;
 
-    // Log successful scan via auditService
-    await auditService.logEvent({
+    // Log successful scan via auditService (non-blocking - don't let audit failures block redirect)
+    auditService.logEvent({
       entityType: 'qr_code',
       entityId: qrCode.id,
       action: 'QR_SCANNED',
@@ -204,7 +204,7 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
       },
       ipAddress: ipAddress || undefined,
       userAgent: userAgent || undefined,
-    });
+    }).catch(e => console.error('[QR] Audit log error (success):', e?.message));
 
     // Redirect to resolved URL
     console.log(`[QR] Resolved ${code} -> ${resolvedUrl}`);

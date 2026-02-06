@@ -195,7 +195,7 @@ router.get('/global-search', async (req, res) => {
     // Search Central Storage (Media Library) - PDFs, images, documents
     try {
       const mediaResults = await db.execute(sql`
-        SELECT id, filename, title, notes, category, mime_type, storage_path, captured_by_name, capture_date
+        SELECT id, filename, title, notes, category, mime_type, storage_path, captured_by_name, capture_date, folder_id
         FROM media_library
         WHERE 
           (is_archived IS NULL OR is_archived = false) AND (
@@ -212,22 +212,23 @@ router.get('/global-search', async (req, res) => {
         const displayTitle = item.title || item.filename || 'Untitled File';
         const fileType = item.mime_type?.includes('pdf') ? 'PDF' : 
                          item.mime_type?.includes('image') ? 'Image' : 'File';
+        const isReferenceDoc = item.category === 'document';
         results.push({
-          type: 'Central Storage',
+          type: isReferenceDoc ? 'Reference Document' : 'Central Storage',
           id: item.id,
           title: displayTitle,
           subtitle: [
             fileType,
-            item.category || null,
+            !isReferenceDoc ? (item.category || null) : null,
             item.captured_by_name ? `By: ${item.captured_by_name}` : null,
           ].filter(Boolean).join(' • '),
-          matchedField: 'file',
+          matchedField: isReferenceDoc ? 'reference document' : 'file',
           matchedValue: displayTitle,
-          url: `/media-library?highlight=${item.id}`,
-          icon: item.mime_type?.includes('pdf') ? '📄' : item.mime_type?.includes('image') ? '🖼️' : '📁'
+          url: isReferenceDoc ? `/reference-docs?highlight=${item.id}` : `/media-library?highlight=${item.id}`,
+          icon: isReferenceDoc ? '📋' : (item.mime_type?.includes('pdf') ? '📄' : item.mime_type?.includes('image') ? '🖼️' : '📁')
         });
       });
-      console.log(`✅ Found ${mediaResults.rows.length} central storage items`);
+      console.log(`✅ Found ${mediaResults.rows.length} central storage / reference doc items`);
     } catch (err: any) {
       console.log('⚠️ Central Storage search failed:', err.message);
     }

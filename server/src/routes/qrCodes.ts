@@ -52,18 +52,19 @@ function getCurrentEnvironment(): 'dev' | 'prod' {
  */
 resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) => {
   const { code } = req.params;
-  const currentEnv = getCurrentEnvironment();
-  const ipAddress = req.ip || req.connection.remoteAddress || null;
-  const userAgent = req.get('user-agent') || null;
-
-  // Helper to build audit actor
-  const getActor = () => req.user ? {
-    id: req.user.id,
-    username: req.user.username,
-    role: req.user.role,
-  } : undefined;
 
   try {
+    const currentEnv = getCurrentEnvironment();
+    const ipAddress = req.ip || req.socket?.remoteAddress || null;
+    const userAgent = req.get('user-agent') || null;
+
+    // Helper to build audit actor
+    const getActor = () => req.user ? {
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+    } : undefined;
+
     // Validate code format
     if (!isValidQRPublicCode(code)) {
       return res.redirect(`/qr-error?reason=invalid_format&code=${encodeURIComponent(code)}`);
@@ -104,7 +105,8 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
     }
 
     // ENVIRONMENT GUARD - Phase 0.5: Block and audit environment mismatch
-    if (qrCode.environment !== currentEnv) {
+    // Skip environment check for 'custom' entity types (internal page redirects work in any environment)
+    if (qrCode.entityType !== 'custom' && qrCode.environment !== currentEnv) {
       console.warn(`[QR] Environment mismatch: QR is for ${qrCode.environment}, current is ${currentEnv}`);
       await auditService.logEvent({
         entityType: 'qr_code',
@@ -208,9 +210,10 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
     console.log(`[QR] Resolved ${code} -> ${resolvedUrl}`);
     return res.redirect(resolvedUrl);
 
-  } catch (error) {
-    console.error('[QR] Resolution error:', error);
-    return res.redirect(`/qr-error?reason=server_error&code=${encodeURIComponent(code)}`);
+  } catch (error: any) {
+    console.error('[QR] Resolution error:', error?.message || error, error?.stack);
+    const errorMsg = error?.message || 'Unknown error';
+    return res.redirect(`/qr-error?reason=server_error&code=${encodeURIComponent(code)}&error=${encodeURIComponent(errorMsg)}`);
   }
 });
 

@@ -249,6 +249,14 @@ export default function FabricInventoryPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
+      if (showCustomFabricInput && customFabricType.trim() && !allFabricTypes.includes(customFabricType.trim())) {
+        try {
+          await apiRequest('/api/cutting-table/fabric-types', {
+            method: 'POST',
+            body: JSON.stringify({ name: customFabricType.trim() }),
+          });
+        } catch (_e) {}
+      }
       return apiRequest('/api/cutting-table/fabric-inventory', {
         method: 'POST',
         body: JSON.stringify({
@@ -278,7 +286,10 @@ export default function FabricInventoryPage() {
     onSuccess: () => {
       toast({ title: "Success", description: "Fabric inventory item created" });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-types'] });
       setIsAddDialogOpen(false);
+      setShowCustomFabricInput(false);
+      setCustomFabricType("");
       setForm(emptyForm);
       setAdditionalRolls([]);
     },
@@ -289,6 +300,14 @@ export default function FabricInventoryPage() {
 
   const batchCreateMutation = useMutation({
     mutationFn: async (data: { form: typeof form; additionalRolls: Array<{ rollNumber: string; internalControlNumber: string }> }) => {
+      if (showCustomFabricInput && customFabricType.trim() && !allFabricTypes.includes(customFabricType.trim())) {
+        try {
+          await apiRequest('/api/cutting-table/fabric-types', {
+            method: 'POST',
+            body: JSON.stringify({ name: customFabricType.trim() }),
+          });
+        } catch (_e) {}
+      }
       const baseData = {
         materialId: data.form.materialId || null,
         productionLineId: data.form.productionLineId || null,
@@ -336,7 +355,10 @@ export default function FabricInventoryPage() {
       const count = results.length;
       toast({ title: "Success", description: `Created ${count} fabric rolls from the same batch` });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-types'] });
       setIsAddDialogOpen(false);
+      setShowCustomFabricInput(false);
+      setCustomFabricType("");
       setForm(emptyForm);
       setAdditionalRolls([]);
     },
@@ -1450,6 +1472,7 @@ export default function FabricInventoryPage() {
                             <TableHead>Expires</TableHead>
                             <TableHead>Supplier PO#</TableHead>
                             <TableHead>Mfg PO#</TableHead>
+                            <TableHead>Location</TableHead>
                             <TableHead className="text-right">Qty</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
@@ -1493,6 +1516,7 @@ export default function FabricInventoryPage() {
                               </TableCell>
                               <TableCell>{item.supplierPoNumber || "-"}</TableCell>
                               <TableCell>{item.manufacturerPoNumber || "-"}</TableCell>
+                              <TableCell>{item.location || "-"}</TableCell>
                               <TableCell className="text-right font-mono">{item.quantityInStock}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">

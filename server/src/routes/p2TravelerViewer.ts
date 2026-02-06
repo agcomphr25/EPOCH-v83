@@ -27,7 +27,7 @@ import {
   insertP2FinalInspectionResultSchema,
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, or, ilike } from 'drizzle-orm';
 
 const router = Router();
 
@@ -51,11 +51,14 @@ function generateDocumentNumber(prefix: string): string {
 // Get comprehensive traveler data for a serialized item
 router.get('/item/:barcode', async (req: Request, res: Response) => {
   try {
-    const { barcode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get serialized item
+    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: eq(p2SerializedItems.barcode, barcode),
+      where: or(
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
+      ),
     });
 
     if (!serializedItem) {
@@ -266,6 +269,34 @@ router.get('/item-by-id/:id', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error getting traveler data by ID:', error);
     return res.status(500).json({ error: 'Failed to get traveler data' });
+  }
+});
+
+// PATCH /api/p2-traveler-viewer/item/:id/traveler-barcode
+// Update the physical traveler barcode for a serialized item
+router.patch('/item/:id/traveler-barcode', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { travelerBarcode } = req.body;
+
+    if (!travelerBarcode || typeof travelerBarcode !== 'string') {
+      return res.status(400).json({ error: 'Traveler barcode is required' });
+    }
+
+    const [updated] = await db
+      .update(p2SerializedItems)
+      .set({ travelerBarcode: travelerBarcode.trim() })
+      .where(eq(p2SerializedItems.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    return res.json({ success: true, item: updated });
+  } catch (error: any) {
+    console.error('Error updating traveler barcode:', error);
+    return res.status(500).json({ error: 'Failed to update traveler barcode' });
   }
 });
 

@@ -1,0 +1,45 @@
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/p2-traveler/start-task:1  Failed to load resource: the server responded with a status of 500 ()
+index-B66RA4rz.js:4397 API error raw body: {"error":"[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"poNumber\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"customerId\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"customerName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_date\",\n    \"path\": [\n      \"startedAt\"\n    ],\n    \"message\": \"Invalid date\"\n  }\n]"}
+console.error @ index-B66RA4rz.js:4397
+index-B66RA4rz.js:4397 💥 API Request failed for /api/p2-traveler/start-task: Error: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "poNumber"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "customerId"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "customerName"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_date",
+    "path": [
+      "startedAt"
+    ],
+    "message": "Invalid date"
+  }
+]
+    at ze (index-B66RA4rz.js:235:6254)
+    at async Object.mutationFn (index-B66RA4rz.js:2788:97235)
+console.error @ index-B66RA4rz.js:4397

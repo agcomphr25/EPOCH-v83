@@ -23,6 +23,7 @@ import {
   p2EmployeePartCertifications,
   p2PurchaseOrderItems,
   inventoryItems,
+  poProducts,
   capabilities,
   employeeCapabilities,
   trainingPrograms,
@@ -1942,13 +1943,18 @@ router.get('/p2-certifications/part-numbers', async (req, res) => {
   try {
     const items = await db
       .select({
-        partNumber: inventoryItems.agPartNumber,
-        partName: inventoryItems.name,
+        partNumber: p2PurchaseOrderItems.partNumber,
+        partName: p2PurchaseOrderItems.partName,
       })
-      .from(inventoryItems)
-      .where(sql`${inventoryItems.agPartNumber} IS NOT NULL AND ${inventoryItems.agPartNumber} != ''`)
-      .orderBy(inventoryItems.agPartNumber);
-    res.json(items);
+      .from(p2PurchaseOrderItems)
+      .where(sql`${p2PurchaseOrderItems.partNumber} IS NOT NULL AND ${p2PurchaseOrderItems.partNumber} != ''`)
+      .orderBy(p2PurchaseOrderItems.partNumber);
+    
+    const uniqueItems = Array.from(
+      new Map(items.map(item => [item.partNumber, item])).values()
+    );
+    
+    res.json(uniqueItems);
   } catch (error: any) {
     console.error('Error fetching part numbers:', error);
     res.status(500).json({ error: error.message });

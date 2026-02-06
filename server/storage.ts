@@ -12803,10 +12803,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getP2SerializedItemByBarcode(barcode: string): Promise<P2SerializedItem | undefined> {
+    const decoded = decodeURIComponent(barcode).trim();
     const [item] = await db
       .select()
       .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.barcode, barcode));
+      .where(or(
+        ilike(p2SerializedItems.barcode, decoded),
+        ilike(p2SerializedItems.travelerBarcode, decoded)
+      ));
     return item;
   }
 

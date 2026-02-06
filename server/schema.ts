@@ -4222,6 +4222,7 @@ export const p2SerializedItems = pgTable('p2_serialized_items', {
   finalQcCompletedAt: timestamp('final_qc_completed_at'),
   completedAt: timestamp('completed_at'), // When item finished all stages
   // Hold and scrap tracking
+  travelerBarcode: text('traveler_barcode'), // Physical traveler barcode (e.g. SG022317-4002P0001 REV N-022)
   holdReason: text('hold_reason'),
   holdBy: text('hold_by'), // Username who placed hold
   holdAt: timestamp('hold_at'),

@@ -1,0 +1,113 @@
+index-B9OINCiE.js:1452  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-B9OINCiE.js:1452
+o @ index-B9OINCiE.js:51
+p @ index-B9OINCiE.js:51
+start @ index-B9OINCiE.js:51
+fetch @ index-B9OINCiE.js:51
+z7 @ index-B9OINCiE.js:51
+onSubscribe @ index-B9OINCiE.js:51
+subscribe @ index-B9OINCiE.js:51
+(anonymous) @ index-B9OINCiE.js:51
+OHe @ index-B9OINCiE.js:38
+Dre @ index-B9OINCiE.js:40
+cF @ index-B9OINCiE.js:40
+T5e @ index-B9OINCiE.js:40
+L_ @ index-B9OINCiE.js:38
+m2t @ index-B9OINCiE.js:40
+Ik @ index-B9OINCiE.js:40
+mVe @ index-B9OINCiE.js:40
+j @ index-B9OINCiE.js:25
+E @ index-B9OINCiE.js:25
+index-B9OINCiE.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-B9OINCiE.js:235
+o @ index-B9OINCiE.js:51
+p @ index-B9OINCiE.js:51
+start @ index-B9OINCiE.js:51
+fetch @ index-B9OINCiE.js:51
+z7 @ index-B9OINCiE.js:51
+onSubscribe @ index-B9OINCiE.js:51
+subscribe @ index-B9OINCiE.js:51
+(anonymous) @ index-B9OINCiE.js:51
+OHe @ index-B9OINCiE.js:38
+Dre @ index-B9OINCiE.js:40
+cF @ index-B9OINCiE.js:40
+T5e @ index-B9OINCiE.js:40
+L_ @ index-B9OINCiE.js:38
+m2t @ index-B9OINCiE.js:40
+Ik @ index-B9OINCiE.js:40
+mVe @ index-B9OINCiE.js:40
+j @ index-B9OINCiE.js:25
+E @ index-B9OINCiE.js:25
+index-B9OINCiE.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-B9OINCiE.js:235
+o @ index-B9OINCiE.js:51
+p @ index-B9OINCiE.js:51
+(anonymous) @ index-B9OINCiE.js:51
+Promise.then
+(anonymous) @ index-B9OINCiE.js:51
+Promise.catch
+p @ index-B9OINCiE.js:51
+start @ index-B9OINCiE.js:51
+fetch @ index-B9OINCiE.js:51
+z7 @ index-B9OINCiE.js:51
+onSubscribe @ index-B9OINCiE.js:51
+subscribe @ index-B9OINCiE.js:51
+(anonymous) @ index-B9OINCiE.js:51
+OHe @ index-B9OINCiE.js:38
+Dre @ index-B9OINCiE.js:40
+cF @ index-B9OINCiE.js:40
+T5e @ index-B9OINCiE.js:40
+L_ @ index-B9OINCiE.js:38
+m2t @ index-B9OINCiE.js:40
+Ik @ index-B9OINCiE.js:40
+mVe @ index-B9OINCiE.js:40
+j @ index-B9OINCiE.js:25
+E @ index-B9OINCiE.js:25
+index-B9OINCiE.js:235  GET https://agcompepoch.xyz/api/p2-traveler/verify-certification/EMP001/SG022317-4002P0001%20REV%20N-027 404 (Not Found)
+ze @ index-B9OINCiE.js:235
+C @ index-B9OINCiE.js:2788
+Pwt @ index-B9OINCiE.js:37
+Bwt @ index-B9OINCiE.js:37
+Owt @ index-B9OINCiE.js:37
+n5e @ index-B9OINCiE.js:37
+vHe @ index-B9OINCiE.js:37
+(anonymous) @ index-B9OINCiE.js:37
+qye @ index-B9OINCiE.js:40
+z$e @ index-B9OINCiE.js:37
+Toe @ index-B9OINCiE.js:37
+gye @ index-B9OINCiE.js:37
+Xwt @ index-B9OINCiE.js:37
+index-B9OINCiE.js:4397 API error raw body: {"error":"Part not found"}
+console.error @ index-B9OINCiE.js:4397
+ze @ index-B9OINCiE.js:235
+await in ze
+C @ index-B9OINCiE.js:2788
+Pwt @ index-B9OINCiE.js:37
+Bwt @ index-B9OINCiE.js:37
+Owt @ index-B9OINCiE.js:37
+n5e @ index-B9OINCiE.js:37
+vHe @ index-B9OINCiE.js:37
+(anonymous) @ index-B9OINCiE.js:37
+qye @ index-B9OINCiE.js:40
+z$e @ index-B9OINCiE.js:37
+Toe @ index-B9OINCiE.js:37
+gye @ index-B9OINCiE.js:37
+Xwt @ index-B9OINCiE.js:37
+index-B9OINCiE.js:4397 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/SG022317-4002P0001 REV N-027: Error: Part not found
+    at ze (index-B9OINCiE.js:235:6254)
+    at async C (index-B9OINCiE.js:2788:95806)
+console.error @ index-B9OINCiE.js:4397
+ze @ index-B9OINCiE.js:235
+await in ze
+C @ index-B9OINCiE.js:2788
+Pwt @ index-B9OINCiE.js:37
+Bwt @ index-B9OINCiE.js:37
+Owt @ index-B9OINCiE.js:37
+n5e @ index-B9OINCiE.js:37
+vHe @ index-B9OINCiE.js:37
+(anonymous) @ index-B9OINCiE.js:37
+qye @ index-B9OINCiE.js:40
+z$e @ index-B9OINCiE.js:37
+Toe @ index-B9OINCiE.js:37
+gye @ index-B9OINCiE.js:37
+Xwt @ index-B9OINCiE.js:37

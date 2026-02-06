@@ -58,6 +58,12 @@ interface MaterialRequirement {
   requiredFields: string[];
 }
 
+interface QCStandard {
+  standard: string;
+  tolerance: string;
+  requirement: string;
+}
+
 interface DepartmentConfig {
   materials?: MaterialRequirement[];
   customDataFields?: Array<{
@@ -65,6 +71,7 @@ interface DepartmentConfig {
     fieldType: 'text' | 'number' | 'date' | 'textarea';
     isRequired: boolean;
   }>;
+  qcStandards?: QCStandard[];
   allowMultipleTasks?: boolean;
 }
 
@@ -581,6 +588,33 @@ export default function P2TravelerPage() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* QC Standards / Tolerance Requirements */}
+                  {verificationData.departmentConfig.qcStandards && verificationData.departmentConfig.qcStandards.length > 0 && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">QC Standards & Tolerances</Label>
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium">Standard</th>
+                              <th className="text-left px-3 py-2 font-medium">Tolerance</th>
+                              <th className="text-left px-3 py-2 font-medium">Requirement</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {verificationData.departmentConfig.qcStandards.map((qc, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
+                                <td className="px-3 py-2 font-mono font-medium">{qc.standard}</td>
+                                <td className="px-3 py-2 font-mono">{qc.tolerance}</td>
+                                <td className="px-3 py-2">{qc.requirement}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
 

@@ -14,15 +14,26 @@ import {
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
 } from '../../schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray } from 'drizzle-orm';
 
 const router = Router();
+
+// Department name aliases for matching certifications with routing names
+const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  'Assemble/Disassembly': ['Assembly/Disassembly', 'Assemble/Disassembly'],
+  'Assembly/Disassembly': ['Assembly/Disassembly', 'Assemble/Disassembly'],
+};
+
+function getDepartmentVariants(department: string): string[] {
+  return DEPARTMENT_ALIASES[department] || [department];
+}
 
 // GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
 // Verify employee certification for part's next department
 router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {
   try {
-    const { employeeCode, barcode } = req.params;
+    const { employeeCode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
     // Get employee
     const employee = await db.query.employees.findFirst({
@@ -33,9 +44,12 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    // Get serialized item
+    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: eq(p2SerializedItems.barcode, barcode),
+      where: or(
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
+      ),
     });
 
     if (!serializedItem) {
@@ -64,12 +78,13 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const nextDepartment = departmentSequence[currentIndex];
 
-    // Check if employee is certified for this department and part
+    // Check if employee is certified for this department and part (handle department name variants)
+    const deptVariants = getDepartmentVariants(nextDepartment);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, employee.id),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        eq(p2EmployeePartCertifications.department, nextDepartment),
+        inArray(p2EmployeePartCertifications.department, deptVariants),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)
@@ -118,10 +133,13 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 // Get part info and next department requirements
 router.get('/part-info/:barcode', async (req: Request, res: Response) => {
   try {
-    const { barcode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: eq(p2SerializedItems.barcode, barcode),
+      where: or(
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
+      ),
     });
 
     if (!serializedItem) {
@@ -235,11 +253,12 @@ router.post('/start-task', async (req: Request, res: Response) => {
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
+    const startDeptVariants = getDepartmentVariants(department);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, parseInt(employeeId)),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        eq(p2EmployeePartCertifications.department, department),
+        inArray(p2EmployeePartCertifications.department, startDeptVariants),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)
@@ -286,18 +305,22 @@ router.post('/start-task', async (req: Request, res: Response) => {
       }
     }
 
-    // Validate input
+    // Validate input - pull denormalized fields from serialized item
     const validatedData = insertP2WorkTaskSchema.parse({
       serializedItemId,
       barcode,
+      poNumber: serializedItem.poNumber,
       partNumber,
       partName,
+      customerId: serializedItem.customerId,
+      customerName: serializedItem.customerName,
       department,
       employeeId: parseInt(employeeId),
       employeeCode,
       employeeName,
-      certificationId: certification.id, // Link certification for audit trail
+      certificationId: certification.id,
       status: 'IN_PROGRESS',
+      startedAt: new Date(),
       traceabilityData,
       customData,
       notes,
@@ -377,12 +400,29 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Task is not in progress' });
     }
 
-    // Verify employee and barcode match
-    if (workTask.employeeCode !== employeeCode) {
+    // Verify employee and barcode match (case-insensitive for scanner compatibility)
+    if (workTask.employeeCode.toLowerCase() !== employeeCode.toLowerCase()) {
       return res.status(403).json({ error: 'Only the assigned technician can complete this task' });
     }
 
-    if (workTask.barcode !== barcode) {
+    // Check barcode against both system barcode and traveler barcode (scanners may use either)
+    const scannedBarcode = barcode.toLowerCase();
+    const taskBarcode = workTask.barcode.toLowerCase();
+    let barcodeMatch = taskBarcode === scannedBarcode;
+
+    if (!barcodeMatch) {
+      // Also check if the scanned barcode matches the serialized item's traveler barcode
+      const serializedItemForBarcode = await db.query.p2SerializedItems.findFirst({
+        where: eq(p2SerializedItems.id, workTask.serializedItemId),
+      });
+      if (serializedItemForBarcode) {
+        const travelerBarcode = serializedItemForBarcode.travelerBarcode?.toLowerCase();
+        const systemBarcode = serializedItemForBarcode.barcode?.toLowerCase();
+        barcodeMatch = scannedBarcode === travelerBarcode || scannedBarcode === systemBarcode;
+      }
+    }
+
+    if (!barcodeMatch) {
       return res.status(400).json({ error: 'Barcode does not match the started task' });
     }
 

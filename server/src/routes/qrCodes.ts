@@ -12,7 +12,7 @@ import { db } from '../../db';
 import { qrCodes, users, auditEvents, insertQrCodeSchema } from '../../schema';
 import { eq, and, desc, sql, isNull, or, gt, lt } from 'drizzle-orm';
 import { z } from 'zod';
-import { authenticateToken, requireRole, sessionAwareAuth } from '../../middleware/auth';
+import { authenticateToken, requireRole, optionalAuth } from '../../middleware/auth';
 import { auditService } from '../services/auditService';
 import {
   generateQRPublicId,
@@ -50,7 +50,7 @@ function getCurrentEnvironment(): 'dev' | 'prod' {
  * - Environment guard with QR_ENV_MISMATCH audit event
  * - Explicit resolver map with fail-hard default
  */
-resolverRouter.get('/:code', sessionAwareAuth, async (req: Request, res: Response) => {
+resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) => {
   const { code } = req.params;
   const currentEnv = getCurrentEnvironment();
   const ipAddress = req.ip || req.connection.remoteAddress || null;

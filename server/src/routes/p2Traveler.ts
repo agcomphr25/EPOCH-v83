@@ -388,12 +388,29 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Task is not in progress' });
     }
 
-    // Verify employee and barcode match
-    if (workTask.employeeCode !== employeeCode) {
+    // Verify employee and barcode match (case-insensitive for scanner compatibility)
+    if (workTask.employeeCode.toLowerCase() !== employeeCode.toLowerCase()) {
       return res.status(403).json({ error: 'Only the assigned technician can complete this task' });
     }
 
-    if (workTask.barcode.toLowerCase() !== barcode.toLowerCase()) {
+    // Check barcode against both system barcode and traveler barcode (scanners may use either)
+    const scannedBarcode = barcode.toLowerCase();
+    const taskBarcode = workTask.barcode.toLowerCase();
+    let barcodeMatch = taskBarcode === scannedBarcode;
+
+    if (!barcodeMatch) {
+      // Also check if the scanned barcode matches the serialized item's traveler barcode
+      const serializedItemForBarcode = await db.query.p2SerializedItems.findFirst({
+        where: eq(p2SerializedItems.id, workTask.serializedItemId),
+      });
+      if (serializedItemForBarcode) {
+        const travelerBarcode = serializedItemForBarcode.travelerBarcode?.toLowerCase();
+        const systemBarcode = serializedItemForBarcode.barcode?.toLowerCase();
+        barcodeMatch = scannedBarcode === travelerBarcode || scannedBarcode === systemBarcode;
+      }
+    }
+
+    if (!barcodeMatch) {
       return res.status(400).json({ error: 'Barcode does not match the started task' });
     }
 

@@ -147,6 +147,7 @@ export default function AllOrdersPage() {
 
   // Department progression flow (Shipping is final department)
   const departments = [
+    'Awaiting Customer Signature',
     'P1 Production Queue',
     'Layup/Plugging',
     'Barcode',

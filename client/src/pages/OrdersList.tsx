@@ -824,6 +824,7 @@ export default function OrdersList() {
 
     // Fixed list of valid departments based on production flow
     const availableDepartments = [
+      'Awaiting Customer Signature',
       'P1 Production Queue',
       'Layup/Plugging',
       'Barcode',

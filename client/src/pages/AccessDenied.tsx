@@ -12,7 +12,7 @@ interface UserData {
 }
 
 export default function AccessDenied() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const { data: currentUser } = useQuery<UserData | null>({
     queryKey: ['currentUser'],
@@ -45,6 +45,9 @@ export default function AccessDenied() {
           <CardDescription className="text-base mt-2" data-testid="text-access-denied-description">
             You don't have permission to access this page. If you believe this is an error, please contact your administrator.
           </CardDescription>
+          <p className="text-xs text-gray-400 mt-1 font-mono" data-testid="text-blocked-path">
+            Path: {location}
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {currentUser && (

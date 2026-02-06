@@ -20,6 +20,7 @@ const PUBLIC_ROUTES = [
   '/',
   '/login',
   '/access-denied',
+  '/qr-error',  // QR code error page - must be public so unauthenticated users see error details
   '/process-runs',  // Timer app integration - read-only reporting
   '/rma-form',  // RMA form - fillable and printable
 ];

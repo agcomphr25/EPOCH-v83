@@ -63,6 +63,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation, Link } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
@@ -246,6 +247,9 @@ export default function BarcodeQueuePage() {
       (order: any) => order.currentDepartment === 'Barcode'
     );
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => barcodeOrders.map((o: any) => o.orderId), [barcodeOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Count orders in previous department (Layup/Plugging)
   const layupCount = useMemo(() => {
@@ -884,6 +888,7 @@ export default function BarcodeQueuePage() {
                                   <span className="font-semibold text-lg">
                                     {getDisplayOrderId(order)}
                                   </span>
+                                  <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                   {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                     <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
                                       <Zap className="w-3 h-3" />
@@ -1202,6 +1207,7 @@ export default function BarcodeQueuePage() {
                                       <span className="font-semibold text-lg">
                                         {getDisplayOrderId(order)}
                                       </span>
+                                      <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                       {isOverdue && (
                                         <Badge
                                           variant="destructive"

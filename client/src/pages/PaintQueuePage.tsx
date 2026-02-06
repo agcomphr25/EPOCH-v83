@@ -33,6 +33,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { useRepairOrders } from '@/hooks/useRepairOrders';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -150,6 +151,9 @@ export default function PaintQueuePage() {
       return aId.localeCompare(bId);
     });
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => paintOrders.map((o: any) => o.orderId), [paintOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Count orders in previous department (Finish QC)
   const finishQCCount = useMemo(() => {
@@ -528,6 +532,7 @@ export default function PaintQueuePage() {
                             <span className="font-medium text-sm truncate">
                               {order.orderId}
                             </span>
+                            <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                             {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                               <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                 <Zap className="w-3 h-3" />

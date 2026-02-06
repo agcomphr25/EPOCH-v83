@@ -85,6 +85,7 @@ import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import hotToast from 'react-hot-toast';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 interface Order {
   id: number;
@@ -147,6 +148,7 @@ export default function AllOrdersPage() {
 
   // Department progression flow (Shipping is final department)
   const departments = [
+    'Awaiting Customer Signature',
     'P1 Production Queue',
     'Layup/Plugging',
     'Barcode',
@@ -665,6 +667,9 @@ export default function AllOrdersPage() {
 
   const { totalOrders, totalPages, orders } = paginationData;
 
+  const orderIds = React.useMemo(() => orders.map((o) => o.orderId), [orders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIds);
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6 max-w-[95%] mx-auto">
@@ -920,6 +925,7 @@ export default function AllOrdersPage() {
                           KICKBACK
                         </Badge>
                       )}
+                      <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                       {order.isFullyPaid ? (
                         <Badge
                           className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"

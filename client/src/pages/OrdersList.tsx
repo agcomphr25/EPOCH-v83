@@ -102,6 +102,7 @@ import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
 import { WebsiteOrderImport } from '@/components/WebsiteOrderImport';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 // Form validation schema for kickback creation
 const kickbackFormSchema = insertKickbackSchema.extend({
@@ -805,6 +806,9 @@ export default function OrdersList() {
       queryKey: ['/api/auth/session'],
     });
 
+    const orderIds = useMemo(() => (orders ?? []).map((o) => o.orderId), [orders]);
+    const { data: ticketMap } = useOrderTicketCounts(orderIds);
+
     console.log('Orders data:', orders);
     console.log('Customers data:', customers);
     console.log('Loading state:', isLoading);
@@ -824,6 +828,7 @@ export default function OrdersList() {
 
     // Fixed list of valid departments based on production flow
     const availableDepartments = [
+      'Awaiting Customer Signature',
       'P1 Production Queue',
       'Layup/Plugging',
       'Barcode',
@@ -1502,6 +1507,7 @@ export default function OrdersList() {
                               KICKBACK
                             </Badge>
                           )}
+                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                           {order.isFullyPaid ? (
                             <Badge
                               className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"

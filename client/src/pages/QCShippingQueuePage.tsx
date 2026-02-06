@@ -45,6 +45,7 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { ShipmentDialog } from '@/components/ShipmentDialog';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 export default function QCShippingQueuePage() {
   // State for tab selection
@@ -388,6 +389,9 @@ export default function QCShippingQueuePage() {
       return dateA.getTime() - dateB.getTime();
     });
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => [...qcShippingOrders, ...noStockModelOrders].map((o: any) => o.orderId), [qcShippingOrders, noStockModelOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -1048,6 +1052,7 @@ export default function QCShippingQueuePage() {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span>{order.orderId}</span>
+              <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
               {order.isRtsOrder && (
                 <Badge className="bg-orange-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                   <Package className="w-3 h-3" />

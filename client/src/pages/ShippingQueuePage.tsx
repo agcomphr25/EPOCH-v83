@@ -28,6 +28,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
 import KickbackReportModal from '@/components/KickbackReportModal';
 
@@ -305,6 +306,9 @@ export default function ShippingQueuePage() {
       return dateA - dateB; // Earliest due date first (most urgent)
     });
   }, [allOrders, rmasReadyToShip]);
+
+  const orderIdsForTickets = useMemo(() => shippingOrders.map((o: any) => o.orderId), [shippingOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -1292,6 +1296,7 @@ export default function ShippingQueuePage() {
                   >
                     {order.orderId}
                   </div>
+                  <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                   {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                     <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                       <Zap className="w-3 h-3" />
@@ -1736,6 +1741,7 @@ export default function ShippingQueuePage() {
                     <div className="flex items-center gap-3">
                       <div className="text-lg font-semibold text-blue-600">
                         Selected Order: {getDisplayOrderId(getSelectedOrder())}
+                        <TicketBadge orderId={getSelectedOrder()?.orderId || ''} ticketMap={ticketMap} />
                       </div>
                       <div className="text-sm text-gray-600">
                         Customer: {getSelectedOrder()?.customer}

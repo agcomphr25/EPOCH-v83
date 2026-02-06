@@ -28,6 +28,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function CNCQueuePage() {
@@ -315,6 +316,9 @@ export default function CNCQueuePage() {
         (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
       );
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => cncOrders.map((o: any) => o.orderId), [cncOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Legacy queues for count calculations
   const gunsimthQueue = cncOrders.filter(
@@ -841,6 +845,7 @@ export default function CNCQueuePage() {
                           <span className="font-semibold text-sm truncate">
                             {getDisplayOrderId(order)}
                           </span>
+                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                           {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                             <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                               <Zap className="w-3 h-3" />

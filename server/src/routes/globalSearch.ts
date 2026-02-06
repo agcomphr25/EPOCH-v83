@@ -192,6 +192,84 @@ router.get('/global-search', async (req, res) => {
       console.log('⚠️ Inventory search failed:', err.message);
     }
 
+    // Search Central Storage (Media Library) - PDFs, images, documents
+    try {
+      const mediaResults = await db.execute(sql`
+        SELECT id, filename, title, notes, category, mime_type, storage_path, captured_by_name, capture_date
+        FROM media_library
+        WHERE 
+          (is_archived IS NULL OR is_archived = false) AND (
+            filename ILIKE ${searchTerm} OR
+            title ILIKE ${searchTerm} OR
+            notes ILIKE ${searchTerm} OR
+            category ILIKE ${searchTerm}
+          )
+        ORDER BY capture_date DESC NULLS LAST
+        LIMIT 10
+      `);
+
+      mediaResults.rows.forEach((item: any) => {
+        const displayTitle = item.title || item.filename || 'Untitled File';
+        const fileType = item.mime_type?.includes('pdf') ? 'PDF' : 
+                         item.mime_type?.includes('image') ? 'Image' : 'File';
+        results.push({
+          type: 'Central Storage',
+          id: item.id,
+          title: displayTitle,
+          subtitle: [
+            fileType,
+            item.category || null,
+            item.captured_by_name ? `By: ${item.captured_by_name}` : null,
+          ].filter(Boolean).join(' • '),
+          matchedField: 'file',
+          matchedValue: displayTitle,
+          url: `/media-library?highlight=${item.id}`,
+          icon: item.mime_type?.includes('pdf') ? '📄' : item.mime_type?.includes('image') ? '🖼️' : '📁'
+        });
+      });
+      console.log(`✅ Found ${mediaResults.rows.length} central storage items`);
+    } catch (err: any) {
+      console.log('⚠️ Central Storage search failed:', err.message);
+    }
+
+    // Search Signed Documents
+    try {
+      const signedDocResults = await db.execute(sql`
+        SELECT osd.id, osd.order_id, osd.approval_type, osd.signed_by, osd.signed_at, osd.notes,
+               ml.filename, ml.title
+        FROM order_signed_documents osd
+        LEFT JOIN media_library ml ON osd.media_id = ml.id
+        WHERE 
+          osd.order_id ILIKE ${searchTerm} OR
+          osd.signed_by ILIKE ${searchTerm} OR
+          osd.notes ILIKE ${searchTerm} OR
+          ml.filename ILIKE ${searchTerm} OR
+          ml.title ILIKE ${searchTerm}
+        ORDER BY osd.signed_at DESC NULLS LAST
+        LIMIT 10
+      `);
+
+      signedDocResults.rows.forEach((doc: any) => {
+        results.push({
+          type: 'Signed Document',
+          id: doc.id,
+          title: doc.title || doc.filename || `Signed Doc - Order ${doc.order_id}`,
+          subtitle: [
+            `Order: ${doc.order_id}`,
+            `Signed by: ${doc.signed_by}`,
+            doc.approval_type?.replace(/_/g, ' '),
+          ].filter(Boolean).join(' • '),
+          matchedField: 'signed document',
+          matchedValue: doc.order_id || doc.signed_by || '',
+          url: `/signature-workflow?orderId=${doc.order_id}`,
+          icon: '✍️'
+        });
+      });
+      console.log(`✅ Found ${signedDocResults.rows.length} signed documents`);
+    } catch (err: any) {
+      console.log('⚠️ Signed documents search failed:', err.message);
+    }
+
     console.log(`🎯 Global Search - Returning ${results.length} total results`);
     
     return res.json({

@@ -12772,8 +12772,8 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(p2SerializedItems)
       .where(or(
-        eq(p2SerializedItems.barcode, decoded),
-        eq(p2SerializedItems.travelerBarcode, decoded)
+        ilike(p2SerializedItems.barcode, decoded),
+        ilike(p2SerializedItems.travelerBarcode, decoded)
       ));
     return item;
   }

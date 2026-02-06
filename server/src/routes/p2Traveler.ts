@@ -14,7 +14,7 @@ import {
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
 } from '../../schema';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, ilike } from 'drizzle-orm';
 
 const router = Router();
 
@@ -34,11 +34,11 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    // Get serialized item - check both system barcode and physical traveler barcode
+    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(
-        eq(p2SerializedItems.barcode, barcode),
-        eq(p2SerializedItems.travelerBarcode, barcode)
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
       ),
     });
 
@@ -126,8 +126,8 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
 
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(
-        eq(p2SerializedItems.barcode, barcode),
-        eq(p2SerializedItems.travelerBarcode, barcode)
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
       ),
     });
 

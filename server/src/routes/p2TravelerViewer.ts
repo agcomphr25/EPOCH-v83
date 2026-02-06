@@ -27,7 +27,7 @@ import {
   insertP2FinalInspectionResultSchema,
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray, or } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, or, ilike } from 'drizzle-orm';
 
 const router = Router();
 
@@ -51,13 +51,13 @@ function generateDocumentNumber(prefix: string): string {
 // Get comprehensive traveler data for a serialized item
 router.get('/item/:barcode', async (req: Request, res: Response) => {
   try {
-    const { barcode } = req.params;
+    const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get serialized item - check both system barcode and physical traveler barcode
+    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(
-        eq(p2SerializedItems.barcode, barcode),
-        eq(p2SerializedItems.travelerBarcode, barcode)
+        ilike(p2SerializedItems.barcode, barcode),
+        ilike(p2SerializedItems.travelerBarcode, barcode)
       ),
     });
 

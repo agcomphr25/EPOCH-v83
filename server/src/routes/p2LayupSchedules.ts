@@ -658,10 +658,12 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
     for (let i = 1; i <= poItem.quantity; i++) {
       const barcode = `${po.poNumber}-${poItem.partNumber}-${i.toString().padStart(4, '0')}`;
       const serialNumber = `${po.poNumber}-${i.toString().padStart(4, '0')}`;
+      const travelerBarcode = `${po.poNumber}-${poItem.partNumber}-${i.toString().padStart(3, '0')}`;
 
       itemsToCreate.push({
         serialNumber,
         barcode,
+        travelerBarcode,
         poId: po.id,
         poItemId: poItem.id,
         poNumber: po.poNumber,

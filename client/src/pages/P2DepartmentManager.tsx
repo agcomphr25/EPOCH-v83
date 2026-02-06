@@ -232,7 +232,7 @@ export default function P2DepartmentManager() {
   // Handle barcode scan - defined early so it can be used by the hook
   const handleBarcodeScan = async (scanned: string) => {
     try {
-      const item: P2SerializedItem = await apiRequest(`/api/p2/barcode/${scanned}`);
+      const item: P2SerializedItem = await apiRequest(`/api/customers/barcode/${encodeURIComponent(scanned)}`);
       
       if (item.currentDepartment !== selectedDepartment) {
         toast({

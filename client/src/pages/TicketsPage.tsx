@@ -298,6 +298,8 @@ export default function TicketsPage() {
     },
   });
 
+  const priorityOrder: Record<string, number> = { high: 0, normal: 1, low: 2 };
+
   const filteredTickets = tickets.filter(ticket => {
     if (!filters.status && ticket.status === 'closed') return false;
     if (!searchQuery) return true;
@@ -307,7 +309,7 @@ export default function TicketsPage() {
       ticket.id.toLowerCase().includes(q) ||
       (ticket.description?.toLowerCase().includes(q) ?? false)
     );
-  });
+  }).sort((a, b) => (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99));
 
   const getStatusBadge = (status: string) => {
     const s = TICKET_STATUSES.find(st => st.value === status);

@@ -1472,6 +1472,7 @@ export default function FabricInventoryPage() {
                             <TableHead>Expires</TableHead>
                             <TableHead>Supplier PO#</TableHead>
                             <TableHead>Mfg PO#</TableHead>
+                            <TableHead>Location</TableHead>
                             <TableHead className="text-right">Qty</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
@@ -1515,6 +1516,7 @@ export default function FabricInventoryPage() {
                               </TableCell>
                               <TableCell>{item.supplierPoNumber || "-"}</TableCell>
                               <TableCell>{item.manufacturerPoNumber || "-"}</TableCell>
+                              <TableCell>{item.location || "-"}</TableCell>
                               <TableCell className="text-right font-mono">{item.quantityInStock}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">

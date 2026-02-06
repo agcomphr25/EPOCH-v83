@@ -104,7 +104,8 @@ resolverRouter.get('/:code', optionalAuth, async (req: Request, res: Response) =
     }
 
     // ENVIRONMENT GUARD - Phase 0.5: Block and audit environment mismatch
-    if (qrCode.environment !== currentEnv) {
+    // Skip environment check for 'custom' entity types (internal page redirects work in any environment)
+    if (qrCode.entityType !== 'custom' && qrCode.environment !== currentEnv) {
       console.warn(`[QR] Environment mismatch: QR is for ${qrCode.environment}, current is ${currentEnv}`);
       await auditService.logEvent({
         entityType: 'qr_code',

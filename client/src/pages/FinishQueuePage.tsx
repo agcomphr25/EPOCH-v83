@@ -33,6 +33,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import KickbackReportModal from '@/components/KickbackReportModal';
 
@@ -128,6 +129,9 @@ export default function FinishQueuePage() {
 
     return allOrders as any[];
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => finishOrders.map((o: any) => o.orderId), [finishOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -592,6 +596,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -724,6 +729,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -856,6 +862,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -967,6 +974,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1078,6 +1086,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1189,6 +1198,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1300,6 +1310,7 @@ export default function FinishQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />

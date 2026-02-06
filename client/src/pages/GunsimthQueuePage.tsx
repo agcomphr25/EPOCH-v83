@@ -33,6 +33,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import KickbackReportModal from '@/components/KickbackReportModal';
@@ -161,6 +162,9 @@ export default function GunsimthQueuePage() {
 
     return filtered;
   }, [allOrders]);
+
+  const orderIdsForTickets = useMemo(() => gunsmithOrders.map((o: any) => o.orderId), [gunsmithOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -648,6 +652,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -779,6 +784,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -910,6 +916,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1038,6 +1045,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1166,6 +1174,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1294,6 +1303,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />
@@ -1422,6 +1432,7 @@ export default function GunsimthQueuePage() {
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                 {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                                     <Zap className="w-3 h-3" />

@@ -54,8 +54,18 @@ router.get('/', sessionAwareAuth, async (req, res) => {
       archived: req.query.archived === 'true' ? true : false,
     };
 
-    const tickets = await storage.getTickets(filters);
-    res.json(tickets);
+    let ticketsList = await storage.getTickets(filters);
+
+    const orderId = req.query.orderId as string | undefined;
+    if (orderId) {
+      const linkedTickets = await db.execute(sql`
+        SELECT DISTINCT ticket_id FROM ticket_orders WHERE order_id = ${orderId}
+      `);
+      const linkedIds = new Set(linkedTickets.rows.map((r: any) => r.ticket_id));
+      ticketsList = ticketsList.filter((t: any) => linkedIds.has(t.id));
+    }
+
+    res.json(ticketsList);
   } catch (error) {
     console.error('Error fetching tickets:', error);
     res.status(500).json({ error: 'Failed to fetch tickets' });
@@ -628,6 +638,49 @@ router.post('/check-sla', sessionAwareAuth, async (req, res) => {
   } catch (error) {
     console.error('Error checking SLA breaches:', error);
     res.status(500).json({ error: 'Failed to check SLA breaches' });
+  }
+});
+
+router.post('/by-orders', sessionAwareAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!hasReadAccess(user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { orderIds } = req.body;
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.json({});
+    }
+
+    const uniqueIds = [...new Set(orderIds)].slice(0, 500);
+
+    const result = await db.execute(sql`
+      SELECT 
+        tor.order_id,
+        COUNT(DISTINCT t.id) as ticket_count,
+        MAX(CASE WHEN t.priority = 'high' THEN 1 ELSE 0 END) as has_high_priority,
+        ARRAY_AGG(DISTINCT t.status) as statuses
+      FROM ticket_orders tor
+      JOIN tickets t ON tor.ticket_id = t.id
+      WHERE tor.order_id = ANY(${uniqueIds})
+        AND t.status NOT IN ('closed')
+      GROUP BY tor.order_id
+    `);
+
+    const ticketMap: Record<string, { count: number; hasHighPriority: boolean; statuses: string[] }> = {};
+    result.rows.forEach((row: any) => {
+      ticketMap[row.order_id] = {
+        count: parseInt(row.ticket_count),
+        hasHighPriority: row.has_high_priority === 1,
+        statuses: row.statuses || [],
+      };
+    });
+
+    res.json(ticketMap);
+  } catch (error) {
+    console.error('Error fetching tickets by orders:', error);
+    res.status(500).json({ error: 'Failed to fetch ticket counts' });
   }
 });
 

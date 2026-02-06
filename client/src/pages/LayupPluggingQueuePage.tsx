@@ -23,6 +23,7 @@ import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -103,6 +104,9 @@ export default function LayupPluggingQueuePage() {
       );
     });
   }, [layupPluggingOrders, searchQuery]);
+
+  const orderIdsForTickets = useMemo(() => filteredOrders.map((o: any) => o.orderId), [filteredOrders]);
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Get stock models for display
   const { data: stockModels = [] } = useQuery({
@@ -516,6 +520,7 @@ export default function LayupPluggingQueuePage() {
                           <span data-testid={`text-order-id-${order.orderId}`}>
                             {getDisplayOrderId(order)}
                           </span>
+                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                           {isPO && (
                             <Badge className="bg-green-500 text-white text-xs">PO</Badge>
                           )}

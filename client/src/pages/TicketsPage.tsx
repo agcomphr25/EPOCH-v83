@@ -123,6 +123,10 @@ export default function TicketsPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const filterOrderId = urlParams.get('orderId') || '';
+
   const [filters, setFilters] = useState({
     status: '',
     ticketType: '',
@@ -154,11 +158,12 @@ export default function TicketsPage() {
     if (filters.priority) params.append('priority', filters.priority);
     if (filters.slaBreached) params.append('slaBreached', filters.slaBreached);
     params.append('archived', filters.archived);
+    if (filterOrderId) params.append('orderId', filterOrderId);
     return params.toString();
   };
 
   const { data: tickets = [], isLoading: isLoadingTickets } = useQuery<Ticket[]>({
-    queryKey: ['/api/tickets', filters],
+    queryKey: ['/api/tickets', filters, filterOrderId],
     queryFn: async () => {
       const response = await fetch(`/api/tickets?${buildFilterParams()}`);
       if (!response.ok) throw new Error('Failed to fetch tickets');
@@ -588,6 +593,20 @@ export default function TicketsPage() {
       <div className="flex-1 flex overflow-hidden">
         <div className="w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
           <div className="p-4 space-y-3 border-b border-gray-200 dark:border-gray-700">
+            {filterOrderId && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded px-3 py-2 text-sm">
+                <span>Showing tickets for order: <strong>{filterOrderId}</strong></span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
+                  onClick={() => navigate('/tickets')}
+                  title="Clear order filter"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input

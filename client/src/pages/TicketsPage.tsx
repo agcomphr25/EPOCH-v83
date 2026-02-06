@@ -299,6 +299,7 @@ export default function TicketsPage() {
   });
 
   const filteredTickets = tickets.filter(ticket => {
+    if (!filters.status && ticket.status === 'closed') return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (

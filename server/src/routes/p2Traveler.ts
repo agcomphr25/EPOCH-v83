@@ -293,18 +293,22 @@ router.post('/start-task', async (req: Request, res: Response) => {
       }
     }
 
-    // Validate input
+    // Validate input - pull denormalized fields from serialized item
     const validatedData = insertP2WorkTaskSchema.parse({
       serializedItemId,
       barcode,
+      poNumber: serializedItem.poNumber,
       partNumber,
       partName,
+      customerId: serializedItem.customerId,
+      customerName: serializedItem.customerName,
       department,
       employeeId: parseInt(employeeId),
       employeeCode,
       employeeName,
-      certificationId: certification.id, // Link certification for audit trail
+      certificationId: certification.id,
       status: 'IN_PROGRESS',
+      startedAt: new Date(),
       traceabilityData,
       customData,
       notes,

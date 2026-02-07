@@ -623,9 +623,27 @@ export default function Navigation() {
     },
     {
       path: '/maintenance',
-      label: 'Maintenance',
-      icon: Wrench,
+      label: 'Preventive Maintenance',
+      icon: Calendar,
       description: 'Preventive maintenance schedules',
+    },
+    {
+      path: '/maintenance-events',
+      label: 'Maintenance Events',
+      icon: Wrench,
+      description: 'Work orders for equipment maintenance',
+    },
+    {
+      path: '/assets',
+      label: 'Assets',
+      icon: Boxes,
+      description: 'Equipment and machinery registry',
+    },
+    {
+      path: '/asset-dashboard',
+      label: 'Asset Dashboard',
+      icon: Activity,
+      description: 'Equipment health and maintenance overview',
     },
     {
       path: '/app/production/stations',

@@ -5,12 +5,13 @@ import {
   assetCategories,
   assetLocations,
   assetLocationHistory,
+  workOrders,
   insertAssetSchema,
   insertAssetCategorySchema,
   insertAssetLocationSchema,
   users,
 } from '../../schema';
-import { eq, desc, sql, isNull } from 'drizzle-orm';
+import { eq, desc, sql, isNull, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 const router = Router();
@@ -72,6 +73,107 @@ router.post('/locations', requireAdmin, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[AssetManagement] Error creating location:', error);
     res.status(500).json({ error: 'Failed to create location' });
+  }
+});
+
+// ==================== ASSET ANALYTICS ====================
+
+router.get('/analytics', async (_req: Request, res: Response) => {
+  try {
+    const allAssets = await db
+      .select({ id: assets.id, assetTag: assets.assetTag, name: assets.name, status: assets.status })
+      .from(assets);
+
+    const reactiveWOs = await db
+      .select({
+        id: workOrders.id,
+        assetId: workOrders.assetId,
+        reportedAt: workOrders.reportedAt,
+        severity: workOrders.severity,
+        downtimeStart: workOrders.downtimeStart,
+        downtimeEnd: workOrders.downtimeEnd,
+      })
+      .from(workOrders)
+      .where(eq(workOrders.type, 'reactive'))
+      .orderBy(workOrders.reportedAt);
+
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    const analyticsMap: Record<string, {
+      assetId: string;
+      assetTag: string;
+      assetName: string;
+      mtbfDays: number | null;
+      reactiveCount90d: number;
+      highFailureRisk: boolean;
+      downtimeImpactScore: number;
+      totalDowntimeHours: number;
+    }> = {};
+
+    for (const asset of allAssets) {
+      const assetReactiveWOs = reactiveWOs
+        .filter((wo) => wo.assetId === asset.id)
+        .sort((a, b) => new Date(a.reportedAt).getTime() - new Date(b.reportedAt).getTime());
+
+      let mtbfDays: number | null = null;
+      if (assetReactiveWOs.length >= 2) {
+        let totalGapMs = 0;
+        for (let i = 1; i < assetReactiveWOs.length; i++) {
+          totalGapMs += new Date(assetReactiveWOs[i].reportedAt).getTime() - new Date(assetReactiveWOs[i - 1].reportedAt).getTime();
+        }
+        mtbfDays = parseFloat((totalGapMs / (assetReactiveWOs.length - 1) / (24 * 60 * 60 * 1000)).toFixed(1));
+      }
+
+      const recentWOs = assetReactiveWOs.filter((wo) => new Date(wo.reportedAt) >= ninetyDaysAgo);
+      const reactiveCount90d = recentWOs.length;
+      const highFailureRisk = reactiveCount90d >= 3;
+
+      let totalDowntimeHours = 0;
+      const severityWeights: Record<number, number> = { 1: 1, 2: 1.5, 3: 2, 4: 3, 5: 5 };
+
+      let downtimeImpactScore = 0;
+      for (const wo of assetReactiveWOs) {
+        if (wo.downtimeStart) {
+          const start = new Date(wo.downtimeStart);
+          const end = wo.downtimeEnd ? new Date(wo.downtimeEnd) : now;
+          const hours = (end.getTime() - start.getTime()) / 3600000;
+          totalDowntimeHours += hours;
+          const weight = severityWeights[wo.severity || 3] || 2;
+          downtimeImpactScore += hours * weight;
+        }
+      }
+
+      analyticsMap[asset.id] = {
+        assetId: asset.id,
+        assetTag: asset.assetTag,
+        assetName: asset.name,
+        mtbfDays,
+        reactiveCount90d,
+        highFailureRisk,
+        downtimeImpactScore: parseFloat(downtimeImpactScore.toFixed(1)),
+        totalDowntimeHours: parseFloat(totalDowntimeHours.toFixed(1)),
+      };
+    }
+
+    const analytics = Object.values(analyticsMap);
+
+    res.json({
+      assets: analytics,
+      summary: {
+        totalAssets: allAssets.length,
+        highFailureRiskCount: analytics.filter((a) => a.highFailureRisk).length,
+        avgMtbfDays: (() => {
+          const withMtbf = analytics.filter((a) => a.mtbfDays !== null);
+          if (withMtbf.length === 0) return null;
+          return parseFloat((withMtbf.reduce((sum, a) => sum + a.mtbfDays!, 0) / withMtbf.length).toFixed(1));
+        })(),
+        totalDowntimeImpact: parseFloat(analytics.reduce((sum, a) => sum + a.downtimeImpactScore, 0).toFixed(1)),
+      },
+    });
+  } catch (error) {
+    console.error('[AssetManagement] Error computing analytics:', error);
+    res.status(500).json({ error: 'Failed to compute asset analytics' });
   }
 });
 

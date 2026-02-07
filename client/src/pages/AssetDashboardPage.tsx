@@ -17,6 +17,8 @@ import {
   Wrench,
   XCircle,
   Activity,
+  Shield,
+  TrendingDown,
 } from 'lucide-react';
 import {
   BarChart,
@@ -62,6 +64,27 @@ type WorkOrderRow = {
   assetTag: string | null;
 };
 
+type AssetAnalytic = {
+  assetId: string;
+  assetTag: string;
+  assetName: string;
+  mtbfDays: number | null;
+  reactiveCount90d: number;
+  highFailureRisk: boolean;
+  downtimeImpactScore: number;
+  totalDowntimeHours: number;
+};
+
+type AnalyticsResponse = {
+  assets: AssetAnalytic[];
+  summary: {
+    totalAssets: number;
+    highFailureRiskCount: number;
+    avgMtbfDays: number | null;
+    totalDowntimeImpact: number;
+  };
+};
+
 const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export default function AssetDashboardPage() {
@@ -75,6 +98,10 @@ export default function AssetDashboardPage() {
 
   const { data: schedules = [] } = useQuery<MaintenanceSchedule[]>({
     queryKey: ['/api/maintenance-schedules'],
+  });
+
+  const { data: analytics } = useQuery<AnalyticsResponse>({
+    queryKey: ['/api/assets/analytics'],
   });
 
   const outOfServiceAssets = useMemo(
@@ -132,6 +159,27 @@ export default function AssetDashboardPage() {
   const openWOs = workOrders.filter((wo) => wo.status === 'open' || wo.status === 'in_progress').length;
   const activeDowntime = workOrders.filter((wo) => wo.downtimeStart && !wo.downtimeEnd).length;
 
+  const highFailureRiskAssets = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.assets.filter((a) => a.highFailureRisk);
+  }, [analytics]);
+
+  const topDowntimeImpact = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.assets
+      .filter((a) => a.downtimeImpactScore > 0)
+      .sort((a, b) => b.downtimeImpactScore - a.downtimeImpactScore)
+      .slice(0, 10);
+  }, [analytics]);
+
+  const mtbfData = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.assets
+      .filter((a) => a.mtbfDays !== null)
+      .sort((a, b) => (a.mtbfDays ?? 0) - (b.mtbfDays ?? 0))
+      .slice(0, 10);
+  }, [analytics]);
+
   return (
     <div className="p-6 space-y-4">
       <div>
@@ -169,12 +217,176 @@ export default function AssetDashboardPage() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-orange-600">{analytics?.summary.highFailureRiskCount ?? 0}</p>
+            <p className="text-xs text-gray-500">High Failure Risk</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-blue-600">
+              {analytics?.summary.avgMtbfDays != null ? `${analytics.summary.avgMtbfDays}d` : '—'}
+            </p>
+            <p className="text-xs text-gray-500">Avg MTBF (days)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-purple-600">
+              {analytics?.summary.totalDowntimeImpact ?? 0}
+            </p>
+            <p className="text-xs text-gray-500">Total Downtime Impact Score</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
+        {/* High Failure Risk Assets */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              High Failure Risk Assets
+              {highFailureRiskAssets.length > 0 && (
+                <Badge className="bg-orange-100 text-orange-800 text-xs ml-auto">
+                  {highFailureRiskAssets.length} flagged
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {highFailureRiskAssets.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No high failure risk assets</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Asset</TableHead>
+                    <TableHead>Failures (90d)</TableHead>
+                    <TableHead>MTBF</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {highFailureRiskAssets.map((a) => (
+                    <TableRow key={a.assetId}>
+                      <TableCell className="text-sm font-medium">{a.assetTag} - {a.assetName}</TableCell>
+                      <TableCell>
+                        <Badge className="bg-red-100 text-red-800 text-xs">{a.reactiveCount90d}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {a.mtbfDays != null ? `${a.mtbfDays}d` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-orange-100 text-orange-800 text-xs">High Failure Risk</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* MTBF Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4 text-blue-500" />
+              Mean Time Between Failures (MTBF)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {mtbfData.length === 0 ? (
+              <p className="text-sm text-gray-400 py-8 text-center">No MTBF data available (needs 2+ reactive WOs per asset)</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={mtbfData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" unit="d" />
+                  <YAxis type="category" dataKey="assetTag" width={80} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: any) => [`${value} days`, 'MTBF']}
+                    labelFormatter={(label: any) => {
+                      const item = mtbfData.find((d) => d.assetTag === label);
+                      return item ? `${item.assetTag} - ${item.assetName}` : label;
+                    }}
+                  />
+                  <Bar dataKey="mtbfDays" name="MTBF (days)" radius={[0, 4, 4, 0]}>
+                    {mtbfData.map((item, i) => (
+                      <Cell
+                        key={i}
+                        fill={item.highFailureRisk ? '#ef4444' : item.mtbfDays! < 30 ? '#f59e0b' : '#10b981'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Downtime Impact Score */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-purple-500" />
+              Downtime Impact Score (hours x severity)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topDowntimeImpact.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No downtime impact data</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Asset</TableHead>
+                    <TableHead>Downtime (hrs)</TableHead>
+                    <TableHead>Impact Score</TableHead>
+                    <TableHead>Risk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topDowntimeImpact.map((a) => (
+                    <TableRow key={a.assetId}>
+                      <TableCell className="text-sm font-medium">{a.assetTag} - {a.assetName}</TableCell>
+                      <TableCell className="text-sm">{a.totalDowntimeHours}h</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            a.downtimeImpactScore >= 100
+                              ? 'bg-red-100 text-red-800 text-xs'
+                              : a.downtimeImpactScore >= 50
+                              ? 'bg-yellow-100 text-yellow-800 text-xs'
+                              : 'bg-green-100 text-green-800 text-xs'
+                          }
+                        >
+                          {a.downtimeImpactScore}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {a.highFailureRisk && (
+                          <Badge className="bg-orange-100 text-orange-800 text-xs">High Failure Risk</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Overdue PM */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <Shield className="h-4 w-4 text-red-500" />
               Overdue Preventive Maintenance
             </CardTitle>
           </CardHeader>
@@ -207,7 +419,9 @@ export default function AssetDashboardPage() {
             )}
           </CardContent>
         </Card>
+      </div>
 
+      <div className="grid grid-cols-2 gap-4">
         {/* Reactive Hotspots */}
         <Card>
           <CardHeader className="pb-2">
@@ -241,9 +455,7 @@ export default function AssetDashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
         {/* Downtime Chart */}
         <Card>
           <CardHeader className="pb-2">
@@ -272,43 +484,43 @@ export default function AssetDashboardPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Out of Service Assets */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              Assets Currently Out of Service
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {outOfServiceAssets.length === 0 ? (
-              <p className="text-sm text-gray-400 py-4 text-center">All assets operational</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Asset Tag</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Location</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {outOfServiceAssets.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-mono text-sm">{a.assetTag}</TableCell>
-                      <TableCell className="text-sm">{a.name}</TableCell>
-                      <TableCell className="text-sm">{a.categoryName || '—'}</TableCell>
-                      <TableCell className="text-sm">{a.locationName || '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
       </div>
+
+      {/* Out of Service Assets */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-red-500" />
+            Assets Currently Out of Service
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {outOfServiceAssets.length === 0 ? (
+            <p className="text-sm text-gray-400 py-4 text-center">All assets operational</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Asset Tag</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Location</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {outOfServiceAssets.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="font-mono text-sm">{a.assetTag}</TableCell>
+                    <TableCell className="text-sm">{a.name}</TableCell>
+                    <TableCell className="text-sm">{a.categoryName || '—'}</TableCell>
+                    <TableCell className="text-sm">{a.locationName || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

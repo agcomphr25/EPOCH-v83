@@ -122,6 +122,8 @@ import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import accountingPrepRoutes from './accountingPrep';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
+import assetManagementRoutes from './assetManagement';
+import workOrdersRoutes from './workOrders';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -265,6 +267,12 @@ export function registerRoutes(app: Express): Server {
 
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
+
+  // Asset Management routes
+  app.use('/api/assets', assetManagementRoutes);
+
+  // Work Orders (Maintenance Events) routes
+  app.use('/api/work-orders', workOrdersRoutes);
 
   // AQL Sampling Chart routes
   app.use('/api/aql-sampling', aqlSamplingRoutes);

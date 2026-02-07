@@ -12478,3 +12478,114 @@ export const insertOnboardingSessionCaptureSchema = createInsertSchema(onboardin
 
 export type OnboardingSessionCapture = typeof onboardingSessionCaptures.$inferSelect;
 export type InsertOnboardingSessionCapture = z.infer<typeof insertOnboardingSessionCaptureSchema>;
+
+// ============================================================
+// Asset Management & Work Order System
+// ============================================================
+
+export const assetCategories = pgTable('asset_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  parentCategoryId: uuid('parent_category_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertAssetCategorySchema = createInsertSchema(assetCategories).omit({ id: true, createdAt: true });
+export type AssetCategory = typeof assetCategories.$inferSelect;
+export type InsertAssetCategory = z.infer<typeof insertAssetCategorySchema>;
+
+export const assetLocations = pgTable('asset_locations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertAssetLocationSchema = createInsertSchema(assetLocations).omit({ id: true, createdAt: true });
+export type AssetLocation = typeof assetLocations.$inferSelect;
+export type InsertAssetLocation = z.infer<typeof insertAssetLocationSchema>;
+
+export const assets = pgTable('assets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetTag: text('asset_tag').notNull().unique(),
+  name: text('name').notNull(),
+  categoryId: uuid('category_id').references(() => assetCategories.id),
+  parentAssetId: uuid('parent_asset_id'),
+  physicalLocationId: uuid('physical_location_id').references(() => assetLocations.id),
+  status: text('status').notNull().default('active'),
+  purchaseDate: date('purchase_date'),
+  purchaseCost: numeric('purchase_cost'),
+  vendorName: text('vendor_name'),
+  warrantyExpiration: date('warranty_expiration'),
+  expectedLifeYears: integer('expected_life_years'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  retiredAt: timestamp('retired_at'),
+});
+
+export const insertAssetSchema = createInsertSchema(assets).omit({ id: true, createdAt: true });
+export type Asset = typeof assets.$inferSelect;
+export type InsertAsset = z.infer<typeof insertAssetSchema>;
+
+export const assetLocationHistory = pgTable('asset_location_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').references(() => assets.id).notNull(),
+  locationId: uuid('location_id').references(() => assetLocations.id).notNull(),
+  movedAt: timestamp('moved_at').defaultNow().notNull(),
+  movedBy: integer('moved_by').references(() => users.id),
+  notes: text('notes'),
+});
+
+export const insertAssetLocationHistorySchema = createInsertSchema(assetLocationHistory).omit({ id: true, movedAt: true });
+export type AssetLocationHistory = typeof assetLocationHistory.$inferSelect;
+export type InsertAssetLocationHistory = z.infer<typeof insertAssetLocationHistorySchema>;
+
+export const workOrders = pgTable('work_orders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').references(() => assets.id),
+  type: text('type').notNull().default('reactive'),
+  title: text('title').notNull(),
+  description: text('description'),
+  priority: text('priority').notNull().default('medium'),
+  status: text('status').notNull().default('open'),
+  severity: integer('severity'),
+  reportedAt: timestamp('reported_at').defaultNow().notNull(),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  downtimeStart: timestamp('downtime_start'),
+  downtimeEnd: timestamp('downtime_end'),
+  createdBy: integer('created_by').references(() => users.id),
+  closedBy: integer('closed_by').references(() => users.id),
+  maintenanceScheduleId: integer('maintenance_schedule_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertWorkOrderSchema = createInsertSchema(workOrders).omit({ id: true, reportedAt: true, createdAt: true });
+export type WorkOrder = typeof workOrders.$inferSelect;
+export type InsertWorkOrder = z.infer<typeof insertWorkOrderSchema>;
+
+export const workOrderParts = pgTable('work_order_parts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workOrderId: uuid('work_order_id').references(() => workOrders.id).notNull(),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id),
+  partName: text('part_name'),
+  quantity: numeric('quantity').notNull(),
+  costSnapshot: numeric('cost_snapshot'),
+});
+
+export const insertWorkOrderPartSchema = createInsertSchema(workOrderParts).omit({ id: true });
+export type WorkOrderPart = typeof workOrderParts.$inferSelect;
+export type InsertWorkOrderPart = z.infer<typeof insertWorkOrderPartSchema>;
+
+export const workOrderAttachments = pgTable('work_order_attachments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workOrderId: uuid('work_order_id').references(() => workOrders.id).notNull(),
+  fileUrl: text('file_url').notNull(),
+  fileName: text('file_name'),
+  uploadedBy: integer('uploaded_by').references(() => users.id),
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+});
+
+export const insertWorkOrderAttachmentSchema = createInsertSchema(workOrderAttachments).omit({ id: true, uploadedAt: true });
+export type WorkOrderAttachment = typeof workOrderAttachments.$inferSelect;
+export type InsertWorkOrderAttachment = z.infer<typeof insertWorkOrderAttachmentSchema>;

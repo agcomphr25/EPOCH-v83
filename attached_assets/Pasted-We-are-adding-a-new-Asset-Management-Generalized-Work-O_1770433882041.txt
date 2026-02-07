@@ -1,0 +1,145 @@
+We are adding a new Asset Management + Generalized Work Order system to EPOCH.
+
+Context:
+- Stack: PostgreSQL + Drizzle ORM
+- Existing module: Preventive Maintenance (UI exists)
+- This must live under QC & Maintenance
+- Only Admins can create/edit assets and work orders
+- We are NOT integrating accounting yet, but we must future-proof for it.
+
+GOAL:
+Build the full database schema and backend API routes for:
+1) Assets
+2) Asset Categories (hierarchical)
+3) Asset Location History
+4) Generalized Work Orders (called "Maintenance Events" in UI)
+5) Work Order Parts
+6) Work Order Attachments
+7) Integration point so Preventive Maintenance schedules generate Work Orders
+
+========================================
+DATABASE SCHEMA (Drizzle)
+========================================
+
+Create these tables:
+
+1) asset_categories
+- id (uuid, pk)
+- name (text, not null)
+- parent_category_id (uuid, nullable, self-reference)
+- created_at
+
+2) assets
+- id (uuid, pk)
+- asset_tag (text, unique, required)
+- name (text, required)
+- category_id (fk -> asset_categories)
+- parent_asset_id (uuid, nullable, self-reference)
+- physical_location_id (fk -> locations table if exists, otherwise create asset_locations table)
+- status (enum: 'active', 'idle', 'out_of_service', 'retired')
+- purchase_date (date, nullable)
+- purchase_cost (numeric, nullable)
+- vendor_name (text, nullable)
+- warranty_expiration (date, nullable)
+- expected_life_years (integer, nullable)
+- notes (text, nullable)
+- created_at
+- retired_at (timestamp, nullable)
+
+3) asset_location_history
+- id (uuid, pk)
+- asset_id (fk -> assets)
+- location_id
+- moved_at (timestamp default now())
+- moved_by (user_id)
+- notes (text)
+
+4) work_orders  (this powers Maintenance Events)
+- id (uuid, pk)
+- asset_id (fk -> assets)
+- type (enum: 'preventive', 'reactive', 'inspection', 'upgrade')
+- title (text, required)
+- description (text)
+- priority (enum: 'low', 'medium', 'high', 'critical')
+- status (enum: 'open', 'in_progress', 'waiting_parts', 'completed', 'closed')
+- severity (integer 1-5 nullable)
+- reported_at (timestamp default now())
+- started_at (timestamp nullable)
+- completed_at (timestamp nullable)
+- downtime_start (timestamp nullable)
+- downtime_end (timestamp nullable)
+- created_by (user_id)
+- closed_by (user_id nullable)
+- created_at
+
+5) work_order_parts
+- id (uuid pk)
+- work_order_id (fk)
+- inventory_item_id (fk -> inventory table)
+- quantity (numeric)
+- cost_snapshot (numeric)
+
+6) work_order_attachments
+- id (uuid pk)
+- work_order_id (fk)
+- file_url (text)
+- uploaded_by (user_id)
+- uploaded_at
+
+========================================
+BACKEND ROUTES
+========================================
+
+Create REST routes:
+
+Assets:
+GET /api/assets
+GET /api/assets/:id
+POST /api/assets
+PUT /api/assets/:id
+POST /api/assets/:id/move-location
+
+Categories:
+GET /api/asset-categories
+POST /api/asset-categories
+
+Work Orders:
+GET /api/work-orders
+GET /api/work-orders/:id
+POST /api/work-orders
+PUT /api/work-orders/:id
+POST /api/work-orders/:id/start
+POST /api/work-orders/:id/complete
+POST /api/work-orders/:id/close
+POST /api/work-orders/:id/add-part
+POST /api/work-orders/:id/add-attachment
+
+========================================
+INTEGRATE WITH PREVENTIVE MAINTENANCE
+========================================
+
+Modify preventive maintenance scheduler logic so that when a PM is due,
+it creates a new work_order with:
+- type = 'preventive'
+- status = 'open'
+- priority = 'medium'
+- title auto-generated
+
+DO NOT delete or modify existing PM UI.
+Just add generation logic.
+
+========================================
+IMPORTANT:
+========================================
+
+- Preserve history. No hard deletes.
+- Use internal UUID primary keys.
+- Asset tag must remain unique.
+- Only allow admin role to create or edit assets/work orders.
+- Use existing auth middleware.
+
+Return:
+- All new schema definitions
+- Migration files
+- Route handlers
+- Updated scheduler logic

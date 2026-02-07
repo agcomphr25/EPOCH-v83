@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 interface ActionAuthUser {
@@ -58,7 +58,7 @@ function clearStoredAuth() {
 export function useActionAuth() {
   const [authState, setAuthState] = useState<ActionAuthState>(getStoredAuth);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const pendingActionRef = useRef<(() => void) | null>(null);
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
     queryKey: ['currentUser'],
@@ -88,6 +88,14 @@ export function useActionAuth() {
     return () => clearTimeout(timeout);
   }, [authState.expiresAt]);
 
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.token && pendingActionRef.current) {
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      action();
+    }
+  }, [authState.isAuthenticated, authState.token]);
+
   const isAuthenticated = !!sessionUser || authState.isAuthenticated;
   const currentUser = sessionUser || authState.user;
 
@@ -97,7 +105,7 @@ export function useActionAuth() {
       return;
     }
 
-    setPendingAction(() => action);
+    pendingActionRef.current = action;
     setShowAuthModal(true);
   }, [isAuthenticated]);
 
@@ -110,21 +118,17 @@ export function useActionAuth() {
       token,
       expiresAt: new Date(expiry),
     });
-
-    if (pendingAction) {
-      pendingAction();
-      setPendingAction(null);
-    }
-  }, [pendingAction]);
+  }, []);
 
   const handleAuthModalClose = useCallback(() => {
     setShowAuthModal(false);
-    setPendingAction(null);
+    pendingActionRef.current = null;
   }, []);
 
   const getAuthHeaders = useCallback((): Record<string, string> => {
-    if (authState.token) {
-      return { 'X-Action-Token': authState.token };
+    const token = authState.token || sessionStorage.getItem(ACTION_TOKEN_KEY);
+    if (token) {
+      return { 'X-Action-Token': token };
     }
     return {};
   }, [authState.token]);

@@ -154,11 +154,11 @@ interface PartRouting {
 
 const DEFAULT_START_CHECKS: PhaseCheck[] = [
   {
-    title: 'Tooling Verified',
-    instructions: 'Verify all required tooling is available, calibrated, and in good condition',
+    title: 'Badge Verified',
+    instructions: 'Scan or enter employee badge to confirm authorized operator for this department',
     required: true,
     taskType: 'CHECK',
-    timePolicy: 'AUTO_ON_COMPLETE',
+    timePolicy: 'AUTO_ON_START',
     requiresSignature: false,
     requiresCertification: false,
   },
@@ -166,10 +166,18 @@ const DEFAULT_START_CHECKS: PhaseCheck[] = [
     title: 'Work Instruction Acknowledged',
     instructions: 'Review and acknowledge the current revision of the work instruction for this operation',
     required: true,
-    taskType: 'DOCUMENT',
+    taskType: 'CHECK',
     timePolicy: 'AUTO_ON_COMPLETE',
-    requiresSignature: true,
-    signatureRole: 'OPERATOR',
+    requiresSignature: false,
+    requiresCertification: false,
+  },
+  {
+    title: 'Required Materials Scanned',
+    instructions: 'Scan all required materials to verify lot numbers, expiration dates, and traceability records',
+    required: true,
+    taskType: 'TRACEABILITY',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: false,
     requiresCertification: false,
   },
 ];
@@ -185,8 +193,8 @@ const DEFAULT_FINISH_CHECKS: PhaseCheck[] = [
     requiresCertification: false,
   },
   {
-    title: 'Dimensional Check',
-    instructions: 'Verify critical dimensions are within tolerance per engineering drawing',
+    title: 'Dimensional / Criteria Check',
+    instructions: 'Verify critical dimensions and acceptance criteria are within tolerance per engineering drawing',
     required: true,
     taskType: 'QC',
     timePolicy: 'AUTO_ON_COMPLETE',
@@ -194,12 +202,13 @@ const DEFAULT_FINISH_CHECKS: PhaseCheck[] = [
     requiresCertification: false,
   },
   {
-    title: 'FOD Check',
-    instructions: 'Inspect work area and part for Foreign Object Debris (FOD) — remove any debris before proceeding',
+    title: 'Department Signoff',
+    instructions: 'Lead or QC signature confirming all work in this department is complete and meets requirements',
     required: true,
-    taskType: 'CHECK',
+    taskType: 'SIGNATURE',
     timePolicy: 'AUTO_ON_COMPLETE',
-    requiresSignature: false,
+    requiresSignature: true,
+    signatureRole: 'LEAD',
     requiresCertification: false,
   },
 ];
@@ -514,7 +523,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     signatureConfig: {
       startRequiresSignature: false,
       finishRequiresSignature: true,
-      requiredSignatures: ['operator'],
+      requiredSignatures: ['LEAD'],
     },
   });
 

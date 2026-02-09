@@ -1696,12 +1696,15 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                               <Separator />
 
-                              {/* Signature Configuration */}
+                              {/* Step-Level (Department) Signature Configuration */}
                               <div>
-                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                <h4 className="font-semibold mb-1 text-sm flex items-center gap-2">
                                   <PenLine className="h-4 w-4 text-green-600" />
-                                  Signature Requirements
+                                  Department Signoff
                                 </h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  Step-level signatures for department completion. Each selected role generates a separate signoff task.
+                                </p>
                                 <div className="space-y-3">
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
@@ -1720,24 +1723,43 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Label htmlFor={`sig-start-${dept}`} className="text-sm cursor-pointer">Require signature to start department</Label>
                                   </div>
                                   {sigConfig.finishRequiresSignature && (
-                                    <div className="pl-6">
-                                      <p className="text-xs text-muted-foreground mb-2">Required signoff roles:</p>
+                                    <div className="pl-6 space-y-2">
+                                      <p className="text-xs text-muted-foreground">Select who must sign off (one task per role):</p>
                                       <div className="flex flex-wrap gap-2">
-                                        {['operator', 'qc_inspector', 'supervisor', 'engineering'].map(role => (
+                                        {([
+                                          { key: 'operator', label: 'Operator', enumRole: 'OPERATOR' },
+                                          { key: 'qc_inspector', label: 'QC Inspector', enumRole: 'QC' },
+                                          { key: 'supervisor', label: 'Lead / Supervisor', enumRole: 'LEAD' },
+                                          { key: 'engineering', label: 'Engineering', enumRole: 'ENGINEERING' },
+                                        ]).map(role => (
                                           <Badge
-                                            key={role}
-                                            variant={sigConfig.requiredSignatures.includes(role) ? 'default' : 'outline'}
+                                            key={role.key}
+                                            variant={sigConfig.requiredSignatures.includes(role.key) ? 'default' : 'outline'}
                                             className="cursor-pointer text-xs"
-                                            onClick={() => toggleRequiredSignature(dept, role)}
+                                            onClick={() => toggleRequiredSignature(dept, role.key)}
                                           >
-                                            {role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                            {role.label}
                                           </Badge>
                                         ))}
                                       </div>
+                                      {sigConfig.requiredSignatures.length > 1 && (
+                                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                                          {sigConfig.requiredSignatures.length} signoff tasks will be created — all must be completed
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                 </div>
                               </div>
+
+                              {/* Task-Level Signature Hint */}
+                              {(config.startChecks?.some(c => c.requiresSignature) || config.finishChecks?.some(c => c.requiresSignature)) && (
+                                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800">
+                                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                                    Some individual tasks above also require signatures (task-level). These are separate from the department signoff.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </CardContent>

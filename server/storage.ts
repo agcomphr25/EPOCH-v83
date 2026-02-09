@@ -13497,8 +13497,32 @@ export class DatabaseStorage implements IStorage {
         requiredSignatures: ['operator'],
       };
 
-      // Map signatureConfig role names to signatureRole enum
-      const primarySignatureRole = signatureConfig.requiredSignatures[0]?.toUpperCase() || 'OPERATOR';
+      // Map signatureConfig role names to signatureRole enum values
+      const mapRoleToEnum = (role: string): string => {
+        const roleMap: Record<string, string> = {
+          'operator': 'OPERATOR',
+          'qc_inspector': 'QC',
+          'supervisor': 'LEAD',
+          'engineering': 'ENGINEERING',
+          'lead': 'LEAD',
+          'qc': 'QC',
+          'custom': 'CUSTOM',
+        };
+        return roleMap[role.toLowerCase()] || role.toUpperCase();
+      };
+      const mapRoleToLabel = (role: string): string => {
+        const labelMap: Record<string, string> = {
+          'operator': 'Operator',
+          'qc_inspector': 'QC Inspector',
+          'supervisor': 'Supervisor/Lead',
+          'engineering': 'Engineering',
+          'lead': 'Lead',
+          'qc': 'QC',
+          'custom': 'Custom',
+        };
+        return labelMap[role.toLowerCase()] || role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      };
+      const primarySignatureRole = mapRoleToEnum(signatureConfig.requiredSignatures[0] || 'operator');
 
       // ===== START PHASE =====
       // Badge Scan (always first, auto-timestamps on start)
@@ -13672,23 +13696,47 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Final Signature (SIGNATURE task - completion gate)
-      await this.createTravelerTask({
-        travelerStepId: step.id,
-        taskType: 'SIGNATURE',
-        taskPhase: 'FINISH',
-        title: `Complete ${deptName}`,
-        instructions: signatureConfig.finishRequiresSignature
-          ? `Badge scan and signature to complete ${deptName} (Required: ${signatureConfig.requiredSignatures.join(', ')})`
-          : `Badge scan to complete ${deptName}`,
-        required: true,
-        sortOrder: sortOrder++,
-        timePolicy: 'AUTO_ON_COMPLETE',
-        requiresSignature: signatureConfig.finishRequiresSignature,
-        signatureRole: signatureConfig.finishRequiresSignature ? (primarySignatureRole as any) : null,
-        requiresCertification: false,
-        status: 'NOT_STARTED',
-      });
+      // Department Signoff — one SIGNATURE task per required role
+      // When multiple roles are required (e.g., Operator + QC), each gets their own
+      // completion gate task so every required signer must individually sign off.
+      if (signatureConfig.finishRequiresSignature && signatureConfig.requiredSignatures.length > 0) {
+        for (const role of signatureConfig.requiredSignatures) {
+          const enumRole = mapRoleToEnum(role);
+          const roleLabel = mapRoleToLabel(role);
+          await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'SIGNATURE',
+            taskPhase: 'FINISH',
+            title: signatureConfig.requiredSignatures.length === 1
+              ? `Department Signoff — ${deptName}`
+              : `${roleLabel} Signoff — ${deptName}`,
+            instructions: `${roleLabel} signature required to complete ${deptName}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: true,
+            signatureRole: enumRole as any,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+        }
+      } else {
+        // No signature required — simple completion gate
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'SIGNATURE',
+          taskPhase: 'FINISH',
+          title: `Complete ${deptName}`,
+          instructions: `Badge scan to complete ${deptName}`,
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          signatureRole: null,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+      }
     }
 
     // Create audit event

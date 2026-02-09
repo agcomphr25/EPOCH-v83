@@ -1524,4 +1524,112 @@ router.delete('/certification-links/:id', async (req: Request, res: Response) =>
   }
 });
 
+router.post('/:id/generate-snippets', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+
+    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    const document = rows[0];
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    let textContent = '';
+
+    if (document.ai_extracted_content) {
+      textContent = JSON.stringify(document.ai_extracted_content);
+    }
+
+    if (!textContent && document.file_url) {
+      try {
+        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        if (fileBuffer && (document.file_type === 'application/pdf' || document.file_name?.endsWith('.pdf'))) {
+          textContent = await extractPdfText(fileBuffer);
+        } else if (fileBuffer) {
+          textContent = fileBuffer.toString('utf-8');
+        }
+      } catch (fileErr) {
+        console.error('Error reading document file for snippet generation:', fileErr);
+      }
+    }
+
+    if (req.body.textContent) {
+      textContent = req.body.textContent;
+    }
+
+    if (!textContent || textContent.trim().length < 10) {
+      return res.status(400).json({
+        error: 'Not enough document content available to generate snippets. Upload and analyze the document first.',
+      });
+    }
+
+    const { departmentName, operationName } = req.body;
+
+    const systemPrompt = `You are an expert manufacturing quality engineer reviewing a work instruction document. Generate structured shop-floor reference snippets that operators will see during production.
+
+Return a JSON object with this exact structure:
+{
+  "snippets": [
+    {
+      "title": "Critical Points",
+      "bullets": ["bullet 1", "bullet 2", ...],
+      "confidence": 0.0-1.0
+    },
+    {
+      "title": "Common Defects",
+      "bullets": ["bullet 1", "bullet 2", ...],
+      "confidence": 0.0-1.0
+    },
+    {
+      "title": "Acceptance Criteria",
+      "bullets": ["bullet 1", "bullet 2", ...],
+      "confidence": 0.0-1.0
+    },
+    {
+      "title": "Do Not Do",
+      "bullets": ["bullet 1", "bullet 2", ...],
+      "confidence": 0.0-1.0
+    }
+  ]
+}
+
+Rules:
+- Each bullet should be a concise, actionable statement (max 15 words).
+- Only include categories that have relevant content — omit empty categories.
+- Set confidence to reflect how explicitly the document supports each snippet (1.0 = directly stated, 0.5 = inferred).
+- Focus on practical shop-floor relevance, not general theory.
+- If a department or operation context is given, tailor snippets to that context.`;
+
+    const userMessage = `Generate shop-floor instruction snippets from this work instruction document.${departmentName ? `\nDepartment: ${departmentName}` : ''}${operationName ? `\nOperation: ${operationName}` : ''}\n\nDocument content:\n${textContent.substring(0, 40000)}`;
+
+    const response = await getOpenAI().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 2048,
+    });
+
+    const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+    const snippets = (parsed.snippets || []).map((s: any) => ({
+      title: s.title || 'Tip',
+      bullets: Array.isArray(s.bullets) ? s.bullets : [],
+      sourceDocumentId: req.params.id,
+      confidence: typeof s.confidence === 'number' ? s.confidence : 0.7,
+    }));
+
+    res.json({ snippets, documentId: req.params.id, documentTitle: document.title || document.file_name });
+  } catch (error) {
+    console.error('Error generating AI snippets:', error);
+    res.status(500).json({ error: 'Failed to generate AI snippets' });
+  }
+});
+
 export default router;

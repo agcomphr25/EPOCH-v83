@@ -49,6 +49,8 @@ import {
   StickyNote,
   Trash2,
   ImageIcon,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -267,6 +269,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
+  
+  const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
   
   // UI state for oven curing input
   const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
@@ -1745,6 +1749,54 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                             <Plus className="h-3 w-3" /> Add Snippet
                                           </Button>
                                         </div>
+                                        {pack.workInstructionRefs.length > 0 && (
+                                          <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="w-full text-xs"
+                                            disabled={aiSnippetGenerating === dept}
+                                            onClick={async () => {
+                                              setAiSnippetGenerating(dept);
+                                              try {
+                                                let allSnippets: AiSnippet[] = [];
+                                                let successCount = 0;
+                                                let failCount = 0;
+                                                for (const wiRef of pack.workInstructionRefs) {
+                                                  try {
+                                                    const res = await apiRequest('POST', `/api/routing-documents/${wiRef.documentId}/generate-snippets`, { departmentName: dept });
+                                                    const data = await res.json();
+                                                    if (Array.isArray(data.snippets) && data.snippets.length > 0) {
+                                                      allSnippets = [...allSnippets, ...data.snippets];
+                                                      successCount++;
+                                                    }
+                                                  } catch (err) {
+                                                    failCount++;
+                                                    console.warn(`Snippet generation failed for ${wiRef.title || wiRef.documentId}:`, err);
+                                                  }
+                                                }
+                                                if (allSnippets.length > 0) {
+                                                  updatePack({ aiSnippets: [...pack.aiSnippets, ...allSnippets] });
+                                                  const msg = failCount > 0
+                                                    ? `Generated ${allSnippets.length} snippets from ${successCount} doc(s). ${failCount} doc(s) had no content.`
+                                                    : `Generated ${allSnippets.length} AI snippets from ${successCount} document(s)`;
+                                                  toast({ title: msg });
+                                                } else {
+                                                  toast({ title: 'No snippets generated', description: 'Documents may not have enough content. Try uploading and analyzing them first.', variant: 'destructive' });
+                                                }
+                                              } catch (err) {
+                                                toast({ title: 'AI generation failed', description: String(err), variant: 'destructive' });
+                                              } finally {
+                                                setAiSnippetGenerating(null);
+                                              }
+                                            }}
+                                          >
+                                            {aiSnippetGenerating === dept ? (
+                                              <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Generating...</>
+                                            ) : (
+                                              <><Sparkles className="h-3 w-3 mr-1" /> Generate AI Snippets from WIs</>
+                                            )}
+                                          </Button>
+                                        )}
                                       </div>
 
                                       <div className="space-y-2">

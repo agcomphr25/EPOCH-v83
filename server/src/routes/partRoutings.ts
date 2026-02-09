@@ -219,20 +219,24 @@ router.get('/departments/list', async (_req: Request, res: Response) => {
 
 router.post('/departments', async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
+    console.log('[PartRoutings] POST /departments body:', JSON.stringify(req.body));
+    const { name } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) {
+      console.error('[PartRoutings] Invalid department name:', { name, bodyType: typeof req.body, body: req.body });
       return res.status(400).json({ error: 'Department name is required' });
     }
     const rows = await pool.query(
       `INSERT INTO p2_routing_departments (name, display_order)
        VALUES ($1, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM p2_routing_departments))
-       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive"`,
+       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive",
+                 created_at AS "createdAt", updated_at AS "updatedAt"`,
       [name.trim()]
     );
+    console.log('[PartRoutings] Department created:', rows[0]);
     res.json(rows[0]);
   } catch (error: any) {
-    console.error('Error creating routing department:', error);
-    res.status(500).json({ error: 'Failed to create routing department' });
+    console.error('Error creating routing department:', error?.message || error);
+    res.status(500).json({ error: error?.message || 'Failed to create routing department' });
   }
 });
 

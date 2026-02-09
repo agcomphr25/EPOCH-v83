@@ -1,0 +1,100 @@
+client/src/App.tsx:85:import P2ControlCenter from './pages/P2ControlCenter';
+client/src/App.tsx:130:import RoutingDocumentManagement from './pages/RoutingDocumentManagement';
+client/src/App.tsx:217:import TravelerManagement from './pages/TravelerManagement';
+client/src/App.tsx:218:import TravelerExecution from './pages/TravelerExecution';
+client/src/App.tsx:741:                  <Route path="/p2-control-center" component={P2ControlCenter} />
+client/src/App.tsx:755:                  <Route path="/travelers" component={TravelerManagement} />
+client/src/App.tsx:756:                  <Route path="/travelers/:id" component={TravelerExecution} />
+client/src/App.tsx:757:                  <Route path="/travelers/:id/execute" component={TravelerExecution} />
+client/src/App.tsx:802:                    component={RoutingDocumentManagement}
+client/src/config/userPermissions.ts:125:  '/travelers',
+client/src/components/Navigation.tsx:595:      path: '/travelers',
+client/src/pages/P2ControlCenter.tsx:44:import PartRoutingManagement from './PartRoutingManagement';
+client/src/pages/P2ControlCenter.tsx:45:import RoutingDocumentManagement from './RoutingDocumentManagement';
+client/src/pages/P2ControlCenter.tsx:83:interface PartRouting {
+client/src/pages/P2ControlCenter.tsx:92:export default function P2ControlCenter() {
+client/src/pages/P2ControlCenter.tsx:516:          <P2TravelersTab />
+client/src/pages/P2ControlCenter.tsx:524:          <RoutingDocumentManagement />
+client/src/pages/P2ControlCenter.tsx:528:          <PartRoutingManagement />
+client/src/pages/P2ControlCenter.tsx:582:function P2TravelersTab() {
+client/src/pages/P2ControlCenter.tsx:592:    queryKey: ['/api/travelers'],
+client/src/pages/P2ControlCenter.tsx:596:  const { data: routings = [] } = useQuery<PartRouting[]>({
+client/src/pages/P2ControlCenter.tsx:597:    queryKey: ['/api/part-routings'],
+client/src/pages/P2ControlCenter.tsx:604:      return apiRequest(`/api/travelers/from-routing/${data.routingId}`, {
+client/src/pages/P2ControlCenter.tsx:614:      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+client/src/pages/P2ControlCenter.tsx:831:                          onClick={() => navigate(`/travelers/${traveler.id}`)}
+client/src/pages/P2ControlCenter.tsx:840:                            onClick={() => navigate(`/travelers/${traveler.id}/execute`)}
+client/src/components/PartRoutingWizard.tsx:114:interface PartRouting {
+client/src/components/PartRoutingWizard.tsx:128:interface PartRoutingWizardProps {
+client/src/components/PartRoutingWizard.tsx:131:  editRouting?: PartRouting | null;
+client/src/components/PartRoutingWizard.tsx:135:export default function PartRoutingWizard({ open, onOpenChange, editRouting, poId }: PartRoutingWizardProps) {
+client/src/components/PartRoutingWizard.tsx:273:        return apiRequest(`/api/part-routings/${editRouting.id}`, {
+client/src/components/PartRoutingWizard.tsx:278:        return apiRequest('/api/part-routings', {
+client/src/components/PartRoutingWizard.tsx:285:      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+client/src/pages/P2DepartmentManager.tsx:45:import PartRoutingWizard from '@/components/PartRoutingWizard';
+client/src/pages/P2DepartmentManager.tsx:111:interface PartRouting {
+client/src/pages/P2DepartmentManager.tsx:288:  const { data: partRouting } = useQuery<PartRouting>({
+client/src/pages/P2DepartmentManager.tsx:289:    queryKey: selectedItem ? [`/api/part-routings/part/${selectedItem.partNumber}`] : [],
+client/src/pages/P2DepartmentManager.tsx:320:    const routing: PartRouting = await apiRequest(`/api/part-routings/part/${partNumber}`);
+client/src/pages/P2DepartmentManager.tsx:1428:      <PartRoutingWizard
+client/src/pages/RoutingDocumentManagement.tsx:35:interface RoutingDocument {
+client/src/pages/RoutingDocumentManagement.tsx:72:export default function RoutingDocumentManagement() {
+client/src/pages/RoutingDocumentManagement.tsx:79:  const [selectedDocument, setSelectedDocument] = useState<RoutingDocument | null>(null);
+client/src/pages/RoutingDocumentManagement.tsx:116:  const { data: documents = [], isLoading: loadingDocs } = useQuery<RoutingDocument[]>({
+client/src/pages/RoutingDocumentManagement.tsx:117:    queryKey: ['/api/routing-documents'],
+client/src/pages/RoutingDocumentManagement.tsx:136:    queryKey: ['/api/routing-documents/templates/list'],
+client/src/pages/RoutingDocumentManagement.tsx:151:    queryKey: ['/api/routing-documents/spec-sheets'],
+client/src/pages/RoutingDocumentManagement.tsx:166:        return apiRequest('/api/routing-documents/create', {
+client/src/pages/RoutingDocumentManagement.tsx:185:      return apiRequest('/api/routing-documents/upload-with-extraction', {
+client/src/pages/RoutingDocumentManagement.tsx:213:      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+client/src/pages/RoutingDocumentManagement.tsx:224:      return apiRequest(`/api/routing-documents/${id}/ai-parse`, {
+client/src/pages/RoutingDocumentManagement.tsx:231:      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+client/src/pages/RoutingDocumentManagement.tsx:242:      return apiRequest('/api/routing-documents/ai-generate', {
+client/src/pages/RoutingDocumentManagement.tsx:249:      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+client/src/pages/RoutingDocumentManagement.tsx:260:      return apiRequest('/api/routing-documents/import-from-library', {
+client/src/pages/RoutingDocumentManagement.tsx:273:      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+client/src/pages/RoutingDocumentManagement.tsx:283:      return apiRequest('/api/routing-documents/templates/learn', {
+client/src/pages/RoutingDocumentManagement.tsx:290:      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+client/src/pages/RoutingDocumentManagement.tsx:302:      return apiRequest(`/api/routing-documents/${data.documentId}/generate-routing`, {
+client/src/pages/RoutingDocumentManagement.tsx:317:      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+client/src/pages/RoutingDocumentManagement.tsx:367:      const response = await apiRequest('/api/routing-documents/extract-text', {
+client/src/components/p2/P2ChangesTab.tsx:142:      apiRequest(`/api/travelers/${data.travelerId}/changes`, { method: 'POST', body: data }),
+client/src/components/p2/P2ChangesTab.tsx:157:      apiRequest(`/api/travelers/${travelerId}/changes/${changeId}/authorize`, { method: 'POST', body: { authorizedById, authorizedByName } }),
+client/src/pages/TravelerExecution.tsx:190:export default function TravelerExecution() {
+client/src/pages/TravelerExecution.tsx:210:    queryKey: ['/api/travelers', travelerId, 'details'],
+client/src/pages/TravelerExecution.tsx:212:      fetch(`/api/travelers/${travelerId}?details=true`).then((res) => {
+client/src/pages/TravelerExecution.tsx:231:      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
+client/src/pages/TravelerExecution.tsx:247:      apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
+client/src/pages/TravelerExecution.tsx:263:      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
+client/src/pages/TravelerExecution.tsx:287:      apiRequest(`/api/travelers/${travelerId}/block`, {
+client/src/pages/TravelerExecution.tsx:305:      apiRequest(`/api/travelers/${travelerId}/unblock`, {
+client/src/pages/TravelerExecution.tsx:321:      apiRequest(`/api/travelers/${travelerId}/complete`, {
+client/src/pages/TravelerExecution.tsx:390:        <Link href="/travelers">
+client/src/pages/TravelerManagement.tsx:76:interface PartRouting {
+client/src/pages/TravelerManagement.tsx:100:export default function TravelerManagement() {
+client/src/pages/TravelerManagement.tsx:118:    queryKey: ['/api/travelers'],
+client/src/pages/TravelerManagement.tsx:121:  const { data: routings = [] } = useQuery<PartRouting[]>({
+client/src/pages/TravelerManagement.tsx:122:    queryKey: ['/api/part-routings'],
+client/src/pages/TravelerManagement.tsx:127:      apiRequest(`/api/travelers/from-routing/${data.partRoutingId}`, {
+client/src/pages/TravelerManagement.tsx:140:      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+client/src/pages/TravelerManagement.tsx:163:      apiRequest(`/api/travelers/${id}/start`, {
+client/src/pages/TravelerManagement.tsx:173:      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+client/src/pages/TravelerManagement.tsx:186:      apiRequest(`/api/travelers/${id}`, { method: 'DELETE' }),
+client/src/pages/TravelerManagement.tsx:192:      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+client/src/pages/TravelerManagement.tsx:407:                          <Link href={`/travelers/${traveler.id}`}>
+client/src/pages/TravelerManagement.tsx:436:                            <Link href={`/travelers/${traveler.id}/execute`}>
+client/src/pages/PartRoutingManagement.tsx:45:import PartRoutingWizard from '@/components/PartRoutingWizard';
+client/src/pages/PartRoutingManagement.tsx:81:interface PartRouting {
+client/src/pages/PartRoutingManagement.tsx:105:export default function PartRoutingManagement() {
+client/src/pages/PartRoutingManagement.tsx:109:  const [editRouting, setEditRouting] = useState<PartRouting | null>(null);
+client/src/pages/PartRoutingManagement.tsx:112:    routing: PartRouting | null;
+client/src/pages/PartRoutingManagement.tsx:119:  const { data: routings = [], isLoading } = useQuery<PartRouting[]>({
+client/src/pages/PartRoutingManagement.tsx:120:    queryKey: ['/api/part-routings'],
+client/src/pages/PartRoutingManagement.tsx:131:      apiRequest(`/api/part-routings/${id}`, {
+client/src/pages/PartRoutingManagement.tsx:139:      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+client/src/pages/PartRoutingManagement.tsx:153:      apiRequest(`/api/part-routings/${id}`, {
+client/src/pages/PartRoutingManagement.tsx:163:      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+client/src/pages/PartRoutingManagement.tsx:184:  const handleView = (routing: PartRouting) => {
+client/src/pages/PartRoutingManagement.tsx:188:  const handleOpenWizard = (routing: PartRouting | null) => {
+client/src/pages/PartRoutingManagement.tsx:196:    queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
+client/src/pages/PartRoutingManagement.tsx:523:      <PartRoutingWizard

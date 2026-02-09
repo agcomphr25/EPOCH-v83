@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertPartRoutingSchema } from '../../schema';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -186,6 +187,84 @@ router.delete('/:id', async (req: Request, res: Response) => {
       error: 'Failed to delete part routing',
       message: error.message 
     });
+  }
+});
+
+router.get('/departments/list', async (_req: Request, res: Response) => {
+  try {
+    const rows = await pool.query(
+      `SELECT id::text, name, display_order AS "displayOrder", is_active AS "isActive",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM p2_routing_departments
+       WHERE is_active = true
+       ORDER BY display_order ASC`
+    );
+    res.json(rows);
+  } catch (error: any) {
+    console.error('Error fetching routing departments:', error);
+    res.status(500).json({ error: 'Failed to fetch routing departments' });
+  }
+});
+
+router.post('/departments', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Department name is required' });
+    }
+    const rows = await pool.query(
+      `INSERT INTO p2_routing_departments (name, display_order)
+       VALUES ($1, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM p2_routing_departments))
+       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive"`,
+      [name.trim()]
+    );
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error creating routing department:', error);
+    res.status(500).json({ error: 'Failed to create routing department' });
+  }
+});
+
+router.patch('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const deptId = req.params.id;
+    const { name } = req.body;
+
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+      return res.status(400).json({ error: 'Department name must be a non-empty string' });
+    }
+    if (name === undefined) {
+      return res.status(400).json({ error: 'No update fields provided' });
+    }
+
+    const rows = await pool.query(
+      `UPDATE p2_routing_departments
+       SET name = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive"`,
+      [name.trim(), deptId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Department not found' });
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating routing department:', error);
+    res.status(500).json({ error: 'Failed to update routing department' });
+  }
+});
+
+router.delete('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const rows = await pool.query(
+      `UPDATE p2_routing_departments SET is_active = false, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id::text, name`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Department not found' });
+    res.json({ message: 'Department deactivated', department: rows[0] });
+  } catch (error: any) {
+    console.error('Error deleting routing department:', error);
+    res.status(500).json({ error: 'Failed to delete routing department' });
   }
 });
 

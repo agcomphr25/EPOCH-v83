@@ -54,14 +54,21 @@ import {
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
-const P2_DEPARTMENTS = [
+const DEFAULT_P2_DEPARTMENTS = [
   'Layup',
   'Assemble/Disassembly',
   'CNC',
   'Finish',
   'Paint',
   'Final QC',
-] as const;
+];
+
+interface RoutingDepartment {
+  id: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
 
 const TRACEABILITY_FIELDS = [
   { id: 'internalControlNumber', label: 'Internal Control Number', description: 'Internal tracking control number' },
@@ -385,6 +392,20 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     queryKey: ['/api/employees/employee-capabilities/all'],
     enabled: open && step === 3,
   });
+
+  const { data: routingDepartments = [], isLoading: deptLoading } = useQuery<RoutingDepartment[]>({
+    queryKey: ['/api/part-routings/departments/list'],
+    enabled: open,
+  });
+
+  const departmentNames = routingDepartments.length > 0
+    ? routingDepartments.map(d => d.name)
+    : DEFAULT_P2_DEPARTMENTS;
+
+  const [newDeptName, setNewDeptName] = useState('');
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [editingDeptName, setEditingDeptName] = useState('');
+  const [deptSaving, setDeptSaving] = useState(false);
 
   // Filter inventory items by search
   const filteredItems = displayItems.filter(item =>
@@ -1237,20 +1258,149 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Available Departments</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label>Available Departments</Label>
+                  </div>
                   <div className="mt-2 space-y-2">
-                    {P2_DEPARTMENTS.filter(d => !selectedDepartments.includes(d)).map((dept) => (
+                    {departmentNames.filter(d => !selectedDepartments.includes(d)).map((dept) => {
+                      const deptRecord = routingDepartments.find(rd => rd.name === dept);
+                      return (
+                        <div key={dept} className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            className="flex-1 justify-start"
+                            onClick={() => toggleDepartment(dept)}
+                            data-testid={`button-add-dept-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
+                          >
+                            <ChevronRight className="mr-2 h-4 w-4" />
+                            {dept}
+                          </Button>
+                          {deptRecord && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => { setEditingDeptId(deptRecord.id); setEditingDeptName(deptRecord.name); }}
+                            >
+                              <PenLine className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {editingDeptId && (
+                      <div className="flex gap-2 p-2 border rounded bg-blue-50 dark:bg-blue-950">
+                        <Input
+                          className="text-sm flex-1"
+                          value={editingDeptName}
+                          onChange={(e) => setEditingDeptName(e.target.value)}
+                          placeholder="Department name"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={deptSaving || !editingDeptName.trim()}
+                          onClick={async () => {
+                            setDeptSaving(true);
+                            try {
+                              const oldDept = routingDepartments.find(d => d.id === editingDeptId);
+                              await apiRequest(`/api/part-routings/departments/${editingDeptId}`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({ name: editingDeptName.trim() }),
+                              });
+                              if (oldDept) {
+                                setSelectedDepartments(prev => prev.map(d => d === oldDept.name ? editingDeptName.trim() : d));
+                                setDepartmentConfig(prev => {
+                                  const updated = { ...prev };
+                                  if (updated[oldDept.name]) {
+                                    updated[editingDeptName.trim()] = updated[oldDept.name];
+                                    delete updated[oldDept.name];
+                                  }
+                                  return updated;
+                                });
+                              }
+                              queryClient.invalidateQueries({ queryKey: ['/api/part-routings/departments/list'] });
+                              setEditingDeptId(null);
+                              setEditingDeptName('');
+                              toast({ title: 'Department updated' });
+                            } catch (err) {
+                              toast({ title: 'Failed to update department', variant: 'destructive' });
+                            } finally {
+                              setDeptSaving(false);
+                            }
+                          }}
+                        >
+                          {deptSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setEditingDeptId(null); setEditingDeptName(''); }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          disabled={deptSaving}
+                          onClick={async () => {
+                            setDeptSaving(true);
+                            try {
+                              await apiRequest(`/api/part-routings/departments/${editingDeptId}`, { method: 'DELETE' });
+                              const oldDept = routingDepartments.find(d => d.id === editingDeptId);
+                              if (oldDept) {
+                                setSelectedDepartments(prev => prev.filter(d => d !== oldDept.name));
+                              }
+                              queryClient.invalidateQueries({ queryKey: ['/api/part-routings/departments/list'] });
+                              setEditingDeptId(null);
+                              setEditingDeptName('');
+                              toast({ title: 'Department removed' });
+                            } catch (err) {
+                              toast({ title: 'Failed to remove department', variant: 'destructive' });
+                            } finally {
+                              setDeptSaving(false);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    <Separator className="my-2" />
+                    <div className="flex gap-2">
+                      <Input
+                        className="text-sm flex-1"
+                        placeholder="New department name..."
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newDeptName.trim()) {
+                            (e.target as HTMLInputElement).blur();
+                            document.getElementById('btn-add-dept')?.click();
+                          }
+                        }}
+                      />
                       <Button
-                        key={dept}
+                        id="btn-add-dept"
+                        size="sm"
                         variant="outline"
-                        className="w-full justify-start"
-                        onClick={() => toggleDepartment(dept)}
-                        data-testid={`button-add-dept-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
+                        disabled={deptSaving || !newDeptName.trim() || departmentNames.includes(newDeptName.trim())}
+                        onClick={async () => {
+                          setDeptSaving(true);
+                          try {
+                            await apiRequest('/api/part-routings/departments', {
+                              method: 'POST',
+                              body: JSON.stringify({ name: newDeptName.trim() }),
+                            });
+                            queryClient.invalidateQueries({ queryKey: ['/api/part-routings/departments/list'] });
+                            setNewDeptName('');
+                            toast({ title: `Department "${newDeptName.trim()}" added` });
+                          } catch (err) {
+                            toast({ title: 'Failed to add department', variant: 'destructive' });
+                          } finally {
+                            setDeptSaving(false);
+                          }
+                        }}
                       >
-                        <ChevronRight className="mr-2 h-4 w-4" />
-                        {dept}
+                        {deptSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add
                       </Button>
-                    ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1763,7 +1913,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                                 let failCount = 0;
                                                 for (const wiRef of pack.workInstructionRefs) {
                                                   try {
-                                                    const res = await apiRequest('POST', `/api/routing-documents/${wiRef.documentId}/generate-snippets`, { departmentName: dept });
+                                                    const res = await apiRequest(`/api/routing-documents/${wiRef.documentId}/generate-snippets`, { method: 'POST', body: JSON.stringify({ departmentName: dept }) });
                                                     const data = await res.json();
                                                     if (Array.isArray(data.snippets) && data.snippets.length > 0) {
                                                       allSnippets = [...allSnippets, ...data.snippets];

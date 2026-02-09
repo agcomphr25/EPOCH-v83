@@ -4255,6 +4255,20 @@ export const p2SerializedItemEvents = pgTable('p2_serialized_item_events', {
   itemIdIdx: index('p2_serialized_item_events_item_id_idx').on(table.serializedItemId),
 }));
 
+// P2 Routing Departments - User-managed department list for part routing wizard
+export const p2RoutingDepartments = pgTable('p2_routing_departments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  displayOrder: integer('display_order').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertP2RoutingDepartmentSchema = createInsertSchema(p2RoutingDepartments).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertP2RoutingDepartment = z.infer<typeof insertP2RoutingDepartmentSchema>;
+export type P2RoutingDepartment = typeof p2RoutingDepartments.$inferSelect;
+
 // Part Routing Definitions - Custom department sequences and traceability requirements per inventory item
 export const partRoutings = pgTable('part_routings', {
   id: uuid('id').defaultRandom().primaryKey(),

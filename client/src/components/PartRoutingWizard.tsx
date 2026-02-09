@@ -44,6 +44,10 @@ import {
   Plus,
   Shield,
   RotateCcw,
+  BookOpen,
+  Lightbulb,
+  StickyNote,
+  Trash2,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -108,6 +112,12 @@ interface SpecialProcessConfig {
   customDataFields: CustomDataField[];
 }
 
+interface InstructionPack {
+  workInstructionRefs: { documentId: string; documentTitle: string; revision?: string }[];
+  aiSnippets: string[];
+  specialNotes: string;
+}
+
 interface PhaseCheck {
   title: string;
   instructions?: string;
@@ -117,6 +127,7 @@ interface PhaseCheck {
   requiresSignature: boolean;
   signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
   requiresCertification: boolean;
+  instructionPack?: InstructionPack;
 }
 
 interface SignatureConfig {
@@ -136,6 +147,7 @@ interface DepartmentConfiguration {
   startChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
+  instructionPack?: InstructionPack;
 }
 
 interface PartRouting {
@@ -1332,7 +1344,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.materials.length > 0 ? 1 : 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + config.qcStandards.length + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -1543,6 +1555,139 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   Operations and processes performed during this department step.
                                 </p>
                               </div>
+
+                              {/* Instruction Pack */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <BookOpen className="h-4 w-4 text-amber-600" />
+                                  Instruction Pack
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  Attach work instructions, AI tips, and notes that operators will see during execution.
+                                </p>
+
+                                {(() => {
+                                  const pack = config.instructionPack || { workInstructionRefs: [], aiSnippets: [], specialNotes: '' };
+                                  const updatePack = (updates: Partial<InstructionPack>) => {
+                                    setDepartmentConfig(prev => ({
+                                      ...prev,
+                                      [dept]: {
+                                        ...config,
+                                        instructionPack: { ...pack, ...updates },
+                                      },
+                                    }));
+                                  };
+
+                                  return (
+                                    <div className="space-y-3">
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium flex items-center gap-1">
+                                          <FileText className="h-3 w-3" /> Work Instruction References
+                                        </Label>
+                                        {pack.workInstructionRefs.length > 0 && (
+                                          <div className="space-y-1">
+                                            {pack.workInstructionRefs.map((ref, idx) => (
+                                              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                                <FileText className="h-3 w-3 text-blue-500 shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-xs font-medium truncate">{ref.documentTitle}</p>
+                                                  {ref.revision && <p className="text-[10px] text-muted-foreground">Rev {ref.revision}</p>}
+                                                </div>
+                                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ workInstructionRefs: pack.workInstructionRefs.filter((_, i) => i !== idx) })}>
+                                                  <X className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <Input placeholder="Document title" className="text-xs" id={`wi-title-${dept}`} />
+                                          <Input placeholder="Rev" className="text-xs w-16" id={`wi-rev-${dept}`} />
+                                          <Button size="sm" variant="outline" onClick={() => {
+                                            const titleEl = document.getElementById(`wi-title-${dept}`) as HTMLInputElement;
+                                            const revEl = document.getElementById(`wi-rev-${dept}`) as HTMLInputElement;
+                                            if (titleEl?.value.trim()) {
+                                              updatePack({
+                                                workInstructionRefs: [...pack.workInstructionRefs, {
+                                                  documentId: crypto.randomUUID(),
+                                                  documentTitle: titleEl.value.trim(),
+                                                  revision: revEl?.value.trim() || undefined,
+                                                }],
+                                              });
+                                              titleEl.value = '';
+                                              if (revEl) revEl.value = '';
+                                            }
+                                          }}>
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium flex items-center gap-1">
+                                          <Lightbulb className="h-3 w-3" /> AI Snippets (Do / Don't bullets)
+                                        </Label>
+                                        {pack.aiSnippets.length > 0 && (
+                                          <div className="space-y-1">
+                                            {pack.aiSnippets.map((snippet, idx) => (
+                                              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                                <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0" />
+                                                <p className="text-xs flex-1">{snippet}</p>
+                                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ aiSnippets: pack.aiSnippets.filter((_, i) => i !== idx) })}>
+                                                  <X className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <Input placeholder="e.g. DO: Check torque spec before tightening" className="text-xs" id={`ai-snippet-${dept}`} onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              const el = e.target as HTMLInputElement;
+                                              if (el.value.trim()) {
+                                                updatePack({ aiSnippets: [...pack.aiSnippets, el.value.trim()] });
+                                                el.value = '';
+                                              }
+                                            }
+                                          }} />
+                                          <Button size="sm" variant="outline" onClick={() => {
+                                            const el = document.getElementById(`ai-snippet-${dept}`) as HTMLInputElement;
+                                            if (el?.value.trim()) {
+                                              updatePack({ aiSnippets: [...pack.aiSnippets, el.value.trim()] });
+                                              el.value = '';
+                                            }
+                                          }}>
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium flex items-center gap-1">
+                                          <StickyNote className="h-3 w-3" /> Special Notes
+                                        </Label>
+                                        <Textarea
+                                          placeholder="Any special instructions, warnings, or notes for the operator..."
+                                          value={pack.specialNotes || ''}
+                                          onChange={(e) => updatePack({ specialNotes: e.target.value })}
+                                          className="text-xs min-h-[60px]"
+                                          rows={3}
+                                        />
+                                      </div>
+
+                                      {(pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes) && (
+                                        <div className="flex justify-end">
+                                          <Button size="sm" variant="ghost" className="text-xs text-destructive" onClick={() => updatePack({ workInstructionRefs: [], aiSnippets: [], specialNotes: '' })}>
+                                            <Trash2 className="h-3 w-3 mr-1" /> Clear Pack
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              <Separator />
 
                               {/* Custom Data Fields */}
                               <div>

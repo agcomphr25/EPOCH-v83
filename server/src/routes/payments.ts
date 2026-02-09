@@ -11,6 +11,7 @@ import {
 } from '../../schema';
 import { eq, desc, inArray } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
+import { auditService } from '../services/auditService';
 
 const router = Router();
 
@@ -256,6 +257,23 @@ async function processTransactionResult(data: {
       .update(allOrders)
       .set(updateFields)
       .where(eq(allOrders.orderId, data.orderId));
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: data.orderId,
+        action: 'PAYMENT_ADDED',
+        meta: {
+          paymentType: 'credit_card',
+          amount: data.amount,
+          lastFour: lastFourDigits,
+          cardType: cardType,
+          paymentId: payment.id,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log payment event:', auditError);
+    }
   }
 
   return {
@@ -360,6 +378,22 @@ router.post('/void/:transactionId', async (req, res) => {
         })
         .where(eq(creditCardTransactions.transactionId, transactionId));
 
+      try {
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: transaction.orderId,
+          action: 'PAYMENT_VOIDED',
+          meta: {
+            transactionId,
+            amount: transaction.amount,
+            lastFour: transaction.lastFourDigits,
+            cardType: transaction.cardType,
+          },
+        });
+      } catch (auditError) {
+        console.error('[Audit] Failed to log void event:', auditError);
+      }
+
       res.json({
         success: true,
         message: 'Transaction voided successfully',
@@ -459,6 +493,24 @@ router.post('/batch', async (req, res) => {
             updatedAt: new Date(),
           })
           .where(eq(allOrders.orderId, allocation.orderId));
+
+        try {
+          await auditService.logEvent({
+            entityType: 'p1_order',
+            entityId: allocation.orderId,
+            action: 'PAYMENT_ADDED',
+            meta: {
+              paymentType: batchData.paymentMethod,
+              amount: allocation.amount,
+              paymentId: paymentRecord.id,
+              batchPayment: true,
+              batchTotal: batchData.totalAmount,
+              notes: batchData.notes,
+            },
+          });
+        } catch (auditError) {
+          console.error('[Audit] Failed to log batch payment event:', auditError);
+        }
 
         results.push({
           orderId: allocation.orderId,
@@ -709,6 +761,25 @@ router.post('/bulk-live', async (req, res) => {
               updatedAt: new Date(),
             })
             .where(eq(allOrders.orderId, allocation.orderId));
+
+          try {
+            await auditService.logEvent({
+              entityType: 'p1_order',
+              entityId: allocation.orderId,
+              action: 'PAYMENT_ADDED',
+              meta: {
+                paymentType: 'credit_card',
+                amount: allocation.amount,
+                lastFour: lastFourDigits,
+                cardType: cardType,
+                paymentId: payment.id,
+                bulkPayment: true,
+                bulkTotal: paymentData.totalAmount,
+              },
+            });
+          } catch (auditError) {
+            console.error('[Audit] Failed to log bulk payment event:', auditError);
+          }
 
           paymentResults.push({
             orderId: allocation.orderId,

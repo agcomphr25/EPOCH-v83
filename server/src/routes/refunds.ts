@@ -10,6 +10,7 @@ import {
 import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { refundTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
+import { auditService } from '../services/auditService';
 
 const router = Router();
 
@@ -155,6 +156,24 @@ router.post('/', async (req: Request, res: Response) => {
       .returning();
 
     console.log('✅ Created refund request:', newRequest.id);
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: validatedData.orderId,
+        action: 'REFUND_REQUESTED',
+        actor: { username: requestedBy },
+        meta: {
+          refundRequestId: newRequest.id,
+          refundType: validatedData.refundType,
+          amount: validatedData.refundAmount || validatedData.amount,
+          reason: validatedData.reason,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log refund request:', auditError);
+    }
+
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('❌ Error creating refund request:', error);
@@ -196,6 +215,22 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
       .returning();
 
     console.log('✅ Approved refund request:', updatedRequest.id);
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: refundRequest.orderId,
+        action: 'REFUND_APPROVED',
+        actor: { username: approvedBy },
+        meta: {
+          refundRequestId: parseInt(id),
+          amount: refundRequest.refundAmount || refundRequest.amount,
+          reason: refundRequest.reason,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log refund approval:', auditError);
+    }
 
     // REMOVED: Automatic Authorize.Net processing
     // Refunds are now approved for manual processing outside of Epoch
@@ -252,6 +287,23 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
     }
 
     console.log('❌ Rejected refund request:', updatedRequest.id);
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: updatedRequest.orderId,
+        action: 'REFUND_REJECTED',
+        actor: { username: approvedBy },
+        meta: {
+          refundRequestId: parseInt(id),
+          rejectionReason: rejectionReason.trim(),
+          amount: updatedRequest.refundAmount || updatedRequest.amount,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log refund rejection:', auditError);
+    }
+
     res.json(updatedRequest);
   } catch (error) {
     console.error('❌ Error rejecting refund request:', error);
@@ -410,7 +462,25 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       .returning();
 
     console.log(`✅ Refund request ${id} processed successfully`);
-    
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: refundRequest.orderId,
+        action: 'REFUND_PROCESSED',
+        actor: { username: processedBy },
+        meta: {
+          refundRequestId: parseInt(id),
+          refundAmount,
+          originalTransactionId: referenceNumber,
+          refundTransactionId: result.refundTransactionId,
+          refundReferenceNumber: result.refundReferenceNumber,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log refund processing:', auditError);
+    }
+
     res.json({
       ...updatedRequest,
       message: 'Refund processed successfully through Accept.Blue',

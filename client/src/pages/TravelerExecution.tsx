@@ -69,12 +69,17 @@ interface TravelerTask {
   id: string;
   travelerStepId: string;
   taskType: string;
-  taskPhase: 'START' | 'WORK' | 'FINISH'; // Execution order enforcement
+  taskPhase: 'START' | 'WORK' | 'FINISH';
   title: string;
   instructions: string | null;
   required: boolean;
   sortOrder: number;
+  timePolicy: 'AUTO_ON_START' | 'AUTO_ON_COMPLETE' | 'MANUAL_ENTRY' | null;
+  requiresSignature: boolean;
+  signatureRole: string | null;
+  requiresCertification: boolean;
   status: string;
+  startedAt: string | null;
   completedAt: string | null;
   completedBy: string | null;
   fields: TravelerTaskField[];
@@ -149,11 +154,16 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 };
 
 const TASK_TYPE_ICONS: Record<string, any> = {
+  CHECK: Shield,
+  PROCESS: Wrench,
+  QC: ClipboardCheck,
+  TRACEABILITY: CreditCard,
+  DOCUMENT: FileText,
+  SIGNATURE: PenTool,
   START_GATE: Play,
   END_GATE: CheckCircle,
   GATE_CHECK: Shield,
   TRACE: CreditCard,
-  QC: ClipboardCheck,
   CUSTOM_FIELD: FileText,
   SPECIAL_PROCESS: AlertTriangle,
   NOTES: FileText,
@@ -604,7 +614,7 @@ export default function TravelerExecution() {
                       const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
                         const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
                         return prevTasks
-                          .filter((t) => t.required && t.taskType !== 'END_GATE')
+                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE')
                           .every((t) => t.status === 'COMPLETED');
                       });
                       
@@ -686,10 +696,23 @@ export default function TravelerExecution() {
                                         </div>
                                         <div className="text-left">
                                           <p className="font-medium">{task.title}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {task.taskType}
-                                            {task.required && ' • Required'}
-                                          </p>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-xs text-muted-foreground">
+                                              {task.taskType}
+                                              {task.required && ' • Required'}
+                                            </span>
+                                            {task.requiresSignature && (
+                                              <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">
+                                                {task.signatureRole || 'SIG'}
+                                              </span>
+                                            )}
+                                            {task.requiresCertification && (
+                                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded">CERT</span>
+                                            )}
+                                            {task.timePolicy === 'MANUAL_ENTRY' && (
+                                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">MANUAL TIME</span>
+                                            )}
+                                          </div>
                                         </div>
                                         {isComplete && (
                                           <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
@@ -704,7 +727,7 @@ export default function TravelerExecution() {
                                           </p>
                                         )}
 
-                                        {task.taskType === 'TRACE' && !isComplete ? (
+                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !isComplete ? (
                                           <MaterialScanner
                                             travelerId={traveler.id}
                                             travelerStepId={currentStep.id}
@@ -824,7 +847,7 @@ export default function TravelerExecution() {
                                               </div>
                                             )}
 
-                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && (
+                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'SIGNATURE' && task.taskType !== 'TRACE' && task.taskType !== 'TRACEABILITY' && (
                                               <Button
                                                 size="sm"
                                                 onClick={() => handleCompleteTask(task)}
@@ -865,7 +888,7 @@ export default function TravelerExecution() {
                       <Button
                         onClick={() => setShowSignDialog(true)}
                         disabled={currentStep.tasks.some(
-                          (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE'
+                          (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE'
                         )}
                         data-testid="button-sign-step"
                       >

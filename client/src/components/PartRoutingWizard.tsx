@@ -111,7 +111,11 @@ interface PhaseCheck {
   title: string;
   instructions?: string;
   required: boolean;
-  signatureRequired: boolean;
+  taskType: 'CHECK' | 'PROCESS' | 'QC' | 'TRACEABILITY' | 'DOCUMENT' | 'SIGNATURE';
+  timePolicy: 'AUTO_ON_START' | 'AUTO_ON_COMPLETE' | 'MANUAL_ENTRY';
+  requiresSignature: boolean;
+  signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
+  requiresCertification: boolean;
 }
 
 interface SignatureConfig {
@@ -894,7 +898,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       title: startCheckTitle.trim(),
       instructions: startCheckInstructions.trim() || undefined,
       required: true,
-      signatureRequired: false,
+      taskType: 'CHECK',
+      timePolicy: 'AUTO_ON_COMPLETE',
+      requiresSignature: false,
+      requiresCertification: false,
     };
     setDepartmentConfig({
       ...departmentConfig,
@@ -919,7 +926,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       title: finishCheckTitle.trim(),
       instructions: finishCheckInstructions.trim() || undefined,
       required: true,
-      signatureRequired: false,
+      taskType: 'CHECK',
+      timePolicy: 'AUTO_ON_COMPLETE',
+      requiresSignature: false,
+      requiresCertification: false,
     };
     setDepartmentConfig({
       ...departmentConfig,
@@ -942,7 +952,20 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     const key = phase === 'start' ? 'startChecks' : 'finishChecks';
     const checks = [...(config[key] || [])];
     if (checks[index]) {
-      checks[index] = { ...checks[index], signatureRequired: !checks[index].signatureRequired };
+      checks[index] = { ...checks[index], requiresSignature: !checks[index].requiresSignature };
+    }
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, [key]: checks },
+    });
+  };
+
+  const updateCheckProperty = (dept: string, phase: 'start' | 'finish', index: number, updates: Partial<PhaseCheck>) => {
+    const config = getOrCreateDeptConfig(dept);
+    const key = phase === 'start' ? 'startChecks' : 'finishChecks';
+    const checks = [...(config[key] || [])];
+    if (checks[index]) {
+      checks[index] = { ...checks[index], ...updates };
     }
     setDepartmentConfig({
       ...departmentConfig,
@@ -1286,19 +1309,50 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 {config.startChecks && config.startChecks.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.startChecks.map((check, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <Check className="h-4 w-4 text-blue-600 shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium truncate">{check.title}</p>
-                                          {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
+                                      <div key={idx} className="p-2 rounded border bg-background space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <Check className="h-4 w-4 text-blue-600 shrink-0" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{check.title}</p>
+                                            {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
+                                          </div>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeStartCheck(dept, idx)}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
                                         </div>
-                                        {check.signatureRequired && <Badge variant="outline" className="text-[10px] shrink-0">Sig</Badge>}
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => toggleCheckSignatureRequired(dept, 'start', idx)}>
-                                          <PenLine className={`h-3 w-3 ${check.signatureRequired ? 'text-primary' : 'text-muted-foreground'}`} />
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeStartCheck(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
+                                        <div className="flex flex-wrap gap-1 pl-6">
+                                          <Badge variant="outline" className="text-[10px]">{check.taskType || 'CHECK'}</Badge>
+                                          <Badge variant="outline" className="text-[10px]">{(check.timePolicy || 'AUTO_ON_COMPLETE').replace(/_/g, ' ')}</Badge>
+                                          <Badge
+                                            variant={check.requiresSignature ? 'default' : 'outline'}
+                                            className="text-[10px] cursor-pointer"
+                                            onClick={() => toggleCheckSignatureRequired(dept, 'start', idx)}
+                                          >
+                                            <PenLine className="h-2.5 w-2.5 mr-0.5" />
+                                            {check.requiresSignature ? (check.signatureRole || 'OPERATOR') : 'No Sig'}
+                                          </Badge>
+                                          {check.requiresSignature && (
+                                            <Select
+                                              value={check.signatureRole || 'OPERATOR'}
+                                              onValueChange={(val) => updateCheckProperty(dept, 'start', idx, { signatureRole: val as any })}
+                                            >
+                                              <SelectTrigger className="h-5 w-24 text-[10px] border-0 p-0 px-1"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="OPERATOR">Operator</SelectItem>
+                                                <SelectItem value="LEAD">Lead</SelectItem>
+                                                <SelectItem value="QC">QC</SelectItem>
+                                                <SelectItem value="ENGINEERING">Engineering</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          )}
+                                          <Badge
+                                            variant={check.requiresCertification ? 'default' : 'outline'}
+                                            className="text-[10px] cursor-pointer"
+                                            onClick={() => updateCheckProperty(dept, 'start', idx, { requiresCertification: !check.requiresCertification })}
+                                          >
+                                            Cert {check.requiresCertification ? 'Yes' : 'No'}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -1538,19 +1592,50 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 {config.finishChecks && config.finishChecks.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.finishChecks.map((check, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium truncate">{check.title}</p>
-                                          {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
+                                      <div key={idx} className="p-2 rounded border bg-background space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{check.title}</p>
+                                            {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
+                                          </div>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeFinishCheck(dept, idx)}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
                                         </div>
-                                        {check.signatureRequired && <Badge variant="outline" className="text-[10px] shrink-0">Sig</Badge>}
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => toggleCheckSignatureRequired(dept, 'finish', idx)}>
-                                          <PenLine className={`h-3 w-3 ${check.signatureRequired ? 'text-primary' : 'text-muted-foreground'}`} />
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeFinishCheck(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
+                                        <div className="flex flex-wrap gap-1 pl-6">
+                                          <Badge variant="outline" className="text-[10px]">{check.taskType || 'CHECK'}</Badge>
+                                          <Badge variant="outline" className="text-[10px]">{(check.timePolicy || 'AUTO_ON_COMPLETE').replace(/_/g, ' ')}</Badge>
+                                          <Badge
+                                            variant={check.requiresSignature ? 'default' : 'outline'}
+                                            className="text-[10px] cursor-pointer"
+                                            onClick={() => toggleCheckSignatureRequired(dept, 'finish', idx)}
+                                          >
+                                            <PenLine className="h-2.5 w-2.5 mr-0.5" />
+                                            {check.requiresSignature ? (check.signatureRole || 'QC') : 'No Sig'}
+                                          </Badge>
+                                          {check.requiresSignature && (
+                                            <Select
+                                              value={check.signatureRole || 'QC'}
+                                              onValueChange={(val) => updateCheckProperty(dept, 'finish', idx, { signatureRole: val as any })}
+                                            >
+                                              <SelectTrigger className="h-5 w-24 text-[10px] border-0 p-0 px-1"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="OPERATOR">Operator</SelectItem>
+                                                <SelectItem value="LEAD">Lead</SelectItem>
+                                                <SelectItem value="QC">QC</SelectItem>
+                                                <SelectItem value="ENGINEERING">Engineering</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          )}
+                                          <Badge
+                                            variant={check.requiresCertification ? 'default' : 'outline'}
+                                            className="text-[10px] cursor-pointer"
+                                            onClick={() => updateCheckProperty(dept, 'finish', idx, { requiresCertification: !check.requiresCertification })}
+                                          >
+                                            Cert {check.requiresCertification ? 'Yes' : 'No'}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>

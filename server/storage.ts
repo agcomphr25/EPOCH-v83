@@ -13497,46 +13497,59 @@ export class DatabaseStorage implements IStorage {
         requiredSignatures: ['operator'],
       };
 
+      // Map signatureConfig role names to signatureRole enum
+      const primarySignatureRole = signatureConfig.requiredSignatures[0]?.toUpperCase() || 'OPERATOR';
+
       // ===== START PHASE =====
-      // Create START_GATE task
+      // Badge Scan (always first, auto-timestamps on start)
       await this.createTravelerTask({
         travelerStepId: step.id,
-        taskType: 'START_GATE',
+        taskType: 'CHECK',
         taskPhase: 'START',
-        title: `Start ${deptName}`,
-        instructions: signatureConfig.startRequiresSignature
-          ? `Badge scan and signature to start work in ${deptName}`
-          : `Badge scan to start work in ${deptName}`,
+        title: 'Badge Scan',
+        instructions: `Badge scan to start work in ${deptName}`,
         required: true,
         sortOrder: sortOrder++,
+        timePolicy: 'AUTO_ON_START',
+        requiresSignature: signatureConfig.startRequiresSignature,
+        signatureRole: signatureConfig.startRequiresSignature ? (primarySignatureRole as any) : null,
+        requiresCertification: true,
         status: 'NOT_STARTED',
       });
 
-      // Create tasks for explicit START checks from routing
+      // Explicit START gate checks from routing template
       for (const check of startChecks) {
         await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'GATE_CHECK',
+          taskType: check.taskType || 'CHECK',
           taskPhase: 'START',
           title: check.title,
           instructions: check.instructions || `Complete: ${check.title}`,
           required: check.required !== false,
           sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+          requiresCertification: check.requiresCertification || false,
           status: 'NOT_STARTED',
         });
       }
 
-      // Create TRACE tasks from traceabilityConfig (START phase - material verification)
+      // Material Lot Entry (TRACEABILITY tasks from materials config)
       const traceFields = traceabilityConfig[deptName] || [];
-      if (traceFields.length > 0) {
+      const materials = deptConfig.materials || [];
+      if (traceFields.length > 0 || materials.length > 0) {
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'TRACE',
+          taskType: 'TRACEABILITY',
           taskPhase: 'START',
-          title: 'Material Traceability',
+          title: 'Material Lot Entry',
           instructions: 'Record traceability data for materials used',
           required: true,
           sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
           status: 'NOT_STARTED',
         });
 
@@ -13552,17 +13565,20 @@ export class DatabaseStorage implements IStorage {
       }
 
       // ===== WORK PHASE =====
-      // Create custom field tasks from departmentConfig.customDataFields
+      // PROCESS tasks from customDataFields
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
         const customTask = await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'CUSTOM_FIELD',
+          taskType: 'PROCESS',
           taskPhase: 'WORK',
-          title: 'Additional Data Entry',
-          instructions: 'Enter required custom data',
+          title: 'Process Data Entry',
+          instructions: 'Enter required process data',
           required: true,
           sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
           status: 'NOT_STARTED',
         });
 
@@ -13577,17 +13593,20 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create oven curing task if applicable (WORK phase)
+      // PROCESS task for oven curing (manual time entry for cure data)
       const ovenCuringSteps = deptConfig.ovenCuringSteps || [];
       if (ovenCuringSteps.length > 0) {
         const ovenTask = await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'SPECIAL_PROCESS',
+          taskType: 'PROCESS',
           taskPhase: 'WORK',
           title: 'Oven Curing',
           instructions: 'Complete oven curing process',
           required: true,
           sortOrder: sortOrder++,
+          timePolicy: 'MANUAL_ENTRY',
+          requiresSignature: false,
+          requiresCertification: false,
           status: 'NOT_STARTED',
         });
 
@@ -13605,21 +13624,25 @@ export class DatabaseStorage implements IStorage {
       }
 
       // ===== FINISH PHASE =====
-      // Create tasks for explicit FINISH checks from routing
+      // Explicit FINISH checks from routing template
       for (const check of finishChecks) {
         await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'GATE_CHECK',
+          taskType: check.taskType || 'CHECK',
           taskPhase: 'FINISH',
           title: check.title,
           instructions: check.instructions || `Complete: ${check.title}`,
           required: check.required !== false,
           sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'QC') : null,
+          requiresCertification: check.requiresCertification || false,
           status: 'NOT_STARTED',
         });
       }
 
-      // Create QC tasks from departmentConfig.qcStandards (FINISH phase)
+      // QC verification tasks
       const qcStandards = deptConfig.qcStandards || [];
       if (qcStandards.length > 0) {
         const qcTask = await this.createTravelerTask({
@@ -13630,6 +13653,10 @@ export class DatabaseStorage implements IStorage {
           instructions: 'Complete all quality control verifications',
           required: true,
           sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: true,
+          signatureRole: 'QC',
+          requiresCertification: false,
           status: 'NOT_STARTED',
         });
 
@@ -13645,10 +13672,10 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create END_GATE task (FINISH phase - signature per config)
+      // Final Signature (SIGNATURE task - completion gate)
       await this.createTravelerTask({
         travelerStepId: step.id,
-        taskType: 'END_GATE',
+        taskType: 'SIGNATURE',
         taskPhase: 'FINISH',
         title: `Complete ${deptName}`,
         instructions: signatureConfig.finishRequiresSignature
@@ -13656,6 +13683,10 @@ export class DatabaseStorage implements IStorage {
           : `Badge scan to complete ${deptName}`,
         required: true,
         sortOrder: sortOrder++,
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: signatureConfig.finishRequiresSignature,
+        signatureRole: signatureConfig.finishRequiresSignature ? (primarySignatureRole as any) : null,
+        requiresCertification: false,
         status: 'NOT_STARTED',
       });
     }

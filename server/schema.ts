@@ -4521,7 +4521,13 @@ export const travelerTasks = pgTable('traveler_tasks', {
   required: boolean('required').default(true),
   sortOrder: integer('sort_order').default(0),
 
+  timePolicy: varchar('time_policy', { length: 50 }).default('AUTO_ON_COMPLETE'),
+  requiresSignature: boolean('requires_signature').default(false),
+  signatureRole: varchar('signature_role', { length: 50 }),
+  requiresCertification: boolean('requires_certification').default(false),
+
   status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   completedBy: varchar('completed_by', { length: 255 }),
 }, (table) => ({
@@ -5617,13 +5623,19 @@ export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
   })
   .extend({
     travelerStepId: z.string().uuid('Invalid traveler step ID'),
-    taskType: z.enum(['TRACE', 'QC', 'CUSTOM_FIELD', 'QUESTIONS', 'SPECIAL_PROCESS', 'NOTES', 'START_GATE', 'END_GATE']),
-    taskPhase: z.enum(['START', 'WORK', 'FINISH']).default('WORK'), // Controls execution order enforcement
+    taskType: z.enum(['CHECK', 'PROCESS', 'QC', 'TRACEABILITY', 'DOCUMENT', 'SIGNATURE',
+      'TRACE', 'CUSTOM_FIELD', 'QUESTIONS', 'SPECIAL_PROCESS', 'NOTES', 'START_GATE', 'END_GATE', 'GATE_CHECK']),
+    taskPhase: z.enum(['START', 'WORK', 'FINISH']).default('WORK'),
     title: z.string().min(1, 'Task title is required'),
     instructions: z.string().optional().nullable(),
     required: z.boolean().default(true),
     sortOrder: z.number().int().default(0),
+    timePolicy: z.enum(['AUTO_ON_START', 'AUTO_ON_COMPLETE', 'MANUAL_ENTRY']).default('AUTO_ON_COMPLETE'),
+    requiresSignature: z.boolean().default(false),
+    signatureRole: z.enum(['OPERATOR', 'LEAD', 'QC', 'ENGINEERING', 'CUSTOM']).optional().nullable(),
+    requiresCertification: z.boolean().default(false),
     status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED']).default('NOT_STARTED'),
+    startedAt: z.coerce.date().optional().nullable(),
     completedAt: z.coerce.date().optional().nullable(),
     completedBy: z.string().optional().nullable(),
   });

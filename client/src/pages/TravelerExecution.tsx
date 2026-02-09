@@ -49,6 +49,8 @@ import {
   Wrench,
   Flag,
   Shield,
+  BookOpen,
+  Lightbulb,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 
@@ -78,6 +80,11 @@ interface TravelerTask {
   requiresSignature: boolean;
   signatureRole: string | null;
   requiresCertification: boolean;
+  instructionPack: {
+    workInstructionRefs?: { documentId: string; documentTitle: string; revision?: string }[];
+    aiSnippets?: string[];
+    specialNotes?: string;
+  } | null;
   status: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -732,6 +739,11 @@ export default function TravelerExecution() {
                                             {task.timePolicy === 'MANUAL_ENTRY' && (
                                               <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">MANUAL TIME</span>
                                             )}
+                                            {task.instructionPack && (
+                                              <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded flex items-center gap-0.5">
+                                                <BookOpen className="h-2.5 w-2.5" /> INSTRUCTIONS
+                                              </span>
+                                            )}
                                           </div>
                                         </div>
                                         {isComplete && (
@@ -746,6 +758,49 @@ export default function TravelerExecution() {
                                             {task.instructions}
                                           </p>
                                         )}
+
+                                        {/* Instruction Pack Viewer */}
+                                        {task.instructionPack && (() => {
+                                          const pack = task.instructionPack;
+                                          const hasContent = (pack.workInstructionRefs?.length || 0) > 0 || (pack.aiSnippets?.length || 0) > 0 || pack.specialNotes;
+                                          if (!hasContent) return null;
+                                          return (
+                                            <div className="rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2">
+                                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                                <BookOpen className="h-3.5 w-3.5" /> Instruction Pack
+                                              </p>
+                                              {pack.workInstructionRefs && pack.workInstructionRefs.length > 0 && (
+                                                <div className="space-y-1">
+                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Work Instructions</p>
+                                                  {pack.workInstructionRefs.map((ref, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                      <FileText className="h-3 w-3 text-blue-500 shrink-0" />
+                                                      <span className="font-medium">{ref.documentTitle}</span>
+                                                      {ref.revision && <span className="text-muted-foreground text-[10px]">Rev {ref.revision}</span>}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {pack.aiSnippets && pack.aiSnippets.length > 0 && (
+                                                <div className="space-y-1">
+                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Tips</p>
+                                                  {pack.aiSnippets.map((snippet, i) => (
+                                                    <div key={i} className="flex items-start gap-2 text-xs">
+                                                      <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0 mt-0.5" />
+                                                      <span>{snippet}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {pack.specialNotes && (
+                                                <div className="space-y-1">
+                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Notes</p>
+                                                  <p className="text-xs whitespace-pre-wrap">{pack.specialNotes}</p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
 
                                         {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !isComplete ? (
                                           <MaterialScanner

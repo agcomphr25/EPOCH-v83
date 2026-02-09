@@ -13589,6 +13589,14 @@ export class DatabaseStorage implements IStorage {
       }
 
       // ===== WORK PHASE =====
+      // Snapshot instruction pack from routing (frozen at traveler creation time)
+      const routingInstructionPack = deptConfig.instructionPack || null;
+      const hasInstructionPack = routingInstructionPack && (
+        (routingInstructionPack.workInstructionRefs?.length > 0) ||
+        (routingInstructionPack.aiSnippets?.length > 0) ||
+        (routingInstructionPack.specialNotes)
+      );
+
       // PROCESS tasks from customDataFields
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
@@ -13603,6 +13611,7 @@ export class DatabaseStorage implements IStorage {
           timePolicy: 'AUTO_ON_COMPLETE',
           requiresSignature: false,
           requiresCertification: false,
+          instructionPack: hasInstructionPack ? routingInstructionPack : null,
           status: 'NOT_STARTED',
         });
 
@@ -13631,6 +13640,7 @@ export class DatabaseStorage implements IStorage {
           timePolicy: 'MANUAL_ENTRY',
           requiresSignature: false,
           requiresCertification: false,
+          instructionPack: hasInstructionPack ? routingInstructionPack : null,
           status: 'NOT_STARTED',
         });
 
@@ -13645,6 +13655,24 @@ export class DatabaseStorage implements IStorage {
             validation: { temperature: cureStep.temperature, time: cureStep.time },
           });
         }
+      }
+
+      // If instruction pack exists but no WORK tasks were created, add a standalone task for it
+      if (hasInstructionPack && customFields.length === 0 && ovenCuringSteps.length === 0) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'WORK',
+          title: 'Work Instructions',
+          instructions: routingInstructionPack?.specialNotes || 'Review instruction pack before proceeding',
+          required: false,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: routingInstructionPack,
+          status: 'NOT_STARTED',
+        });
       }
 
       // ===== FINISH PHASE =====

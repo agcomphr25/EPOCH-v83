@@ -1,0 +1,114 @@
+server/index.ts:140:  '/api/p2-traveler',    // Production floor traveler system (uses badge authentication)
+server/storage.ts:55:  partRoutings,
+server/storage.ts:13078:      .insert(partRoutings)
+server/storage.ts:13088:      conditions.push(eq(partRoutings.inventoryItemId, filters.inventoryItemId));
+server/storage.ts:13091:      conditions.push(eq(partRoutings.isActive, filters.isActive));
+server/storage.ts:13095:      return await db.select().from(partRoutings).orderBy(partRoutings.createdAt);
+server/storage.ts:13100:      .from(partRoutings)
+server/storage.ts:13102:      .orderBy(partRoutings.createdAt);
+server/storage.ts:13108:      .from(partRoutings)
+server/storage.ts:13109:      .where(eq(partRoutings.id, id));
+server/storage.ts:13116:      .from(partRoutings)
+server/storage.ts:13118:        eq(partRoutings.inventoryItemId, inventoryItemId),
+server/storage.ts:13119:        eq(partRoutings.isActive, true)
+server/storage.ts:13127:      .from(partRoutings)
+server/storage.ts:13129:        eq(partRoutings.partNumber, partNumber),
+server/storage.ts:13130:        eq(partRoutings.isActive, true)
+server/storage.ts:13152:      .update(partRoutings)
+server/storage.ts:13154:      .where(eq(partRoutings.id, id))
+server/storage.ts:13165:    await db.delete(partRoutings).where(eq(partRoutings.id, id));
+server/src/routes/p2ProductionQueue.ts:9:  partRoutings
+server/src/routes/p2ProductionQueue.ts:93:        .from(partRoutings)
+server/src/routes/p2ProductionQueue.ts:96:            inArray(partRoutings.partNumber, uniquePartNumbers),
+server/src/routes/p2ProductionQueue.ts:97:            eq(partRoutings.isActive, true)
+server/src/routes/index.ts:87:import partRoutingsRoutes from './partRoutings';
+server/src/routes/index.ts:90:import routingDocumentsRoutes from './routingDocuments';
+server/src/routes/index.ts:210:  app.use('/api/part-routings', partRoutingsRoutes);
+server/src/routes/index.ts:213:  app.use('/api/travelers', travelersRoutes);
+server/src/routes/index.ts:219:  app.use('/api/routing-documents', routingDocumentsRoutes);
+server/src/routes/index.ts:255:  app.use('/api/p2-traveler', p2TravelerRoutes);
+server/src/routes/index.ts:258:  app.use('/api/p2-traveler-viewer', p2TravelerViewerRoutes);
+server/src/routes/index.ts:2112:  app.get('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+server/src/routes/index.ts:2123:  app.post('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+server/src/routes/index.ts:2137:  app.post('/api/travelers/:travelerId/changes/:changeId/authorize', softAuth, async (req, res) => {
+server/src/routes/p2Traveler.ts:7:  partRoutings,
+server/src/routes/p2Traveler.ts:31:// GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
+server/src/routes/p2Traveler.ts:33:router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {
+server/src/routes/p2Traveler.ts:60:    const routing = await db.query.partRoutings.findFirst({
+server/src/routes/p2Traveler.ts:62:        eq(partRoutings.partNumber, serializedItem.partNumber),
+server/src/routes/p2Traveler.ts:63:        eq(partRoutings.isActive, true)
+server/src/routes/p2Traveler.ts:132:// GET /api/p2-traveler/part-info/:barcode
+server/src/routes/p2Traveler.ts:149:    const routing = await db.query.partRoutings.findFirst({
+server/src/routes/p2Traveler.ts:151:        eq(partRoutings.partNumber, serializedItem.partNumber),
+server/src/routes/p2Traveler.ts:152:        eq(partRoutings.isActive, true)
+server/src/routes/p2Traveler.ts:192:// GET /api/p2-traveler/active-tasks/:employeeId
+server/src/routes/p2Traveler.ts:213:// POST /api/p2-traveler/start-task
+server/src/routes/p2Traveler.ts:241:    const routing = await db.query.partRoutings.findFirst({
+server/src/routes/p2Traveler.ts:243:        eq(partRoutings.partNumber, serializedItem.partNumber),
+server/src/routes/p2Traveler.ts:244:        eq(partRoutings.isActive, true)
+server/src/routes/p2Traveler.ts:379:// POST /api/p2-traveler/complete-task
+server/src/routes/p2Traveler.ts:454:    const routing = await db.query.partRoutings.findFirst({
+server/src/routes/p2Traveler.ts:456:        eq(partRoutings.partNumber, serializedItem.partNumber),
+server/src/routes/p2Traveler.ts:457:        eq(partRoutings.isActive, true)
+server/src/routes/p2Traveler.ts:580:// GET /api/p2-traveler/traceability/:serializedItemId
+server/src/routes/travelers.ts:114:router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) => {
+server/src/routes/p2TravelerViewer.ts:7:  partRoutings,
+server/src/routes/p2TravelerViewer.ts:50:// GET /api/p2-traveler-viewer/item/:barcode
+server/src/routes/p2TravelerViewer.ts:69:    const routing = await db.query.partRoutings.findFirst({
+server/src/routes/p2TravelerViewer.ts:71:        eq(partRoutings.partNumber, serializedItem.partNumber),
+server/src/routes/p2TravelerViewer.ts:72:        eq(partRoutings.isActive, true)
+server/src/routes/p2TravelerViewer.ts:253:// GET /api/p2-traveler-viewer/item-by-id/:id
+server/src/routes/p2TravelerViewer.ts:268:    return res.redirect(`/api/p2-traveler-viewer/item/${serializedItem.barcode}`);
+server/src/routes/p2TravelerViewer.ts:275:// PATCH /api/p2-traveler-viewer/item/:id/traveler-barcode
+server/src/routes/p2TravelerViewer.ts:303:// POST /api/p2-traveler-viewer/oven-cure-log
+server/src/routes/p2TravelerViewer.ts:316:// PUT /api/p2-traveler-viewer/oven-cure-log/:id
+server/src/routes/p2TravelerViewer.ts:342:// POST /api/p2-traveler-viewer/vacuum-leak-test
+server/src/routes/p2TravelerViewer.ts:355:// PUT /api/p2-traveler-viewer/vacuum-leak-test/:id
+server/src/routes/p2TravelerViewer.ts:381:// POST /api/p2-traveler-viewer/final-inspection
+server/src/routes/p2TravelerViewer.ts:394:// PUT /api/p2-traveler-viewer/final-inspection/:id
+server/src/routes/p2TravelerViewer.ts:420:// POST /api/p2-traveler-viewer/lot-number
+server/src/routes/p2TravelerViewer.ts:438:// GET /api/p2-traveler-viewer/lot-numbers
+server/src/routes/p2TravelerViewer.ts:466:// PUT /api/p2-traveler-viewer/lot-number/:id
+server/src/routes/p2TravelerViewer.ts:492:// POST /api/p2-traveler-viewer/lot-number/:id/add-items
+server/src/routes/p2TravelerViewer.ts:536:// POST /api/p2-traveler-viewer/packing-slip
+server/src/routes/p2TravelerViewer.ts:563:// GET /api/p2-traveler-viewer/packing-slips
+server/src/routes/p2TravelerViewer.ts:577:// GET /api/p2-traveler-viewer/packing-slip/:id
+server/src/routes/p2TravelerViewer.ts:595:// PUT /api/p2-traveler-viewer/packing-slip/:id
+server/src/routes/p2TravelerViewer.ts:621:// POST /api/p2-traveler-viewer/certificate-of-conformance
+server/src/routes/p2TravelerViewer.ts:648:// GET /api/p2-traveler-viewer/certificates-of-conformance
+server/src/routes/p2TravelerViewer.ts:662:// GET /api/p2-traveler-viewer/certificate-of-conformance/:id
+server/src/routes/p2TravelerViewer.ts:680:// PUT /api/p2-traveler-viewer/certificate-of-conformance/:id
+server/src/routes/p2TravelerViewer.ts:706:// POST /api/p2-traveler-viewer/test-for-conformance
+server/src/routes/p2TravelerViewer.ts:724:// GET /api/p2-traveler-viewer/test-for-conformance-reports
+server/src/routes/p2TravelerViewer.ts:738:// GET /api/p2-traveler-viewer/test-for-conformance/:id
+server/src/routes/p2TravelerViewer.ts:756:// PUT /api/p2-traveler-viewer/test-for-conformance/:id
+server/src/routes/p2TravelerViewer.ts:782:// POST /api/p2-traveler-viewer/generate-from-lot/:lotId
+server/src/routes/p2TravelerViewer.ts:987:// POST /api/p2-traveler-viewer/signatures
+server/src/routes/p2TravelerViewer.ts:1023:// GET /api/p2-traveler-viewer/signatures/item/:serializedItemId
+server/src/routes/p2TravelerViewer.ts:1041:// GET /api/p2-traveler-viewer/signatures/barcode/:barcode
+server/src/routes/p2TravelerViewer.ts:1059:// GET /api/p2-traveler-viewer/signatures/:id
+server/src/routes/p2TravelerViewer.ts:1080:// GET /api/p2-traveler-viewer/signatures/department/:department
+server/src/routes/p2TravelerViewer.ts:1100:// GET /api/p2-traveler-viewer/signatures/employee/:employeeId
+server/src/routes/p2TravelerViewer.ts:1120:// GET /api/p2-traveler-viewer/signatures/verify/:id
+server/src/routes/routingDocuments.ts:4:  routingDocuments, 
+server/src/routes/routingDocuments.ts:333:    const [document] = await db.insert(routingDocuments).values({
+server/src/routes/routingDocuments.ts:374:    const [document] = await db.insert(routingDocuments).values({
+server/src/routes/routingDocuments.ts:421:        await db.update(routingDocuments)
+server/src/routes/routingDocuments.ts:428:          .where(eq(routingDocuments.id, document.id));
+server/src/routes/routingDocuments.ts:457:    const [document] = await db.insert(routingDocuments).values({
+server/src/routes/routingDocuments.ts:502:    const [document] = await db.insert(routingDocuments).values({
+server/src/routes/routingDocuments.ts:571:    const [updatedDocument] = await db.update(routingDocuments)
+server/src/routes/routingDocuments.ts:578:      .where(eq(routingDocuments.id, req.params.id))
+server/src/routes/routingDocuments.ts:666:    const [newDocument] = await db.insert(routingDocuments).values({
+server/src/routes/routingDocuments.ts:976:    const [document] = await db.select().from(routingDocuments).where(eq(routingDocuments.id, id));
+server/src/routes/routingDocuments.ts:1132:    const [updated] = await db.update(routingDocuments)
+server/src/routes/routingDocuments.ts:1134:      .where(eq(routingDocuments.id, req.params.id))
+server/src/routes/routingDocuments.ts:1156:    const [deleted] = await db.update(routingDocuments)
+server/src/routes/routingDocuments.ts:1158:      .where(eq(routingDocuments.id, req.params.id))
+server/src/routes/routingDocuments.ts:1184:    const result = await db.delete(routingDocuments).where(eq(routingDocuments.id, req.params.id));
+server/schema.ts:4259:export const partRoutings = pgTable('part_routings', {
+server/schema.ts:5351:export const insertPartRoutingSchema = createInsertSchema(partRoutings)
+server/schema.ts:5449:export type PartRouting = typeof partRoutings.$inferSelect;
+server/schema.ts:11148:export const routingDocuments = pgTable('routing_documents', {
+server/schema.ts:11344:export const insertRoutingDocumentSchema = createInsertSchema(routingDocuments)
+server/schema.ts:11427:export type RoutingDocument = typeof routingDocuments.$inferSelect;

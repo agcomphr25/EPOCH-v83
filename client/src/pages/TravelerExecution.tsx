@@ -23,6 +23,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -30,6 +37,7 @@ import {
 } from '@/components/ui/accordion';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft,
   Play,
@@ -48,6 +56,13 @@ import {
   ScanBarcode,
   Wrench,
   Flag,
+  Shield,
+  BookOpen,
+  Lightbulb,
+  ImageIcon,
+  Eye,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 
@@ -68,12 +83,23 @@ interface TravelerTask {
   id: string;
   travelerStepId: string;
   taskType: string;
-  taskPhase: 'START' | 'WORK' | 'FINISH'; // Execution order enforcement
+  taskPhase: 'START' | 'WORK' | 'FINISH';
   title: string;
   instructions: string | null;
   required: boolean;
   sortOrder: number;
+  timePolicy: 'AUTO_ON_START' | 'AUTO_ON_COMPLETE' | 'MANUAL_ENTRY' | null;
+  requiresSignature: boolean;
+  signatureRole: string | null;
+  requiresCertification: boolean;
+  instructionPack: {
+    workInstructionRefs?: { documentId: string; title?: string; pageRange?: string; anchor?: string }[];
+    aiSnippets?: { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[];
+    specialNotes?: string;
+    media?: { type: 'image' | 'pdf'; documentId: string; caption?: string }[];
+  } | null;
   status: string;
+  startedAt: string | null;
   completedAt: string | null;
   completedBy: string | null;
   fields: TravelerTaskField[];
@@ -82,8 +108,10 @@ interface TravelerTask {
 interface TravelerSignature {
   id: string;
   travelerStepId: string;
+  travelerTaskId: string | null;
   signedBy: string;
   signedByName: string | null;
+  signatureRole: string | null;
   badgeScan: string | null;
   signedAt: string;
   meaning: string;
@@ -148,10 +176,16 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 };
 
 const TASK_TYPE_ICONS: Record<string, any> = {
+  CHECK: Shield,
+  PROCESS: Wrench,
+  QC: ClipboardCheck,
+  TRACEABILITY: CreditCard,
+  DOCUMENT: FileText,
+  SIGNATURE: PenTool,
   START_GATE: Play,
   END_GATE: CheckCircle,
+  GATE_CHECK: Shield,
   TRACE: CreditCard,
-  QC: ClipboardCheck,
   CUSTOM_FIELD: FileText,
   SPECIAL_PROCESS: AlertTriangle,
   NOTES: FileText,
@@ -192,6 +226,8 @@ export default function TravelerExecution() {
   const travelerId = params.id;
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
+  const [signingRole, setSigningRole] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState({
     signedBy: '',
     signedByName: '',
@@ -202,9 +238,36 @@ export default function TravelerExecution() {
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
+  const [instructionSheetOpen, setInstructionSheetOpen] = useState(false);
+  const [instructionSheetTaskId, setInstructionSheetTaskId] = useState<string | null>(null);
+  const [wiModalOpen, setWiModalOpen] = useState(false);
+  const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const normalizeInstructionPack = (rawPack: any) => {
+    if (!rawPack) return null;
+    const normalizedRefs = (rawPack.workInstructionRefs || []).map((r: any) => ({
+      documentId: r.documentId || '',
+      title: r.title || r.documentTitle || undefined,
+      pageRange: r.pageRange || undefined,
+      anchor: r.anchor || undefined,
+    }));
+    const normalizedSnippets = (rawPack.aiSnippets || []).map((s: any) =>
+      typeof s === 'string'
+        ? { title: 'Tip', bullets: [s] }
+        : { title: s.title || 'Tip', bullets: s.bullets || [], sourceDocumentId: s.sourceDocumentId, confidence: s.confidence }
+    );
+    const pack = {
+      workInstructionRefs: normalizedRefs as { documentId: string; title?: string; pageRange?: string; anchor?: string }[],
+      aiSnippets: normalizedSnippets as { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[],
+      specialNotes: rawPack.specialNotes as string | undefined,
+      media: (rawPack.media || []) as { type: 'image' | 'pdf'; documentId: string; caption?: string }[],
+    };
+    const hasContent = pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || pack.media.length > 0;
+    return hasContent ? pack : null;
+  };
 
   const { data: travelerData, isLoading, refetch } = useQuery<TravelerWithDetails>({
     queryKey: ['/api/travelers', travelerId, 'details'],
@@ -259,15 +322,21 @@ export default function TravelerExecution() {
   });
 
   const signStepMutation = useMutation({
-    mutationFn: (stepId: string) =>
+    mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
-        body: JSON.stringify(signatureData),
+        body: JSON.stringify({
+          ...signatureData,
+          taskId: taskId || undefined,
+          signatureRole: role || undefined,
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      toast({ title: 'Step Signed', description: 'Step has been completed and signed' });
+      toast({ title: 'Signed', description: 'Signature recorded successfully' });
       setShowSignDialog(false);
+      setSigningTaskId(null);
+      setSigningRole(null);
       setSignatureData({
         signedBy: '',
         signedByName: '',
@@ -586,7 +655,17 @@ export default function TravelerExecution() {
                   </div>
                 )}
 
-                {currentStep.status === 'IN_PROGRESS' && (
+                {currentStep.status === 'IN_PROGRESS' && (() => {
+                  const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
+                  const allRequiredNonGateComplete = currentStep.tasks
+                    .filter((t) => t.required && !isGateTask(t))
+                    .every((t) => t.status === 'COMPLETED');
+                  const unsignedSigTasks = currentStep.tasks.filter(
+                    (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
+                  );
+                  const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
+
+                  return (
                   <div className="space-y-6">
                     {PHASE_ORDER.map((phase, phaseIndex) => {
                       const phaseTasks = currentStep.tasks
@@ -602,7 +681,7 @@ export default function TravelerExecution() {
                       const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
                         const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
                         return prevTasks
-                          .filter((t) => t.required && t.taskType !== 'END_GATE')
+                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE')
                           .every((t) => t.status === 'COMPLETED');
                       });
                       
@@ -684,10 +763,28 @@ export default function TravelerExecution() {
                                         </div>
                                         <div className="text-left">
                                           <p className="font-medium">{task.title}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {task.taskType}
-                                            {task.required && ' • Required'}
-                                          </p>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-xs text-muted-foreground">
+                                              {task.taskType}
+                                              {task.required && ' • Required'}
+                                            </span>
+                                            {task.requiresSignature && (
+                                              <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">
+                                                {task.signatureRole || 'SIG'}
+                                              </span>
+                                            )}
+                                            {task.requiresCertification && (
+                                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded">CERT</span>
+                                            )}
+                                            {task.timePolicy === 'MANUAL_ENTRY' && (
+                                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">MANUAL TIME</span>
+                                            )}
+                                            {task.instructionPack && (
+                                              <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded flex items-center gap-0.5">
+                                                <BookOpen className="h-2.5 w-2.5" /> INSTRUCTIONS
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                         {isComplete && (
                                           <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
@@ -702,7 +799,40 @@ export default function TravelerExecution() {
                                           </p>
                                         )}
 
-                                        {task.taskType === 'TRACE' && !isComplete ? (
+                                        {/* Instruction Pack — Prominent Display */}
+                                        {(() => {
+                                          const pack = normalizeInstructionPack(task.instructionPack);
+                                          if (!pack) return null;
+                                          return (
+                                            <div className="space-y-2">
+                                              {pack.specialNotes && (
+                                                <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
+                                                  <div className="flex items-start gap-2">
+                                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                    <div>
+                                                      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">Special Notes</p>
+                                                      <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 font-medium"
+                                                onClick={() => { setInstructionSheetTaskId(task.id); setInstructionSheetOpen(true); }}
+                                              >
+                                                <BookOpen className="h-4 w-4 mr-2" />
+                                                View Instructions
+                                                <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+                                                  {pack.workInstructionRefs.length + pack.aiSnippets.length + pack.media.length}
+                                                </Badge>
+                                              </Button>
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !isComplete ? (
                                           <MaterialScanner
                                             travelerId={traveler.id}
                                             travelerStepId={currentStep.id}
@@ -822,20 +952,38 @@ export default function TravelerExecution() {
                                               </div>
                                             )}
 
-                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && (
-                                              <Button
-                                                size="sm"
-                                                onClick={() => handleCompleteTask(task)}
-                                                disabled={completeTaskMutation.isPending}
-                                                data-testid={`button-complete-task-${task.id}`}
-                                              >
-                                                {completeTaskMutation.isPending ? (
-                                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                ) : (
-                                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                                )}
-                                                Complete Task
-                                              </Button>
+                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && task.taskType !== 'TRACEABILITY' && (
+                                              task.taskType === 'SIGNATURE' ? (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                  onClick={() => {
+                                                    setSigningTaskId(task.id);
+                                                    setSigningRole(task.signatureRole);
+                                                    setShowSignDialog(true);
+                                                  }}
+                                                  disabled={!phaseUnlocked}
+                                                  data-testid={`button-sign-task-${task.id}`}
+                                                >
+                                                  <PenTool className="h-4 w-4 mr-2" />
+                                                  Sign ({task.signatureRole || 'Required'})
+                                                </Button>
+                                              ) : (
+                                                <Button
+                                                  size="sm"
+                                                  onClick={() => handleCompleteTask(task)}
+                                                  disabled={completeTaskMutation.isPending}
+                                                  data-testid={`button-complete-task-${task.id}`}
+                                                >
+                                                  {completeTaskMutation.isPending ? (
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                  ) : (
+                                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                                  )}
+                                                  Complete Task
+                                                </Button>
+                                              )
                                             )}
                                           </>
                                         )}
@@ -859,20 +1007,52 @@ export default function TravelerExecution() {
                       );
                     })}
 
-                    <div className="flex justify-end pt-4 border-t">
-                      <Button
-                        onClick={() => setShowSignDialog(true)}
-                        disabled={currentStep.tasks.some(
-                          (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE'
-                        )}
-                        data-testid="button-sign-step"
-                      >
-                        <PenTool className="h-4 w-4 mr-2" />
-                        Sign & Complete Step
-                      </Button>
+                    <div className="pt-4 border-t space-y-3">
+                      {!canSignStep && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                            <div className="text-sm text-amber-800">
+                              {!allRequiredNonGateComplete && (
+                                <p>Complete all required tasks before signing off.</p>
+                              )}
+                              {allRequiredNonGateComplete && unsignedSigTasks.length > 0 && (
+                                <div>
+                                  <p className="font-medium mb-1">Signatures still needed:</p>
+                                  <ul className="list-disc list-inside text-xs space-y-0.5">
+                                    {unsignedSigTasks.map((t) => (
+                                      <li key={t.id}>
+                                        {t.title}
+                                        {t.signatureRole && (
+                                          <span className="text-amber-600 ml-1">({t.signatureRole})</span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => {
+                            setSigningTaskId(null);
+                            setSigningRole(null);
+                            setShowSignDialog(true);
+                          }}
+                          disabled={!canSignStep}
+                          data-testid="button-sign-step"
+                        >
+                          <PenTool className="h-4 w-4 mr-2" />
+                          Sign & Complete Step
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {currentStep.status === 'COMPLETED' && (
                   <div className="text-center py-8">
@@ -882,13 +1062,18 @@ export default function TravelerExecution() {
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
                         <p className="text-sm text-muted-foreground mb-2">Signed by:</p>
                         {currentStep.signatures.map((sig) => (
-                          <div key={sig.id} className="text-sm">
-                            <p className="font-medium">
-                              {sig.signedByName || sig.signedBy}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(sig.signedAt).toLocaleString()} - {sig.meaning}
-                            </p>
+                          <div key={sig.id} className="text-sm flex items-center gap-2">
+                            <div>
+                              <p className="font-medium">
+                                {sig.signedByName || sig.signedBy}
+                                {sig.signatureRole && (
+                                  <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(sig.signedAt).toLocaleString()} - {sig.meaning}
+                              </p>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -904,9 +1089,13 @@ export default function TravelerExecution() {
       <Dialog open={showSignDialog} onOpenChange={setShowSignDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Sign Step Completion</DialogTitle>
+            <DialogTitle>
+              {signingRole ? `${signingRole} Signoff` : 'Sign Step Completion'}
+            </DialogTitle>
             <DialogDescription>
-              Your signature confirms all tasks in this step are complete
+              {signingRole
+                ? `${signingRole} signature required for this department`
+                : 'Your signature confirms all tasks in this step are complete'}
             </DialogDescription>
           </DialogHeader>
 
@@ -951,7 +1140,7 @@ export default function TravelerExecution() {
               Cancel
             </Button>
             <Button
-              onClick={() => currentStep && signStepMutation.mutate(currentStep.id)}
+              onClick={() => currentStep && signStepMutation.mutate({ stepId: currentStep.id, taskId: signingTaskId, role: signingRole })}
               disabled={signStepMutation.isPending || !signatureData.signedBy}
               data-testid="button-confirm-sign"
             >
@@ -999,6 +1188,292 @@ export default function TravelerExecution() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Instruction Pack Sheet Drawer */}
+      <Sheet open={instructionSheetOpen} onOpenChange={setInstructionSheetOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-blue-600" />
+              Instruction Pack
+            </SheetTitle>
+            <SheetDescription>
+              Work instructions, tips, and reference materials for this task
+            </SheetDescription>
+          </SheetHeader>
+
+          {(() => {
+            const sheetTask = currentStep?.tasks?.find((t: TravelerTask) => t.id === instructionSheetTaskId);
+            const pack = sheetTask ? normalizeInstructionPack(sheetTask.instructionPack) : null;
+            if (!pack) return <p className="text-sm text-muted-foreground mt-4">No instructions available.</p>;
+
+            return (
+              <div className="space-y-6 mt-6">
+                {pack.specialNotes && (
+                  <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-2">Special Notes</p>
+                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {pack.workInstructionRefs.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <p className="text-sm font-semibold">Work Instructions</p>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      {pack.workInstructionRefs.map((ref, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                          <FileText className="h-5 w-5 text-blue-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ref.title || ref.documentId}</p>
+                            <div className="flex gap-2 text-xs text-muted-foreground mt-0.5">
+                              {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                              {ref.anchor && <span>§ {ref.anchor}</span>}
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              setWiModalRef(ref);
+                              setWiModalOpen(true);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            View WI
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {pack.aiSnippets.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-yellow-500" />
+                      <p className="text-sm font-semibold">AI Tips</p>
+                    </div>
+                    <Separator />
+                    <Accordion type="multiple" defaultValue={pack.aiSnippets.map((_, i) => `snippet-${i}`)} className="space-y-2">
+                      {pack.aiSnippets.map((snippet, i) => (
+                        <AccordionItem key={i} value={`snippet-${i}`} className="border rounded-lg px-3">
+                          <AccordionTrigger className="py-2 hover:no-underline">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Lightbulb className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+                              <span className="font-medium">{snippet.title}</span>
+                              {snippet.confidence != null && (
+                                <Badge variant="outline" className="text-[10px] ml-auto mr-2">
+                                  {Math.round(snippet.confidence * 100)}% confidence
+                                </Badge>
+                              )}
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <ul className="space-y-1.5 pb-2">
+                              {snippet.bullets.map((b, bi) => (
+                                <li key={bi} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <span className="text-yellow-500 shrink-0 mt-0.5">•</span>
+                                  <span>{b}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {snippet.sourceDocumentId && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <ExternalLink className="h-3 w-3" />
+                                Source: {snippet.sourceDocumentId}
+                              </p>
+                            )}
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
+                )}
+
+                {pack.media.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-green-600" />
+                      <p className="text-sm font-semibold">Reference Media</p>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      {pack.media.map((m, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                          {m.type === 'image' ? (
+                            <ImageIcon className="h-5 w-5 text-green-500 shrink-0" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-red-500 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.caption || m.documentId}</p>
+                            <p className="text-xs text-muted-foreground uppercase">{m.type}</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              setWiModalRef({ documentId: m.documentId, title: m.caption });
+                              setWiModalOpen(true);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            Open
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Work Instruction Detail Modal */}
+      <Dialog open={wiModalOpen} onOpenChange={setWiModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              {wiModalRef?.title || 'Work Instruction'}
+            </DialogTitle>
+            <DialogDescription>
+              Document reference viewer
+            </DialogDescription>
+          </DialogHeader>
+
+          {wiModalRef && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Document ID</p>
+                  <p className="font-mono text-xs bg-muted p-2 rounded">{wiModalRef.documentId}</p>
+                </div>
+                {wiModalRef.pageRange && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Page Range</p>
+                    <p className="text-sm font-medium">Pages {wiModalRef.pageRange}</p>
+                  </div>
+                )}
+                {wiModalRef.anchor && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Section</p>
+                    <p className="text-sm font-medium">§ {wiModalRef.anchor}</p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <WiDocumentViewer documentId={wiModalRef.documentId} />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWiModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function WiDocumentViewer({ documentId }: { documentId: string }) {
+  const { data: doc, isLoading, error } = useQuery<{
+    id: string;
+    title: string;
+    description?: string;
+    version: number;
+    documentType: string;
+    fileUrl?: string;
+    fileName?: string;
+    fileType?: string;
+    aiExtractedContent?: any;
+  }>({
+    queryKey: ['/api/routing-documents', documentId],
+    queryFn: () =>
+      fetch(`/api/routing-documents/${documentId}`).then((res) => {
+        if (!res.ok) throw new Error('Document not found');
+        return res.json();
+      }),
+    enabled: !!documentId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Loading document...</span>
+      </div>
+    );
+  }
+
+  if (error || !doc) {
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-center">
+        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm font-medium">Document Not Linked</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          This reference (ID: {documentId.slice(0, 8)}...) is not yet linked to a routing document.
+          The document ID will resolve when the routing document system is populated.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border p-4 bg-card">
+        <div className="flex items-start gap-3">
+          <FileText className="h-6 w-6 text-blue-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-base font-semibold">{doc.title}</p>
+            <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+              <span>Version {doc.version}</span>
+              <span className="capitalize">{doc.documentType?.replace(/_/g, ' ')}</span>
+              {doc.fileName && <span>{doc.fileName}</span>}
+            </div>
+            {doc.description && (
+              <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {doc.fileUrl && (
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Open Document
+            </a>
+          </Button>
+        </div>
+      )}
+
+      {doc.aiExtractedContent && (
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">AI-Extracted Content</p>
+          <p className="text-sm whitespace-pre-wrap">
+            {typeof doc.aiExtractedContent === 'string'
+              ? doc.aiExtractedContent
+              : JSON.stringify(doc.aiExtractedContent, null, 2).slice(0, 2000)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,105 @@
+We just added the backend for Asset Management + Work Orders.
+
+Now build the frontend UI inside QC & Maintenance.
+
+GOAL:
+Add a new section called "Assets & Maintenance"
+
+Structure under QC & Maintenance:
+
+QC & Maintenance
+  - Preventive Maintenance (existing)
+  - Maintenance Events (new - powered by work_orders table)
+  - Assets (new)
+  - Asset Dashboard (new)
+
+========================================
+ASSETS PAGE
+========================================
+
+Create:
+1) Tree View (left sidebar)
+   - Uses asset_categories hierarchical structure
+   - Expand/collapse folders
+
+2) Main Table View (right side)
+   - Columns:
+     Asset Tag
+     Name
+     Category
+     Location
+     Status
+     Last Work Order Date
+   - Filterable
+   - Sortable
+
+3) Full Asset Form (no quick add)
+   - Asset Tag
+   - Name
+   - Category
+   - Parent Asset
+   - Physical Location
+   - Status
+   - Purchase Info
+   - Warranty
+   - Notes
+
+Admin-only create/edit buttons.
+
+========================================
+MAINTENANCE EVENTS PAGE
+========================================
+
+Table:
+- Work Order ID
+- Asset
+- Type
+- Priority
+- Status
+- Downtime Active (yes/no)
+- Created At
+
+Click row → Open Work Order Detail Page
+
+========================================
+WORK ORDER DETAIL VIEW
+========================================
+
+Sections:
+1) Overview (title, asset, priority, status dropdown)
+2) Description
+3) Downtime tracking (Start / End buttons)
+4) Parts Used (table + add part)
+5) Attachments upload
+6) Activity Timeline (status changes, edits)
+
+Status transitions:
+Open → In Progress → Completed → Closed
+
+Only Admin can:
+- Change status
+- Add parts
+- Close order
+
+========================================
+ASSET DASHBOARD
+========================================
+
+Show:
+
+1) Overdue Preventive Maintenance
+2) Assets with most Reactive work orders (last 90 days)
+3) Assets currently Out of Service
+4) Downtime hours per asset (last 30 days)
+
+Use existing chart components in the app.
+Keep design consistent with current EPOCH theme.
+
+========================================
+IMPORTANT:
+========================================
+
+- Use existing layout components
+- Keep UI consistent with Preventive Maintenance style
+- Do NOT break current QC & Maintenance navigation
+- Follow current React + Tailwind structure

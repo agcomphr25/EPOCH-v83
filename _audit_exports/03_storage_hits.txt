@@ -1,0 +1,27 @@
+server/src/routes/travelers.ts:91:    const traveler = await storage.createTraveler(validatedData);
+server/src/routes/travelers.ts:93:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:167:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:231:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:290:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:323:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:357:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:449:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:523:        incompleteTasks: incompleteFinishTasks.map((t) => ({
+server/src/routes/travelers.ts:534:    const incompleteTasks = tasks.filter(
+server/src/routes/travelers.ts:538:    if (incompleteTasks.length > 0) {
+server/src/routes/travelers.ts:541:        incompleteTasks: incompleteTasks.map((t) => ({
+server/src/routes/travelers.ts:551:    const signature = await storage.createTravelerSignature({
+server/src/routes/travelers.ts:575:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:664:    await storage.createTravelerEvent({
+server/src/routes/materialLots.ts:576:    const consumption = await storage.createTravelerMaterialConsumption(validatedData);
+server/src/routes/partRoutings.ts:29:    const routings = await storage.getPartRoutings(filters);
+server/src/routes/partRoutings.ts:90:    const routing = await storage.createPartRouting(validatedData);
+server/src/routes/partRoutings.ts:138:    const routing = await storage.updatePartRouting(id, validatedData);
+server/src/routes/partRoutings.ts:176:    await storage.deletePartRouting(id);
+server/src/routes/routingDocuments.ts:1063:    const newRouting = await storage.createPartRouting({
+server/src/routes/customers.ts:1991:      const routing = await storage.createPartRouting(validated);
+server/src/routes/customers.ts:2012:      const routings = await storage.getPartRoutings({
+server/src/routes/customers.ts:2090:      const { updatePartRoutingSchema } = await import('../../schema');
+server/src/routes/customers.ts:2093:      const validated = updatePartRoutingSchema.parse(req.body);
+server/src/routes/customers.ts:2096:      const routing = await storage.updatePartRouting(id, validated);
+server/src/routes/customers.ts:2117:      await storage.deletePartRouting(id);

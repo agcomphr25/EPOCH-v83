@@ -2,6 +2,18 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertPartRoutingSchema } from '../../schema';
+import { pool } from '../../db';
+import OpenAI from 'openai';
+
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OpenAI API key not configured');
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 const router = Router();
 
@@ -186,6 +198,308 @@ router.delete('/:id', async (req: Request, res: Response) => {
       error: 'Failed to delete part routing',
       message: error.message 
     });
+  }
+});
+
+router.get('/departments/list', async (_req: Request, res: Response) => {
+  try {
+    const rows = await pool.query(
+      `SELECT id::text, name, display_order AS "displayOrder", is_active AS "isActive",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM p2_routing_departments
+       WHERE is_active = true
+       ORDER BY display_order ASC`
+    );
+    res.json(rows);
+  } catch (error: any) {
+    console.error('Error fetching routing departments:', error);
+    res.status(500).json({ error: 'Failed to fetch routing departments' });
+  }
+});
+
+router.post('/departments', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Department name is required' });
+    }
+    const rows = await pool.query(
+      `INSERT INTO p2_routing_departments (name, display_order)
+       VALUES ($1, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM p2_routing_departments))
+       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive"`,
+      [name.trim()]
+    );
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error creating routing department:', error);
+    res.status(500).json({ error: 'Failed to create routing department' });
+  }
+});
+
+router.patch('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const deptId = req.params.id;
+    const { name } = req.body;
+
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+      return res.status(400).json({ error: 'Department name must be a non-empty string' });
+    }
+    if (name === undefined) {
+      return res.status(400).json({ error: 'No update fields provided' });
+    }
+
+    const rows = await pool.query(
+      `UPDATE p2_routing_departments
+       SET name = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id::text, name, display_order AS "displayOrder", is_active AS "isActive"`,
+      [name.trim(), deptId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Department not found' });
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating routing department:', error);
+    res.status(500).json({ error: 'Failed to update routing department' });
+  }
+});
+
+router.delete('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const rows = await pool.query(
+      `UPDATE p2_routing_departments SET is_active = false, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id::text, name`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Department not found' });
+    res.json({ message: 'Department deactivated', department: rows[0] });
+  } catch (error: any) {
+    console.error('Error deleting routing department:', error);
+    res.status(500).json({ error: 'Failed to delete routing department' });
+  }
+});
+
+// ============================================================================
+// TRAINING PACKAGE GENERATION FROM WORK INSTRUCTIONS
+// ============================================================================
+
+router.post('/:id/generate-training', async (req: Request, res: Response) => {
+  try {
+    const routingId = req.params.id;
+    const { departmentName } = req.body;
+
+    if (!departmentName || typeof departmentName !== 'string') {
+      return res.status(400).json({ error: 'departmentName is required' });
+    }
+
+    const routingResult = await pool.query(
+      `SELECT id::text, part_number AS "partNumber", revision FROM part_routings WHERE id = $1`,
+      [routingId]
+    );
+    if (routingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Routing not found' });
+    }
+    const routing = routingResult.rows[0];
+
+    const docResult = await pool.query(
+      `SELECT id::text, title, ai_extracted_content AS "aiExtractedContent",
+              file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType"
+       FROM routing_documents
+       WHERE part_routing_id = $1 AND department_name = $2 AND is_active = true`,
+      [routingId, departmentName]
+    );
+    const docRows = docResult.rows;
+
+    if (docRows.length === 0) {
+      return res.status(400).json({
+        error: `No work instruction documents found for department "${departmentName}" in this routing.`,
+      });
+    }
+
+    let allContent = '';
+    const sourceDocIds: string[] = [];
+    const sourceDocTitles: string[] = [];
+
+    for (const doc of docRows) {
+      sourceDocIds.push(doc.id);
+      sourceDocTitles.push(doc.title);
+
+      let docContent = '';
+      if (doc.aiExtractedContent) {
+        docContent = typeof doc.aiExtractedContent === 'string'
+          ? doc.aiExtractedContent
+          : JSON.stringify(doc.aiExtractedContent);
+      }
+
+      if (docContent) {
+        allContent += `\n\n--- Document: ${doc.title} ---\n${docContent}`;
+      }
+    }
+
+    if (!allContent || allContent.trim().length < 20) {
+      return res.status(400).json({
+        error: 'Not enough document content to generate training. Make sure documents have been analyzed first.',
+      });
+    }
+
+    const systemPrompt = `You are an expert manufacturing training developer creating AS9100-compliant training content and certification quizzes from work instruction documents.
+
+Return a JSON object with this exact structure:
+{
+  "trainingContent": {
+    "title": "Training title for this department/process",
+    "objectives": ["Learning objective 1", "Learning objective 2", ...],
+    "keyPoints": [
+      { "topic": "Topic name", "details": ["Detail 1", "Detail 2", ...] }
+    ],
+    "safetyNotes": ["Safety note 1", "Safety note 2", ...],
+    "commonMistakes": ["Common mistake 1", "Common mistake 2", ...]
+  },
+  "quizQuestions": [
+    {
+      "question": "Question text?",
+      "questionType": "multiple_choice",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Option A",
+      "explanation": "Why this is correct...",
+      "difficulty": "easy|medium|hard"
+    }
+  ]
+}
+
+Rules:
+- Generate 8-12 quiz questions covering the key processes, safety requirements, and quality standards.
+- Mix difficulty levels: 3-4 easy, 3-4 medium, 2-3 hard.
+- Include both multiple_choice (4 options) and true_false question types.
+- Questions must be directly answerable from the work instruction content.
+- Training objectives should be specific and measurable (use action verbs: identify, demonstrate, explain, etc).
+- Key points should cover critical process steps, quality checkpoints, and acceptance criteria.
+- Safety notes should highlight PPE requirements, hazardous materials, and safety procedures.
+- Common mistakes should cover typical operator errors and how to avoid them.
+- All content must be practical and shop-floor relevant.`;
+
+    const userMessage = `Generate training content and certification quiz for:
+Department: ${departmentName}
+Part Number: ${routing.partNumber || 'N/A'}
+Revision: ${routing.revision || 'N/A'}
+Number of source documents: ${docRows.length}
+
+Work Instruction Content:
+${allContent.substring(0, 50000)}`;
+
+    const response = await getOpenAI().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 4096,
+    });
+
+    const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+
+    if (!parsed.trainingContent || !parsed.quizQuestions || !Array.isArray(parsed.quizQuestions)) {
+      return res.status(500).json({ error: 'AI did not return valid training content' });
+    }
+
+    const quizQuestions = parsed.quizQuestions.map((q: any, idx: number) => ({
+      question: q.question || '',
+      questionType: q.questionType === 'true_false' ? 'true_false' : 'multiple_choice',
+      options: Array.isArray(q.options) ? q.options : [],
+      correctAnswer: q.correctAnswer || '',
+      explanation: q.explanation || '',
+      difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
+      sourceDocumentId: sourceDocIds[idx % sourceDocIds.length],
+    }));
+
+    const existingResult = await pool.query(
+      `SELECT id::text FROM routing_training_packages WHERE part_routing_id = $1 AND department_name = $2`,
+      [routingId, departmentName]
+    );
+
+    let packageId: string;
+
+    if (existingResult.rows.length > 0) {
+      const updateResult = await pool.query(
+        `UPDATE routing_training_packages
+         SET source_document_ids = $1, source_document_titles = $2,
+             training_content = $3, quiz_questions = $4,
+             total_questions = $5, model_version = 'gpt-4o-mini',
+             status = 'generated', generated_at = NOW(), updated_at = NOW()
+         WHERE part_routing_id = $6 AND department_name = $7
+         RETURNING id::text`,
+        [
+          JSON.stringify(sourceDocIds), JSON.stringify(sourceDocTitles),
+          JSON.stringify(parsed.trainingContent), JSON.stringify(quizQuestions),
+          quizQuestions.length,
+          routingId, departmentName,
+        ]
+      );
+      packageId = updateResult.rows[0].id;
+    } else {
+      const insertResult = await pool.query(
+        `INSERT INTO routing_training_packages
+         (part_routing_id, department_name, source_document_ids, source_document_titles,
+          training_content, quiz_questions, total_questions)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id::text`,
+        [
+          routingId, departmentName,
+          JSON.stringify(sourceDocIds), JSON.stringify(sourceDocTitles),
+          JSON.stringify(parsed.trainingContent), JSON.stringify(quizQuestions),
+          quizQuestions.length,
+        ]
+      );
+      packageId = insertResult.rows[0].id;
+    }
+
+    res.json({
+      id: packageId,
+      departmentName,
+      trainingContent: parsed.trainingContent,
+      quizQuestions,
+      totalQuestions: quizQuestions.length,
+      sourceDocumentIds: sourceDocIds,
+      sourceDocumentTitles: sourceDocTitles,
+    });
+  } catch (error: any) {
+    console.error('Error generating training package:', error);
+    res.status(500).json({ error: 'Failed to generate training package: ' + (error.message || 'Unknown error') });
+  }
+});
+
+router.get('/:id/training', async (req: Request, res: Response) => {
+  try {
+    const routingId = req.params.id;
+    const departmentName = req.query.department as string | undefined;
+
+    let query = `SELECT id::text, part_routing_id::text AS "partRoutingId",
+                        department_name AS "departmentName", process_name AS "processName",
+                        source_document_ids AS "sourceDocumentIds",
+                        source_document_titles AS "sourceDocumentTitles",
+                        training_content AS "trainingContent",
+                        quiz_questions AS "quizQuestions",
+                        total_questions AS "totalQuestions",
+                        passing_score AS "passingScore",
+                        model_version AS "modelVersion",
+                        status, generated_at AS "generatedAt"
+                 FROM routing_training_packages
+                 WHERE part_routing_id = $1`;
+    const params: any[] = [routingId];
+
+    if (departmentName) {
+      query += ` AND department_name = $2`;
+      params.push(departmentName);
+    }
+
+    query += ` ORDER BY department_name ASC`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error: any) {
+    console.error('Error fetching training packages:', error);
+    res.status(500).json({ error: 'Failed to fetch training packages' });
   }
 });
 

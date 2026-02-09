@@ -48,6 +48,10 @@ import FieldPage from './pages/FieldPage';
 import TicketsPage from './pages/TicketsPage';
 import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
+import MaintenanceEventsPage from './pages/MaintenanceEventsPage';
+import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
+import AssetsPage from './pages/AssetsPage';
+import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
 import Module8TestPage from './pages/Module8TestPage';
@@ -525,6 +529,12 @@ function App() {
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />
                   <Route path="/maintenance" component={MaintenancePage} />
+                  <Route path="/maintenance-events" component={MaintenanceEventsPage} />
+                  <Route path="/maintenance-events/:id">
+                    {(params) => <WorkOrderDetailPage params={params} />}
+                  </Route>
+                  <Route path="/assets" component={AssetsPage} />
+                  <Route path="/asset-dashboard" component={AssetDashboardPage} />
 
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />

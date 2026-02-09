@@ -1,0 +1,210 @@
+server/db/seed-stock-bom.ts:17:      revision: 'A',
+server/db/qa-stock-bom.ts:40:    console.log(`   SKU: ${bom.sku}, Revision: ${bom.revision}\n`);
+server/services/templatePdfService.ts:7: * Uses pdf-lib for all PDF operations, following the same patterns as
+server/src/db/queries/bom.ts:5: * Explodes a BOM revision and rolls up quantities, costs, and weights
+server/src/db/queries/bom.ts:8:export async function explodeBOMRevisionWithRollups(revisionId: string) {
+server/src/db/queries/bom.ts:11:      -- Base case: direct children of this revision
+server/src/db/queries/bom.ts:18:      WHERE bl.revision_id = ${revisionId}
+server/src/db/queries/bom.ts:30:      JOIN bom_revisions br ON br.bom_id = bo.id AND br.is_released = true
+server/src/db/queries/bom.ts:31:      JOIN bom_lines bl2 ON bl2.revision_id = br.id
+server/src/db/queries/bom.ts:69: * Find where a part is used across all released BOM revisions
+server/src/db/queries/bom.ts:74:      br.id AS revision_id, 
+server/src/db/queries/bom.ts:82:    JOIN bom_revisions br ON br.id = bl.revision_id AND br.is_released = true
+server/src/db/queries/bom.ts:96:export async function buildBOMTree(revisionId: string) {
+server/src/db/queries/bom.ts:113:      WHERE bl.revision_id = ${revId}
+server/src/db/queries/bom.ts:125:      JOIN bom_revisions br ON br.bom_id = bo.id
+server/src/db/queries/bom.ts:201:      revisionId: currentRevId,
+server/src/db/queries/bom.ts:207:  return buildNode(revisionId);
+server/db.ts:22:// Create a real PostgreSQL pool for operations that need proper UPDATE/INSERT support
+server/db.ts:44:    console.log('⚠️  Server will start anyway - database operations may fail');
+server/db.ts:50:// Now uses real pg Pool for proper PostgreSQL operations
+server/db.ts:51:// Returns an array-like object with rows as base, plus rowCount for UPDATE/INSERT operations
+server/storage.ts:56:  travelers,
+server/storage.ts:7591:          revisionNumber: vendorPOs.revisionNumber,
+server/storage.ts:7641:        revisionNumber: vendorPOs.revisionNumber,
+server/storage.ts:7717:    // Get the highest revision number for this PO family
+server/storage.ts:7719:      .select({ revisionNumber: vendorPOs.revisionNumber })
+server/storage.ts:7727:      .orderBy(desc(vendorPOs.revisionNumber))
+server/storage.ts:7730:    const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+server/storage.ts:7732:    // Mark the current PO as no longer the current revision
+server/storage.ts:7738:    // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
+server/storage.ts:7739:    const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, ''); // Remove any existing revision suffix
+server/storage.ts:7740:    const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
+server/storage.ts:7741:    const newPONumber = `${basePONumber}-R${revisionLetter}`;
+server/storage.ts:7743:    // Create the new revision PO (copy of the original with revision metadata)
+server/storage.ts:7744:    const revisionData = {
+server/storage.ts:7747:      status: 'Draft', // New revision starts as Draft for editing
+server/storage.ts:7759:      revisionNumber: nextRevisionNumber,
+server/storage.ts:7767:    const [newRevision] = await db.insert(vendorPOs).values(revisionData).returning();
+server/storage.ts:7769:    // Copy all line items from the original PO to the new revision
+server/storage.ts:7785:        receivedQuantity: 0, // Reset received quantity for new revision
+server/storage.ts:7810:    // Get all POs in this revision chain (original + all revisions)
+server/storage.ts:7821:      .orderBy(vendorPOs.revisionNumber);
+server/storage.ts:11405:        .orderBy(bomDefinitions.modelName, bomDefinitions.revision);
+server/storage.ts:12340:        // Get the most recent active revision (prefer released, otherwise latest)
+server/storage.ts:12341:        const revisions = await db
+server/storage.ts:12347:        if (revisions.length === 0) {
+server/storage.ts:12348:          console.warn(`⚠️ No BOM revision found for BOM ${bom.code}`);
+server/storage.ts:12352:        const revision = revisions[0];
+server/storage.ts:12354:        // Get all BOM lines (components) for this revision
+server/storage.ts:12358:          .where(eq(bomLines.revisionId, revision.id))
+server/storage.ts:12362:          console.warn(`⚠️ No BOM lines found for BOM ${bom.code} revision ${revision.revCode}`);
+server/storage.ts:12422:              notes: `Generated from P2 PO ${po.poNumber} - BOM ${bom.code} (${revision.revCode}) - Component ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}${level > 0 ? ` (Sub-assembly level ${level})` : ''}`,
+server/storage.ts:13174:    const [traveler] = await db.insert(travelers).values(data).returning();
+server/storage.ts:13187:      conditions.push(eq(travelers.status, filters.status));
+server/storage.ts:13190:      conditions.push(eq(travelers.partNumber, filters.partNumber));
+server/storage.ts:13193:      conditions.push(eq(travelers.workOrderId, filters.workOrderId));
+server/storage.ts:13196:      conditions.push(eq(travelers.inventoryItemId, filters.inventoryItemId));
+server/storage.ts:13200:      return await db.select().from(travelers).orderBy(desc(travelers.createdAt));
+server/storage.ts:13205:      .from(travelers)
+server/storage.ts:13207:      .orderBy(desc(travelers.createdAt));
+server/storage.ts:13211:    const [traveler] = await db.select().from(travelers).where(eq(travelers.id, id));
+server/storage.ts:13218:      .from(travelers)
+server/storage.ts:13219:      .where(eq(travelers.travelerNumber, travelerNumber));
+server/storage.ts:13225:      .update(travelers)
+server/storage.ts:13227:      .where(eq(travelers.id, id))
+server/storage.ts:13237:    await db.delete(travelers).where(eq(travelers.id, id));
+server/storage.ts:13246:      .select({ travelerNumber: travelers.travelerNumber })
+server/storage.ts:13247:      .from(travelers)
+server/storage.ts:13248:      .where(sql`${travelers.travelerNumber} LIKE ${prefix + '%'}`)
+server/storage.ts:13249:      .orderBy(desc(travelers.travelerNumber))
+server/storage.ts:17576:    // Don't update for system operations like reminder updates
+server/middleware/auth.ts:190: * Requires recent authentication (within 15 minutes) for critical operations
+server/src/utils/manufacturingQueueHelper.ts:201:    // Step 2: Get the latest active BOM revision
+server/src/utils/manufacturingQueueHelper.ts:211:      console.log(`⚠️ No released BOM revision found for part ${params.partNumber}`);
+server/src/utils/manufacturingQueueHelper.ts:215:    // Step 3: Get all BOM lines (components) for this revision
+server/src/utils/manufacturingQueueHelper.ts:222:      .where(eq(bomLines.revisionId, latestRevision.id));
+server/schema.ts:3276:  revisionNumber: integer('revision_number').default(0).notNull(), // R0 = original, R1 = first revision, etc.
+server/schema.ts:3278:  changeReason: text('change_reason'), // Required explanation for revisions
+server/schema.ts:3279:  isCurrentRevision: boolean('is_current_revision').default(true).notNull(), // Only one revision should be current
+server/schema.ts:3280:  revisedAt: timestamp('revised_at'), // When this revision was created
+server/schema.ts:3281:  revisedBy: text('revised_by'), // Who created this revision
+server/schema.ts:4031:// P2 Customer Management - separate customer database for P2 operations
+server/schema.ts:4259:export const partRoutings = pgTable('part_routings', {
+server/schema.ts:4264:  routingName: text('routing_name').default('Default').notNull(), // AS9100 routing name for revision control
+server/schema.ts:4265:  routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
+server/schema.ts:4266:  departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
+server/schema.ts:4270:  specialProcessConfig: jsonb('special_process_config'), // { "processName": { materials: [{partId, partNumber, requiredFields}], qcStandards: [{standard, tolerance}], customFields: [{fieldName, fieldType, isRequired}] } }
+server/schema.ts:4279:  inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+server/schema.ts:4401:// NOTE: Foreign keys to travelers/travelerSteps defined via SQL since those tables are defined later
+server/schema.ts:4452:export const travelers = pgTable('travelers', {
+server/schema.ts:4455:  travelerRevision: integer('traveler_revision').default(1).notNull(),
+server/schema.ts:4472:  partRoutingRevision: integer('part_routing_revision'),
+server/schema.ts:4478:  travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
+server/schema.ts:4479:  statusIdx: index('travelers_status_idx').on(table.status),
+server/schema.ts:4480:  partNumberIdx: index('travelers_part_number_idx').on(table.partNumber),
+server/schema.ts:4481:  workOrderIdx: index('travelers_work_order_idx').on(table.workOrderId),
+server/schema.ts:4485:export const travelerSteps = pgTable('traveler_steps', {
+server/schema.ts:4488:    .references(() => travelers.id, { onDelete: 'cascade' })
+server/schema.ts:4505:  travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
+server/schema.ts:4506:  stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
+server/schema.ts:4510:export const travelerTasks = pgTable('traveler_tasks', {
+server/schema.ts:4528:  stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
+server/schema.ts:4529:  taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
+server/schema.ts:4530:  taskPhaseIdx: index('traveler_tasks_phase_idx').on(table.taskPhase),
+server/schema.ts:4577:    .references(() => travelers.id, { onDelete: 'cascade' })
+server/schema.ts:5568:export const insertTravelerSchema = createInsertSchema(travelers)
+server/schema.ts:5685:export type Traveler = typeof travelers.$inferSelect;
+server/schema.ts:5939:  revision: text('revision').notNull().default('A'),
+server/schema.ts:5982:    revision: z.string().min(1, 'Revision is required').default('A'),
+server/schema.ts:6061:// BOM revisions - allows multiple versions of each BOM with release control
+server/schema.ts:6062:export const bomRevisions = pgTable('bom_revisions', {
+server/schema.ts:6076:// BOM lines - individual line items within a revision
+server/schema.ts:6080:  revisionId: uuid('revision_id').notNull().references(() => bomRevisions.id, { onDelete: 'cascade' }),
+server/schema.ts:6090:  byRev: index('bom_lines_rev_idx').on(t.revisionId),
+server/schema.ts:6102:  revisions: many(bomRevisions),
+server/schema.ts:6112:  revision: one(bomRevisions, { fields: [bomLines.revisionId], references: [bomRevisions.id] }),
+server/schema.ts:6158:  revisionId: z.string().uuid('Invalid revision ID'),
+server/schema.ts:6668:    relationshipType: text('relationship_type').default('primary'), // 'primary', 'supporting', 'revision', 'reference'
+server/schema.ts:7525:  revision: text('revision').default('A'), // Rev (x)
+server/schema.ts:8311:  verificationOperations: text('verification_operations'),
+server/schema.ts:8887:  currentRevision: text('current_revision'),
+server/schema.ts:11148:export const routingDocuments = pgTable('routing_documents', {
+server/schema.ts:11177:  partRoutingIdx: index('routing_documents_part_routing_idx').on(table.partRoutingId),
+server/schema.ts:11178:  partNumberIdx: index('routing_documents_part_number_idx').on(table.partNumber),
+server/schema.ts:11179:  departmentIdx: index('routing_documents_department_idx').on(table.departmentName),
+server/src/routes/robustBoms.ts:190:          revisions: {
+server/src/routes/robustBoms.ts:215:// Get single BOM with all revisions
+server/src/routes/robustBoms.ts:223:        revisions: {
+server/src/routes/robustBoms.ts:314:// Delete BOM (cascades to revisions and lines)
+server/src/routes/robustBoms.ts:330:// Create new revision for a BOM
+server/src/routes/robustBoms.ts:331:router.post('/boms/:bomId/revisions', async (req, res) => {
+server/src/routes/robustBoms.ts:334:    const revisionData = insertBomRevisionSchema.parse({
+server/src/routes/robustBoms.ts:341:      .values(revisionData)
+server/src/routes/robustBoms.ts:346:    console.error('Create revision error:', error);
+server/src/routes/robustBoms.ts:349:        error: 'Invalid revision data', 
+server/src/routes/robustBoms.ts:353:    res.status(500).json({ error: 'Failed to create revision' });
+server/src/routes/robustBoms.ts:357:// Get revision details with lines
+server/src/routes/robustBoms.ts:358:router.get('/revisions/:revId', async (req, res) => {
+server/src/routes/robustBoms.ts:361:    const revision = await db.query.bomRevisions.findFirst({
+server/src/routes/robustBoms.ts:378:    if (!revision) {
+server/src/routes/robustBoms.ts:382:    res.json(revision);
+server/src/routes/robustBoms.ts:384:    console.error('Get revision error:', error);
+server/src/routes/robustBoms.ts:385:    res.status(500).json({ error: 'Failed to fetch revision' });
+server/src/routes/robustBoms.ts:389:// Update revision lines (replaces all lines)
+server/src/routes/robustBoms.ts:390:router.post('/revisions/:revId/lines', async (req, res) => {
+server/src/routes/robustBoms.ts:393:    const linesData = z.array(insertBomLineSchema.omit({ revisionId: true }))
+server/src/routes/robustBoms.ts:397:    await db.delete(bomLines).where(eq(bomLines.revisionId, revId));
+server/src/routes/robustBoms.ts:404:          revisionId: revId,
+server/src/routes/robustBoms.ts:411:    console.error('Update revision lines error:', error);
+server/src/routes/robustBoms.ts:418:    res.status(500).json({ error: 'Failed to update revision lines' });
+server/src/routes/robustBoms.ts:422:// Release a revision (makes it active, un-releases others for same BOM)
+server/src/routes/robustBoms.ts:423:router.post('/revisions/:revId/release', async (req, res) => {
+server/src/routes/robustBoms.ts:428:    const revision = await db.query.bomRevisions.findFirst({
+server/src/routes/robustBoms.ts:432:    if (!revision) {
+server/src/routes/robustBoms.ts:436:    // Un-release all other revisions for this BOM
+server/src/routes/robustBoms.ts:440:      .where(eq(bomRevisions.bomId, revision.bomId));
+server/src/routes/robustBoms.ts:442:    // Release this revision
+server/src/routes/robustBoms.ts:455:    console.error('Release revision error:', error);
+server/src/routes/robustBoms.ts:456:    res.status(500).json({ error: 'Failed to release revision' });
+server/src/routes/robustBoms.ts:460:// Explode BOM revision with rollups (recursive explosion)
+server/src/routes/robustBoms.ts:461:router.get('/revisions/:revId/explode', async (req, res) => {
+server/src/routes/robustBoms.ts:473:router.get('/revisions/:revId/tree', async (req, res) => {
+server/src/routes/robustBoms.ts:477:    console.log('🌳 BOM Tree for revision', revId, ':', JSON.stringify(tree, null, 2));
+server/src/routes/index.ts:88:import travelersRoutes from './travelers';
+server/src/routes/index.ts:213:  app.use('/api/travelers', travelersRoutes);
+server/src/routes/index.ts:359:  // Robust BOM management routes - Advanced BOM system with revisions and parts library
+server/src/routes/index.ts:2112:  app.get('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+server/src/routes/index.ts:2123:  app.post('/api/travelers/:travelerId/changes', softAuth, async (req, res) => {
+server/src/routes/index.ts:2137:  app.post('/api/travelers/:travelerId/changes/:changeId/authorize', softAuth, async (req, res) => {
+server/src/routes/index.ts:2754:          revision: 'A',
+server/src/routes/index.ts:2796:                  revision: 'A',
+server/src/routes/travelers.ts:19:// Get all travelers with optional filters
+server/src/routes/travelers.ts:36:    const travelers = await storage.getTravelers(
+server/src/routes/travelers.ts:39:    res.json(travelers);
+server/src/routes/travelers.ts:41:    console.error('Error fetching travelers:', error);
+server/src/routes/travelers.ts:42:    res.status(500).json({ error: 'Failed to fetch travelers', message: error.message });
+server/src/routes/travelers.ts:199:        error: 'Only DRAFT travelers can be deleted',
+server/src/routes/qrCodes.ts:6: * - Admin CRUD operations for QR code management
+server/src/routes/inventory.ts:1231:    // Phase 2: Database operations (transactional if replace mode)
+server/src/routes/routingDocuments.ts:95:    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE is_active = true ORDER BY created_at DESC`);
+server/src/routes/routingDocuments.ts:198:          const docResult = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${link.document_id} LIMIT 1`);
+server/src/routes/routingDocuments.ts:244:    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+server/src/routes/routingDocuments.ts:393:1. Routing steps (operations/departments in order)
+server/src/routes/routingDocuments.ts:527:    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+server/src/routes/routingDocuments.ts:543:1. Routing steps (operations/departments in order)
+server/src/routes/routingDocuments.ts:603:        const result = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${docId}`);
+server/src/routes/routingDocuments.ts:634:    const systemPrompt = `You are an expert at creating manufacturing work instructions, spec sheets, and travelers. Based on the provided reference documents and template, generate a new document structure with all necessary fields.
+server/src/routes/routingDocuments.ts:701:      const result = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${docId}`);
+server/src/routes/routingDocuments.ts:1013:        // Build department config with operations and quality checkpoints
+server/src/routes/routingDocuments.ts:1015:          operations: [],
+server/src/routes/routingDocuments.ts:1026:      departmentConfig[dept].operations.push({
+server/src/routes/routingDocuments.ts:1051:        departmentConfig[dept] = { operations: [], qcStandards: [], technicianRequired: true, materials: [] };
+server/src/routes/routingDocuments.ts:1095:        operationsExtracted: routingSteps.length,
+server/src/routes/vendorPOs.ts:254:// Note: Blocks edits on issued POs (status Sent or beyond) - use revisions instead
+server/src/routes/vendorPOs.ts:278:        message: 'This PO has been issued and cannot be directly modified. Create a revision to make changes.',
+server/src/routes/vendorPOs.ts:301:// POST /api/vendor-pos/:id/revisions - Create a new revision of an issued PO
+server/src/routes/vendorPOs.ts:302:router.post('/:id/revisions', async (req: Request, res: Response) => {
+server/src/routes/vendorPOs.ts:309:    // Validate revision request
+server/src/routes/vendorPOs.ts:310:    const revisionSchema = z.object({
+server/src/routes/vendorPOs.ts:315:    const { changeReason, revisedBy } = revisionSchema.parse(req.body);
+server/src/routes/vendorPOs.ts:327:        error: 'Cannot create revision',
+server/src/routes/vendorPOs.ts:333:    // Create revision using storage function
+server/src/routes/vendorPOs.ts:334:    const revision = await storage.createVendorPORevision(id, changeReason, revisedBy);
+server/src/routes/vendorPOs.ts:336:    res.status(201).json(revision);
+server/src/routes/vendorPOs.ts:338:    console.error('Create vendor PO revision error:', error);
+server/src/routes/vendorPOs.ts:342:        .json({ error: 'Invalid revision data', details: error.errors });
+server/src/routes/vendorPOs.ts:347:    res.status(500).json({ error: 'Failed to create vendor PO revision' });
+server/src/routes/vendorPOs.ts:351:// GET /api/vendor-pos/:id/history - Get revision history for a PO
+server/src/routes/discounts.ts:26:// Write operations for persistent discounts - admin only
+server/src/routes/discounts.ts:65:// Short Term Sales routes - GET allows order-entry users, write operations require admin

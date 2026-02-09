@@ -465,11 +465,11 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
   }
 });
 
-// Sign and complete a step
+// Sign and complete a step (or a specific signature task within a step)
 router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { signedBy, signedByName, badgeScan, meaning, notes } = req.body;
+    const { signedBy, signedByName, badgeScan, meaning, notes, signatureRole, taskId } = req.body;
 
     if (!signedBy || !meaning) {
       return res.status(400).json({ error: 'signedBy and meaning are required' });
@@ -511,11 +511,13 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     }
 
     // Rule: All required FINISH phase tasks must be completed before signing
+    // SIGNATURE and END_GATE tasks are completion gates — they get completed BY the signing action
+    const isCompletionGate = (t: any) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
     const incompleteFinishTasks = tasks.filter(
       (t) => t.required && 
              (t as any).taskPhase === 'FINISH' && 
              t.status !== 'COMPLETED' && 
-             t.taskType !== 'END_GATE'
+             !isCompletionGate(t)
     );
     if (incompleteFinishTasks.length > 0) {
       return res.status(400).json({
@@ -530,15 +532,17 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       });
     }
 
-    // Rule: All other required tasks (START, WORK) must also be completed
-    const incompleteTasks = tasks.filter(
-      (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE'
+    // Rule: All required START and WORK phase tasks must also be completed
+    const incompleteOtherTasks = tasks.filter(
+      (t) => t.required && 
+             t.status !== 'COMPLETED' && 
+             !isCompletionGate(t) &&
+             ((t as any).taskPhase === 'START' || (t as any).taskPhase === 'WORK')
     );
-
-    if (incompleteTasks.length > 0) {
+    if (incompleteOtherTasks.length > 0) {
       return res.status(400).json({
         error: 'All required tasks must be completed before signing',
-        incompleteTasks: incompleteTasks.map((t) => ({
+        incompleteTasks: incompleteOtherTasks.map((t) => ({
           id: t.id,
           title: t.title,
           taskType: t.taskType,
@@ -548,29 +552,86 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       });
     }
 
+    // Rule: All tasks with requiresSignature must have their signatures satisfied
+    // Tasks that require a signature can have their data entered, but step sign-off
+    // is blocked until all signature-required tasks are either completed or gate tasks
+    const unsignedSigTasks = tasks.filter(
+      (t) => (t as any).requiresSignature && 
+             t.status !== 'COMPLETED' && 
+             !isCompletionGate(t)
+    );
+    if (unsignedSigTasks.length > 0) {
+      return res.status(400).json({
+        error: 'All tasks requiring signatures must be signed before completing the step',
+        unsignedTasks: unsignedSigTasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          taskType: t.taskType,
+          signatureRole: (t as any).signatureRole,
+          status: t.status,
+        })),
+      });
+    }
+
+    // Find which SIGNATURE gate task(s) to complete with this signing
+    const pendingGateTasks = tasks.filter((t) => isCompletionGate(t) && t.status !== 'COMPLETED');
+    let matchedGateTask: any = null;
+
+    if (taskId) {
+      matchedGateTask = pendingGateTasks.find((t) => t.id === taskId);
+    } else if (signatureRole) {
+      matchedGateTask = pendingGateTasks.find(
+        (t) => t.taskType === 'SIGNATURE' && (t as any).signatureRole === signatureRole
+      );
+    }
+
     const signature = await storage.createTravelerSignature({
       travelerStepId: stepId,
+      travelerTaskId: matchedGateTask?.id || null,
       signedBy,
       signedByName: signedByName || null,
+      signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
       badgeScan: badgeScan || null,
       meaning,
       notes: notes || null,
     });
 
-    const endGateTask = tasks.find((t) => t.taskType === 'END_GATE');
-    if (endGateTask) {
-      await storage.updateTravelerTask(endGateTask.id, {
+    // Complete the matched gate task, or all pending gates if no specific match
+    if (matchedGateTask) {
+      await storage.updateTravelerTask(matchedGateTask.id, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: signedBy,
+      });
+    } else {
+      for (const gateTask of pendingGateTasks) {
+        await storage.updateTravelerTask(gateTask.id, {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          completedBy: signedBy,
+        });
+      }
+    }
+
+    // Check if all gate tasks are now complete — if so, complete the step
+    const remainingGates = tasks.filter(
+      (t) => isCompletionGate(t) && t.status !== 'COMPLETED' && t.id !== matchedGateTask?.id
+    );
+    const allGatesComplete = remainingGates.length === 0;
+
+    // Re-check all required non-gate tasks are complete before closing the step
+    const allTasksDone = tasks
+      .filter((t) => t.required && !isCompletionGate(t))
+      .every((t) => t.status === 'COMPLETED');
+
+    let updatedStep = step;
+    if (allGatesComplete && allTasksDone) {
+      updatedStep = await storage.updateTravelerStep(stepId, {
         status: 'COMPLETED',
         completedAt: new Date(),
         completedBy: signedBy,
       });
     }
-
-    const updatedStep = await storage.updateTravelerStep(stepId, {
-      status: 'COMPLETED',
-      completedAt: new Date(),
-      completedBy: signedBy,
-    });
 
     await storage.createTravelerEvent({
       travelerId,
@@ -583,10 +644,13 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
         departmentName: step.departmentName,
         meaning,
         signatureId: signature.id,
+        signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
+        taskId: matchedGateTask?.id || null,
+        stepCompleted: allGatesComplete && allTasksDone,
       },
     });
 
-    res.json({ step: updatedStep, signature });
+    res.json({ step: updatedStep, signature, stepCompleted: allGatesComplete && allTasksDone });
   } catch (error: any) {
     console.error('Error signing step:', error);
     res.status(500).json({ error: 'Failed to sign step', message: error.message });
@@ -635,6 +699,37 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
         error: 'Step must be IN_PROGRESS to complete tasks',
         stepStatus: step.status,
       });
+    }
+
+    const taskPhase = (task as any).taskPhase as string | undefined;
+    if (taskPhase && taskPhase !== 'START') {
+      const allStepTasks = await storage.getTravelerTasks(step.id);
+      const phaseOrder = ['START', 'WORK', 'FINISH'];
+      const currentPhaseIndex = phaseOrder.indexOf(taskPhase);
+
+      for (let i = 0; i < currentPhaseIndex; i++) {
+        const prevPhase = phaseOrder[i];
+        const incompletePrevTasks = allStepTasks.filter(
+          (t) =>
+            (t as any).taskPhase === prevPhase &&
+            t.required &&
+            t.status !== 'COMPLETED' &&
+            t.taskType !== 'END_GATE' &&
+            t.taskType !== 'SIGNATURE'
+        );
+        if (incompletePrevTasks.length > 0) {
+          return res.status(400).json({
+            error: `All required ${prevPhase} phase tasks must be completed before working on ${taskPhase} phase tasks`,
+            blockedPhase: taskPhase,
+            incompletePhase: prevPhase,
+            incompleteTasks: incompletePrevTasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              taskType: t.taskType,
+            })),
+          });
+        }
+      }
     }
 
     if (fieldValues) {

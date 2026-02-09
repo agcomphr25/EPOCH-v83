@@ -23,6 +23,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -30,6 +37,7 @@ import {
 } from '@/components/ui/accordion';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft,
   Play,
@@ -52,6 +60,9 @@ import {
   BookOpen,
   Lightbulb,
   ImageIcon,
+  Eye,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 
@@ -227,9 +238,36 @@ export default function TravelerExecution() {
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
+  const [instructionSheetOpen, setInstructionSheetOpen] = useState(false);
+  const [instructionSheetTaskId, setInstructionSheetTaskId] = useState<string | null>(null);
+  const [wiModalOpen, setWiModalOpen] = useState(false);
+  const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const normalizeInstructionPack = (rawPack: any) => {
+    if (!rawPack) return null;
+    const normalizedRefs = (rawPack.workInstructionRefs || []).map((r: any) => ({
+      documentId: r.documentId || '',
+      title: r.title || r.documentTitle || undefined,
+      pageRange: r.pageRange || undefined,
+      anchor: r.anchor || undefined,
+    }));
+    const normalizedSnippets = (rawPack.aiSnippets || []).map((s: any) =>
+      typeof s === 'string'
+        ? { title: 'Tip', bullets: [s] }
+        : { title: s.title || 'Tip', bullets: s.bullets || [], sourceDocumentId: s.sourceDocumentId, confidence: s.confidence }
+    );
+    const pack = {
+      workInstructionRefs: normalizedRefs as { documentId: string; title?: string; pageRange?: string; anchor?: string }[],
+      aiSnippets: normalizedSnippets as { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[],
+      specialNotes: rawPack.specialNotes as string | undefined,
+      media: (rawPack.media || []) as { type: 'image' | 'pdf'; documentId: string; caption?: string }[],
+    };
+    const hasContent = pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || pack.media.length > 0;
+    return hasContent ? pack : null;
+  };
 
   const { data: travelerData, isLoading, refetch } = useQuery<TravelerWithDetails>({
     queryKey: ['/api/travelers', travelerId, 'details'],
@@ -761,90 +799,35 @@ export default function TravelerExecution() {
                                           </p>
                                         )}
 
-                                        {/* Instruction Pack Viewer */}
-                                        {task.instructionPack && (() => {
-                                          const rawPack = task.instructionPack as any;
-                                          const normalizedRefs = (rawPack.workInstructionRefs || []).map((r: any) => ({
-                                            documentId: r.documentId || '',
-                                            title: r.title || r.documentTitle || undefined,
-                                            pageRange: r.pageRange || undefined,
-                                            anchor: r.anchor || undefined,
-                                          }));
-                                          const normalizedSnippets = (rawPack.aiSnippets || []).map((s: any) =>
-                                            typeof s === 'string'
-                                              ? { title: 'Tip', bullets: [s] }
-                                              : { title: s.title || 'Tip', bullets: s.bullets || [], sourceDocumentId: s.sourceDocumentId, confidence: s.confidence }
-                                          );
-                                          const pack = {
-                                            workInstructionRefs: normalizedRefs,
-                                            aiSnippets: normalizedSnippets,
-                                            specialNotes: rawPack.specialNotes,
-                                            media: rawPack.media || [],
-                                          };
-                                          const hasContent = pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || pack.media.length > 0;
-                                          if (!hasContent) return null;
+                                        {/* Instruction Pack — Prominent Display */}
+                                        {(() => {
+                                          const pack = normalizeInstructionPack(task.instructionPack);
+                                          if (!pack) return null;
                                           return (
-                                            <div className="rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2">
-                                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                                                <BookOpen className="h-3.5 w-3.5" /> Instruction Pack
-                                              </p>
-                                              {pack.workInstructionRefs.length > 0 && (
-                                                <div className="space-y-1">
-                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Work Instructions</p>
-                                                  {pack.workInstructionRefs.map((ref, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-xs">
-                                                      <FileText className="h-3 w-3 text-blue-500 shrink-0" />
-                                                      <span className="font-medium">{ref.title || ref.documentId}</span>
-                                                      {ref.pageRange && <span className="text-muted-foreground text-[10px]">pp. {ref.pageRange}</span>}
-                                                      {ref.anchor && <span className="text-muted-foreground text-[10px]">§ {ref.anchor}</span>}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {pack.aiSnippets.length > 0 && (
-                                                <div className="space-y-2">
-                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">AI Tips</p>
-                                                  {pack.aiSnippets.map((snippet, i) => (
-                                                    <div key={i} className="space-y-0.5">
-                                                      <div className="flex items-center gap-1.5 text-xs">
-                                                        <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0" />
-                                                        <span className="font-medium">{snippet.title}</span>
-                                                        {snippet.confidence != null && (
-                                                          <span className="text-[10px] text-muted-foreground ml-auto">{Math.round(snippet.confidence * 100)}%</span>
-                                                        )}
-                                                      </div>
-                                                      {snippet.bullets.length > 0 && (
-                                                        <ul className="ml-5 space-y-0.5">
-                                                          {snippet.bullets.map((b, bi) => (
-                                                            <li key={bi} className="text-xs text-muted-foreground flex items-start gap-1">
-                                                              <span className="shrink-0 mt-0.5">•</span>
-                                                              <span>{b}</span>
-                                                            </li>
-                                                          ))}
-                                                        </ul>
-                                                      )}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {pack.media.length > 0 && (
-                                                <div className="space-y-1">
-                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Media</p>
-                                                  {pack.media.map((m, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-xs">
-                                                      {m.type === 'image' ? <ImageIcon className="h-3 w-3 text-green-500 shrink-0" /> : <FileText className="h-3 w-3 text-red-500 shrink-0" />}
-                                                      <span>{m.caption || m.documentId}</span>
-                                                      <span className="text-[10px] text-muted-foreground uppercase">{m.type}</span>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
+                                            <div className="space-y-2">
                                               {pack.specialNotes && (
-                                                <div className="space-y-1">
-                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Notes</p>
-                                                  <p className="text-xs whitespace-pre-wrap">{pack.specialNotes}</p>
+                                                <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
+                                                  <div className="flex items-start gap-2">
+                                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                    <div>
+                                                      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">Special Notes</p>
+                                                      <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               )}
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 font-medium"
+                                                onClick={() => { setInstructionSheetTaskId(task.id); setInstructionSheetOpen(true); }}
+                                              >
+                                                <BookOpen className="h-4 w-4 mr-2" />
+                                                View Instructions
+                                                <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+                                                  {pack.workInstructionRefs.length + pack.aiSnippets.length + pack.media.length}
+                                                </Badge>
+                                              </Button>
                                             </div>
                                           );
                                         })()}

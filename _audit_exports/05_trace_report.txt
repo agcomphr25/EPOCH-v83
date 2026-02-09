@@ -1,0 +1,291 @@
+=====================================================================
+ TRACE REPORT: Routing → Traveler Tie Points
+ Generated: $(date)
+ Scope: Only routing-to-traveler creation, execution, and lifecycle
+=====================================================================
+
+=== SECTION 1: BACKEND — Traveler generation from routing ===
+-------------------------------------------------------------
+server/storage.ts:13466:      partRoutingRevision: (routing as any).routingRevision || 1,
+server/storage.ts:13627:        fromRoutingRevision: (routing as any).routingRevision || 1,
+server/schema.ts:4265:  routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
+server/schema.ts:4471:  partRoutingId: varchar('part_routing_id', { length: 255 }),
+server/schema.ts:4472:  partRoutingRevision: integer('part_routing_revision'),
+server/schema.ts:8886:  routingId: uuid('routing_id'), // References routing document if applicable
+server/schema.ts:8924:// Scope: Affects specific traveler only, routing stays intact
+server/schema.ts:11150:  partRoutingId: uuid('part_routing_id'),
+server/schema.ts:11177:  partRoutingIdx: index('routing_documents_part_routing_idx').on(table.partRoutingId),
+server/schema.ts:11185:  partRoutingId: uuid('part_routing_id'),
+server/schema.ts:11211:  partRoutingIdx: index('spec_sheets_part_routing_idx').on(table.partRoutingId),
+server/schema.ts:11270:  partRoutingId: uuid('part_routing_id').notNull(),
+server/schema.ts:11282:  partRoutingIdx: index('routing_document_links_routing_idx').on(table.partRoutingId),
+server/schema.ts:11291:  partRoutingId: uuid('part_routing_id'),
+server/schema.ts:11306:  routingIdx: index('certification_task_links_routing_idx').on(table.partRoutingId),
+server/src/routes/travelers.ts:113:// Generate traveler from part routing
+server/src/routes/travelers.ts:114:router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) => {
+server/src/routes/travelers.ts:143:    console.error('Error generating traveler from routing:', error);
+server/src/routes/routingDocuments.ts:190:    const results = await db.execute(sql`SELECT * FROM routing_document_links WHERE part_routing_id = ${req.params.partRoutingId} ORDER BY sort_order ASC`);
+server/src/routes/routingDocuments.ts:941:    const { certificationId, partRoutingId, departmentName, routingDocumentId, travelerStepId, travelerTaskId, taskDescription, isRequired } = req.body;
+server/src/routes/routingDocuments.ts:1068:      routingRevision: 1,
+server/src/routes/routingDocuments.ts:1484:    const { certificationId, partRoutingId, departmentName, routingDocumentId, travelerStepId, travelerTaskId, taskDescription, isRequired } = req.body;
+
+
+=== SECTION 2: BACKEND — Travelers endpoints (execution lifecycle) ===
+----------------------------------------------------------------------
+20:router.get('/', async (req: Request, res: Response) => {
+47:router.get('/by-number/:travelerNumber', async (req: Request, res: Response) => {
+63:router.get('/:id', async (req: Request, res: Response) => {
+88:router.post('/', async (req: Request, res: Response) => {
+114:router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) => {
+149:router.patch('/:id', async (req: Request, res: Response) => {
+188:router.delete('/:id', async (req: Request, res: Response) => {
+212:router.post('/:id/start', async (req: Request, res: Response) => {
+246:router.post('/:id/complete', async (req: Request, res: Response) => {
+305:router.post('/:id/block', async (req: Request, res: Response) => {
+338:router.post('/:id/unblock', async (req: Request, res: Response) => {
+376:router.get('/:travelerId/steps', async (req: Request, res: Response) => {
+388:router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
+469:router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Response) => {
+601:router.get('/:travelerId/steps/:stepId/tasks', async (req: Request, res: Response) => {
+613:router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Response) => {
+686:router.get('/:travelerId/tasks/:taskId/fields', async (req: Request, res: Response) => {
+698:router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, res: Response) => {
+725:router.get('/:travelerId/events', async (req: Request, res: Response) => {
+
+
+=== SECTION 3: BACKEND — P2 Traveler (shop floor) endpoints ===
+-----------------------------------------------------------------
+7:  partRoutings,
+31:// GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
+33:router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {
+60:    const routing = await db.query.partRoutings.findFirst({
+62:        eq(partRoutings.partNumber, serializedItem.partNumber),
+63:        eq(partRoutings.isActive, true)
+132:// GET /api/p2-traveler/part-info/:barcode
+134:router.get('/part-info/:barcode', async (req: Request, res: Response) => {
+149:    const routing = await db.query.partRoutings.findFirst({
+151:        eq(partRoutings.partNumber, serializedItem.partNumber),
+152:        eq(partRoutings.isActive, true)
+192:// GET /api/p2-traveler/active-tasks/:employeeId
+194:router.get('/active-tasks/:employeeId', async (req: Request, res: Response) => {
+213:// POST /api/p2-traveler/start-task
+215:router.post('/start-task', async (req: Request, res: Response) => {
+241:    const routing = await db.query.partRoutings.findFirst({
+243:        eq(partRoutings.partNumber, serializedItem.partNumber),
+244:        eq(partRoutings.isActive, true)
+379:// POST /api/p2-traveler/complete-task
+381:router.post('/complete-task', async (req: Request, res: Response) => {
+454:    const routing = await db.query.partRoutings.findFirst({
+456:        eq(partRoutings.partNumber, serializedItem.partNumber),
+457:        eq(partRoutings.isActive, true)
+582:router.get('/traceability/:serializedItemId', async (req: Request, res: Response) => {
+
+
+=== SECTION 4: BACKEND — P2 Traveler Viewer endpoints ===
+-----------------------------------------------------------
+50:// GET /api/p2-traveler-viewer/item/:barcode
+52:router.get('/item/:barcode', async (req: Request, res: Response) => {
+255:router.get('/item-by-id/:id', async (req: Request, res: Response) => {
+268:    return res.redirect(`/api/p2-traveler-viewer/item/${serializedItem.barcode}`);
+275:// PATCH /api/p2-traveler-viewer/item/:id/traveler-barcode
+277:router.patch('/item/:id/traveler-barcode', async (req: Request, res: Response) => {
+305:router.post('/oven-cure-log', async (req: Request, res: Response) => {
+318:router.put('/oven-cure-log/:id', async (req: Request, res: Response) => {
+344:router.post('/vacuum-leak-test', async (req: Request, res: Response) => {
+357:router.put('/vacuum-leak-test/:id', async (req: Request, res: Response) => {
+383:router.post('/final-inspection', async (req: Request, res: Response) => {
+396:router.put('/final-inspection/:id', async (req: Request, res: Response) => {
+420:// POST /api/p2-traveler-viewer/lot-number
+422:router.post('/lot-number', async (req: Request, res: Response) => {
+438:// GET /api/p2-traveler-viewer/lot-numbers
+440:router.get('/lot-numbers', async (req: Request, res: Response) => {
+466:// PUT /api/p2-traveler-viewer/lot-number/:id
+468:router.put('/lot-number/:id', async (req: Request, res: Response) => {
+492:// POST /api/p2-traveler-viewer/lot-number/:id/add-items
+494:router.post('/lot-number/:id/add-items', async (req: Request, res: Response) => {
+536:// POST /api/p2-traveler-viewer/packing-slip
+538:router.post('/packing-slip', async (req: Request, res: Response) => {
+563:// GET /api/p2-traveler-viewer/packing-slips
+565:router.get('/packing-slips', async (req: Request, res: Response) => {
+577:// GET /api/p2-traveler-viewer/packing-slip/:id
+579:router.get('/packing-slip/:id', async (req: Request, res: Response) => {
+595:// PUT /api/p2-traveler-viewer/packing-slip/:id
+597:router.put('/packing-slip/:id', async (req: Request, res: Response) => {
+621:// POST /api/p2-traveler-viewer/certificate-of-conformance
+623:router.post('/certificate-of-conformance', async (req: Request, res: Response) => {
+648:// GET /api/p2-traveler-viewer/certificates-of-conformance
+650:router.get('/certificates-of-conformance', async (req: Request, res: Response) => {
+662:// GET /api/p2-traveler-viewer/certificate-of-conformance/:id
+664:router.get('/certificate-of-conformance/:id', async (req: Request, res: Response) => {
+680:// PUT /api/p2-traveler-viewer/certificate-of-conformance/:id
+682:router.put('/certificate-of-conformance/:id', async (req: Request, res: Response) => {
+706:// POST /api/p2-traveler-viewer/test-for-conformance
+708:router.post('/test-for-conformance', async (req: Request, res: Response) => {
+724:// GET /api/p2-traveler-viewer/test-for-conformance-reports
+726:router.get('/test-for-conformance-reports', async (req: Request, res: Response) => {
+738:// GET /api/p2-traveler-viewer/test-for-conformance/:id
+740:router.get('/test-for-conformance/:id', async (req: Request, res: Response) => {
+756:// PUT /api/p2-traveler-viewer/test-for-conformance/:id
+758:router.put('/test-for-conformance/:id', async (req: Request, res: Response) => {
+782:// POST /api/p2-traveler-viewer/generate-from-lot/:lotId
+784:router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => {
+987:// POST /api/p2-traveler-viewer/signatures
+989:router.post('/signatures', async (req: Request, res: Response) => {
+1023:// GET /api/p2-traveler-viewer/signatures/item/:serializedItemId
+1025:router.get('/signatures/item/:serializedItemId', async (req: Request, res: Response) => {
+1041:// GET /api/p2-traveler-viewer/signatures/barcode/:barcode
+1043:router.get('/signatures/barcode/:barcode', async (req: Request, res: Response) => {
+1059:// GET /api/p2-traveler-viewer/signatures/:id
+1061:router.get('/signatures/:id', async (req: Request, res: Response) => {
+1080:// GET /api/p2-traveler-viewer/signatures/department/:department
+1082:router.get('/signatures/department/:department', async (req: Request, res: Response) => {
+1100:// GET /api/p2-traveler-viewer/signatures/employee/:employeeId
+1102:router.get('/signatures/employee/:employeeId', async (req: Request, res: Response) => {
+1120:// GET /api/p2-traveler-viewer/signatures/verify/:id
+1122:router.get('/signatures/verify/:id', async (req: Request, res: Response) => {
+
+
+=== SECTION 5: STORAGE — Traveler creation + step/task/material/signature/event writes ===
+-----------------------------------------------------------------------------------------
+server/src/routes/travelers.ts:91:    const traveler = await storage.createTraveler(validatedData);
+server/src/routes/travelers.ts:93:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:167:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:231:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:290:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:323:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:357:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:449:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:551:    const signature = await storage.createTravelerSignature({
+server/src/routes/travelers.ts:575:    await storage.createTravelerEvent({
+server/src/routes/travelers.ts:664:    await storage.createTravelerEvent({
+server/src/routes/materialLots.ts:576:    const consumption = await storage.createTravelerMaterialConsumption(validatedData);
+server/storage.ts:57:  travelerSteps,
+server/storage.ts:58:  travelerTasks,
+server/storage.ts:1378:  createTraveler(data: InsertTraveler): Promise<Traveler>;
+server/storage.ts:1402:  createTravelerStep(data: InsertTravelerStep): Promise<TravelerStep>;
+server/storage.ts:1409:  createTravelerTask(data: InsertTravelerTask): Promise<TravelerTask>;
+server/storage.ts:1416:  createTravelerTaskField(data: InsertTravelerTaskField): Promise<TravelerTaskField>;
+server/storage.ts:1422:  createTravelerSignature(data: InsertTravelerSignature): Promise<TravelerSignature>;
+server/storage.ts:1426:  createTravelerEvent(data: InsertTravelerEvent): Promise<TravelerEvent>;
+server/storage.ts:2169:  createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption>;
+server/storage.ts:13173:  async createTraveler(data: InsertTraveler): Promise<Traveler> {
+server/storage.ts:13297:  async createTravelerStep(data: InsertTravelerStep): Promise<TravelerStep> {
+server/storage.ts:13298:    const [step] = await db.insert(travelerSteps).values(data).returning();
+server/storage.ts:13305:      .from(travelerSteps)
+server/storage.ts:13306:      .where(eq(travelerSteps.travelerId, travelerId))
+server/storage.ts:13307:      .orderBy(travelerSteps.stepNumber);
+server/storage.ts:13311:    const [step] = await db.select().from(travelerSteps).where(eq(travelerSteps.id, id));
+server/storage.ts:13317:      .update(travelerSteps)
+server/storage.ts:13319:      .where(eq(travelerSteps.id, id))
+server/storage.ts:13329:    await db.delete(travelerSteps).where(eq(travelerSteps.id, id));
+server/storage.ts:13333:  async createTravelerTask(data: InsertTravelerTask): Promise<TravelerTask> {
+server/storage.ts:13334:    const [task] = await db.insert(travelerTasks).values(data).returning();
+server/storage.ts:13341:      .from(travelerTasks)
+server/storage.ts:13342:      .where(eq(travelerTasks.travelerStepId, stepId))
+server/storage.ts:13343:      .orderBy(travelerTasks.sortOrder);
+server/storage.ts:13347:    const [task] = await db.select().from(travelerTasks).where(eq(travelerTasks.id, id));
+server/storage.ts:13353:      .update(travelerTasks)
+server/storage.ts:13355:      .where(eq(travelerTasks.id, id))
+server/storage.ts:13365:    await db.delete(travelerTasks).where(eq(travelerTasks.id, id));
+server/storage.ts:13369:  async createTravelerTaskField(data: InsertTravelerTaskField): Promise<TravelerTaskField> {
+server/storage.ts:13402:  async createTravelerSignature(data: InsertTravelerSignature): Promise<TravelerSignature> {
+server/storage.ts:13416:  async createTravelerEvent(data: InsertTravelerEvent): Promise<TravelerEvent> {
+server/storage.ts:13452:    const traveler = await this.createTraveler({
+server/storage.ts:13481:      const step = await this.createTravelerStep({
+server/storage.ts:13492:      await this.createTravelerTask({
+server/storage.ts:13506:        const traceTask = await this.createTravelerTask({
+server/storage.ts:13519:          await this.createTravelerTaskField({
+server/storage.ts:13532:        const qcTask = await this.createTravelerTask({
+server/storage.ts:13544:          await this.createTravelerTaskField({
+server/storage.ts:13558:        const customTask = await this.createTravelerTask({
+server/storage.ts:13570:          await this.createTravelerTaskField({
+server/storage.ts:13583:        const ovenTask = await this.createTravelerTask({
+server/storage.ts:13596:          await this.createTravelerTaskField({
+server/storage.ts:13608:      await this.createTravelerTask({
+server/storage.ts:13621:    await this.createTravelerEvent({
+server/storage.ts:13626:        fromRoutingId: routing.id,
+server/storage.ts:13627:        fromRoutingRevision: (routing as any).routingRevision || 1,
+server/storage.ts:17448:  async createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption> {
+
+
+=== SECTION 6: SCHEMA — Tables tying routing → traveler ===
+-------------------------------------------------------------
+4259:export const partRoutings = pgTable('part_routings', {
+4265:  routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
+4266:  departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
+4279:  inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+4401:// NOTE: Foreign keys to travelers/travelerSteps defined via SQL since those tables are defined later
+4452:export const travelers = pgTable('travelers', {
+4471:  partRoutingId: varchar('part_routing_id', { length: 255 }),
+4472:  partRoutingRevision: integer('part_routing_revision'),
+4478:  travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
+4479:  statusIdx: index('travelers_status_idx').on(table.status),
+4480:  partNumberIdx: index('travelers_part_number_idx').on(table.partNumber),
+4481:  workOrderIdx: index('travelers_work_order_idx').on(table.workOrderId),
+4485:export const travelerSteps = pgTable('traveler_steps', {
+4488:    .references(() => travelers.id, { onDelete: 'cascade' })
+4505:  travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
+4506:  stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
+4510:export const travelerTasks = pgTable('traveler_tasks', {
+4528:  stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
+4529:  taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
+4530:  taskPhaseIdx: index('traveler_tasks_phase_idx').on(table.taskPhase),
+4555:export const travelerSignatures = pgTable('traveler_signatures', {
+4570:  stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
+4574:export const travelerEvents = pgTable('traveler_events', {
+4577:    .references(() => travelers.id, { onDelete: 'cascade' })
+4587:  travelerIdIdx: index('traveler_events_traveler_id_idx').on(table.travelerId),
+4588:  actionIdx: index('traveler_events_action_idx').on(table.action),
+5351:export const insertPartRoutingSchema = createInsertSchema(partRoutings)
+5449:export type PartRouting = typeof partRoutings.$inferSelect;
+5568:export const insertTravelerSchema = createInsertSchema(travelers)
+5587:    partRoutingId: z.string().uuid().optional().nullable(),
+5588:    partRoutingRevision: z.number().int().optional().nullable(),
+5685:export type Traveler = typeof travelers.$inferSelect;
+11148:export const routingDocuments = pgTable('routing_documents', {
+11150:  partRoutingId: uuid('part_routing_id'),
+11177:  partRoutingIdx: index('routing_documents_part_routing_idx').on(table.partRoutingId),
+11178:  partNumberIdx: index('routing_documents_part_number_idx').on(table.partNumber),
+11179:  departmentIdx: index('routing_documents_department_idx').on(table.departmentName),
+11185:  partRoutingId: uuid('part_routing_id'),
+11211:  partRoutingIdx: index('spec_sheets_part_routing_idx').on(table.partRoutingId),
+11270:  partRoutingId: uuid('part_routing_id').notNull(),
+11282:  partRoutingIdx: index('routing_document_links_routing_idx').on(table.partRoutingId),
+11291:  partRoutingId: uuid('part_routing_id'),
+11306:  routingIdx: index('certification_task_links_routing_idx').on(table.partRoutingId),
+11344:export const insertRoutingDocumentSchema = createInsertSchema(routingDocuments)
+11378:    partRoutingId: z.string().uuid('Invalid routing ID'),
+11427:export type RoutingDocument = typeof routingDocuments.$inferSelect;
+
+
+=== SECTION 7: FRONTEND — Generate traveler + routing picker + navigation to execute ===
+----------------------------------------------------------------------------------------
+client/src/pages/P2ControlCenter.tsx:516:          <P2TravelersTab />
+client/src/pages/P2ControlCenter.tsx:582:function P2TravelersTab() {
+client/src/pages/P2ControlCenter.tsx:604:      return apiRequest(`/api/travelers/from-routing/${data.routingId}`, {
+client/src/pages/P2ControlCenter.tsx:695:              Generate Traveler
+client/src/pages/P2ControlCenter.tsx:831:                          onClick={() => navigate(`/travelers/${traveler.id}`)}
+client/src/pages/P2ControlCenter.tsx:840:                            onClick={() => navigate(`/travelers/${traveler.id}/execute`)}
+client/src/pages/P2ControlCenter.tsx:859:            <DialogTitle>Generate Traveler from Routing</DialogTitle>
+client/src/pages/P2ControlCenter.tsx:922:              {generateTravelerMutation.isPending ? 'Generating...' : 'Generate Traveler'}
+client/src/App.tsx:217:import TravelerManagement from './pages/TravelerManagement';
+client/src/App.tsx:218:import TravelerExecution from './pages/TravelerExecution';
+client/src/App.tsx:755:                  <Route path="/travelers" component={TravelerManagement} />
+client/src/App.tsx:756:                  <Route path="/travelers/:id" component={TravelerExecution} />
+client/src/App.tsx:757:                  <Route path="/travelers/:id/execute" component={TravelerExecution} />
+client/src/pages/TravelerManagement.tsx:100:export default function TravelerManagement() {
+client/src/pages/TravelerManagement.tsx:127:      apiRequest(`/api/travelers/from-routing/${data.partRoutingId}`, {
+client/src/pages/TravelerManagement.tsx:163:      apiRequest(`/api/travelers/${id}/start`, {
+client/src/pages/TravelerManagement.tsx:186:      apiRequest(`/api/travelers/${id}`, { method: 'DELETE' }),
+client/src/pages/TravelerManagement.tsx:407:                          <Link href={`/travelers/${traveler.id}`}>
+client/src/pages/TravelerManagement.tsx:436:                            <Link href={`/travelers/${traveler.id}/execute`}>
+client/src/pages/TravelerExecution.tsx:190:export default function TravelerExecution() {
+client/src/pages/TravelerExecution.tsx:212:      fetch(`/api/travelers/${travelerId}?details=true`).then((res) => {
+client/src/pages/TravelerExecution.tsx:231:      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
+client/src/pages/TravelerExecution.tsx:247:      apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
+client/src/pages/TravelerExecution.tsx:263:      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
+client/src/pages/TravelerExecution.tsx:287:      apiRequest(`/api/travelers/${travelerId}/block`, {
+client/src/pages/TravelerExecution.tsx:305:      apiRequest(`/api/travelers/${travelerId}/unblock`, {
+client/src/pages/TravelerExecution.tsx:321:      apiRequest(`/api/travelers/${travelerId}/complete`, {
+
+===== END OF REPORT =====

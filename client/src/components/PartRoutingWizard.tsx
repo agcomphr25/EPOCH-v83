@@ -43,6 +43,7 @@ import {
   PenLine,
   Plus,
   Shield,
+  RotateCcw,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -150,6 +151,58 @@ interface PartRouting {
   createdAt: string;
   updatedAt: string;
 }
+
+const DEFAULT_START_CHECKS: PhaseCheck[] = [
+  {
+    title: 'Tooling Verified',
+    instructions: 'Verify all required tooling is available, calibrated, and in good condition',
+    required: true,
+    taskType: 'CHECK',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: false,
+    requiresCertification: false,
+  },
+  {
+    title: 'Work Instruction Acknowledged',
+    instructions: 'Review and acknowledge the current revision of the work instruction for this operation',
+    required: true,
+    taskType: 'DOCUMENT',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: true,
+    signatureRole: 'OPERATOR',
+    requiresCertification: false,
+  },
+];
+
+const DEFAULT_FINISH_CHECKS: PhaseCheck[] = [
+  {
+    title: 'Visual Inspection',
+    instructions: 'Perform visual inspection for defects, damage, and workmanship per AS9100 standards',
+    required: true,
+    taskType: 'QC',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: false,
+    requiresCertification: false,
+  },
+  {
+    title: 'Dimensional Check',
+    instructions: 'Verify critical dimensions are within tolerance per engineering drawing',
+    required: true,
+    taskType: 'QC',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: false,
+    requiresCertification: false,
+  },
+  {
+    title: 'FOD Check',
+    instructions: 'Inspect work area and part for Foreign Object Debris (FOD) — remove any debris before proceeding',
+    required: true,
+    taskType: 'CHECK',
+    timePolicy: 'AUTO_ON_COMPLETE',
+    requiresSignature: false,
+    requiresCertification: false,
+  },
+];
 
 interface PartRoutingWizardProps {
   open: boolean;
@@ -452,12 +505,21 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   };
 
   // Department configuration handlers
+  const createDefaultDeptConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: DEFAULT_START_CHECKS.map(c => ({ ...c })),
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['operator'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
-    return departmentConfig[dept] || {
-      materials: [],
-      assignedTechnicianId: null,
-      qcStandards: [],
-    };
+    return departmentConfig[dept] || createDefaultDeptConfig();
   };
 
   const addMaterialToDepartment = (dept: string, item: InventoryItem) => {
@@ -1002,21 +1064,15 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const toggleDepartment = (dept: string) => {
     if (selectedDepartments.includes(dept)) {
       setSelectedDepartments(selectedDepartments.filter(d => d !== dept));
-      // Remove department configuration
       const newConfig = { ...departmentConfig };
       delete newConfig[dept];
       setDepartmentConfig(newConfig);
     } else {
       setSelectedDepartments([...selectedDepartments, dept]);
-      // Initialize department configuration with defaults
       if (!departmentConfig[dept]) {
         setDepartmentConfig({
           ...departmentConfig,
-          [dept]: {
-            materials: [],
-            assignedTechnicianId: null,
-            qcStandards: [],
-          },
+          [dept]: createDefaultDeptConfig(),
         });
       }
     }
@@ -1302,10 +1358,28 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                               {/* Start Checks */}
                               <div>
-                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-blue-600" />
-                                  Gate Checks ({config.startChecks?.length || 0})
-                                </h4>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-blue-600" />
+                                    Gate Checks ({config.startChecks?.length || 0})
+                                  </h4>
+                                  {(!config.startChecks || config.startChecks.length === 0) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => {
+                                        setDepartmentConfig(prev => ({
+                                          ...prev,
+                                          [dept]: { ...config, startChecks: DEFAULT_START_CHECKS.map(c => ({ ...c })) },
+                                        }));
+                                      }}
+                                    >
+                                      <RotateCcw className="h-3 w-3 mr-1" />
+                                      Load Defaults
+                                    </Button>
+                                  )}
+                                </div>
                                 {config.startChecks && config.startChecks.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.startChecks.map((check, idx) => (
@@ -1585,10 +1659,28 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                               {/* Finish Checks */}
                               <div>
-                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-green-600" />
-                                  End Checks ({config.finishChecks?.length || 0})
-                                </h4>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-green-600" />
+                                    End Checks ({config.finishChecks?.length || 0})
+                                  </h4>
+                                  {(!config.finishChecks || config.finishChecks.length === 0) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => {
+                                        setDepartmentConfig(prev => ({
+                                          ...prev,
+                                          [dept]: { ...config, finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })) },
+                                        }));
+                                      }}
+                                    >
+                                      <RotateCcw className="h-3 w-3 mr-1" />
+                                      Load Defaults
+                                    </Button>
+                                  )}
+                                </div>
                                 {config.finishChecks && config.finishChecks.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.finishChecks.map((check, idx) => (

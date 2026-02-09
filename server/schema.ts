@@ -12642,3 +12642,52 @@ export const workOrderAttachments = pgTable('work_order_attachments', {
 export const insertWorkOrderAttachmentSchema = createInsertSchema(workOrderAttachments).omit({ id: true, uploadedAt: true });
 export type WorkOrderAttachment = typeof workOrderAttachments.$inferSelect;
 export type InsertWorkOrderAttachment = z.infer<typeof insertWorkOrderAttachmentSchema>;
+
+// ============================================================================
+// ROUTING TRAINING PACKAGES - AI-generated training & quizzes from work instructions
+// ============================================================================
+
+export const routingTrainingPackages = pgTable('routing_training_packages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  partRoutingId: uuid('part_routing_id'),
+  departmentName: varchar('department_name', { length: 255 }).notNull(),
+  processName: varchar('process_name', { length: 255 }),
+
+  sourceDocumentIds: jsonb('source_document_ids').$type<string[]>().default([]),
+  sourceDocumentTitles: jsonb('source_document_titles').$type<string[]>().default([]),
+
+  trainingContent: jsonb('training_content').$type<{
+    title: string;
+    objectives: string[];
+    keyPoints: { topic: string; details: string[] }[];
+    safetyNotes: string[];
+    commonMistakes: string[];
+  }>(),
+
+  quizQuestions: jsonb('quiz_questions').$type<{
+    question: string;
+    questionType: 'multiple_choice' | 'true_false';
+    options: string[];
+    correctAnswer: string;
+    explanation: string;
+    difficulty: 'easy' | 'medium' | 'hard';
+    sourceDocumentId?: string;
+  }[]>().default([]),
+
+  totalQuestions: integer('total_questions').default(0),
+  passingScore: integer('passing_score').default(80),
+  modelVersion: varchar('model_version', { length: 50 }).default('gpt-4o-mini'),
+  status: varchar('status', { length: 50 }).default('generated'),
+
+  generatedBy: varchar('generated_by', { length: 255 }),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).default(sql`now()`),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  routingIdx: index('routing_training_packages_routing_idx').on(table.partRoutingId),
+  deptIdx: index('routing_training_packages_dept_idx').on(table.departmentName),
+}));
+
+export const insertRoutingTrainingPackageSchema = createInsertSchema(routingTrainingPackages).omit({ id: true, createdAt: true, updatedAt: true, generatedAt: true });
+export type RoutingTrainingPackage = typeof routingTrainingPackages.$inferSelect;
+export type InsertRoutingTrainingPackage = z.infer<typeof insertRoutingTrainingPackageSchema>;

@@ -51,6 +51,12 @@ import {
   ImageIcon,
   Sparkles,
   Loader2,
+  GraduationCap,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
+  AlertCircle,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -406,6 +412,47 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
   const [editingDeptName, setEditingDeptName] = useState('');
   const [deptSaving, setDeptSaving] = useState(false);
+
+  const [trainingGenerating, setTrainingGenerating] = useState<string | null>(null);
+  const [expandedTraining, setExpandedTraining] = useState<Record<string, boolean>>({});
+  const [showQuizPreview, setShowQuizPreview] = useState<Record<string, boolean>>({});
+
+  const { data: trainingPackages = [], refetch: refetchTraining } = useQuery<any[]>({
+    queryKey: ['/api/part-routings', editRouting?.id, 'training'],
+    queryFn: async () => {
+      if (!editRouting?.id) return [];
+      const res = await fetch(`/api/part-routings/${editRouting.id}/training`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!editRouting?.id && open && step === 3,
+  });
+
+  const getTrainingForDept = (dept: string) => {
+    return trainingPackages.find((p: any) => p.departmentName === dept);
+  };
+
+  const handleGenerateTraining = async (dept: string) => {
+    if (!editRouting?.id) {
+      toast({ title: 'Save routing first', description: 'Please save the routing before generating training content.', variant: 'destructive' });
+      return;
+    }
+    setTrainingGenerating(dept);
+    try {
+      const result = await apiRequest(`/api/part-routings/${editRouting.id}/generate-training`, {
+        method: 'POST',
+        body: JSON.stringify({ departmentName: dept }),
+        timeout: 120000,
+      });
+      setExpandedTraining(prev => ({ ...prev, [dept]: true }));
+      refetchTraining();
+      toast({ title: 'Training & Quiz Generated', description: `Generated ${result.totalQuestions} quiz questions for ${dept}` });
+    } catch (err: any) {
+      toast({ title: 'Generation Failed', description: err.message || 'Could not generate training content', variant: 'destructive' });
+    } finally {
+      setTrainingGenerating(null);
+    }
+  };
 
   // Filter inventory items by search
   const filteredItems = displayItems.filter(item =>
@@ -2341,6 +2388,197 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                               )}
                             </div>
                           )}
+
+                          {/* Training & Quiz Generation Section */}
+                          <Separator className="my-3" />
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 text-sm font-medium text-purple-700 dark:text-purple-300 hover:underline"
+                                onClick={() => setExpandedTraining(prev => ({ ...prev, [dept]: !prev[dept] }))}
+                              >
+                                <GraduationCap className="h-4 w-4" />
+                                Training & Certification Quiz
+                                {expandedTraining[dept] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </button>
+                              {(() => {
+                                const existing = getTrainingForDept(dept);
+                                if (existing) {
+                                  return (
+                                    <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-300">
+                                      <CircleCheck className="h-3 w-3 mr-1" />
+                                      {existing.totalQuestions} Questions
+                                    </Badge>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+
+                            {expandedTraining[dept] && (
+                              <div className="space-y-3 pl-1">
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950"
+                                    disabled={trainingGenerating === dept || !editRouting?.id}
+                                    onClick={() => handleGenerateTraining(dept)}
+                                  >
+                                    {trainingGenerating === dept ? (
+                                      <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Generating...</>
+                                    ) : (
+                                      <><Brain className="h-3 w-3 mr-1" /> {getTrainingForDept(dept) ? 'Regenerate' : 'Generate'} Training & Quiz</>
+                                    )}
+                                  </Button>
+                                  {!editRouting?.id && (
+                                    <span className="text-[10px] text-muted-foreground">Save routing first</span>
+                                  )}
+                                </div>
+
+                                {(() => {
+                                  const pkg = getTrainingForDept(dept);
+                                  if (!pkg) return (
+                                    <p className="text-xs text-muted-foreground italic">
+                                      No training generated yet. Click the button above to generate training content and quiz questions from the work instructions assigned to this department.
+                                    </p>
+                                  );
+
+                                  const tc = pkg.trainingContent;
+                                  const questions = pkg.quizQuestions || [];
+
+                                  return (
+                                    <div className="space-y-3">
+                                      {tc && (
+                                        <div className="border rounded-lg p-3 bg-purple-50/50 dark:bg-purple-950/20 space-y-2">
+                                          <h5 className="text-sm font-semibold text-purple-800 dark:text-purple-200">{tc.title}</h5>
+
+                                          {tc.objectives?.length > 0 && (
+                                            <div>
+                                              <p className="text-[11px] font-medium text-purple-700 dark:text-purple-300 mb-1">Learning Objectives:</p>
+                                              <ul className="list-disc list-inside space-y-0.5">
+                                                {tc.objectives.map((obj: string, i: number) => (
+                                                  <li key={i} className="text-[11px] text-muted-foreground">{obj}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+
+                                          {tc.keyPoints?.length > 0 && (
+                                            <div>
+                                              <p className="text-[11px] font-medium text-purple-700 dark:text-purple-300 mb-1">Key Points:</p>
+                                              {tc.keyPoints.map((kp: any, i: number) => (
+                                                <div key={i} className="mb-1">
+                                                  <p className="text-[11px] font-medium">{kp.topic}</p>
+                                                  <ul className="list-disc list-inside ml-2">
+                                                    {kp.details?.map((d: string, j: number) => (
+                                                      <li key={j} className="text-[10px] text-muted-foreground">{d}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {tc.safetyNotes?.length > 0 && (
+                                            <div>
+                                              <p className="text-[11px] font-medium text-red-600 dark:text-red-400 mb-1">
+                                                <AlertCircle className="h-3 w-3 inline mr-1" />Safety Notes:
+                                              </p>
+                                              <ul className="list-disc list-inside space-y-0.5">
+                                                {tc.safetyNotes.map((note: string, i: number) => (
+                                                  <li key={i} className="text-[10px] text-red-600 dark:text-red-400">{note}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+
+                                          {tc.commonMistakes?.length > 0 && (
+                                            <div>
+                                              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mb-1">Common Mistakes to Avoid:</p>
+                                              <ul className="list-disc list-inside space-y-0.5">
+                                                {tc.commonMistakes.map((m: string, i: number) => (
+                                                  <li key={i} className="text-[10px] text-amber-600 dark:text-amber-400">{m}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-950/20 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <button
+                                            type="button"
+                                            className="flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-300"
+                                            onClick={() => setShowQuizPreview(prev => ({ ...prev, [dept]: !prev[dept] }))}
+                                          >
+                                            <BookOpen className="h-3 w-3" />
+                                            Quiz Preview ({questions.length} questions)
+                                            {showQuizPreview[dept] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                          </button>
+                                          <div className="flex gap-1">
+                                            {['easy', 'medium', 'hard'].map(d => {
+                                              const count = questions.filter((q: any) => q.difficulty === d).length;
+                                              if (count === 0) return null;
+                                              return (
+                                                <Badge key={d} variant="outline" className={`text-[9px] ${d === 'easy' ? 'text-green-600 border-green-300' : d === 'medium' ? 'text-amber-600 border-amber-300' : 'text-red-600 border-red-300'}`}>
+                                                  {count} {d}
+                                                </Badge>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+
+                                        {showQuizPreview[dept] && (
+                                          <div className="space-y-2 mt-2">
+                                            {questions.map((q: any, i: number) => (
+                                              <div key={i} className="border rounded p-2 bg-white dark:bg-gray-900 space-y-1">
+                                                <div className="flex items-start gap-2">
+                                                  <span className="text-[10px] font-mono text-muted-foreground mt-0.5">Q{i + 1}</span>
+                                                  <div className="flex-1">
+                                                    <p className="text-[11px] font-medium">{q.question}</p>
+                                                    {q.questionType === 'multiple_choice' && q.options?.length > 0 && (
+                                                      <div className="mt-1 space-y-0.5">
+                                                        {q.options.map((opt: string, j: number) => (
+                                                          <div key={j} className={`text-[10px] pl-2 ${opt === q.correctAnswer ? 'text-green-600 dark:text-green-400 font-medium' : 'text-muted-foreground'}`}>
+                                                            {String.fromCharCode(65 + j)}) {opt} {opt === q.correctAnswer && '✓'}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                    {q.questionType === 'true_false' && (
+                                                      <div className="mt-1 flex gap-3">
+                                                        <span className={`text-[10px] ${q.correctAnswer === 'True' ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>True {q.correctAnswer === 'True' && '✓'}</span>
+                                                        <span className={`text-[10px] ${q.correctAnswer === 'False' ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>False {q.correctAnswer === 'False' && '✓'}</span>
+                                                      </div>
+                                                    )}
+                                                    {q.explanation && (
+                                                      <p className="text-[9px] text-muted-foreground mt-1 italic">💡 {q.explanation}</p>
+                                                    )}
+                                                  </div>
+                                                  <Badge variant="outline" className={`text-[8px] shrink-0 ${q.difficulty === 'easy' ? 'text-green-600 border-green-300' : q.difficulty === 'medium' ? 'text-amber-600 border-amber-300' : 'text-red-600 border-red-300'}`}>
+                                                    {q.difficulty}
+                                                  </Badge>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                        <FileText className="h-3 w-3" />
+                                        Source WIs: {(pkg.sourceDocumentTitles || []).join(', ') || 'N/A'}
+                                        <span className="ml-auto">Generated: {pkg.generatedAt ? new Date(pkg.generatedAt).toLocaleDateString() : 'N/A'}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     );

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { 
   productionPrograms, 
   productionProgramSteps, 
@@ -414,38 +414,70 @@ function calculateCumulativePauseSeconds(events: any[]): number {
 
 router.get('/runs', async (req: Request, res: Response) => {
   try {
-    const runs = await db
-      .select()
-      .from(productionProgramRuns)
-      .orderBy(desc(productionProgramRuns.startedAt))
-      .limit(100);
+    const runsResult = await pool.query(
+      `SELECT * FROM production_program_runs ORDER BY started_at DESC LIMIT 100`
+    );
+    const runs = runsResult || [];
 
-    // Fetch events, programs, and steps for each run
-    const runsWithDetails = await Promise.all(runs.map(async (run) => {
-      const events = await db
-        .select()
-        .from(productionProgramRunEvents)
-        .where(eq(productionProgramRunEvents.runId, run.id))
-        .orderBy(productionProgramRunEvents.occurredAt);
+    const runsWithDetails = await Promise.all(runs.map(async (run: any) => {
+      const events = await pool.query(
+        `SELECT * FROM production_program_run_events WHERE run_id = $1 ORDER BY occurred_at`,
+        [run.id]
+      ) || [];
 
-      const [program] = await db
-        .select()
-        .from(productionPrograms)
-        .where(eq(productionPrograms.id, run.programId))
-        .limit(1);
+      const programs = await pool.query(
+        `SELECT * FROM production_programs WHERE id = $1 LIMIT 1`,
+        [run.program_id]
+      ) || [];
+      const program = programs[0] || null;
 
-      const steps = await db
-        .select()
-        .from(productionProgramSteps)
-        .where(eq(productionProgramSteps.programId, run.programId))
-        .orderBy(productionProgramSteps.stepIndex);
+      const steps = await pool.query(
+        `SELECT * FROM production_program_steps WHERE program_id = $1 ORDER BY step_index`,
+        [run.program_id]
+      ) || [];
 
-      const cumulativePauseSeconds = calculateCumulativePauseSeconds(events);
+      const mappedEvents = events.map((e: any) => ({
+        id: e.id,
+        runId: e.run_id,
+        eventType: e.event_type,
+        stepIndex: e.step_index,
+        userId: e.user_id,
+        occurredAt: e.occurred_at,
+      }));
+
+      const cumulativePauseSeconds = calculateCumulativePauseSeconds(mappedEvents);
 
       return {
-        ...run,
-        program,
-        steps,
+        id: run.id,
+        programId: run.program_id,
+        startedByUserId: run.started_by_user_id,
+        instanceName: run.instance_name,
+        sku: run.sku,
+        serialNumber: run.serial_number,
+        inventoryItemId: run.inventory_item_id,
+        mandrelNumber: run.mandrel_number,
+        ovenNumber: run.oven_number,
+        ovenSlot: run.oven_slot,
+        status: run.status,
+        currentStepIndex: run.current_step_index,
+        startedAt: run.started_at,
+        completedAt: run.completed_at,
+        lastPausedAt: run.last_paused_at,
+        totalElapsedSeconds: run.total_elapsed_seconds,
+        createdAt: run.created_at,
+        updatedAt: run.updated_at,
+        program: program ? {
+          id: program.id,
+          name: program.name,
+          description: program.description,
+        } : null,
+        steps: steps.map((s: any) => ({
+          id: s.id,
+          programId: s.program_id,
+          stepIndex: s.step_index,
+          stepName: s.step_name,
+          durationSeconds: s.duration_seconds,
+        })),
         cumulativePauseSeconds,
       };
     }));

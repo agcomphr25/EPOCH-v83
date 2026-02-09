@@ -45,6 +45,7 @@ export default function StartProductionTimerModal({
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const serialInputRef = useRef<HTMLInputElement>(null);
 
   const [programId, setProgramId] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
@@ -68,7 +69,11 @@ export default function StartProductionTimerModal({
   }, []);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setTimeout(() => {
+        serialInputRef.current?.focus();
+      }, 100);
+    } else {
       stopScanning();
       setProgramId('');
       setSerialNumber('');
@@ -233,10 +238,17 @@ export default function StartProductionTimerModal({
             <div className="flex gap-2">
               <Input
                 id="serialNumber"
+                ref={serialInputRef}
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
-                placeholder="Enter serial number"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                  }
+                }}
+                placeholder="Enter or scan serial number"
                 className="flex-1"
+                autoComplete="off"
                 required
               />
               {barcodeSupported && (

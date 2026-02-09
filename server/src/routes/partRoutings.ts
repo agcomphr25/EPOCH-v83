@@ -292,23 +292,22 @@ router.post('/:id/generate-training', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'departmentName is required' });
     }
 
-    const routingResult = await pool.query(
+    const routingRows = await pool.query(
       `SELECT id::text, part_number AS "partNumber", revision FROM part_routings WHERE id = $1`,
       [routingId]
     );
-    if (routingResult.rows.length === 0) {
+    if (routingRows.length === 0) {
       return res.status(404).json({ error: 'Routing not found' });
     }
-    const routing = routingResult.rows[0];
+    const routing = routingRows[0];
 
-    const docResult = await pool.query(
+    const docRows = await pool.query(
       `SELECT id::text, title, ai_extracted_content AS "aiExtractedContent",
               file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType"
        FROM routing_documents
        WHERE part_routing_id = $1 AND department_name = $2 AND is_active = true`,
       [routingId, departmentName]
     );
-    const docRows = docResult.rows;
 
     if (docRows.length === 0) {
       return res.status(400).json({
@@ -413,15 +412,15 @@ ${allContent.substring(0, 50000)}`;
       sourceDocumentId: sourceDocIds[idx % sourceDocIds.length],
     }));
 
-    const existingResult = await pool.query(
+    const existingRows = await pool.query(
       `SELECT id::text FROM routing_training_packages WHERE part_routing_id = $1 AND department_name = $2`,
       [routingId, departmentName]
     );
 
     let packageId: string;
 
-    if (existingResult.rows.length > 0) {
-      const updateResult = await pool.query(
+    if (existingRows.length > 0) {
+      const updateRows = await pool.query(
         `UPDATE routing_training_packages
          SET source_document_ids = $1, source_document_titles = $2,
              training_content = $3, quiz_questions = $4,
@@ -436,9 +435,9 @@ ${allContent.substring(0, 50000)}`;
           routingId, departmentName,
         ]
       );
-      packageId = updateResult.rows[0].id;
+      packageId = updateRows[0].id;
     } else {
-      const insertResult = await pool.query(
+      const insertRows = await pool.query(
         `INSERT INTO routing_training_packages
          (part_routing_id, department_name, source_document_ids, source_document_titles,
           training_content, quiz_questions, total_questions)
@@ -451,7 +450,7 @@ ${allContent.substring(0, 50000)}`;
           quizQuestions.length,
         ]
       );
-      packageId = insertResult.rows[0].id;
+      packageId = insertRows[0].id;
     }
 
     res.json({
@@ -495,8 +494,8 @@ router.get('/:id/training', async (req: Request, res: Response) => {
 
     query += ` ORDER BY department_name ASC`;
 
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    const rows = await pool.query(query, params);
+    res.json(rows);
   } catch (error: any) {
     console.error('Error fetching training packages:', error);
     res.status(500).json({ error: 'Failed to fetch training packages' });

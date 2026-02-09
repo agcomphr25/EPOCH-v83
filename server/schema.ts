@@ -212,6 +212,7 @@ export const orders = pgTable('orders', {
   gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
   paintCompletedAt: timestamp('paint_completed_at'),
   qcCompletedAt: timestamp('qc_completed_at'),
+  shippingQcCompletedAt: timestamp('shipping_qc_completed_at'),
   shippingCompletedAt: timestamp('shipping_completed_at'),
   // Scrapping fields
   scrapDate: timestamp('scrap_date'),

@@ -10506,17 +10506,22 @@ export class DatabaseStorage implements IStorage {
       );
 
       // Try to update in allOrders table first
-      const allOrdersResult = await db
+      await db
         .update(allOrders)
         .set({
           currentDepartment: department,
           status: status,
           updatedAt: new Date(),
         })
-        .where(eq(allOrders.orderId, orderId))
-        .returning();
+        .where(eq(allOrders.orderId, orderId));
 
-      if (allOrdersResult.length > 0) {
+      const [updatedAllOrder] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+
+      if (updatedAllOrder) {
         console.log(
           `✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`
         );
@@ -15354,31 +15359,48 @@ export class DatabaseStorage implements IStorage {
     orderId: string,
     data: Partial<InsertAllOrder>
   ): Promise<AllOrder> {
-    const [order] = await db
-      .update(allOrders)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(allOrders.orderId, orderId))
-      .returning();
+    try {
+      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
+      
+      await db
+        .update(allOrders)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(allOrders.orderId, orderId));
 
-    if (!order) {
-      throw new Error(`Finalized order with ID ${orderId} not found`);
+      const [order] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+
+      if (!order) {
+        throw new Error(`Finalized order with ID ${orderId} not found`);
+      }
+
+      return order;
+    } catch (err: any) {
+      console.error(`[updateFinalizedOrder] Error for ${orderId}:`, err.message);
+      throw err;
     }
-
-    return order;
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
     // Update the order to be fulfilled and move to shipping management
-    const [order] = await db
+    await db
       .update(allOrders)
       .set({
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
-        shippedDate: new Date(), // Set shipped date to current date when fulfilled
+        shippedDate: new Date(),
         updatedAt: new Date(),
       })
+      .where(eq(allOrders.orderId, orderId));
+
+    const [order] = await db
+      .select()
+      .from(allOrders)
       .where(eq(allOrders.orderId, orderId))
-      .returning();
+      .limit(1);
 
     if (!order) {
       throw new Error(`Order with ID ${orderId} not found`);

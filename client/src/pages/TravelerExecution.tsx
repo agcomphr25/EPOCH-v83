@@ -51,6 +51,7 @@ import {
   Shield,
   BookOpen,
   Lightbulb,
+  ImageIcon,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 
@@ -81,9 +82,10 @@ interface TravelerTask {
   signatureRole: string | null;
   requiresCertification: boolean;
   instructionPack: {
-    workInstructionRefs?: { documentId: string; documentTitle: string; revision?: string }[];
-    aiSnippets?: string[];
+    workInstructionRefs?: { documentId: string; title?: string; pageRange?: string; anchor?: string }[];
+    aiSnippets?: { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[];
     specialNotes?: string;
+    media?: { type: 'image' | 'pdf'; documentId: string; caption?: string }[];
   } | null;
   status: string;
   startedAt: string | null;
@@ -761,33 +763,78 @@ export default function TravelerExecution() {
 
                                         {/* Instruction Pack Viewer */}
                                         {task.instructionPack && (() => {
-                                          const pack = task.instructionPack;
-                                          const hasContent = (pack.workInstructionRefs?.length || 0) > 0 || (pack.aiSnippets?.length || 0) > 0 || pack.specialNotes;
+                                          const rawPack = task.instructionPack as any;
+                                          const normalizedRefs = (rawPack.workInstructionRefs || []).map((r: any) => ({
+                                            documentId: r.documentId || '',
+                                            title: r.title || r.documentTitle || undefined,
+                                            pageRange: r.pageRange || undefined,
+                                            anchor: r.anchor || undefined,
+                                          }));
+                                          const normalizedSnippets = (rawPack.aiSnippets || []).map((s: any) =>
+                                            typeof s === 'string'
+                                              ? { title: 'Tip', bullets: [s] }
+                                              : { title: s.title || 'Tip', bullets: s.bullets || [], sourceDocumentId: s.sourceDocumentId, confidence: s.confidence }
+                                          );
+                                          const pack = {
+                                            workInstructionRefs: normalizedRefs,
+                                            aiSnippets: normalizedSnippets,
+                                            specialNotes: rawPack.specialNotes,
+                                            media: rawPack.media || [],
+                                          };
+                                          const hasContent = pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || pack.media.length > 0;
                                           if (!hasContent) return null;
                                           return (
                                             <div className="rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2">
                                               <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
                                                 <BookOpen className="h-3.5 w-3.5" /> Instruction Pack
                                               </p>
-                                              {pack.workInstructionRefs && pack.workInstructionRefs.length > 0 && (
+                                              {pack.workInstructionRefs.length > 0 && (
                                                 <div className="space-y-1">
                                                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Work Instructions</p>
                                                   {pack.workInstructionRefs.map((ref, i) => (
                                                     <div key={i} className="flex items-center gap-2 text-xs">
                                                       <FileText className="h-3 w-3 text-blue-500 shrink-0" />
-                                                      <span className="font-medium">{ref.documentTitle}</span>
-                                                      {ref.revision && <span className="text-muted-foreground text-[10px]">Rev {ref.revision}</span>}
+                                                      <span className="font-medium">{ref.title || ref.documentId}</span>
+                                                      {ref.pageRange && <span className="text-muted-foreground text-[10px]">pp. {ref.pageRange}</span>}
+                                                      {ref.anchor && <span className="text-muted-foreground text-[10px]">§ {ref.anchor}</span>}
                                                     </div>
                                                   ))}
                                                 </div>
                                               )}
-                                              {pack.aiSnippets && pack.aiSnippets.length > 0 && (
-                                                <div className="space-y-1">
-                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Tips</p>
+                                              {pack.aiSnippets.length > 0 && (
+                                                <div className="space-y-2">
+                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">AI Tips</p>
                                                   {pack.aiSnippets.map((snippet, i) => (
-                                                    <div key={i} className="flex items-start gap-2 text-xs">
-                                                      <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0 mt-0.5" />
-                                                      <span>{snippet}</span>
+                                                    <div key={i} className="space-y-0.5">
+                                                      <div className="flex items-center gap-1.5 text-xs">
+                                                        <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0" />
+                                                        <span className="font-medium">{snippet.title}</span>
+                                                        {snippet.confidence != null && (
+                                                          <span className="text-[10px] text-muted-foreground ml-auto">{Math.round(snippet.confidence * 100)}%</span>
+                                                        )}
+                                                      </div>
+                                                      {snippet.bullets.length > 0 && (
+                                                        <ul className="ml-5 space-y-0.5">
+                                                          {snippet.bullets.map((b, bi) => (
+                                                            <li key={bi} className="text-xs text-muted-foreground flex items-start gap-1">
+                                                              <span className="shrink-0 mt-0.5">•</span>
+                                                              <span>{b}</span>
+                                                            </li>
+                                                          ))}
+                                                        </ul>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {pack.media.length > 0 && (
+                                                <div className="space-y-1">
+                                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Media</p>
+                                                  {pack.media.map((m, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                      {m.type === 'image' ? <ImageIcon className="h-3 w-3 text-green-500 shrink-0" /> : <FileText className="h-3 w-3 text-red-500 shrink-0" />}
+                                                      <span>{m.caption || m.documentId}</span>
+                                                      <span className="text-[10px] text-muted-foreground uppercase">{m.type}</span>
                                                     </div>
                                                   ))}
                                                 </div>

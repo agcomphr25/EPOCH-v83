@@ -48,6 +48,7 @@ import {
   Lightbulb,
   StickyNote,
   Trash2,
+  ImageIcon,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -112,10 +113,25 @@ interface SpecialProcessConfig {
   customDataFields: CustomDataField[];
 }
 
+interface InstructionRef {
+  documentId: string;
+  title?: string;
+  pageRange?: string;
+  anchor?: string;
+}
+
+interface AiSnippet {
+  title: string;
+  bullets: string[];
+  sourceDocumentId?: string;
+  confidence?: number;
+}
+
 interface InstructionPack {
-  workInstructionRefs: { documentId: string; documentTitle: string; revision?: string }[];
-  aiSnippets: string[];
+  workInstructionRefs: InstructionRef[];
+  aiSnippets: AiSnippet[];
   specialNotes: string;
+  media: { type: 'image' | 'pdf'; documentId: string; caption?: string }[];
 }
 
 interface PhaseCheck {
@@ -1344,7 +1360,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.materials.length > 0 ? 1 : 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + config.qcStandards.length + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -1567,7 +1583,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 </p>
 
                                 {(() => {
-                                  const pack = config.instructionPack || { workInstructionRefs: [], aiSnippets: [], specialNotes: '' };
+                                  const pack = config.instructionPack || { workInstructionRefs: [], aiSnippets: [], specialNotes: '', media: [] };
                                   const updatePack = (updates: Partial<InstructionPack>) => {
                                     setDepartmentConfig(prev => ({
                                       ...prev,
@@ -1590,8 +1606,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                               <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
                                                 <FileText className="h-3 w-3 text-blue-500 shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                  <p className="text-xs font-medium truncate">{ref.documentTitle}</p>
-                                                  {ref.revision && <p className="text-[10px] text-muted-foreground">Rev {ref.revision}</p>}
+                                                  <p className="text-xs font-medium truncate">{ref.title || ref.documentId}</p>
+                                                  <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                                    {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                                                    {ref.anchor && <span>§ {ref.anchor}</span>}
+                                                  </div>
                                                 </div>
                                                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ workInstructionRefs: pack.workInstructionRefs.filter((_, i) => i !== idx) })}>
                                                   <X className="h-3 w-3" />
@@ -1601,21 +1620,25 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           </div>
                                         )}
                                         <div className="flex gap-2">
-                                          <Input placeholder="Document title" className="text-xs" id={`wi-title-${dept}`} />
-                                          <Input placeholder="Rev" className="text-xs w-16" id={`wi-rev-${dept}`} />
+                                          <Input placeholder="Document title" className="text-xs flex-1" id={`wi-title-${dept}`} />
+                                          <Input placeholder="Pages" className="text-xs w-16" id={`wi-pages-${dept}`} />
+                                          <Input placeholder="Section" className="text-xs w-20" id={`wi-anchor-${dept}`} />
                                           <Button size="sm" variant="outline" onClick={() => {
                                             const titleEl = document.getElementById(`wi-title-${dept}`) as HTMLInputElement;
-                                            const revEl = document.getElementById(`wi-rev-${dept}`) as HTMLInputElement;
+                                            const pagesEl = document.getElementById(`wi-pages-${dept}`) as HTMLInputElement;
+                                            const anchorEl = document.getElementById(`wi-anchor-${dept}`) as HTMLInputElement;
                                             if (titleEl?.value.trim()) {
                                               updatePack({
                                                 workInstructionRefs: [...pack.workInstructionRefs, {
                                                   documentId: crypto.randomUUID(),
-                                                  documentTitle: titleEl.value.trim(),
-                                                  revision: revEl?.value.trim() || undefined,
+                                                  title: titleEl.value.trim(),
+                                                  pageRange: pagesEl?.value.trim() || undefined,
+                                                  anchor: anchorEl?.value.trim() || undefined,
                                                 }],
                                               });
                                               titleEl.value = '';
-                                              if (revEl) revEl.value = '';
+                                              if (pagesEl) pagesEl.value = '';
+                                              if (anchorEl) anchorEl.value = '';
                                             }
                                           }}>
                                             <Plus className="h-3 w-3" />
@@ -1625,39 +1648,101 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                                       <div className="space-y-2">
                                         <Label className="text-xs font-medium flex items-center gap-1">
-                                          <Lightbulb className="h-3 w-3" /> AI Snippets (Do / Don't bullets)
+                                          <Lightbulb className="h-3 w-3" /> AI Snippets
                                         </Label>
                                         {pack.aiSnippets.length > 0 && (
-                                          <div className="space-y-1">
+                                          <div className="space-y-2">
                                             {pack.aiSnippets.map((snippet, idx) => (
-                                              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                                <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0" />
-                                                <p className="text-xs flex-1">{snippet}</p>
-                                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ aiSnippets: pack.aiSnippets.filter((_, i) => i !== idx) })}>
-                                                  <X className="h-3 w-3" />
-                                                </Button>
+                                              <div key={idx} className="p-2 rounded border bg-background space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                  <Lightbulb className="h-3 w-3 text-yellow-500 shrink-0" />
+                                                  <p className="text-xs font-medium flex-1">{snippet.title}</p>
+                                                  {snippet.confidence != null && (
+                                                    <span className="text-[10px] text-muted-foreground">{Math.round(snippet.confidence * 100)}%</span>
+                                                  )}
+                                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ aiSnippets: pack.aiSnippets.filter((_, i) => i !== idx) })}>
+                                                    <X className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                                <ul className="ml-5 space-y-0.5">
+                                                  {snippet.bullets.map((b, bi) => (
+                                                    <li key={bi} className="text-xs text-muted-foreground flex items-start gap-1">
+                                                      <span className="shrink-0 mt-1">•</span>
+                                                      <span>{b}</span>
+                                                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-auto shrink-0" onClick={() => {
+                                                        const updated = [...pack.aiSnippets];
+                                                        updated[idx] = { ...updated[idx], bullets: updated[idx].bullets.filter((_, i) => i !== bi) };
+                                                        updatePack({ aiSnippets: updated });
+                                                      }}>
+                                                        <X className="h-2.5 w-2.5" />
+                                                      </Button>
+                                                    </li>
+                                                  ))}
+                                                </ul>
+                                                <div className="flex gap-1 ml-5">
+                                                  <Input placeholder="Add bullet..." className="text-xs h-6" id={`ai-bullet-${dept}-${idx}`} onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                      const el = e.target as HTMLInputElement;
+                                                      if (el.value.trim()) {
+                                                        const updated = [...pack.aiSnippets];
+                                                        updated[idx] = { ...updated[idx], bullets: [...updated[idx].bullets, el.value.trim()] };
+                                                        updatePack({ aiSnippets: updated });
+                                                        el.value = '';
+                                                      }
+                                                    }
+                                                  }} />
+                                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
+                                                    const el = document.getElementById(`ai-bullet-${dept}-${idx}`) as HTMLInputElement;
+                                                    if (el?.value.trim()) {
+                                                      const updated = [...pack.aiSnippets];
+                                                      updated[idx] = { ...updated[idx], bullets: [...updated[idx].bullets, el.value.trim()] };
+                                                      updatePack({ aiSnippets: updated });
+                                                      el.value = '';
+                                                    }
+                                                  }}>
+                                                    <Plus className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                                <div className="flex gap-2 ml-5 mt-1">
+                                                  <Input
+                                                    placeholder="Source doc ID (optional)"
+                                                    className="text-xs h-6 flex-1"
+                                                    value={snippet.sourceDocumentId || ''}
+                                                    onChange={(e) => {
+                                                      const updated = [...pack.aiSnippets];
+                                                      updated[idx] = { ...updated[idx], sourceDocumentId: e.target.value || undefined };
+                                                      updatePack({ aiSnippets: updated });
+                                                    }}
+                                                  />
+                                                  <Input
+                                                    placeholder="Conf %"
+                                                    className="text-xs h-6 w-16"
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={snippet.confidence != null ? Math.round(snippet.confidence * 100) : ''}
+                                                    onChange={(e) => {
+                                                      const updated = [...pack.aiSnippets];
+                                                      const val = e.target.value ? parseInt(e.target.value) / 100 : undefined;
+                                                      updated[idx] = { ...updated[idx], confidence: val };
+                                                      updatePack({ aiSnippets: updated });
+                                                    }}
+                                                  />
+                                                </div>
                                               </div>
                                             ))}
                                           </div>
                                         )}
                                         <div className="flex gap-2">
-                                          <Input placeholder="e.g. DO: Check torque spec before tightening" className="text-xs" id={`ai-snippet-${dept}`} onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              const el = e.target as HTMLInputElement;
-                                              if (el.value.trim()) {
-                                                updatePack({ aiSnippets: [...pack.aiSnippets, el.value.trim()] });
-                                                el.value = '';
-                                              }
-                                            }
-                                          }} />
+                                          <Input placeholder="Snippet title (e.g. Critical hold points)" className="text-xs flex-1" id={`ai-title-${dept}`} />
                                           <Button size="sm" variant="outline" onClick={() => {
-                                            const el = document.getElementById(`ai-snippet-${dept}`) as HTMLInputElement;
+                                            const el = document.getElementById(`ai-title-${dept}`) as HTMLInputElement;
                                             if (el?.value.trim()) {
-                                              updatePack({ aiSnippets: [...pack.aiSnippets, el.value.trim()] });
+                                              updatePack({ aiSnippets: [...pack.aiSnippets, { title: el.value.trim(), bullets: [] }] });
                                               el.value = '';
                                             }
                                           }}>
-                                            <Plus className="h-3 w-3" />
+                                            <Plus className="h-3 w-3" /> Add Snippet
                                           </Button>
                                         </div>
                                       </div>
@@ -1675,9 +1760,55 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                         />
                                       </div>
 
-                                      {(pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes) && (
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium flex items-center gap-1">
+                                          <ImageIcon className="h-3 w-3" /> Media Attachments
+                                        </Label>
+                                        {(pack.media || []).length > 0 && (
+                                          <div className="space-y-1">
+                                            {(pack.media || []).map((m, idx) => (
+                                              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                                {m.type === 'image' ? <ImageIcon className="h-3 w-3 text-green-500 shrink-0" /> : <FileText className="h-3 w-3 text-red-500 shrink-0" />}
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-xs font-medium truncate">{m.caption || m.documentId}</p>
+                                                  <p className="text-[10px] text-muted-foreground uppercase">{m.type}</p>
+                                                </div>
+                                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => updatePack({ media: (pack.media || []).filter((_, i) => i !== idx) })}>
+                                                  <X className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <select className="text-xs border rounded px-2 h-8 bg-background" id={`media-type-${dept}`}>
+                                            <option value="image">Image</option>
+                                            <option value="pdf">PDF</option>
+                                          </select>
+                                          <Input placeholder="Document ID" className="text-xs w-32" id={`media-docid-${dept}`} />
+                                          <Input placeholder="Caption" className="text-xs flex-1" id={`media-caption-${dept}`} />
+                                          <Button size="sm" variant="outline" onClick={() => {
+                                            const typeEl = document.getElementById(`media-type-${dept}`) as HTMLSelectElement;
+                                            const docIdEl = document.getElementById(`media-docid-${dept}`) as HTMLInputElement;
+                                            const captionEl = document.getElementById(`media-caption-${dept}`) as HTMLInputElement;
+                                            updatePack({
+                                              media: [...(pack.media || []), {
+                                                type: (typeEl?.value as 'image' | 'pdf') || 'image',
+                                                documentId: docIdEl?.value.trim() || crypto.randomUUID(),
+                                                caption: captionEl?.value.trim() || undefined,
+                                              }],
+                                            });
+                                            if (docIdEl) docIdEl.value = '';
+                                            if (captionEl) captionEl.value = '';
+                                          }}>
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      {(pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || (pack.media || []).length > 0) && (
                                         <div className="flex justify-end">
-                                          <Button size="sm" variant="ghost" className="text-xs text-destructive" onClick={() => updatePack({ workInstructionRefs: [], aiSnippets: [], specialNotes: '' })}>
+                                          <Button size="sm" variant="ghost" className="text-xs text-destructive" onClick={() => updatePack({ workInstructionRefs: [], aiSnippets: [], specialNotes: '', media: [] })}>
                                             <Trash2 className="h-3 w-3 mr-1" /> Clear Pack
                                           </Button>
                                         </div>

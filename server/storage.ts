@@ -13594,7 +13594,8 @@ export class DatabaseStorage implements IStorage {
       const hasInstructionPack = routingInstructionPack && (
         (routingInstructionPack.workInstructionRefs?.length > 0) ||
         (routingInstructionPack.aiSnippets?.length > 0) ||
-        (routingInstructionPack.specialNotes)
+        (routingInstructionPack.specialNotes) ||
+        (routingInstructionPack.media?.length > 0)
       );
 
       // PROCESS tasks from customDataFields

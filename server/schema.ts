@@ -5642,11 +5642,22 @@ export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
     instructionPack: z.object({
       workInstructionRefs: z.array(z.object({
         documentId: z.string(),
-        documentTitle: z.string(),
-        revision: z.string().optional(),
+        title: z.string().optional(),
+        pageRange: z.string().optional(),
+        anchor: z.string().optional(),
       })).optional().default([]),
-      aiSnippets: z.array(z.string()).optional().default([]),
+      aiSnippets: z.array(z.object({
+        title: z.string(),
+        bullets: z.array(z.string()),
+        sourceDocumentId: z.string().optional(),
+        confidence: z.number().optional(),
+      })).optional().default([]),
       specialNotes: z.string().optional().default(''),
+      media: z.array(z.object({
+        type: z.enum(['image', 'pdf']),
+        documentId: z.string(),
+        caption: z.string().optional(),
+      })).optional().default([]),
     }).optional().nullable(),
     status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED']).default('NOT_STARTED'),
     startedAt: z.coerce.date().optional().nullable(),

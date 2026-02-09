@@ -1433,13 +1433,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           try {
                             await apiRequest('/api/part-routings/departments', {
                               method: 'POST',
-                              body: JSON.stringify({ name: newDeptName.trim() }),
+                              body: { name: newDeptName.trim() },
                             });
                             queryClient.invalidateQueries({ queryKey: ['/api/part-routings/departments/list'] });
                             setNewDeptName('');
                             toast({ title: `Department "${newDeptName.trim()}" added` });
-                          } catch (err) {
-                            toast({ title: 'Failed to add department', variant: 'destructive' });
+                          } catch (err: any) {
+                            console.error('Failed to add department:', err);
+                            toast({ title: 'Failed to add department', description: err?.message || 'Unknown error', variant: 'destructive' });
                           } finally {
                             setDeptSaving(false);
                           }

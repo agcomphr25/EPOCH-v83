@@ -57,6 +57,10 @@ import {
   ChevronUp,
   CircleCheck,
   AlertCircle,
+  FolderOpen,
+  Search,
+  Eye,
+  CheckSquare,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -284,6 +288,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
   
   const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
+  const [showDocPicker, setShowDocPicker] = useState(false);
+  const [docPickerDept, setDocPickerDept] = useState<string>('');
+  const [docPickerSearch, setDocPickerSearch] = useState('');
+  const [docPickerSelectedDoc, setDocPickerSelectedDoc] = useState<any>(null);
+  const [docPickerSections, setDocPickerSections] = useState<any[]>([]);
+  const [docPickerLoadingSections, setDocPickerLoadingSections] = useState(false);
+  const [docPickerSelectedSections, setDocPickerSelectedSections] = useState<Set<string>>(new Set());
+  const [docPickerUseWhole, setDocPickerUseWhole] = useState(true);
   
   // UI state for oven curing input
   const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
@@ -1822,25 +1834,28 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           </div>
                                         )}
                                         <div className="flex gap-2">
-                                          <Input placeholder="Document title" className="text-xs flex-1" id={`wi-title-${dept}`} />
+                                          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => {
+                                            setDocPickerDept(dept);
+                                            setShowDocPicker(true);
+                                          }}>
+                                            <FolderOpen className="h-3 w-3 mr-1" />
+                                            Browse from Storage
+                                          </Button>
+                                          <Input placeholder="Or enter title manually" className="text-xs flex-1" id={`wi-title-${dept}`} />
                                           <Input placeholder="Pages" className="text-xs w-16" id={`wi-pages-${dept}`} />
-                                          <Input placeholder="Section" className="text-xs w-20" id={`wi-anchor-${dept}`} />
                                           <Button size="sm" variant="outline" onClick={() => {
                                             const titleEl = document.getElementById(`wi-title-${dept}`) as HTMLInputElement;
                                             const pagesEl = document.getElementById(`wi-pages-${dept}`) as HTMLInputElement;
-                                            const anchorEl = document.getElementById(`wi-anchor-${dept}`) as HTMLInputElement;
                                             if (titleEl?.value.trim()) {
                                               updatePack({
                                                 workInstructionRefs: [...pack.workInstructionRefs, {
                                                   documentId: crypto.randomUUID(),
                                                   title: titleEl.value.trim(),
                                                   pageRange: pagesEl?.value.trim() || undefined,
-                                                  anchor: anchorEl?.value.trim() || undefined,
                                                 }],
                                               });
                                               titleEl.value = '';
                                               if (pagesEl) pagesEl.value = '';
-                                              if (anchorEl) anchorEl.value = '';
                                             }
                                           }}>
                                             <Plus className="h-3 w-3" />
@@ -2978,6 +2993,289 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={showDocPicker} onOpenChange={(open) => {
+        if (!open) {
+          setShowDocPicker(false);
+          setDocPickerSelectedDoc(null);
+          setDocPickerSections([]);
+          setDocPickerSearch('');
+          setDocPickerSelectedSections(new Set());
+          setDocPickerUseWhole(true);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              Browse Work Instructions from Storage
+            </DialogTitle>
+            <DialogDescription>
+              Select a document and choose to use the whole document or specific sections.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-4 h-[60vh]">
+            <div className={`${docPickerSelectedDoc ? 'w-1/3' : 'w-full'} flex flex-col`}>
+              <div className="relative mb-3">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search documents..."
+                  className="pl-8"
+                  value={docPickerSearch}
+                  onChange={(e) => setDocPickerSearch(e.target.value)}
+                />
+              </div>
+              <ScrollArea className="flex-1 border rounded-md">
+                <DocPickerList
+                  search={docPickerSearch}
+                  selectedDocId={docPickerSelectedDoc?.id}
+                  onSelectDoc={async (doc: any) => {
+                    setDocPickerSelectedDoc(doc);
+                    setDocPickerSections([]);
+                    setDocPickerSelectedSections(new Set());
+                    setDocPickerUseWhole(true);
+                    setDocPickerLoadingSections(true);
+                    try {
+                      const res = await apiRequest(`/api/routing-documents/${doc.id}/sections`);
+                      const data = await res.json();
+                      setDocPickerSections(data.sections || []);
+                    } catch (err) {
+                      console.warn('Could not load sections:', err);
+                      setDocPickerSections([]);
+                    } finally {
+                      setDocPickerLoadingSections(false);
+                    }
+                  }}
+                />
+              </ScrollArea>
+            </div>
+
+            {docPickerSelectedDoc && (
+              <div className="w-2/3 flex flex-col border rounded-md">
+                <div className="p-3 border-b bg-muted/50">
+                  <h4 className="font-medium text-sm">{docPickerSelectedDoc.title || docPickerSelectedDoc.file_name}</h4>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="outline" className="text-[10px]">{docPickerSelectedDoc.document_type || docPickerSelectedDoc.documentType || 'document'}</Badge>
+                    {docPickerSelectedDoc.department_name && <Badge variant="secondary" className="text-[10px]">{docPickerSelectedDoc.department_name}</Badge>}
+                  </div>
+                </div>
+
+                <div className="p-3 border-b flex items-center gap-3">
+                  <Label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="docSelection"
+                      checked={docPickerUseWhole}
+                      onChange={() => {
+                        setDocPickerUseWhole(true);
+                        setDocPickerSelectedSections(new Set());
+                      }}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm font-medium">Use Whole Document</span>
+                  </Label>
+                  <Label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="docSelection"
+                      checked={!docPickerUseWhole}
+                      onChange={() => setDocPickerUseWhole(false)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm font-medium">Select Sections</span>
+                  </Label>
+                </div>
+
+                <ScrollArea className="flex-1">
+                  {docPickerLoadingSections ? (
+                    <div className="flex items-center justify-center p-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : docPickerSections.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground text-sm">
+                      <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No extracted content available.</p>
+                      <p className="text-xs mt-1">Upload and analyze this document first to see its sections.</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 space-y-2">
+                      {docPickerSections.map((section: any) => {
+                        const isSelected = docPickerSelectedSections.has(section.id);
+                        return (
+                          <div
+                            key={section.id}
+                            className={`rounded-md border p-3 transition-colors ${
+                              docPickerUseWhole
+                                ? 'bg-primary/5 border-primary/30'
+                                : isSelected
+                                  ? 'bg-primary/10 border-primary'
+                                  : 'hover:bg-muted/50 cursor-pointer'
+                            }`}
+                            onClick={() => {
+                              if (docPickerUseWhole) return;
+                              setDocPickerSelectedSections(prev => {
+                                const next = new Set(prev);
+                                if (next.has(section.id)) {
+                                  next.delete(section.id);
+                                } else {
+                                  next.add(section.id);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!docPickerUseWhole && (
+                                <Checkbox
+                                  checked={isSelected}
+                                  className="mt-0.5"
+                                  onCheckedChange={(checked) => {
+                                    setDocPickerSelectedSections(prev => {
+                                      const next = new Set(prev);
+                                      if (checked) next.add(section.id);
+                                      else next.delete(section.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{section.title}</p>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-3 whitespace-pre-wrap">
+                                  {section.content.substring(0, 200)}{section.content.length > 200 ? '...' : ''}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDocPicker(false)}>Cancel</Button>
+            <Button
+              disabled={!docPickerSelectedDoc || (!docPickerUseWhole && docPickerSelectedSections.size === 0)}
+              onClick={() => {
+                if (!docPickerSelectedDoc) return;
+                const docId = docPickerSelectedDoc.id;
+                const docTitle = docPickerSelectedDoc.title || docPickerSelectedDoc.file_name || 'Untitled';
+
+                const config = departmentConfig[docPickerDept] || {};
+                const pack = config.instructionPack || { workInstructionRefs: [], aiSnippets: [], specialNotes: '', media: [] };
+
+                if (docPickerUseWhole) {
+                  const newRef: InstructionRef = {
+                    documentId: docId,
+                    title: docTitle,
+                  };
+                  setDepartmentConfig(prev => ({
+                    ...prev,
+                    [docPickerDept]: {
+                      ...config,
+                      instructionPack: {
+                        ...pack,
+                        workInstructionRefs: [...pack.workInstructionRefs, newRef],
+                      },
+                    },
+                  }));
+                  toast({ title: 'Document added', description: `"${docTitle}" attached as work instruction reference` });
+                } else {
+                  const selectedSecs = docPickerSections.filter((s: any) => docPickerSelectedSections.has(s.id));
+                  const newRefs: InstructionRef[] = selectedSecs.map((s: any) => ({
+                    documentId: docId,
+                    title: `${docTitle} — ${s.title}`,
+                    anchor: s.title,
+                  }));
+                  setDepartmentConfig(prev => ({
+                    ...prev,
+                    [docPickerDept]: {
+                      ...config,
+                      instructionPack: {
+                        ...pack,
+                        workInstructionRefs: [...pack.workInstructionRefs, ...newRefs],
+                      },
+                    },
+                  }));
+                  toast({ title: `${selectedSecs.length} section(s) added`, description: `From "${docTitle}"` });
+                }
+
+                setShowDocPicker(false);
+                setDocPickerSelectedDoc(null);
+                setDocPickerSections([]);
+                setDocPickerSearch('');
+                setDocPickerSelectedSections(new Set());
+              }}
+            >
+              <CheckSquare className="h-4 w-4 mr-2" />
+              {docPickerUseWhole ? 'Add Whole Document' : `Add ${docPickerSelectedSections.size} Section(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+function DocPickerList({ search, selectedDocId, onSelectDoc }: { search: string; selectedDocId?: string; onSelectDoc: (doc: any) => void }) {
+  const { data: docs, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/routing-documents'],
+  });
+
+  const filtered = (docs || []).filter((d: any) => {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return (d.title || '').toLowerCase().includes(s) ||
+      (d.file_name || '').toLowerCase().includes(s) ||
+      (d.department_name || '').toLowerCase().includes(s) ||
+      (d.part_number || '').toLowerCase().includes(s);
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <div className="p-6 text-center text-muted-foreground text-sm">
+        <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <p>{search ? 'No documents match your search' : 'No documents in storage'}</p>
+        <p className="text-xs mt-1">Upload documents in the Routing Document Management page first.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-2 space-y-1">
+      {filtered.map((doc: any) => (
+        <div
+          key={doc.id}
+          className={`p-2 rounded-md cursor-pointer transition-colors ${
+            selectedDocId === doc.id
+              ? 'bg-primary/10 border border-primary'
+              : 'hover:bg-muted border border-transparent'
+          }`}
+          onClick={() => onSelectDoc(doc)}
+        >
+          <div className="flex items-start gap-2">
+            <FileText className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{doc.title || doc.file_name}</p>
+              <div className="flex gap-1 mt-0.5 flex-wrap">
+                {doc.document_type && <Badge variant="outline" className="text-[9px] px-1 h-4">{doc.document_type}</Badge>}
+                {doc.department_name && <Badge variant="secondary" className="text-[9px] px-1 h-4">{doc.department_name}</Badge>}
+                {doc.ai_extracted_content && <Badge className="text-[9px] px-1 h-4 bg-green-100 text-green-700">AI Analyzed</Badge>}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

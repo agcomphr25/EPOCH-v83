@@ -4526,6 +4526,8 @@ export const travelerTasks = pgTable('traveler_tasks', {
   signatureRole: varchar('signature_role', { length: 50 }),
   requiresCertification: boolean('requires_certification').default(false),
 
+  instructionPack: jsonb('instruction_pack'),
+
   status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
   startedAt: timestamp('started_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
@@ -5637,6 +5639,15 @@ export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
     requiresSignature: z.boolean().default(false),
     signatureRole: z.enum(['OPERATOR', 'LEAD', 'QC', 'ENGINEERING', 'CUSTOM']).optional().nullable(),
     requiresCertification: z.boolean().default(false),
+    instructionPack: z.object({
+      workInstructionRefs: z.array(z.object({
+        documentId: z.string(),
+        documentTitle: z.string(),
+        revision: z.string().optional(),
+      })).optional().default([]),
+      aiSnippets: z.array(z.string()).optional().default([]),
+      specialNotes: z.string().optional().default(''),
+    }).optional().nullable(),
     status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED']).default('NOT_STARTED'),
     startedAt: z.coerce.date().optional().nullable(),
     completedAt: z.coerce.date().optional().nullable(),

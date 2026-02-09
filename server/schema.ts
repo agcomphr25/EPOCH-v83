@@ -4563,9 +4563,11 @@ export const travelerSignatures = pgTable('traveler_signatures', {
   travelerStepId: varchar('traveler_step_id', { length: 255 })
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
+  travelerTaskId: varchar('traveler_task_id', { length: 255 }),
 
   signedBy: varchar('signed_by', { length: 255 }).notNull(),
   signedByName: varchar('signed_by_name', { length: 255 }),
+  signatureRole: varchar('signature_role', { length: 50 }),
   badgeScan: varchar('badge_scan', { length: 255 }),
   signedAt: timestamp('signed_at', { withTimezone: true }).default(sql`now()`),
 
@@ -4574,6 +4576,7 @@ export const travelerSignatures = pgTable('traveler_signatures', {
   signatureHash: text('signature_hash'),
 }, (table) => ({
   stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
+  taskIdIdx: index('traveler_signatures_task_id_idx').on(table.travelerTaskId),
 }));
 
 // Traveler Events - Audit trail for all actions
@@ -5668,11 +5671,13 @@ export const insertTravelerSignatureSchema = createInsertSchema(travelerSignatur
   })
   .extend({
     travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    travelerTaskId: z.string().optional().nullable(),
     signedBy: z.string().min(1, 'Signed by is required'),
     signedByName: z.string().optional().nullable(),
+    signatureRole: z.string().optional().nullable(),
     badgeScan: z.string().optional().nullable(),
     signedAt: z.coerce.date().optional(),
-    meaning: z.enum(['PERFORMED', 'INSPECTED', 'VERIFIED', 'RELEASED']),
+    meaning: z.enum(['PERFORMED', 'INSPECTED', 'VERIFIED', 'RELEASED', 'COMPLETED']),
     signatureHash: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
   });

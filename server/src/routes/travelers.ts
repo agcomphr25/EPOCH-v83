@@ -465,11 +465,11 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
   }
 });
 
-// Sign and complete a step
+// Sign and complete a step (or a specific signature task within a step)
 router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { signedBy, signedByName, badgeScan, meaning, notes } = req.body;
+    const { signedBy, signedByName, badgeScan, meaning, notes, signatureRole, taskId } = req.body;
 
     if (!signedBy || !meaning) {
       return res.status(400).json({ error: 'signedBy and meaning are required' });
@@ -573,30 +573,65 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       });
     }
 
+    // Find which SIGNATURE gate task(s) to complete with this signing
+    const pendingGateTasks = tasks.filter((t) => isCompletionGate(t) && t.status !== 'COMPLETED');
+    let matchedGateTask: any = null;
+
+    if (taskId) {
+      matchedGateTask = pendingGateTasks.find((t) => t.id === taskId);
+    } else if (signatureRole) {
+      matchedGateTask = pendingGateTasks.find(
+        (t) => t.taskType === 'SIGNATURE' && (t as any).signatureRole === signatureRole
+      );
+    }
+
     const signature = await storage.createTravelerSignature({
       travelerStepId: stepId,
+      travelerTaskId: matchedGateTask?.id || null,
       signedBy,
       signedByName: signedByName || null,
+      signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
       badgeScan: badgeScan || null,
       meaning,
       notes: notes || null,
     });
 
-    // Complete all completion gate tasks (END_GATE and SIGNATURE tasks)
-    const gateTasks = tasks.filter((t) => isCompletionGate(t) && t.status !== 'COMPLETED');
-    for (const gateTask of gateTasks) {
-      await storage.updateTravelerTask(gateTask.id, {
+    // Complete the matched gate task, or all pending gates if no specific match
+    if (matchedGateTask) {
+      await storage.updateTravelerTask(matchedGateTask.id, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: signedBy,
+      });
+    } else {
+      for (const gateTask of pendingGateTasks) {
+        await storage.updateTravelerTask(gateTask.id, {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          completedBy: signedBy,
+        });
+      }
+    }
+
+    // Check if all gate tasks are now complete — if so, complete the step
+    const remainingGates = tasks.filter(
+      (t) => isCompletionGate(t) && t.status !== 'COMPLETED' && t.id !== matchedGateTask?.id
+    );
+    const allGatesComplete = remainingGates.length === 0;
+
+    // Re-check all required non-gate tasks are complete before closing the step
+    const allTasksDone = tasks
+      .filter((t) => t.required && !isCompletionGate(t))
+      .every((t) => t.status === 'COMPLETED');
+
+    let updatedStep = step;
+    if (allGatesComplete && allTasksDone) {
+      updatedStep = await storage.updateTravelerStep(stepId, {
         status: 'COMPLETED',
         completedAt: new Date(),
         completedBy: signedBy,
       });
     }
-
-    const updatedStep = await storage.updateTravelerStep(stepId, {
-      status: 'COMPLETED',
-      completedAt: new Date(),
-      completedBy: signedBy,
-    });
 
     await storage.createTravelerEvent({
       travelerId,
@@ -609,10 +644,13 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
         departmentName: step.departmentName,
         meaning,
         signatureId: signature.id,
+        signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
+        taskId: matchedGateTask?.id || null,
+        stepCompleted: allGatesComplete && allTasksDone,
       },
     });
 
-    res.json({ step: updatedStep, signature });
+    res.json({ step: updatedStep, signature, stepCompleted: allGatesComplete && allTasksDone });
   } catch (error: any) {
     console.error('Error signing step:', error);
     res.status(500).json({ error: 'Failed to sign step', message: error.message });

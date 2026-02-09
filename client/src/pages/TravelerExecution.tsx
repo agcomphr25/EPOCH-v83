@@ -88,8 +88,10 @@ interface TravelerTask {
 interface TravelerSignature {
   id: string;
   travelerStepId: string;
+  travelerTaskId: string | null;
   signedBy: string;
   signedByName: string | null;
+  signatureRole: string | null;
   badgeScan: string | null;
   signedAt: string;
   meaning: string;
@@ -204,6 +206,8 @@ export default function TravelerExecution() {
   const travelerId = params.id;
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
+  const [signingRole, setSigningRole] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState({
     signedBy: '',
     signedByName: '',
@@ -271,15 +275,21 @@ export default function TravelerExecution() {
   });
 
   const signStepMutation = useMutation({
-    mutationFn: (stepId: string) =>
+    mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
-        body: JSON.stringify(signatureData),
+        body: JSON.stringify({
+          ...signatureData,
+          taskId: taskId || undefined,
+          signatureRole: role || undefined,
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      toast({ title: 'Step Signed', description: 'Step has been completed and signed' });
+      toast({ title: 'Signed', description: 'Signature recorded successfully' });
       setShowSignDialog(false);
+      setSigningTaskId(null);
+      setSigningRole(null);
       setSignatureData({
         signedBy: '',
         signedByName: '',
@@ -857,20 +867,38 @@ export default function TravelerExecution() {
                                               </div>
                                             )}
 
-                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'SIGNATURE' && task.taskType !== 'TRACE' && task.taskType !== 'TRACEABILITY' && (
-                                              <Button
-                                                size="sm"
-                                                onClick={() => handleCompleteTask(task)}
-                                                disabled={completeTaskMutation.isPending}
-                                                data-testid={`button-complete-task-${task.id}`}
-                                              >
-                                                {completeTaskMutation.isPending ? (
-                                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                ) : (
-                                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                                )}
-                                                Complete Task
-                                              </Button>
+                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && task.taskType !== 'TRACEABILITY' && (
+                                              task.taskType === 'SIGNATURE' ? (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                  onClick={() => {
+                                                    setSigningTaskId(task.id);
+                                                    setSigningRole(task.signatureRole);
+                                                    setShowSignDialog(true);
+                                                  }}
+                                                  disabled={!phaseUnlocked}
+                                                  data-testid={`button-sign-task-${task.id}`}
+                                                >
+                                                  <PenTool className="h-4 w-4 mr-2" />
+                                                  Sign ({task.signatureRole || 'Required'})
+                                                </Button>
+                                              ) : (
+                                                <Button
+                                                  size="sm"
+                                                  onClick={() => handleCompleteTask(task)}
+                                                  disabled={completeTaskMutation.isPending}
+                                                  data-testid={`button-complete-task-${task.id}`}
+                                                >
+                                                  {completeTaskMutation.isPending ? (
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                  ) : (
+                                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                                  )}
+                                                  Complete Task
+                                                </Button>
+                                              )
                                             )}
                                           </>
                                         )}
@@ -924,7 +952,11 @@ export default function TravelerExecution() {
                       )}
                       <div className="flex justify-end">
                         <Button
-                          onClick={() => setShowSignDialog(true)}
+                          onClick={() => {
+                            setSigningTaskId(null);
+                            setSigningRole(null);
+                            setShowSignDialog(true);
+                          }}
                           disabled={!canSignStep}
                           data-testid="button-sign-step"
                         >
@@ -945,13 +977,18 @@ export default function TravelerExecution() {
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
                         <p className="text-sm text-muted-foreground mb-2">Signed by:</p>
                         {currentStep.signatures.map((sig) => (
-                          <div key={sig.id} className="text-sm">
-                            <p className="font-medium">
-                              {sig.signedByName || sig.signedBy}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(sig.signedAt).toLocaleString()} - {sig.meaning}
-                            </p>
+                          <div key={sig.id} className="text-sm flex items-center gap-2">
+                            <div>
+                              <p className="font-medium">
+                                {sig.signedByName || sig.signedBy}
+                                {sig.signatureRole && (
+                                  <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(sig.signedAt).toLocaleString()} - {sig.meaning}
+                              </p>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -967,9 +1004,13 @@ export default function TravelerExecution() {
       <Dialog open={showSignDialog} onOpenChange={setShowSignDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Sign Step Completion</DialogTitle>
+            <DialogTitle>
+              {signingRole ? `${signingRole} Signoff` : 'Sign Step Completion'}
+            </DialogTitle>
             <DialogDescription>
-              Your signature confirms all tasks in this step are complete
+              {signingRole
+                ? `${signingRole} signature required for this department`
+                : 'Your signature confirms all tasks in this step are complete'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1014,7 +1055,7 @@ export default function TravelerExecution() {
               Cancel
             </Button>
             <Button
-              onClick={() => currentStep && signStepMutation.mutate(currentStep.id)}
+              onClick={() => currentStep && signStepMutation.mutate({ stepId: currentStep.id, taskId: signingTaskId, role: signingRole })}
               disabled={signStepMutation.isPending || !signatureData.signedBy}
               data-testid="button-confirm-sign"
             >

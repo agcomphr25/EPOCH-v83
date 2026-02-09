@@ -15,7 +15,8 @@ const VIEW_DEDUPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes - don't log repeat vie
 const router = Router();
 
 const CSR_ADMIN_ROLES = ['ADMIN', 'OWNER', 'CSR'];
-const WRITE_ROLES = ['ADMIN', 'OWNER']; // Only admins can write
+const WRITE_ROLES = ['ADMIN', 'OWNER'];
+const TICKET_WRITE_USERS = ['darleneb', 'staciw'];
 
 const updateTicketSchema = z.object({
   status: z.enum(['new', 'in_progress', 'waiting_on_customer', 'waiting_on_production', 'resolved', 'closed']).optional(),
@@ -33,9 +34,8 @@ function hasReadAccess(user: any): boolean {
   return !!user;
 }
 
-// Write access only for ADMIN/OWNER
 function hasWriteAccess(user: any): boolean {
-  return user && WRITE_ROLES.includes(user.role);
+  return user && (WRITE_ROLES.includes(user.role) || TICKET_WRITE_USERS.includes(user.username?.toLowerCase()));
 }
 
 router.get('/', sessionAwareAuth, async (req, res) => {

@@ -532,19 +532,42 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       });
     }
 
-    // Rule: All other required tasks (START, WORK) must also be completed
-    const incompleteTasks = tasks.filter(
-      (t) => t.required && t.status !== 'COMPLETED' && !isCompletionGate(t)
+    // Rule: All required START and WORK phase tasks must also be completed
+    const incompleteOtherTasks = tasks.filter(
+      (t) => t.required && 
+             t.status !== 'COMPLETED' && 
+             !isCompletionGate(t) &&
+             ((t as any).taskPhase === 'START' || (t as any).taskPhase === 'WORK')
     );
-
-    if (incompleteTasks.length > 0) {
+    if (incompleteOtherTasks.length > 0) {
       return res.status(400).json({
         error: 'All required tasks must be completed before signing',
-        incompleteTasks: incompleteTasks.map((t) => ({
+        incompleteTasks: incompleteOtherTasks.map((t) => ({
           id: t.id,
           title: t.title,
           taskType: t.taskType,
           taskPhase: (t as any).taskPhase,
+          status: t.status,
+        })),
+      });
+    }
+
+    // Rule: All tasks with requiresSignature must have their signatures satisfied
+    // Tasks that require a signature can have their data entered, but step sign-off
+    // is blocked until all signature-required tasks are either completed or gate tasks
+    const unsignedSigTasks = tasks.filter(
+      (t) => (t as any).requiresSignature && 
+             t.status !== 'COMPLETED' && 
+             !isCompletionGate(t)
+    );
+    if (unsignedSigTasks.length > 0) {
+      return res.status(400).json({
+        error: 'All tasks requiring signatures must be signed before completing the step',
+        unsignedTasks: unsignedSigTasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          taskType: t.taskType,
+          signatureRole: (t as any).signatureRole,
           status: t.status,
         })),
       });
@@ -638,6 +661,37 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
         error: 'Step must be IN_PROGRESS to complete tasks',
         stepStatus: step.status,
       });
+    }
+
+    const taskPhase = (task as any).taskPhase as string | undefined;
+    if (taskPhase && taskPhase !== 'START') {
+      const allStepTasks = await storage.getTravelerTasks(step.id);
+      const phaseOrder = ['START', 'WORK', 'FINISH'];
+      const currentPhaseIndex = phaseOrder.indexOf(taskPhase);
+
+      for (let i = 0; i < currentPhaseIndex; i++) {
+        const prevPhase = phaseOrder[i];
+        const incompletePrevTasks = allStepTasks.filter(
+          (t) =>
+            (t as any).taskPhase === prevPhase &&
+            t.required &&
+            t.status !== 'COMPLETED' &&
+            t.taskType !== 'END_GATE' &&
+            t.taskType !== 'SIGNATURE'
+        );
+        if (incompletePrevTasks.length > 0) {
+          return res.status(400).json({
+            error: `All required ${prevPhase} phase tasks must be completed before working on ${taskPhase} phase tasks`,
+            blockedPhase: taskPhase,
+            incompletePhase: prevPhase,
+            incompleteTasks: incompletePrevTasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              taskType: t.taskType,
+            })),
+          });
+        }
+      }
     }
 
     if (fieldValues) {

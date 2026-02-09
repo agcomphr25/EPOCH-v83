@@ -598,7 +598,17 @@ export default function TravelerExecution() {
                   </div>
                 )}
 
-                {currentStep.status === 'IN_PROGRESS' && (
+                {currentStep.status === 'IN_PROGRESS' && (() => {
+                  const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
+                  const allRequiredNonGateComplete = currentStep.tasks
+                    .filter((t) => t.required && !isGateTask(t))
+                    .every((t) => t.status === 'COMPLETED');
+                  const unsignedSigTasks = currentStep.tasks.filter(
+                    (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
+                  );
+                  const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
+
+                  return (
                   <div className="space-y-6">
                     {PHASE_ORDER.map((phase, phaseIndex) => {
                       const phaseTasks = currentStep.tasks
@@ -884,20 +894,48 @@ export default function TravelerExecution() {
                       );
                     })}
 
-                    <div className="flex justify-end pt-4 border-t">
-                      <Button
-                        onClick={() => setShowSignDialog(true)}
-                        disabled={currentStep.tasks.some(
-                          (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE'
-                        )}
-                        data-testid="button-sign-step"
-                      >
-                        <PenTool className="h-4 w-4 mr-2" />
-                        Sign & Complete Step
-                      </Button>
+                    <div className="pt-4 border-t space-y-3">
+                      {!canSignStep && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                            <div className="text-sm text-amber-800">
+                              {!allRequiredNonGateComplete && (
+                                <p>Complete all required tasks before signing off.</p>
+                              )}
+                              {allRequiredNonGateComplete && unsignedSigTasks.length > 0 && (
+                                <div>
+                                  <p className="font-medium mb-1">Signatures still needed:</p>
+                                  <ul className="list-disc list-inside text-xs space-y-0.5">
+                                    {unsignedSigTasks.map((t) => (
+                                      <li key={t.id}>
+                                        {t.title}
+                                        {t.signatureRole && (
+                                          <span className="text-amber-600 ml-1">({t.signatureRole})</span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => setShowSignDialog(true)}
+                          disabled={!canSignStep}
+                          data-testid="button-sign-step"
+                        >
+                          <PenTool className="h-4 w-4 mr-2" />
+                          Sign & Complete Step
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {currentStep.status === 'COMPLETED' && (
                   <div className="text-center py-8">

@@ -1188,6 +1188,292 @@ export default function TravelerExecution() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Instruction Pack Sheet Drawer */}
+      <Sheet open={instructionSheetOpen} onOpenChange={setInstructionSheetOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-blue-600" />
+              Instruction Pack
+            </SheetTitle>
+            <SheetDescription>
+              Work instructions, tips, and reference materials for this task
+            </SheetDescription>
+          </SheetHeader>
+
+          {(() => {
+            const sheetTask = currentStep?.tasks?.find((t: TravelerTask) => t.id === instructionSheetTaskId);
+            const pack = sheetTask ? normalizeInstructionPack(sheetTask.instructionPack) : null;
+            if (!pack) return <p className="text-sm text-muted-foreground mt-4">No instructions available.</p>;
+
+            return (
+              <div className="space-y-6 mt-6">
+                {pack.specialNotes && (
+                  <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-2">Special Notes</p>
+                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {pack.workInstructionRefs.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <p className="text-sm font-semibold">Work Instructions</p>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      {pack.workInstructionRefs.map((ref, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                          <FileText className="h-5 w-5 text-blue-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ref.title || ref.documentId}</p>
+                            <div className="flex gap-2 text-xs text-muted-foreground mt-0.5">
+                              {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                              {ref.anchor && <span>§ {ref.anchor}</span>}
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              setWiModalRef(ref);
+                              setWiModalOpen(true);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            View WI
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {pack.aiSnippets.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-yellow-500" />
+                      <p className="text-sm font-semibold">AI Tips</p>
+                    </div>
+                    <Separator />
+                    <Accordion type="multiple" defaultValue={pack.aiSnippets.map((_, i) => `snippet-${i}`)} className="space-y-2">
+                      {pack.aiSnippets.map((snippet, i) => (
+                        <AccordionItem key={i} value={`snippet-${i}`} className="border rounded-lg px-3">
+                          <AccordionTrigger className="py-2 hover:no-underline">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Lightbulb className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+                              <span className="font-medium">{snippet.title}</span>
+                              {snippet.confidence != null && (
+                                <Badge variant="outline" className="text-[10px] ml-auto mr-2">
+                                  {Math.round(snippet.confidence * 100)}% confidence
+                                </Badge>
+                              )}
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <ul className="space-y-1.5 pb-2">
+                              {snippet.bullets.map((b, bi) => (
+                                <li key={bi} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <span className="text-yellow-500 shrink-0 mt-0.5">•</span>
+                                  <span>{b}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {snippet.sourceDocumentId && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <ExternalLink className="h-3 w-3" />
+                                Source: {snippet.sourceDocumentId}
+                              </p>
+                            )}
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
+                )}
+
+                {pack.media.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-green-600" />
+                      <p className="text-sm font-semibold">Reference Media</p>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      {pack.media.map((m, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                          {m.type === 'image' ? (
+                            <ImageIcon className="h-5 w-5 text-green-500 shrink-0" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-red-500 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.caption || m.documentId}</p>
+                            <p className="text-xs text-muted-foreground uppercase">{m.type}</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              setWiModalRef({ documentId: m.documentId, title: m.caption });
+                              setWiModalOpen(true);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            Open
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Work Instruction Detail Modal */}
+      <Dialog open={wiModalOpen} onOpenChange={setWiModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              {wiModalRef?.title || 'Work Instruction'}
+            </DialogTitle>
+            <DialogDescription>
+              Document reference viewer
+            </DialogDescription>
+          </DialogHeader>
+
+          {wiModalRef && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Document ID</p>
+                  <p className="font-mono text-xs bg-muted p-2 rounded">{wiModalRef.documentId}</p>
+                </div>
+                {wiModalRef.pageRange && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Page Range</p>
+                    <p className="text-sm font-medium">Pages {wiModalRef.pageRange}</p>
+                  </div>
+                )}
+                {wiModalRef.anchor && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Section</p>
+                    <p className="text-sm font-medium">§ {wiModalRef.anchor}</p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <WiDocumentViewer documentId={wiModalRef.documentId} />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWiModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function WiDocumentViewer({ documentId }: { documentId: string }) {
+  const { data: doc, isLoading, error } = useQuery<{
+    id: string;
+    title: string;
+    description?: string;
+    version: number;
+    documentType: string;
+    fileUrl?: string;
+    fileName?: string;
+    fileType?: string;
+    aiExtractedContent?: any;
+  }>({
+    queryKey: ['/api/routing-documents', documentId],
+    queryFn: () =>
+      fetch(`/api/routing-documents/${documentId}`).then((res) => {
+        if (!res.ok) throw new Error('Document not found');
+        return res.json();
+      }),
+    enabled: !!documentId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Loading document...</span>
+      </div>
+    );
+  }
+
+  if (error || !doc) {
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-center">
+        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm font-medium">Document Not Linked</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          This reference (ID: {documentId.slice(0, 8)}...) is not yet linked to a routing document.
+          The document ID will resolve when the routing document system is populated.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border p-4 bg-card">
+        <div className="flex items-start gap-3">
+          <FileText className="h-6 w-6 text-blue-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-base font-semibold">{doc.title}</p>
+            <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+              <span>Version {doc.version}</span>
+              <span className="capitalize">{doc.documentType?.replace(/_/g, ' ')}</span>
+              {doc.fileName && <span>{doc.fileName}</span>}
+            </div>
+            {doc.description && (
+              <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {doc.fileUrl && (
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Open Document
+            </a>
+          </Button>
+        </div>
+      )}
+
+      {doc.aiExtractedContent && (
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">AI-Extracted Content</p>
+          <p className="text-sm whitespace-pre-wrap">
+            {typeof doc.aiExtractedContent === 'string'
+              ? doc.aiExtractedContent
+              : JSON.stringify(doc.aiExtractedContent, null, 2).slice(0, 2000)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

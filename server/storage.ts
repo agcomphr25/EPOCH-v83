@@ -13542,19 +13542,39 @@ export class DatabaseStorage implements IStorage {
       });
 
       // Explicit START gate checks from routing template
+      // Enrich "Work Instruction Acknowledged" checks with instruction pack WI refs
+      const routingInstructionPackForStart = deptConfig.instructionPack || null;
+      const wiRefsList = (routingInstructionPackForStart?.workInstructionRefs || []) as Array<{ documentId: string; title?: string; pageRange?: string; anchor?: string }>;
+
       for (const check of startChecks) {
+        let enrichedInstructions = check.instructions || `Complete: ${check.title}`;
+        const isWiAck = check.title?.toLowerCase().includes('work instruction') && check.title?.toLowerCase().includes('acknowledged');
+
+        if (isWiAck && wiRefsList.length > 0) {
+          const wiList = wiRefsList.map((r, i) => {
+            let entry = `${i + 1}. ${r.title || r.documentId}`;
+            if (r.pageRange) entry += ` (pp. ${r.pageRange})`;
+            if (r.anchor) entry += ` [§ ${r.anchor}]`;
+            return entry;
+          }).join('\n');
+          enrichedInstructions = `Review and acknowledge the following work instructions:\n${wiList}`;
+        }
+
         await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: check.taskType || 'CHECK',
           taskPhase: 'START',
-          title: check.title,
-          instructions: check.instructions || `Complete: ${check.title}`,
+          title: isWiAck && wiRefsList.length > 0
+            ? `WI Acknowledged (${wiRefsList.length} doc${wiRefsList.length > 1 ? 's' : ''})`
+            : check.title,
+          instructions: enrichedInstructions,
           required: check.required !== false,
           sortOrder: sortOrder++,
           timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
           requiresSignature: check.requiresSignature || false,
           signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
           requiresCertification: check.requiresCertification || false,
+          instructionPack: isWiAck && wiRefsList.length > 0 ? routingInstructionPackForStart : null,
           status: 'NOT_STARTED',
         });
       }

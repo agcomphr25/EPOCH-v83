@@ -48,6 +48,7 @@ import {
   ScanBarcode,
   Wrench,
   Flag,
+  Shield,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 
@@ -150,6 +151,7 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 const TASK_TYPE_ICONS: Record<string, any> = {
   START_GATE: Play,
   END_GATE: CheckCircle,
+  GATE_CHECK: Shield,
   TRACE: CreditCard,
   QC: ClipboardCheck,
   CUSTOM_FIELD: FileText,

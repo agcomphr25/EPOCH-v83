@@ -13488,17 +13488,43 @@ export class DatabaseStorage implements IStorage {
 
       let sortOrder = 0;
 
-      // Create START_GATE task (START phase)
+      // Read phase configuration from routing
+      const startChecks = deptConfig.startChecks || [];
+      const finishChecks = deptConfig.finishChecks || [];
+      const signatureConfig = deptConfig.signatureConfig || {
+        startRequiresSignature: false,
+        finishRequiresSignature: true,
+        requiredSignatures: ['operator'],
+      };
+
+      // ===== START PHASE =====
+      // Create START_GATE task
       await this.createTravelerTask({
         travelerStepId: step.id,
         taskType: 'START_GATE',
         taskPhase: 'START',
         title: `Start ${deptName}`,
-        instructions: `Badge scan to start work in ${deptName}`,
+        instructions: signatureConfig.startRequiresSignature
+          ? `Badge scan and signature to start work in ${deptName}`
+          : `Badge scan to start work in ${deptName}`,
         required: true,
         sortOrder: sortOrder++,
         status: 'NOT_STARTED',
       });
+
+      // Create tasks for explicit START checks from routing
+      for (const check of startChecks) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'GATE_CHECK',
+          taskPhase: 'START',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+      }
 
       // Create TRACE tasks from traceabilityConfig (START phase - material verification)
       const traceFields = traceabilityConfig[deptName] || [];
@@ -13514,7 +13540,6 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        // Create fields for each traceability item
         for (const fieldKey of traceFields) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
@@ -13526,33 +13551,8 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create QC tasks from departmentConfig.qcStandards (FINISH phase - final inspection)
-      const qcStandards = deptConfig.qcStandards || [];
-      if (qcStandards.length > 0) {
-        const qcTask = await this.createTravelerTask({
-          travelerStepId: step.id,
-          taskType: 'QC',
-          taskPhase: 'FINISH',
-          title: 'Quality Control Checks',
-          instructions: 'Complete all quality control verifications',
-          required: true,
-          sortOrder: sortOrder++,
-          status: 'NOT_STARTED',
-        });
-
-        for (const qc of qcStandards) {
-          await this.createTravelerTaskField({
-            travelerTaskId: qcTask.id,
-            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
-            fieldLabel: qc.standard || 'QC Check',
-            fieldType: 'yes_no',
-            required: true,
-            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
-          });
-        }
-      }
-
-      // Create custom field tasks from departmentConfig.customDataFields (WORK phase)
+      // ===== WORK PHASE =====
+      // Create custom field tasks from departmentConfig.customDataFields
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
         const customTask = await this.createTravelerTask({
@@ -13577,7 +13577,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create oven curing task if applicable (WORK phase - special process)
+      // Create oven curing task if applicable (WORK phase)
       const ovenCuringSteps = deptConfig.ovenCuringSteps || [];
       if (ovenCuringSteps.length > 0) {
         const ovenTask = await this.createTravelerTask({
@@ -13604,13 +13604,56 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create END_GATE task (FINISH phase - signature required)
+      // ===== FINISH PHASE =====
+      // Create tasks for explicit FINISH checks from routing
+      for (const check of finishChecks) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'GATE_CHECK',
+          taskPhase: 'FINISH',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+      }
+
+      // Create QC tasks from departmentConfig.qcStandards (FINISH phase)
+      const qcStandards = deptConfig.qcStandards || [];
+      if (qcStandards.length > 0) {
+        const qcTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          taskPhase: 'FINISH',
+          title: 'Quality Control Checks',
+          instructions: 'Complete all quality control verifications',
+          required: true,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+
+        for (const qc of qcStandards) {
+          await this.createTravelerTaskField({
+            travelerTaskId: qcTask.id,
+            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            fieldLabel: qc.standard || 'QC Check',
+            fieldType: 'yes_no',
+            required: true,
+            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+          });
+        }
+      }
+
+      // Create END_GATE task (FINISH phase - signature per config)
       await this.createTravelerTask({
         travelerStepId: step.id,
         taskType: 'END_GATE',
         taskPhase: 'FINISH',
         title: `Complete ${deptName}`,
-        instructions: `Badge scan and signature to complete ${deptName}`,
+        instructions: signatureConfig.finishRequiresSignature
+          ? `Badge scan and signature to complete ${deptName} (Required: ${signatureConfig.requiredSignatures.join(', ')})`
+          : `Badge scan to complete ${deptName}`,
         required: true,
         sortOrder: sortOrder++,
         status: 'NOT_STARTED',

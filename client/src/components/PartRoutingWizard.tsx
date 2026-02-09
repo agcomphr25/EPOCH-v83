@@ -37,6 +37,12 @@ import {
   Flame,
   FileText,
   UserCheck,
+  PlayCircle,
+  Wrench,
+  CheckCircle2,
+  PenLine,
+  Plus,
+  Shield,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -93,22 +99,38 @@ interface CustomDataField {
 }
 
 interface SpecialProcessConfig {
-  processName: string; // Name of the special process
-  notes: string; // Process instructions/notes
-  requiredTechnicianId: number | null; // REQUIRED technician for special process
-  materials: MaterialRequirement[]; // Materials requiring traceability
-  qcStandards: QCStandard[]; // QC standards for special process
-  customDataFields: CustomDataField[]; // Custom data entry fields
+  processName: string;
+  notes: string;
+  requiredTechnicianId: number | null;
+  materials: MaterialRequirement[];
+  qcStandards: QCStandard[];
+  customDataFields: CustomDataField[];
+}
+
+interface PhaseCheck {
+  title: string;
+  instructions?: string;
+  required: boolean;
+  signatureRequired: boolean;
+}
+
+interface SignatureConfig {
+  startRequiresSignature: boolean;
+  finishRequiresSignature: boolean;
+  requiredSignatures: string[];
 }
 
 interface DepartmentConfiguration {
-  materials: MaterialRequirement[]; // Materials used in this department
-  assignedTechnicianId: number | null; // Assigned technician (employee) for this department
-  qcStandards: QCStandard[]; // QC standards with tolerance and requirements
-  ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
-  specialProcess?: string; // Special process notes (for Assembly/Disassembly)
-  specialProcessConfig?: SpecialProcessConfig; // Full special process configuration
-  customDataFields?: CustomDataField[]; // Custom data entry fields for technicians to fill in
+  materials: MaterialRequirement[];
+  assignedTechnicianId: number | null;
+  qcStandards: QCStandard[];
+  ovenCuringSteps?: OvenCuringStep[];
+  specialProcess?: string;
+  specialProcessConfig?: SpecialProcessConfig;
+  customDataFields?: CustomDataField[];
+  startChecks?: PhaseCheck[];
+  finishChecks?: PhaseCheck[];
+  signatureConfig?: SignatureConfig;
 }
 
 interface PartRouting {
@@ -175,6 +197,15 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [customFieldName, setCustomFieldName] = useState<string>('');
   const [customFieldType, setCustomFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
   const [customFieldRequired, setCustomFieldRequired] = useState<boolean>(false);
+  
+  // UI state for phase checks input
+  const [startCheckTitle, setStartCheckTitle] = useState<string>('');
+  const [startCheckInstructions, setStartCheckInstructions] = useState<string>('');
+  const [finishCheckTitle, setFinishCheckTitle] = useState<string>('');
+  const [finishCheckInstructions, setFinishCheckInstructions] = useState<string>('');
+  
+  // UI state for active phase tab per department
+  const [activePhaseTab, setActivePhaseTab] = useState<Record<string, 'START' | 'WORK' | 'FINISH'>>({});
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -314,6 +345,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     setCustomFieldName('');
     setCustomFieldType('text');
     setCustomFieldRequired(false);
+    setStartCheckTitle('');
+    setStartCheckInstructions('');
+    setFinishCheckTitle('');
+    setFinishCheckInstructions('');
+    setActivePhaseTab({});
     clearSpInputState();
     setSpecialProcessDept('');
     setShowSpecialProcessDialog(false);
@@ -851,6 +887,95 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
+  const addStartCheck = (dept: string) => {
+    if (!startCheckTitle.trim()) return;
+    const config = getOrCreateDeptConfig(dept);
+    const newCheck: PhaseCheck = {
+      title: startCheckTitle.trim(),
+      instructions: startCheckInstructions.trim() || undefined,
+      required: true,
+      signatureRequired: false,
+    };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, startChecks: [...(config.startChecks || []), newCheck] },
+    });
+    setStartCheckTitle('');
+    setStartCheckInstructions('');
+  };
+
+  const removeStartCheck = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, startChecks: config.startChecks?.filter((_, i) => i !== index) },
+    });
+  };
+
+  const addFinishCheck = (dept: string) => {
+    if (!finishCheckTitle.trim()) return;
+    const config = getOrCreateDeptConfig(dept);
+    const newCheck: PhaseCheck = {
+      title: finishCheckTitle.trim(),
+      instructions: finishCheckInstructions.trim() || undefined,
+      required: true,
+      signatureRequired: false,
+    };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, finishChecks: [...(config.finishChecks || []), newCheck] },
+    });
+    setFinishCheckTitle('');
+    setFinishCheckInstructions('');
+  };
+
+  const removeFinishCheck = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, finishChecks: config.finishChecks?.filter((_, i) => i !== index) },
+    });
+  };
+
+  const toggleCheckSignatureRequired = (dept: string, phase: 'start' | 'finish', index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    const key = phase === 'start' ? 'startChecks' : 'finishChecks';
+    const checks = [...(config[key] || [])];
+    if (checks[index]) {
+      checks[index] = { ...checks[index], signatureRequired: !checks[index].signatureRequired };
+    }
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, [key]: checks },
+    });
+  };
+
+  const updateSignatureConfig = (dept: string, updates: Partial<SignatureConfig>) => {
+    const config = getOrCreateDeptConfig(dept);
+    const current = config.signatureConfig || {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['operator'],
+    };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, signatureConfig: { ...current, ...updates } },
+    });
+  };
+
+  const toggleRequiredSignature = (dept: string, role: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    const current = config.signatureConfig || {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['operator'],
+    };
+    const roles = current.requiredSignatures.includes(role)
+      ? current.requiredSignatures.filter(r => r !== role)
+      : [...current.requiredSignatures, role];
+    updateSignatureConfig(dept, { requiredSignatures: roles });
+  };
+
   const toggleDepartment = (dept: string) => {
     if (selectedDepartments.includes(dept)) {
       setSelectedDepartments(selectedDepartments.filter(d => d !== dept));
@@ -1056,13 +1181,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
             </div>
           )}
 
-          {/* Step 3: Department Configuration */}
+          {/* Step 3: Department Configuration - Three Phase Layout */}
           {step === 3 && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold mb-2">Step 3: Department Configuration</h3>
                 <p className="text-sm text-muted-foreground">
-                  Configure materials, technician requirements, and QC standards for each department
+                  Configure each department's three execution phases: START checks, WORK processes, and FINISH checks with signature requirements
                 </p>
               </div>
 
@@ -1076,6 +1201,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                 <div className="space-y-4">
                   {selectedDepartments.map((dept) => {
                     const config = getOrCreateDeptConfig(dept);
+                    const sigConfig = config.signatureConfig || { startRequiresSignature: false, finishRequiresSignature: true, requiredSignatures: ['operator'] };
+                    const currentPhase = activePhaseTab[dept] || 'START';
                     const filteredMaterialItems = inventoryItems.filter(item =>
                       (item.agPartNumber?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase()) ||
                       (item.name?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase())
@@ -1083,483 +1210,451 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                     return (
                       <Card key={dept}>
-                        <CardHeader>
-                          <CardTitle className="text-base">{dept}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                          {/* Materials Section */}
-                          <div>
-                            <h4 className="font-semibold mb-3 flex items-center gap-2">
-                              <Package className="h-4 w-4" />
-                              Materials Requiring Traceability ({config.materials.length})
-                            </h4>
-                            {config.materials.length > 0 && (
-                              <div className="space-y-2 mb-3">
-                                {config.materials.map((material) => (
-                                  <Card key={material.partId} className="p-3">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div>
-                                        <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
-                                        <p className="text-xs text-muted-foreground">{material.partName}</p>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => removeMaterialFromDepartment(dept, material.partId)}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                    
-                                    {/* Entry Method */}
-                                    <div className="mb-3 flex items-center gap-2">
-                                      <Label className="text-xs font-semibold">Entry Method:</Label>
-                                      <Button
-                                        size="sm"
-                                        variant={material.entryMethod === 'manual' ? 'default' : 'outline'}
-                                        className="h-7 text-xs"
-                                        onClick={() => toggleMaterialEntryMethod(dept, material.partId)}
-                                      >
-                                        {material.entryMethod === 'manual' ? 'Manual Entry' : 'Barcode Scan'}
-                                      </Button>
-                                    </div>
-                                    
-                                    {/* Traceability Fields */}
-                                    {material.entryMethod === 'barcode' && (
-                                      <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
-                                        <p className="text-xs text-blue-800 dark:text-blue-300">
-                                          ✓ All traceability information is automatically captured when using barcode scanning
-                                        </p>
-                                      </div>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {TRACEABILITY_FIELDS.map((field) => (
-                                        <div key={field.id} className="flex items-center space-x-2">
-                                          <Checkbox
-                                            id={`${dept}-${material.partId}-${field.id}`}
-                                            checked={(material.requiredFields || []).includes(field.id)}
-                                            disabled={material.entryMethod === 'barcode'}
-                                            onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
-                                          />
-                                          <Label
-                                            htmlFor={`${dept}-${material.partId}-${field.id}`}
-                                            className={`text-xs ${material.entryMethod === 'barcode' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                                          >
-                                            {field.label}
-                                          </Label>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </Card>
-                                ))}
-                              </div>
-                            )}
-                            <div>
-                              <Label className="text-sm mb-2 block">Add Material:</Label>
-                              <Input
-                                placeholder="Search inventory..."
-                                value={selectedDeptForConfig === dept ? materialSearchTerm : ''}
-                                onChange={(e) => {
-                                  setSelectedDeptForConfig(dept);
-                                  setMaterialSearchTerm(e.target.value);
-                                }}
-                                onFocus={() => setSelectedDeptForConfig(dept)}
-                                className="mb-2"
-                              />
-                              {selectedDeptForConfig === dept && materialSearchTerm && (
-                                <ScrollArea className="h-32 border rounded">
-                                  {filteredMaterialItems.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="p-2 hover:bg-muted cursor-pointer"
-                                      onClick={() => {
-                                        addMaterialToDepartment(dept, item);
-                                        setMaterialSearchTerm('');
-                                        setSelectedDeptForConfig('');
-                                      }}
-                                    >
-                                      <p className="font-mono text-sm">{item.agPartNumber}</p>
-                                      <p className="text-xs text-muted-foreground">{item.name}</p>
-                                    </div>
-                                  ))}
-                                </ScrollArea>
-                              )}
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Technician Assignment Section */}
-                          <div>
-                            <h4 className="font-semibold mb-2 flex items-center gap-2">
-                              <UserCheck className="h-4 w-4" />
-                              Preferred Technician (Optional)
-                            </h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              For scheduling reference only. <span className="text-primary font-medium">Any certified technician</span> can complete tasks in this department - certification is verified at task start.
-                            </p>
-                            {(() => {
-                              const certifiedEmployees = getCertifiedEmployees(dept);
-                              
-                              if (certifiedEmployees.length === 0) {
-                                return (
-                                  <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-                                    <p className="text-sm text-amber-800 dark:text-amber-300">
-                                      ⚠️ No employees are certified for {selectedItem?.agPartNumber || 'this part'} in the {dept} department.
-                                      Please add certifications in the P2 Certifications Manager first.
-                                    </p>
-                                  </div>
-                                );
-                              }
-                              
-                              return (
-                                <Select
-                                  value={config.assignedTechnicianId?.toString() || 'NONE'}
-                                  onValueChange={(val) => setAssignedTechnician(dept, val)}
-                                >
-                                  <SelectTrigger data-testid={`select-technician-${dept}`}>
-                                    <SelectValue placeholder="Select certified technician" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="NONE">No technician assigned</SelectItem>
-                                    {certifiedEmployees.map((emp) => (
-                                      <SelectItem key={emp.id} value={emp.id.toString()}>
-                                        {emp.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              );
-                            })()}
-                          </div>
-
-                          <Separator />
-
-                          {/* QC Standards Section */}
-                          <div>
-                            <h4 className="font-semibold mb-3">QC Standards ({config.qcStandards.length})</h4>
-                            {config.qcStandards.length > 0 && (
-                              <div className="space-y-2 mb-3">
-                                {config.qcStandards.map((qcStandard, idx) => (
-                                  <Card key={idx} className="p-3">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div className="flex-1">
-                                        <p className="font-medium text-sm">{qcStandard.standard}</p>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => removeQcStandard(dept, idx)}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div>
-                                        <span className="text-muted-foreground">Tolerance:</span>
-                                        <p className="font-mono">{qcStandard.tolerance}</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground">Requirement:</span>
-                                        <p className="font-mono">{qcStandard.requirement}</p>
-                                      </div>
-                                    </div>
-                                  </Card>
-                                ))}
-                              </div>
-                            )}
-                            <div className="space-y-2">
-                              <Input
-                                placeholder="QC Standard (e.g., Surface Finish)"
-                                value={selectedDeptForConfig === dept ? qcStandardInput : ''}
-                                onChange={(e) => {
-                                  setSelectedDeptForConfig(dept);
-                                  setQcStandardInput(e.target.value);
-                                }}
-                                onFocus={() => setSelectedDeptForConfig(dept)}
-                              />
-                              <Input
-                                placeholder="Tolerance (e.g., ±0.001 in)"
-                                value={selectedDeptForConfig === dept ? qcToleranceInput : ''}
-                                onChange={(e) => {
-                                  setSelectedDeptForConfig(dept);
-                                  setQcToleranceInput(e.target.value);
-                                }}
-                                onFocus={() => setSelectedDeptForConfig(dept)}
-                              />
-                              <Input
-                                placeholder="Requirement (e.g., 32 Ra max)"
-                                value={selectedDeptForConfig === dept ? qcRequirementInput : ''}
-                                onChange={(e) => {
-                                  setSelectedDeptForConfig(dept);
-                                  setQcRequirementInput(e.target.value);
-                                }}
-                                onFocus={() => setSelectedDeptForConfig(dept)}
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() => addQcStandard(dept)}
-                                disabled={
-                                  !qcStandardInput.trim() || 
-                                  !qcToleranceInput.trim() || 
-                                  !qcRequirementInput.trim() || 
-                                  selectedDeptForConfig !== dept
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base">{dept}</CardTitle>
+                            <div className="flex items-center gap-2">
+                              <UserCheck className="h-4 w-4 text-muted-foreground" />
+                              {(() => {
+                                const certifiedEmployees = getCertifiedEmployees(dept);
+                                if (certifiedEmployees.length === 0) {
+                                  return <span className="text-xs text-muted-foreground">No certified techs</span>;
                                 }
-                              >
-                                Add QC Standard
-                              </Button>
+                                return (
+                                  <Select
+                                    value={config.assignedTechnicianId?.toString() || 'NONE'}
+                                    onValueChange={(val) => setAssignedTechnician(dept, val)}
+                                  >
+                                    <SelectTrigger className="w-[180px] h-8 text-xs">
+                                      <SelectValue placeholder="Assign technician" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="NONE">No technician</SelectItem>
+                                      {certifiedEmployees.map((emp) => (
+                                        <SelectItem key={emp.id} value={emp.id.toString()}>{emp.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                );
+                              })()}
                             </div>
                           </div>
 
-                          {/* Oven Curing Section - Only for Assemble/Disassembly */}
-                          {dept === 'Assemble/Disassembly' && (
-                            <>
-                              <Separator />
-                              <div>
-                                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                  <Flame className="h-4 w-4" />
-                                  Oven Curing Steps ({config.ovenCuringSteps?.length || 0})
-                                </h4>
-                                <p className="text-sm text-muted-foreground mb-3">
-                                  Add temperature ramp ups and downs for the curing process
+                          {/* Phase Tabs */}
+                          <div className="flex gap-1 mt-3">
+                            {([
+                              { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.materials.length > 0 ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) },
+                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + config.qcStandards.length + (sigConfig.requiredSignatures.length) },
+                            ]).map(phase => (
+                              <button
+                                key={phase.key}
+                                type="button"
+                                onClick={() => setActivePhaseTab({ ...activePhaseTab, [dept]: phase.key })}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all flex-1 ${
+                                  currentPhase === phase.key
+                                    ? `${phase.bg} ${phase.color} border-current`
+                                    : 'bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/50'
+                                }`}
+                              >
+                                <phase.icon className="h-3.5 w-3.5" />
+                                {phase.label}
+                                {phase.count > 0 && (
+                                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">{phase.count}</Badge>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4 pt-0">
+                          {/* ==================== START PHASE ==================== */}
+                          {currentPhase === 'START' && (
+                            <div className="space-y-4">
+                              <div className="p-3 bg-blue-50/50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900">
+                                <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                                  Pre-flight checks and gate requirements before work begins. Badge scan is always required to start.
                                 </p>
-                                
-                                {/* Display existing curing steps */}
-                                {config.ovenCuringSteps && config.ovenCuringSteps.length > 0 && (
+                              </div>
+
+                              {/* Start Checks */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <Shield className="h-4 w-4 text-blue-600" />
+                                  Gate Checks ({config.startChecks?.length || 0})
+                                </h4>
+                                {config.startChecks && config.startChecks.length > 0 && (
                                   <div className="space-y-2 mb-3">
-                                    {config.ovenCuringSteps.map((step, idx) => (
-                                      <Card key={idx} className="p-3">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <div className="flex-1">
-                                            <p className="font-medium text-sm">Step {idx + 1}</p>
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0"
-                                            onClick={() => removeOvenCuringStep(dept, idx)}
-                                            data-testid={`button-remove-curing-step-${idx}`}
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
+                                    {config.startChecks.map((check, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <Check className="h-4 w-4 text-blue-600 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">{check.title}</p>
+                                          {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                        {check.signatureRequired && <Badge variant="outline" className="text-[10px] shrink-0">Sig</Badge>}
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => toggleCheckSignatureRequired(dept, 'start', idx)}>
+                                          <PenLine className={`h-3 w-3 ${check.signatureRequired ? 'text-primary' : 'text-muted-foreground'}`} />
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeStartCheck(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder="Check title (e.g., Verify Work Order)"
+                                    value={selectedDeptForConfig === dept ? startCheckTitle : ''}
+                                    onChange={(e) => { setSelectedDeptForConfig(dept); setStartCheckTitle(e.target.value); }}
+                                    onFocus={() => setSelectedDeptForConfig(dept)}
+                                    className="text-sm"
+                                  />
+                                  <Button size="sm" onClick={() => addStartCheck(dept)} disabled={!startCheckTitle.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                {selectedDeptForConfig === dept && startCheckTitle && (
+                                  <Input
+                                    placeholder="Instructions (optional)"
+                                    value={startCheckInstructions}
+                                    onChange={(e) => setStartCheckInstructions(e.target.value)}
+                                    className="text-sm mt-1"
+                                  />
+                                )}
+                              </div>
+
+                              <Separator />
+
+                              {/* Materials (START phase - material verification) */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <Package className="h-4 w-4 text-blue-600" />
+                                  Material Traceability ({config.materials.length})
+                                </h4>
+                                {config.materials.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.materials.map((material) => (
+                                      <Card key={material.partId} className="p-3">
+                                        <div className="flex items-start justify-between mb-2">
                                           <div>
-                                            <span className="text-muted-foreground">Temperature:</span>
-                                            <p className="font-mono">{step.temperature}</p>
+                                            <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
+                                            <p className="text-xs text-muted-foreground">{material.partName}</p>
                                           </div>
-                                          <div>
-                                            <span className="text-muted-foreground">Time:</span>
-                                            <p className="font-mono">{step.time}</p>
+                                          <div className="flex items-center gap-1">
+                                            <Button size="sm" variant={material.entryMethod === 'manual' ? 'default' : 'outline'} className="h-6 text-[10px]" onClick={() => toggleMaterialEntryMethod(dept, material.partId)}>
+                                              {material.entryMethod === 'manual' ? 'Manual' : 'Barcode'}
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeMaterialFromDepartment(dept, material.partId)}>
+                                              <X className="h-3 w-3" />
+                                            </Button>
                                           </div>
+                                        </div>
+                                        {material.entryMethod === 'barcode' && (
+                                          <div className="mb-2 p-1.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
+                                            All traceability auto-captured via barcode
+                                          </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-1">
+                                          {TRACEABILITY_FIELDS.map((field) => (
+                                            <div key={field.id} className="flex items-center space-x-1">
+                                              <Checkbox
+                                                id={`${dept}-${material.partId}-${field.id}`}
+                                                checked={(material.requiredFields || []).includes(field.id)}
+                                                disabled={material.entryMethod === 'barcode'}
+                                                onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
+                                              />
+                                              <Label htmlFor={`${dept}-${material.partId}-${field.id}`} className={`text-[11px] ${material.entryMethod === 'barcode' ? 'opacity-60' : 'cursor-pointer'}`}>
+                                                {field.label}
+                                              </Label>
+                                            </div>
+                                          ))}
                                         </div>
                                       </Card>
                                     ))}
                                   </div>
                                 )}
-                                
-                                {/* Add new curing step */}
+                                <div>
+                                  <Input
+                                    placeholder="Search inventory to add material..."
+                                    value={selectedDeptForConfig === dept ? materialSearchTerm : ''}
+                                    onChange={(e) => { setSelectedDeptForConfig(dept); setMaterialSearchTerm(e.target.value); }}
+                                    onFocus={() => setSelectedDeptForConfig(dept)}
+                                    className="mb-1 text-sm"
+                                  />
+                                  {selectedDeptForConfig === dept && materialSearchTerm && (
+                                    <ScrollArea className="h-28 border rounded">
+                                      {filteredMaterialItems.map((item) => (
+                                        <div key={item.id} className="p-2 hover:bg-muted cursor-pointer" onClick={() => { addMaterialToDepartment(dept, item); setMaterialSearchTerm(''); setSelectedDeptForConfig(''); }}>
+                                          <p className="font-mono text-xs">{item.agPartNumber}</p>
+                                          <p className="text-[10px] text-muted-foreground">{item.name}</p>
+                                        </div>
+                                      ))}
+                                    </ScrollArea>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ==================== WORK PHASE ==================== */}
+                          {currentPhase === 'WORK' && (
+                            <div className="space-y-4">
+                              <div className="p-3 bg-amber-50/50 dark:bg-amber-950/30 rounded-lg border border-amber-100 dark:border-amber-900">
+                                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                                  Operations and processes performed during this department step.
+                                </p>
+                              </div>
+
+                              {/* Custom Data Fields */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm">Custom Data Entry ({config.customDataFields?.length || 0})</h4>
+                                {config.customDataFields && config.customDataFields.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.customDataFields.map((field, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{field.fieldName}</p>
+                                          <div className="flex gap-1 mt-0.5">
+                                            <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
+                                            {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                                          </div>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeCustomDataField(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="space-y-2">
-                                  <div>
-                                    <Label htmlFor={`oven-temp-${dept}`}>Temperature</Label>
-                                    <Input
-                                      id={`oven-temp-${dept}`}
-                                      data-testid="input-oven-temperature"
-                                      placeholder="e.g., 350°F"
-                                      value={selectedDeptForConfig === dept ? ovenTemperatureInput : ''}
-                                      onChange={(e) => {
-                                        setSelectedDeptForConfig(dept);
-                                        setOvenTemperatureInput(e.target.value);
-                                      }}
-                                      onFocus={() => setSelectedDeptForConfig(dept)}
-                                    />
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
+                                      <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="number">Number</SelectItem>
+                                        <SelectItem value="date">Date</SelectItem>
+                                        <SelectItem value="textarea">Text Area</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </div>
-                                  <div>
-                                    <Label htmlFor={`oven-time-${dept}`}>Time</Label>
-                                    <Input
-                                      id={`oven-time-${dept}`}
-                                      data-testid="input-oven-time"
-                                      placeholder="e.g., 2 hours"
-                                      value={selectedDeptForConfig === dept ? ovenTimeInput : ''}
-                                      onChange={(e) => {
-                                        setSelectedDeptForConfig(dept);
-                                        setOvenTimeInput(e.target.value);
-                                      }}
-                                      onFocus={() => setSelectedDeptForConfig(dept)}
-                                    />
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id={`custom-field-required-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
+                                      <Label htmlFor={`custom-field-required-${dept}`} className="text-xs cursor-pointer">Required</Label>
+                                    </div>
+                                    <Button size="sm" onClick={() => addCustomDataField(dept)} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
+                                      <Plus className="h-4 w-4 mr-1" /> Add Field
+                                    </Button>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => addOvenCuringStep(dept)}
-                                    disabled={
-                                      !ovenTemperatureInput.trim() || 
-                                      !ovenTimeInput.trim() || 
-                                      selectedDeptForConfig !== dept
-                                    }
-                                    data-testid="button-add-curing-step"
-                                  >
-                                    Add Curing Step
+                                </div>
+                              </div>
+
+                              {/* Oven Curing */}
+                              {dept === 'Assemble/Disassembly' && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                      <Flame className="h-4 w-4 text-amber-600" />
+                                      Oven Curing ({config.ovenCuringSteps?.length || 0})
+                                    </h4>
+                                    {config.ovenCuringSteps && config.ovenCuringSteps.length > 0 && (
+                                      <div className="space-y-2 mb-3">
+                                        {config.ovenCuringSteps.map((cureStep, idx) => (
+                                          <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                            <Flame className="h-4 w-4 text-amber-500 shrink-0" />
+                                            <div className="flex-1">
+                                              <p className="text-sm">Step {idx + 1}: {cureStep.temperature} for {cureStep.time}</p>
+                                            </div>
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeOvenCuringStep(dept, idx)}>
+                                              <X className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex gap-2">
+                                      <Input placeholder="Temperature" value={selectedDeptForConfig === dept ? ovenTemperatureInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setOvenTemperatureInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                      <Input placeholder="Time" value={selectedDeptForConfig === dept ? ovenTimeInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setOvenTimeInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                      <Button size="sm" onClick={() => addOvenCuringStep(dept)} disabled={!ovenTemperatureInput.trim() || !ovenTimeInput.trim() || selectedDeptForConfig !== dept}>
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Special Process */}
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-amber-600" />
+                                  Special Process
+                                </h4>
+                                {config.specialProcessConfig?.processName && (
+                                  <Card className="p-3 bg-muted/30 border-l-4 border-l-amber-500 mb-2">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-medium text-sm">{config.specialProcessConfig.processName}</p>
+                                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-1">
+                                          <span>Materials: {config.specialProcessConfig.materials?.length || 0}</span>
+                                          <span>QC: {config.specialProcessConfig.qcStandards?.length || 0}</span>
+                                          <span>Fields: {config.specialProcessConfig.customDataFields?.length || 0}</span>
+                                        </div>
+                                      </div>
+                                      {config.specialProcessConfig.requiredTechnicianId && (
+                                        <Badge variant="default" className="text-[10px]">Tech Assigned</Badge>
+                                      )}
+                                    </div>
+                                  </Card>
+                                )}
+                                <Button size="sm" variant="outline" onClick={() => openSpecialProcessDialog(dept)}>
+                                  <FileText className="mr-1 h-3 w-3" />
+                                  {config.specialProcessConfig?.processName ? 'Edit' : 'Configure'} Special Process
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ==================== FINISH PHASE ==================== */}
+                          {currentPhase === 'FINISH' && (
+                            <div className="space-y-4">
+                              <div className="p-3 bg-green-50/50 dark:bg-green-950/30 rounded-lg border border-green-100 dark:border-green-900">
+                                <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                                  Post-operation checks, QC verification, and signoff gates. Badge scan + signature required to complete.
+                                </p>
+                              </div>
+
+                              {/* Finish Checks */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <Shield className="h-4 w-4 text-green-600" />
+                                  End Checks ({config.finishChecks?.length || 0})
+                                </h4>
+                                {config.finishChecks && config.finishChecks.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.finishChecks.map((check, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">{check.title}</p>
+                                          {check.instructions && <p className="text-xs text-muted-foreground truncate">{check.instructions}</p>}
+                                        </div>
+                                        {check.signatureRequired && <Badge variant="outline" className="text-[10px] shrink-0">Sig</Badge>}
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => toggleCheckSignatureRequired(dept, 'finish', idx)}>
+                                          <PenLine className={`h-3 w-3 ${check.signatureRequired ? 'text-primary' : 'text-muted-foreground'}`} />
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => removeFinishCheck(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder="Check title (e.g., Visual Inspection)"
+                                    value={selectedDeptForConfig === dept ? finishCheckTitle : ''}
+                                    onChange={(e) => { setSelectedDeptForConfig(dept); setFinishCheckTitle(e.target.value); }}
+                                    onFocus={() => setSelectedDeptForConfig(dept)}
+                                    className="text-sm"
+                                  />
+                                  <Button size="sm" onClick={() => addFinishCheck(dept)} disabled={!finishCheckTitle.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                {selectedDeptForConfig === dept && finishCheckTitle && (
+                                  <Input
+                                    placeholder="Instructions (optional)"
+                                    value={finishCheckInstructions}
+                                    onChange={(e) => setFinishCheckInstructions(e.target.value)}
+                                    className="text-sm mt-1"
+                                  />
+                                )}
+                              </div>
+
+                              <Separator />
+
+                              {/* QC Standards */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm">QC Standards ({config.qcStandards.length})</h4>
+                                {config.qcStandards.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.qcStandards.map((qcStandard, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{qcStandard.standard}</p>
+                                          <p className="text-[10px] text-muted-foreground">Tol: {qcStandard.tolerance} | Req: {qcStandard.requirement}</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeQcStandard(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-1">
+                                  <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  </div>
+                                  <Button size="sm" onClick={() => addQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
                                 </div>
                               </div>
 
-                            </>
-                          )}
+                              <Separator />
 
-                          <Separator />
-
-                          {/* Custom Data Fields Section - Available for All Departments */}
-                          <div>
-                            <h4 className="font-semibold mb-3">Custom Data Entry Fields ({config.customDataFields?.length || 0})</h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              Define custom fields that technicians will fill in when processing parts through this department
-                            </p>
-                            
-                            {/* Display existing custom fields */}
-                            {config.customDataFields && config.customDataFields.length > 0 && (
-                              <div className="space-y-2 mb-3">
-                                {config.customDataFields.map((field, idx) => (
-                                  <Card key={idx} className="p-3">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div className="flex-1">
-                                        <p className="font-medium text-sm">{field.fieldName}</p>
-                                        <div className="flex gap-2 items-center mt-1">
-                                          <Badge variant="outline" className="text-xs">
-                                            {field.fieldType}
-                                          </Badge>
-                                          {field.isRequired && (
-                                            <Badge variant="secondary" className="text-xs">
-                                              Required
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => removeCustomDataField(dept, idx)}
-                                        data-testid={`button-remove-custom-field-${idx}`}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </Card>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {/* Add new custom field */}
-                            <div className="space-y-2">
+                              {/* Signature Configuration */}
                               <div>
-                                <Label htmlFor={`custom-field-name-${dept}`}>Field Name</Label>
-                                <Input
-                                  id={`custom-field-name-${dept}`}
-                                  data-testid="input-custom-field-name"
-                                  placeholder="e.g., Temperature, Mold Number, Humidity"
-                                  value={selectedDeptForConfig === dept ? customFieldName : ''}
-                                  onChange={(e) => {
-                                    setSelectedDeptForConfig(dept);
-                                    setCustomFieldName(e.target.value);
-                                  }}
-                                  onFocus={() => setSelectedDeptForConfig(dept)}
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`custom-field-type-${dept}`}>Field Type</Label>
-                                <Select
-                                  value={selectedDeptForConfig === dept ? customFieldType : 'text'}
-                                  onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => {
-                                    setSelectedDeptForConfig(dept);
-                                    setCustomFieldType(val);
-                                  }}
-                                >
-                                  <SelectTrigger id={`custom-field-type-${dept}`} data-testid="select-custom-field-type">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="text">Text</SelectItem>
-                                    <SelectItem value="number">Number</SelectItem>
-                                    <SelectItem value="date">Date</SelectItem>
-                                    <SelectItem value="textarea">Text Area</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`custom-field-required-${dept}`}
-                                  checked={selectedDeptForConfig === dept ? customFieldRequired : false}
-                                  onCheckedChange={(checked) => {
-                                    setSelectedDeptForConfig(dept);
-                                    setCustomFieldRequired(checked as boolean);
-                                  }}
-                                  data-testid="checkbox-custom-field-required"
-                                />
-                                <Label htmlFor={`custom-field-required-${dept}`} className="cursor-pointer">
-                                  Required field
-                                </Label>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={() => addCustomDataField(dept)}
-                                disabled={
-                                  !customFieldName.trim() || 
-                                  selectedDeptForConfig !== dept
-                                }
-                                data-testid="button-add-custom-field"
-                              >
-                                Add Custom Field
-                              </Button>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Special Process Section - Available for All Departments */}
-                          <div>
-                            <h4 className="font-semibold mb-3 flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              Special Process
-                            </h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              Configure special process requirements for this department (technician required)
-                            </p>
-                            <div className="space-y-2">
-                              {config.specialProcessConfig?.processName && (
-                                <Card className="p-3 bg-muted/30 border-l-4 border-l-primary">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                      <p className="font-medium">{config.specialProcessConfig.processName}</p>
-                                      {config.specialProcessConfig.requiredTechnicianId && (
-                                        <Badge variant="default" className="text-xs">
-                                          <UserCheck className="h-3 w-3 mr-1" />
-                                          Tech Assigned
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    {config.specialProcessConfig.notes && (
-                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{config.specialProcessConfig.notes}</p>
-                                    )}
-                                    <div className="flex gap-4 text-xs text-muted-foreground">
-                                      <span>Materials: {config.specialProcessConfig.materials?.length || 0}</span>
-                                      <span>QC Standards: {config.specialProcessConfig.qcStandards?.length || 0}</span>
-                                      <span>Custom Fields: {config.specialProcessConfig.customDataFields?.length || 0}</span>
-                                    </div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <PenLine className="h-4 w-4 text-green-600" />
+                                  Signature Requirements
+                                </h4>
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`sig-finish-${dept}`}
+                                      checked={sigConfig.finishRequiresSignature}
+                                      onCheckedChange={(checked) => updateSignatureConfig(dept, { finishRequiresSignature: checked as boolean })}
+                                    />
+                                    <Label htmlFor={`sig-finish-${dept}`} className="text-sm cursor-pointer">Require signature to complete department</Label>
                                   </div>
-                                </Card>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSpecialProcessDialog(dept)}
-                                data-testid={`button-configure-special-process-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                {config.specialProcessConfig?.processName ? 'Edit Special Process' : 'Configure Special Process'}
-                              </Button>
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`sig-start-${dept}`}
+                                      checked={sigConfig.startRequiresSignature}
+                                      onCheckedChange={(checked) => updateSignatureConfig(dept, { startRequiresSignature: checked as boolean })}
+                                    />
+                                    <Label htmlFor={`sig-start-${dept}`} className="text-sm cursor-pointer">Require signature to start department</Label>
+                                  </div>
+                                  {sigConfig.finishRequiresSignature && (
+                                    <div className="pl-6">
+                                      <p className="text-xs text-muted-foreground mb-2">Required signoff roles:</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {['operator', 'qc_inspector', 'supervisor', 'engineering'].map(role => (
+                                          <Badge
+                                            key={role}
+                                            variant={sigConfig.requiredSignatures.includes(role) ? 'default' : 'outline'}
+                                            className="cursor-pointer text-xs"
+                                            onClick={() => toggleRequiredSignature(dept, role)}
+                                          >
+                                            {role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </CardContent>
                       </Card>
                     );

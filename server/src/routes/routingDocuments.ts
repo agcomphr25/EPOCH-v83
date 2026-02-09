@@ -232,6 +232,90 @@ router.get('/certification-links/:certificationId', async (req: Request, res: Re
   }
 });
 
+router.get('/:id/sections', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+
+    const results = await db.execute(sql`SELECT id, title, file_name, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    const document = rows[0];
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const sections: { id: string; title: string; content: string; startIndex: number }[] = [];
+    let fullText = '';
+
+    if (document.ai_extracted_content) {
+      const content = typeof document.ai_extracted_content === 'string'
+        ? document.ai_extracted_content
+        : JSON.stringify(document.ai_extracted_content, null, 2);
+      fullText = content;
+
+      const lines = content.split('\n');
+      let currentSection: { title: string; content: string[]; startIndex: number } | null = null;
+      let lineIndex = 0;
+
+      for (const line of lines) {
+        const headerMatch = line.match(/^#{1,3}\s+(.+)$/) ||
+          line.match(/^([A-Z][A-Z\s/&-]{3,})\s*$/) ||
+          line.match(/^\d+\.\s+([A-Z].{3,})$/);
+
+        if (headerMatch) {
+          if (currentSection && currentSection.content.length > 0) {
+            sections.push({
+              id: `section-${sections.length}`,
+              title: currentSection.title,
+              content: currentSection.content.join('\n').trim(),
+              startIndex: currentSection.startIndex,
+            });
+          }
+          currentSection = { title: headerMatch[1].trim(), content: [], startIndex: lineIndex };
+        } else if (currentSection) {
+          currentSection.content.push(line);
+        } else if (line.trim()) {
+          if (!currentSection) {
+            currentSection = { title: 'Introduction', content: [line], startIndex: lineIndex };
+          }
+        }
+        lineIndex++;
+      }
+
+      if (currentSection && currentSection.content.length > 0) {
+        sections.push({
+          id: `section-${sections.length}`,
+          title: currentSection.title,
+          content: currentSection.content.join('\n').trim(),
+          startIndex: currentSection.startIndex,
+        });
+      }
+    }
+
+    if (sections.length === 0 && fullText) {
+      sections.push({
+        id: 'section-0',
+        title: 'Full Document',
+        content: fullText,
+        startIndex: 0,
+      });
+    }
+
+    res.json({
+      documentId: formatUuid(document.id),
+      documentTitle: document.title || document.file_name,
+      fullText,
+      sections,
+    });
+  } catch (error) {
+    console.error('Error fetching document sections:', error);
+    res.status(500).json({ error: 'Failed to fetch document sections' });
+  }
+});
+
 // Get single routing document - This MUST come after all other GET routes with path segments
 router.get('/:id', async (req: Request, res: Response) => {
   try {

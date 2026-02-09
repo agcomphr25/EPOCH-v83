@@ -17,9 +17,95 @@ function getOpenAI(): OpenAI {
 
 const router = Router();
 
-// Middleware to log all requests to this router
-router.use((req: Request, res: Response, next: NextFunction) => {
+async function ensureTablesExist() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS p2_routing_departments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        display_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS part_routings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        part_number TEXT NOT NULL,
+        revision TEXT NOT NULL DEFAULT 'A',
+        name TEXT NOT NULL,
+        description TEXT,
+        inventory_item_id TEXT,
+        departments JSONB NOT NULL DEFAULT '[]',
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS routing_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        department_id UUID NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        document_type TEXT NOT NULL DEFAULT 'work_instruction',
+        content TEXT,
+        file_url TEXT,
+        file_name TEXT,
+        revision TEXT NOT NULL DEFAULT 'A',
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS routing_training_packages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        routing_id UUID NOT NULL,
+        department_id UUID NOT NULL,
+        training_content JSONB NOT NULL DEFAULT '{}',
+        quiz_questions JSONB NOT NULL DEFAULT '[]',
+        source_document_ids JSONB NOT NULL DEFAULT '[]',
+        generated_at TIMESTAMP DEFAULT NOW(),
+        generated_by TEXT,
+        model_version TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    const existing = await pool.query(`SELECT COUNT(*) as count FROM p2_routing_departments`);
+    if (parseInt(existing[0]?.count) === 0) {
+      console.log('[PartRoutings] Seeding default departments...');
+      const defaults = ['Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC'];
+      for (let i = 0; i < defaults.length; i++) {
+        await pool.query(
+          `INSERT INTO p2_routing_departments (name, display_order) VALUES ($1, $2)`,
+          [defaults[i], i + 1]
+        );
+      }
+      console.log('[PartRoutings] Default departments seeded');
+    }
+    console.log('[PartRoutings] Tables verified/created successfully');
+  } catch (error: any) {
+    console.error('[PartRoutings] Error ensuring tables exist:', error?.message);
+  }
+}
+
+let tablesInitialized = false;
+
+// Middleware to log all requests and ensure tables exist
+router.use(async (req: Request, res: Response, next: NextFunction) => {
   console.log(`[PartRoutings] ${req.method} ${req.path} Content-Type: ${req.get('Content-Type')}`);
+  if (!tablesInitialized) {
+    await ensureTablesExist();
+    tablesInitialized = true;
+  }
   next();
 });
 

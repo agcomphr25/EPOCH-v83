@@ -124,9 +124,19 @@ interface CustomDataField {
   isRequired: boolean; // Whether the field is required
 }
 
+interface StandardProcessConfig {
+  processName: string;
+  notes: string;
+  requiredTechnicianId: number | null;
+  materials: MaterialRequirement[];
+  qcStandards: QCStandard[];
+  customDataFields: CustomDataField[];
+}
+
 interface StandardProcess {
   name: string;
   description: string;
+  config?: StandardProcessConfig;
 }
 
 interface SpecialProcessConfig {

@@ -124,6 +124,11 @@ interface CustomDataField {
   isRequired: boolean; // Whether the field is required
 }
 
+interface StandardProcess {
+  name: string;
+  description: string;
+}
+
 interface SpecialProcessConfig {
   processName: string;
   notes: string;
@@ -185,6 +190,7 @@ interface DepartmentConfiguration {
   ovenCuringSteps?: OvenCuringStep[];
   specialProcess?: string;
   specialProcessConfig?: SpecialProcessConfig;
+  standardProcesses?: StandardProcess[];
   customDataFields?: CustomDataField[];
   startChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
@@ -309,6 +315,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
   const [ovenTimeInput, setOvenTimeInput] = useState<string>('');
   
+  const [stdProcessName, setStdProcessName] = useState<string>('');
+  const [stdProcessDescription, setStdProcessDescription] = useState<string>('');
+
   // UI state for special process dialog
   const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
   const [specialProcessDept, setSpecialProcessDept] = useState<string>('');
@@ -895,6 +904,31 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         ...config,
         specialProcess: value,
       },
+    });
+  };
+
+  const addStandardProcess = (dept: string) => {
+    if (!stdProcessName.trim() || selectedDeptForConfig !== dept) return;
+    const config = getOrCreateDeptConfig(dept);
+    const existing = config.standardProcesses || [];
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        standardProcesses: [...existing, { name: stdProcessName.trim(), description: stdProcessDescription.trim() }],
+      },
+    });
+    setStdProcessName('');
+    setStdProcessDescription('');
+  };
+
+  const removeStandardProcess = (dept: string, idx: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    const updated = [...(config.standardProcesses || [])];
+    updated.splice(idx, 1);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, standardProcesses: updated },
     });
   };
 
@@ -1594,7 +1628,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -2151,6 +2185,52 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 </div>
                               </div>
 
+                              {/* Standard Processes */}
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <Wrench className="h-4 w-4 text-blue-600" />
+                                  Standard Processes ({config.standardProcesses?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  Routine operations performed at this department (e.g. sanding, trimming, drilling).
+                                </p>
+                                {config.standardProcesses && config.standardProcesses.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.standardProcesses.map((proc, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background border-l-4 border-l-blue-400">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{proc.name}</p>
+                                          {proc.description && <p className="text-[10px] text-muted-foreground">{proc.description}</p>}
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStandardProcess(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <Input
+                                    placeholder="Process name (e.g. Sanding, Trimming)"
+                                    value={selectedDeptForConfig === dept ? stdProcessName : ''}
+                                    onChange={(e) => { setSelectedDeptForConfig(dept); setStdProcessName(e.target.value); }}
+                                    onFocus={() => setSelectedDeptForConfig(dept)}
+                                    className="text-sm"
+                                  />
+                                  <Input
+                                    placeholder="Description (optional)"
+                                    value={selectedDeptForConfig === dept ? stdProcessDescription : ''}
+                                    onChange={(e) => { setSelectedDeptForConfig(dept); setStdProcessDescription(e.target.value); }}
+                                    onFocus={() => setSelectedDeptForConfig(dept)}
+                                    className="text-sm"
+                                  />
+                                  <Button size="sm" onClick={() => addStandardProcess(dept)} disabled={!stdProcessName.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add Standard Process
+                                  </Button>
+                                </div>
+                              </div>
+
                               {/* Special Process */}
                               <Separator />
                               <div>
@@ -2158,6 +2238,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   <FileText className="h-4 w-4 text-amber-600" />
                                   Special Process
                                 </h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  Complex processes requiring dedicated materials, QC standards, and technician assignment.
+                                </p>
                                 {config.specialProcessConfig?.processName && (
                                   <Card className="p-3 bg-muted/30 border-l-4 border-l-amber-500 mb-2">
                                     <div className="flex items-center justify-between">

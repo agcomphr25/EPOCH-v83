@@ -3974,14 +3974,9 @@ export class DatabaseStorage implements IStorage {
     const discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }> = [];
 
     // Persistent discount
-    if (order.discountCode && order.discountCode !== 'none') {
-      let discount = null;
-      if (order.discountCode.startsWith('persistent_')) {
-        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        discount = persistentDiscountsData.find((d) => d.id === discountId);
-      } else {
-        discount = persistentDiscountsData.find((d) => d.name === order.discountCode);
-      }
+    if (order.discountCode && order.discountCode !== 'none' && order.discountCode.startsWith('persistent_')) {
+      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+      const discount = persistentDiscountsData.find((d) => d.id === discountId);
 
       if (discount && discount.isActive) {
         let discountAmount = 0;
@@ -4002,6 +3997,37 @@ export class DatabaseStorage implements IStorage {
             value: discountValue,
             amount: discountAmount,
             appliesTo: discount.appliesTo || 'total_order',
+          });
+        }
+      }
+    }
+
+    // Seasonal / short-term discount
+    if (order.discountCode && order.discountCode.startsWith('short_term_')) {
+      const saleId = parseInt(order.discountCode.replace('short_term_', ''));
+      const allSales = await this.getAllShortTermSalesIncludingExpired();
+      const sale = allSales.find((s) => s.id === saleId);
+
+      if (sale && (sale.isActive === 1 || sale.overrideActive)) {
+        const salePercent = sale.percent;
+        const saleAppliesTo = sale.appliesTo || 'total';
+        const afterPriorDiscounts = subtotal - discountTotal;
+
+        let discountAmount = 0;
+        if (saleAppliesTo === 'stock_model') {
+          discountAmount = (basePrice * salePercent) / 100;
+        } else {
+          discountAmount = (afterPriorDiscounts * salePercent) / 100;
+        }
+
+        if (discountAmount > 0) {
+          discountTotal += discountAmount;
+          discounts.push({
+            source: sale.name || 'Seasonal Sale',
+            type: 'percent',
+            value: salePercent,
+            amount: discountAmount,
+            appliesTo: saleAppliesTo === 'stock_model' ? 'stock_model' : 'total_order',
           });
         }
       }

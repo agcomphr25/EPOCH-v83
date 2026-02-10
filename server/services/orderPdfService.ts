@@ -50,6 +50,11 @@ interface CoreOrderData {
   altShipToPhone: string | null;
   altShipToAddress: Record<string, any> | null;
   altShipToCustomerId: string | null;
+  discountCode: string | null;
+  customDiscountType: string | null;
+  customDiscountValue: number | null;
+  showCustomDiscount: boolean | null;
+  priceOverride: number | null;
 }
 
 /**
@@ -86,7 +91,12 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         alt_ship_to_email as "altShipToEmail",
         alt_ship_to_phone as "altShipToPhone",
         alt_ship_to_address as "altShipToAddress",
-        alt_ship_to_customer_id as "altShipToCustomerId"
+        alt_ship_to_customer_id as "altShipToCustomerId",
+        discount_code as "discountCode",
+        custom_discount_type as "customDiscountType",
+        custom_discount_value as "customDiscountValue",
+        show_custom_discount as "showCustomDiscount",
+        price_override as "priceOverride"
       FROM all_orders 
       WHERE order_id = ${orderId}
       LIMIT 1
@@ -116,6 +126,11 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         altShipToPhone: row.altShipToPhone,
         altShipToAddress: row.altShipToAddress,
         altShipToCustomerId: row.altShipToCustomerId,
+        discountCode: row.discountCode || null,
+        customDiscountType: row.customDiscountType || null,
+        customDiscountValue: row.customDiscountValue ? parseFloat(row.customDiscountValue) : null,
+        showCustomDiscount: row.showCustomDiscount || false,
+        priceOverride: row.priceOverride ? parseFloat(row.priceOverride) : null,
       };
     }
     
@@ -142,7 +157,12 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         alt_ship_to_email as "altShipToEmail",
         alt_ship_to_phone as "altShipToPhone",
         alt_ship_to_address as "altShipToAddress",
-        alt_ship_to_customer_id as "altShipToCustomerId"
+        alt_ship_to_customer_id as "altShipToCustomerId",
+        discount_code as "discountCode",
+        custom_discount_type as "customDiscountType",
+        custom_discount_value as "customDiscountValue",
+        show_custom_discount as "showCustomDiscount",
+        price_override as "priceOverride"
       FROM order_drafts 
       WHERE order_id = ${orderId}
       LIMIT 1
@@ -172,6 +192,11 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         altShipToPhone: row.altShipToPhone,
         altShipToAddress: row.altShipToAddress,
         altShipToCustomerId: row.altShipToCustomerId,
+        discountCode: row.discountCode || null,
+        customDiscountType: row.customDiscountType || null,
+        customDiscountValue: row.customDiscountValue ? parseFloat(row.customDiscountValue) : null,
+        showCustomDiscount: row.showCustomDiscount || false,
+        priceOverride: row.priceOverride ? parseFloat(row.priceOverride) : null,
       };
     }
     
@@ -198,7 +223,12 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         alt_ship_to_email as "altShipToEmail",
         alt_ship_to_phone as "altShipToPhone",
         alt_ship_to_address as "altShipToAddress",
-        alt_ship_to_customer_id as "altShipToCustomerId"
+        alt_ship_to_customer_id as "altShipToCustomerId",
+        discount_code as "discountCode",
+        custom_discount_type as "customDiscountType",
+        custom_discount_value as "customDiscountValue",
+        show_custom_discount as "showCustomDiscount",
+        price_override as "priceOverride"
       FROM all_orders 
       WHERE fb_order_number = ${orderId}
       LIMIT 1
@@ -228,6 +258,11 @@ async function getOrderCoreDataForPdf(orderId: string): Promise<CoreOrderData | 
         altShipToPhone: row.altShipToPhone,
         altShipToAddress: row.altShipToAddress,
         altShipToCustomerId: row.altShipToCustomerId,
+        discountCode: row.discountCode || null,
+        customDiscountType: row.customDiscountType || null,
+        customDiscountValue: row.customDiscountValue ? parseFloat(row.customDiscountValue) : null,
+        showCustomDiscount: row.showCustomDiscount || false,
+        priceOverride: row.priceOverride ? parseFloat(row.priceOverride) : null,
       };
     }
     
@@ -567,16 +602,17 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
 
   const miscItems = order.features?.miscItems || [];
 
-  // Extract discount information from features JSONB (schema-safe approach)
-  // Discount data may be embedded in the features field or stored as separate columns
-  // We try features first, then fall back to safe defaults
+  // Extract discount information: DB columns are authoritative, features JSONB is fallback
   const discountFromFeatures = extractDiscountFromFeatures(order.features);
+  const discountCode = order.discountCode || discountFromFeatures.discountCode || undefined;
+  const customDiscountType = order.customDiscountType || discountFromFeatures.customDiscountType || undefined;
+  const customDiscountValue = order.customDiscountValue ?? discountFromFeatures.customDiscountValue ?? undefined;
+  const showCustomDiscount = order.showCustomDiscount ?? discountFromFeatures.showCustomDiscount ?? false;
   
   let discountDisplayName: string | undefined = discountFromFeatures.discountDisplayName;
   let discountAppliesTo: 'stock_model' | 'total_order' | undefined = discountFromFeatures.discountAppliesTo;
-  const discountCode = discountFromFeatures.discountCode;
 
-  // If discount code exists, try to look up display name from persistent discounts
+  // Look up display name from discount tables if we have a discount code
   if (discountCode && !discountDisplayName) {
     try {
       if (discountCode.startsWith('persistent_')) {
@@ -590,6 +626,16 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
           const discount = discountResults[0];
           discountDisplayName = discount.description || discount.name;
           discountAppliesTo = discount.appliesTo as 'stock_model' | 'total_order' || 'stock_model';
+        }
+      } else if (discountCode.startsWith('short_term_')) {
+        const saleId = parseInt(discountCode.replace('short_term_', ''));
+        const saleResults = await db.execute(sql`
+          SELECT name, applies_to as "appliesTo" FROM short_term_sales WHERE id = ${saleId} LIMIT 1
+        `);
+        if (saleResults.rows && saleResults.rows.length > 0) {
+          const sale = saleResults.rows[0] as any;
+          discountDisplayName = sale.name;
+          discountAppliesTo = (sale.appliesTo === 'stock_model' ? 'stock_model' : 'total_order');
         }
       } else {
         const discountResults = await db
@@ -605,7 +651,6 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
       }
     } catch (err) {
       console.warn(`⚠️ [PDF-SERVICE] Could not look up discount ${discountCode}:`, err);
-      // Continue without discount display name - won't throw
     }
   }
 
@@ -682,9 +727,9 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
     discountCode: discountCode || undefined,
     discountDisplayName,
     discountAppliesTo,
-    customDiscountType: discountFromFeatures.customDiscountType || undefined,
-    customDiscountValue: discountFromFeatures.customDiscountValue || undefined,
-    showCustomDiscount: discountFromFeatures.showCustomDiscount || false,
+    customDiscountType: customDiscountType || undefined,
+    customDiscountValue: customDiscountValue || undefined,
+    showCustomDiscount: showCustomDiscount || false,
   };
 
   // NEW: Add resolved pricing summary using shared function
@@ -867,6 +912,7 @@ export async function generateOrderPdf(
     customDiscountType: orderData.customDiscountType,
     customDiscountValue: orderData.customDiscountValue,
     showCustomDiscount: orderData.showCustomDiscount,
+    pricingSummary: orderData.pricingSummary,
   };
 
   console.log(`📄 [PDF-SERVICE] Generating PDF with:`, {

@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
@@ -24,6 +25,10 @@ export const rawSql = sql;
 export const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// pgPool-based Drizzle instance for reliable INSERT/UPDATE operations
+// Use this instead of `db` when the Neon HTTP driver causes type serialization issues
+export const dbPool = drizzlePg({ client: pgPool, schema });
 
 // Test database connection with timeout
 export async function testDatabaseConnection() {

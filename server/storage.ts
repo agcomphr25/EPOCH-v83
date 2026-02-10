@@ -481,7 +481,7 @@ import {
   type TicketActivity,
   type InsertTicketActivity,
 } from './schema';
-import { db, pool, rawSql } from './db';
+import { db, dbPool, pool, rawSql } from './db';
 import {
   eq,
   desc,
@@ -15115,9 +15115,25 @@ export class DatabaseStorage implements IStorage {
       hasAttachments: orderData.hasAttachments || false,
     };
 
+    // DEBUG: Log all real-type fields before insert
+    console.log('🔍 REAL-TYPE FIELDS DEBUG:', {
+      shipping: finalizedOrderData.shipping,
+      customDiscountValue: finalizedOrderData.customDiscountValue,
+      priceOverride: finalizedOrderData.priceOverride,
+      flattopPriceOverride: finalizedOrderData.flattopPriceOverride,
+      paymentAmount: finalizedOrderData.paymentAmount,
+      discountValue: finalizedOrderData.discountValue,
+      shippingType: typeof finalizedOrderData.shipping,
+      customDiscountValueType: typeof finalizedOrderData.customDiscountValue,
+      priceOverrideType: typeof finalizedOrderData.priceOverride,
+      flattopPriceOverrideType: typeof finalizedOrderData.flattopPriceOverride,
+      paymentAmountType: typeof finalizedOrderData.paymentAmount,
+      discountValueType: typeof finalizedOrderData.discountValue,
+    });
+
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
-    const result = await db
+    // Uses pgPool-based Drizzle to avoid Neon HTTP driver serialization issues with real/numeric types
+    const result = await dbPool
       .insert(allOrders)
       .values(finalizedOrderData)
       .returning();

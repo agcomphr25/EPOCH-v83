@@ -239,7 +239,7 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid document ID format' });
     }
 
-    const results = await db.execute(sql`SELECT id, title, file_name, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, ai_extracted_content, description FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
     const rows = (results as any)?.rows || results || [];
     const document = rows[0];
 
@@ -251,21 +251,141 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
     let fullText = '';
 
     if (document.ai_extracted_content) {
-      const content = typeof document.ai_extracted_content === 'string'
-        ? document.ai_extracted_content
-        : JSON.stringify(document.ai_extracted_content, null, 2);
-      fullText = content;
+      const rawContent = document.ai_extracted_content;
+      const isStructuredJson = typeof rawContent === 'object' && rawContent !== null && !Array.isArray(rawContent) &&
+        (rawContent.routingSteps || rawContent.dataFields || rawContent.qualityCheckpoints || rawContent.specialProcesses || rawContent.certificationRequirements);
 
-      const lines = content.split('\n');
-      let currentSection: { title: string; content: string[]; startIndex: number } | null = null;
-      let lineIndex = 0;
+      if (isStructuredJson) {
+        const parts: string[] = [];
 
-      for (const line of lines) {
-        const headerMatch = line.match(/^#{1,3}\s+(.+)$/) ||
-          line.match(/^([A-Z][A-Z\s/&-]{3,})\s*$/) ||
-          line.match(/^\d+\.\s+([A-Z].{3,})$/);
+        if (rawContent.routingSteps && rawContent.routingSteps.length > 0) {
+          const stepsContent = rawContent.routingSteps.map((s: any) =>
+            `Step ${s.stepNumber}: ${s.department || ''} - ${s.operation || ''}\n${s.description || ''}`
+          ).join('\n\n');
+          sections.push({ id: `section-${sections.length}`, title: `Routing Steps (${rawContent.routingSteps.length})`, content: stepsContent.trim(), startIndex: 0 });
+          parts.push(`## Routing Steps\n${stepsContent}`);
+        }
 
-        if (headerMatch) {
+        if (rawContent.dataFields && rawContent.dataFields.length > 0) {
+          const fieldsContent = rawContent.dataFields.map((f: any) =>
+            `${f.fieldLabel || f.fieldName}: ${f.fieldType || 'text'}${f.isRequired ? ' (Required)' : ''}${f.department ? ` [${f.department}]` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Data Fields (${rawContent.dataFields.length})`, content: fieldsContent.trim(), startIndex: 0 });
+          parts.push(`## Data Fields\n${fieldsContent}`);
+        }
+
+        if (rawContent.qualityCheckpoints && rawContent.qualityCheckpoints.length > 0) {
+          const qcContent = rawContent.qualityCheckpoints.map((q: any) =>
+            `${q.checkpoint}: Standard: ${q.standard || 'N/A'}, Tolerance: ${q.tolerance || 'N/A'}${q.department ? ` [${q.department}]` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Quality Checkpoints (${rawContent.qualityCheckpoints.length})`, content: qcContent.trim(), startIndex: 0 });
+          parts.push(`## Quality Checkpoints\n${qcContent}`);
+        }
+
+        if (rawContent.specialProcesses && rawContent.specialProcesses.length > 0) {
+          const spContent = rawContent.specialProcesses.map((s: any) =>
+            `${s.process}: ${s.requirements || ''}${s.department ? ` [${s.department}]` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Special Processes (${rawContent.specialProcesses.length})`, content: spContent.trim(), startIndex: 0 });
+          parts.push(`## Special Processes\n${spContent}`);
+        }
+
+        if (rawContent.certificationRequirements && rawContent.certificationRequirements.length > 0) {
+          const certContent = rawContent.certificationRequirements.map((c: any) =>
+            `${c.certification}: ${c.task || ''}${c.department ? ` [${c.department}]` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Certification Requirements (${rawContent.certificationRequirements.length})`, content: certContent.trim(), startIndex: 0 });
+          parts.push(`## Certification Requirements\n${certContent}`);
+        }
+
+        fullText = parts.join('\n\n');
+      } else {
+        const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2);
+        fullText = content;
+        const lines = content.split('\n');
+        let currentSection: { title: string; content: string[]; startIndex: number } | null = null;
+        let lineIndex = 0;
+
+        for (const line of lines) {
+          const headerMatch = line.match(/^#{1,3}\s+(.+)$/) ||
+            line.match(/^([A-Z][A-Z\s/&-]{3,})\s*$/) ||
+            line.match(/^\d+\.\s+([A-Z].{3,})$/);
+
+          if (headerMatch) {
+            if (currentSection && currentSection.content.length > 0) {
+              sections.push({
+                id: `section-${sections.length}`,
+                title: currentSection.title,
+                content: currentSection.content.join('\n').trim(),
+                startIndex: currentSection.startIndex,
+              });
+            }
+            currentSection = { title: headerMatch[1].trim(), content: [], startIndex: lineIndex };
+          } else if (currentSection) {
+            currentSection.content.push(line);
+          } else if (line.trim()) {
+            if (!currentSection) {
+              currentSection = { title: 'Introduction', content: [line], startIndex: lineIndex };
+            }
+          }
+          lineIndex++;
+        }
+
+        if (currentSection && currentSection.content.length > 0) {
+          sections.push({
+            id: `section-${sections.length}`,
+            title: currentSection.title,
+            content: currentSection.content.join('\n').trim(),
+            startIndex: currentSection.startIndex,
+          });
+        }
+      }
+    }
+
+    if (sections.length === 0 && document.file_url) {
+      try {
+        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        let extractedText = '';
+
+        const fileType = (document.file_type || document.file_name || '').toLowerCase();
+        if (fileType.includes('pdf')) {
+          extractedText = await extractPdfText(fileBuffer);
+        } else if (fileType.match(/text|txt|md|csv|json|xml/)) {
+          extractedText = fileBuffer.toString('utf-8');
+        }
+
+        if (extractedText.trim()) {
+          fullText = extractedText;
+
+          const lines = extractedText.split('\n');
+          let currentSection: { title: string; content: string[]; startIndex: number } | null = null;
+          let lineIndex = 0;
+
+          for (const line of lines) {
+            const headerMatch = line.match(/^#{1,3}\s+(.+)$/) ||
+              line.match(/^([A-Z][A-Z\s/&-]{3,})\s*$/) ||
+              line.match(/^\d+\.\s+([A-Z].{3,})$/);
+
+            if (headerMatch) {
+              if (currentSection && currentSection.content.length > 0) {
+                sections.push({
+                  id: `section-${sections.length}`,
+                  title: currentSection.title,
+                  content: currentSection.content.join('\n').trim(),
+                  startIndex: currentSection.startIndex,
+                });
+              }
+              currentSection = { title: headerMatch[1].trim(), content: [], startIndex: lineIndex };
+            } else if (currentSection) {
+              currentSection.content.push(line);
+            } else if (line.trim()) {
+              if (!currentSection) {
+                currentSection = { title: 'Introduction', content: [line], startIndex: lineIndex };
+              }
+            }
+            lineIndex++;
+          }
+
           if (currentSection && currentSection.content.length > 0) {
             sections.push({
               id: `section-${sections.length}`,
@@ -274,24 +394,9 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
               startIndex: currentSection.startIndex,
             });
           }
-          currentSection = { title: headerMatch[1].trim(), content: [], startIndex: lineIndex };
-        } else if (currentSection) {
-          currentSection.content.push(line);
-        } else if (line.trim()) {
-          if (!currentSection) {
-            currentSection = { title: 'Introduction', content: [line], startIndex: lineIndex };
-          }
         }
-        lineIndex++;
-      }
-
-      if (currentSection && currentSection.content.length > 0) {
-        sections.push({
-          id: `section-${sections.length}`,
-          title: currentSection.title,
-          content: currentSection.content.join('\n').trim(),
-          startIndex: currentSection.startIndex,
-        });
+      } catch (fileErr) {
+        console.warn('Could not fetch file from storage for section extraction:', fileErr);
       }
     }
 
@@ -300,6 +405,16 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
         id: 'section-0',
         title: 'Full Document',
         content: fullText,
+        startIndex: 0,
+      });
+    }
+
+    if (sections.length === 0 && document.description) {
+      fullText = document.description;
+      sections.push({
+        id: 'section-0',
+        title: 'Document Description',
+        content: document.description,
         startIndex: 0,
       });
     }

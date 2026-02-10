@@ -44,11 +44,13 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         ordersToMoveToShipping.push(order);
       }
       // Orders with missing stock model or missing action_length need attention
+      // Flattop orders are excluded - they never need attention
       else if (
-        !stockModel ||
+        !order.isFlattop &&
+        (!stockModel ||
         stockModel === '' ||
         !features.action_length ||
-        features.action_length === ''
+        features.action_length === '')
       ) {
         ordersNeedingAttention.push(order);
       }
@@ -1130,6 +1132,7 @@ router.get('/attention', async (req: Request, res: Response) => {
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND o.features->>'po_item_id' IS NULL
+        AND (o.is_flattop IS NULL OR o.is_flattop = false)
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
           (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')

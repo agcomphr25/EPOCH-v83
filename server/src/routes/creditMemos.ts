@@ -12,6 +12,7 @@ import {
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { auditService } from '../services/auditService';
 
 const router = Router();
 
@@ -286,6 +287,24 @@ router.post('/', async (req: Request, res: Response) => {
       .returning();
     
     console.log('Created credit memo:', newMemo.memoNumber);
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: newMemo.memoNumber,
+        action: 'CREDIT_MEMO_CREATED',
+        actor: { username: createdBy || 'System' },
+        meta: {
+          memoNumber: newMemo.memoNumber,
+          customerId,
+          amount,
+          reason,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log credit memo creation:', auditError);
+    }
+
     res.status(201).json(newMemo);
   } catch (error) {
     console.error('Error creating credit memo:', error);
@@ -387,7 +406,26 @@ router.post('/:id/apply', async (req: Request, res: Response) => {
     
     console.log(`Applied $${totalToApply} from credit memo ${memo.memoNumber} to ${createdApplications.length} orders`);
     console.log(`Created ${createdPayments.length} payment records to update order balances`);
-    
+
+    for (const app of createdApplications) {
+      try {
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: app.orderId,
+          action: 'CREDIT_APPLIED',
+          actor: { username: appliedBy },
+          meta: {
+            memoNumber: memo.memoNumber,
+            creditMemoId: parseInt(id),
+            amountApplied: app.amountApplied,
+            remainingBalance: newUnappliedAmount,
+          },
+        });
+      } catch (auditError) {
+        console.error('[Audit] Failed to log credit application:', auditError);
+      }
+    }
+
     res.json({
       success: true,
       message: `Applied $${totalToApply.toFixed(2)} to ${createdApplications.length} order(s)`,
@@ -453,7 +491,22 @@ router.put('/:id', async (req: Request, res: Response) => {
       .set(updateData)
       .where(eq(creditMemos.id, parseInt(id)))
       .returning();
-    
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: existingMemo.memoNumber || String(id),
+        action: 'CREDIT_MEMO_UPDATED',
+        actor: { username: req.user?.username || 'System' },
+        meta: {
+          memoNumber: existingMemo.memoNumber,
+          changes: { reason, notes, status },
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log credit memo update:', auditError);
+    }
+
     res.json(updatedMemo);
   } catch (error) {
     console.error('Error updating credit memo:', error);
@@ -485,7 +538,23 @@ router.delete('/:id', async (req: Request, res: Response) => {
         updatedAt: new Date(),
       })
       .where(eq(creditMemos.id, parseInt(id)));
-    
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: existingMemo.memoNumber || String(id),
+        action: 'CREDIT_MEMO_CANCELLED',
+        actor: { username: req.user?.username || 'System' },
+        meta: {
+          memoNumber: existingMemo.memoNumber,
+          amount: existingMemo.amount,
+          customerId: existingMemo.customerId,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log credit memo cancellation:', auditError);
+    }
+
     res.json({ success: true, message: 'Credit memo cancelled successfully' });
   } catch (error) {
     console.error('Error deleting credit memo:', error);

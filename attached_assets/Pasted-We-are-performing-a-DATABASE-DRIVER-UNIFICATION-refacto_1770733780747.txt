@@ -1,0 +1,110 @@
+We are performing a DATABASE DRIVER UNIFICATION refactor.
+
+GOAL:
+Remove all usage of drizzle-orm/neon-http and standardize the entire app on drizzle-orm/node-postgres.
+
+This is NOT a feature change.
+This is NOT a logic rewrite.
+This is a driver consistency fix.
+
+========================================
+PHASE 1 — IDENTIFY CURRENT DB SETUP
+========================================
+
+1. Open db.ts.
+2. Show:
+   - All imports
+   - How drizzle is initialized
+   - All exported DB instances
+   - Any pgPool or pool definitions
+3. Search entire repo for:
+   - drizzle-orm/neon-http
+   - NeonHttpPreparedQuery
+   - dbPool
+   - any second drizzle instance
+
+Do NOT modify yet.
+Just confirm all usage locations.
+
+========================================
+PHASE 2 — STANDARDIZE TO NODE-POSTGRES
+========================================
+
+We will use:
+
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+
+Steps:
+
+1. In db.ts:
+   - Remove all neon-http imports.
+   - Create a single pg Pool instance.
+   - Initialize ONE drizzle instance using node-postgres.
+   - Export ONLY one db object.
+   - Remove dbPool if it exists.
+   - Remove duplicate drizzle instances.
+
+2. Ensure:
+   - SSL config remains correct.
+   - Connection string remains unchanged.
+   - Environment variables are preserved.
+
+========================================
+PHASE 3 — UPDATE ALL IMPORTS
+========================================
+
+Search entire repo for:
+   - dbPool
+   - alternate db imports
+   - any neon-specific imports
+
+Replace all with the single exported db instance.
+
+There must be:
+   - ONE db instance
+   - ONE driver
+   - ZERO neon-http references
+
+========================================
+PHASE 4 — VERIFY INSERT PATHS
+========================================
+
+Locate:
+   - createFinalizedOrder
+   - finalizeDraftOrder
+   - rtsSales
+   - Any db.insert(allOrders)
+
+Confirm all now use the unified db instance.
+
+========================================
+PHASE 5 — SAFETY CHECKS
+========================================
+
+Before finishing:
+
+1. Confirm there are no remaining neon-http imports.
+2. Confirm no duplicate drizzle instances exist.
+3. Confirm server compiles without errors.
+4. Confirm no type changes were introduced.
+5. Confirm no business logic was altered.
+
+========================================
+OUTPUT REQUIRED
+========================================
+
+Return:
+
+1. Final db.ts file.
+2. List of all modified files.
+3. Confirmation that:
+   - Neon HTTP driver is fully removed
+   - Only node-postgres is used
+   - All insert paths are unified
+   - No logic changes occurred
+
+DO NOT introduce new sanitization logic.
+DO NOT change business logic.
+DO NOT refactor unrelated code.
+ONLY unify the database driver layer.

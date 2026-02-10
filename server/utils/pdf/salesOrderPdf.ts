@@ -510,13 +510,14 @@ export async function generateSalesOrderPDF(
     featureCount += customerNotesLineCount; // Each wrapped line takes a row
   }
   
-  // Calculate height: header (18) + model line (14) + features (14 each) + separator (15) + subtotal (20) + [discount (20)] + shipping (20) + total (25) + padding (15)
-  // Check for discount: pricing summary discounts OR custom discount OR promo code discount
+  // Calculate height: header (18) + model line (14) + features (14 each) + separator (15) + subtotal (20) + [discount lines (20 each)] + shipping (20) + total (25) + padding (15)
   const hasCustomDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
   const hasPromoDiscount = orderData.discountType && orderData.discountType !== 'none' && orderData.discountValue && orderData.discountValue > 0;
   const hasPricingSummaryDiscount = orderData.pricingSummary && orderData.pricingSummary.discounts.length > 0;
+  const pricingSummaryDiscountCount = hasPricingSummaryDiscount ? orderData.pricingSummary!.discounts.length : 0;
   const hasDiscount = hasPricingSummaryDiscount || hasCustomDiscount || hasPromoDiscount;
-  const discountLineHeight = hasDiscount ? 20 : 0;
+  const discountLineCount = hasPricingSummaryDiscount ? pricingSummaryDiscountCount : (hasDiscount ? 1 : 0);
+  const discountLineHeight = discountLineCount * 20;
   const featuresTableHeight = 18 + (featureCount * 14) + 15 + 20 + discountLineHeight + 20 + 25 + 15;
   
   page.drawRectangle({
@@ -898,23 +899,45 @@ export async function generateSalesOrderPDF(
   }
   
   if (discountAmount > 0) {
-    page.drawText(discountLabel, {
-      x: margin + 8,
-      y: summaryLineY,
-      size: 10,
-      font: boldFont,
-      color: rgb(0.8, 0, 0),
-    });
+    if (discountItems.length > 1) {
+      for (const item of discountItems) {
+        page.drawText(item.label, {
+          x: margin + 8,
+          y: summaryLineY,
+          size: 10,
+          font: boldFont,
+          color: rgb(0.8, 0, 0),
+        });
 
-    page.drawText(`-$${discountAmount.toFixed(2)}`, {
-      x: margin + printableWidth - 70,
-      y: summaryLineY,
-      size: 10,
-      font: boldFont,
-      color: rgb(0.8, 0, 0),
-    });
+        page.drawText(`-$${item.amount.toFixed(2)}`, {
+          x: margin + printableWidth - 70,
+          y: summaryLineY,
+          size: 10,
+          font: boldFont,
+          color: rgb(0.8, 0, 0),
+        });
 
-    summaryLineY -= 20;
+        summaryLineY -= 20;
+      }
+    } else {
+      page.drawText(discountLabel, {
+        x: margin + 8,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0.8, 0, 0),
+      });
+
+      page.drawText(`-$${discountAmount.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0.8, 0, 0),
+      });
+
+      summaryLineY -= 20;
+    }
   }
 
   // Shipping - Use pricing summary when available for UI consistency

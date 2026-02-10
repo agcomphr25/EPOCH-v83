@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 import * as schema from '../../schema';
 
@@ -17,11 +17,11 @@ async function migrateEmployeeTrainingMatrixByName() {
     '🚀 Starting employee-specific training matrix migration (matching by name)...\n'
   );
 
-  const devSql = neon(DEV_DATABASE_URL);
-  const devDb = drizzle(devSql, { schema });
+  const devPool = new Pool({ connectionString: DEV_DATABASE_URL });
+  const devDb = drizzle(devPool, { schema });
 
-  const prodSql = neon(PROD_DATABASE_URL);
-  const prodDb = drizzle(prodSql, { schema });
+  const prodPool = new Pool({ connectionString: PROD_DATABASE_URL });
+  const prodDb = drizzle(prodPool, { schema });
 
   try {
     // Step 1: Get all employees from DEV

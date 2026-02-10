@@ -2642,7 +2642,21 @@ export class DatabaseStorage implements IStorage {
 
   // Stock Models CRUD
   async getAllStockModels(): Promise<StockModel[]> {
-    return await db.select().from(stockModels).orderBy(stockModels.sortOrder);
+    // Use pgPool for proper boolean handling - Neon HTTP driver has boolean coercion issues
+    const { pgPool } = await import('./db');
+    const { rows } = await pgPool.query('SELECT id, name, display_name, price, description, handedness, is_active, sort_order, created_at, updated_at FROM stock_models ORDER BY sort_order');
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      displayName: row.display_name || row.name,
+      price: Number(row.price || 0),
+      description: row.description,
+      handedness: row.handedness,
+      isActive: row.is_active === true,
+      sortOrder: row.sort_order ?? 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
   }
 
   async getStockModel(id: string): Promise<StockModel | undefined> {
@@ -2819,12 +2833,19 @@ export class DatabaseStorage implements IStorage {
       const currentPrefix = getCurrentYearMonthPrefix(now);
 
       // Find the highest existing order ID with this prefix to ensure continuity
-      const existingOrders = await db
-        .select({ orderId: allOrders.orderId })
-        .from(allOrders)
-        .where(like(allOrders.orderId, `${currentPrefix}%`))
-        .orderBy(desc(allOrders.orderId))
-        .limit(1);
+      let existingOrders: { orderId: string }[] = [];
+      try {
+        const rawResult = await db
+          .select({ orderId: allOrders.orderId })
+          .from(allOrders)
+          .where(like(allOrders.orderId, `${currentPrefix}%`))
+          .orderBy(desc(allOrders.orderId))
+          .limit(1);
+        existingOrders = rawResult || [];
+      } catch (queryError) {
+        console.warn(`[generateNextOrderId] Query for existing orders failed, starting fresh:`, queryError);
+        existingOrders = [];
+      }
 
       let startSequence = 0;
       if (existingOrders.length > 0) {
@@ -2834,30 +2855,34 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Use atomic INSERT...ON CONFLICT to increment sequence
-      // This is natively atomic in PostgreSQL and works with neon-http driver
-      const [result] = await db
-        .insert(orderIdSequences)
-        .values({
-          yearMonthPrefix: currentPrefix,
-          currentSequence: startSequence + 1,
-          lastUsedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: orderIdSequences.yearMonthPrefix,
-          set: {
-            currentSequence: sql`${orderIdSequences.currentSequence} + 1`,
-            lastUsedAt: now,
-            updatedAt: now,
-          },
-        })
-        .returning();
+      // Use raw SQL for atomic upsert to avoid Neon HTTP driver null issues with RETURNING
+      const upsertResult = await db.execute(sql`
+        INSERT INTO order_id_sequences (year_month_prefix, current_sequence, last_used_at, created_at, updated_at)
+        VALUES (${currentPrefix}, ${startSequence + 1}, NOW(), NOW(), NOW())
+        ON CONFLICT (year_month_prefix) DO UPDATE SET
+          current_sequence = order_id_sequences.current_sequence + 1,
+          last_used_at = NOW(),
+          updated_at = NOW()
+        RETURNING current_sequence
+      `);
 
-      // Format the order ID with prefix and sequence
-      const nextOrderId = formatOrderId(currentPrefix, result.currentSequence);
-      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${result.currentSequence}, prefix: ${currentPrefix})`);
+      let currentSequence: number;
+      if (upsertResult && upsertResult.rows && upsertResult.rows.length > 0) {
+        currentSequence = Number(upsertResult.rows[0].current_sequence);
+      } else {
+        // Fallback: query the table directly
+        const seqResult = await db.execute(sql`
+          SELECT current_sequence FROM order_id_sequences WHERE year_month_prefix = ${currentPrefix}
+        `);
+        if (seqResult && seqResult.rows && seqResult.rows.length > 0) {
+          currentSequence = Number(seqResult.rows[0].current_sequence);
+        } else {
+          currentSequence = startSequence + 1;
+        }
+      }
+
+      const nextOrderId = formatOrderId(currentPrefix, currentSequence);
+      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${currentSequence}, prefix: ${currentPrefix})`);
       return nextOrderId;
 
     } catch (error) {
@@ -3974,14 +3999,9 @@ export class DatabaseStorage implements IStorage {
     const discounts: Array<{ source: string; type: 'percent' | 'fixed'; value: number; amount: number; appliesTo: string }> = [];
 
     // Persistent discount
-    if (order.discountCode && order.discountCode !== 'none') {
-      let discount = null;
-      if (order.discountCode.startsWith('persistent_')) {
-        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        discount = persistentDiscountsData.find((d) => d.id === discountId);
-      } else {
-        discount = persistentDiscountsData.find((d) => d.name === order.discountCode);
-      }
+    if (order.discountCode && order.discountCode !== 'none' && order.discountCode.startsWith('persistent_')) {
+      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+      const discount = persistentDiscountsData.find((d) => d.id === discountId);
 
       if (discount && discount.isActive) {
         let discountAmount = 0;
@@ -4002,6 +4022,37 @@ export class DatabaseStorage implements IStorage {
             value: discountValue,
             amount: discountAmount,
             appliesTo: discount.appliesTo || 'total_order',
+          });
+        }
+      }
+    }
+
+    // Seasonal / short-term discount
+    if (order.discountCode && order.discountCode.startsWith('short_term_')) {
+      const saleId = parseInt(order.discountCode.replace('short_term_', ''));
+      const allSales = await this.getAllShortTermSalesIncludingExpired();
+      const sale = allSales.find((s) => s.id === saleId);
+
+      if (sale && (sale.isActive === 1 || sale.overrideActive)) {
+        const salePercent = sale.percent;
+        const saleAppliesTo = sale.appliesTo || 'total';
+        const afterPriorDiscounts = subtotal - discountTotal;
+
+        let discountAmount = 0;
+        if (saleAppliesTo === 'stock_model') {
+          discountAmount = (basePrice * salePercent) / 100;
+        } else {
+          discountAmount = (afterPriorDiscounts * salePercent) / 100;
+        }
+
+        if (discountAmount > 0) {
+          discountTotal += discountAmount;
+          discounts.push({
+            source: sale.name || 'Seasonal Sale',
+            type: 'percent',
+            value: salePercent,
+            amount: discountAmount,
+            appliesTo: saleAppliesTo === 'stock_model' ? 'stock_model' : 'total_order',
           });
         }
       }
@@ -7967,7 +8018,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Received date cannot be in the future. Received: ${receivedDate.toISOString()}, Current: ${now.toISOString()}`);
     }
 
-    // Note: neon-http driver doesn't support transactions, so we execute queries sequentially
+    // Execute queries sequentially
     // Get the PO line item details
     const [poLineItem] = await db
       .select({
@@ -10506,17 +10557,22 @@ export class DatabaseStorage implements IStorage {
       );
 
       // Try to update in allOrders table first
-      const allOrdersResult = await db
+      await db
         .update(allOrders)
         .set({
           currentDepartment: department,
           status: status,
           updatedAt: new Date(),
         })
-        .where(eq(allOrders.orderId, orderId))
-        .returning();
+        .where(eq(allOrders.orderId, orderId));
 
-      if (allOrdersResult.length > 0) {
+      const [updatedAllOrder] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+
+      if (updatedAllOrder) {
         console.log(
           `✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`
         );
@@ -13864,7 +13920,7 @@ export class DatabaseStorage implements IStorage {
     shipment: InsertShipmentRecord;
     items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord> {
-    // Create the shipment record first (without transaction - neon-http doesn't support transactions)
+    // Create the shipment record first
     const [shipment] = await db
       .insert(shipmentRecords)
       .values(data.shipment)
@@ -14988,15 +15044,15 @@ export class DatabaseStorage implements IStorage {
       featureQuantities: orderData.featureQuantities,
       discountCode: orderData.discountCode || '',
       discountType: orderData.discountType,
-      discountValue: orderData.discountValue,
+      discountValue: (orderData.discountValue !== '' && orderData.discountValue != null) ? Number(orderData.discountValue) : null,
       discountAppliesTo: orderData.discountAppliesTo,
       notes: orderData.notes || '',
       customDiscountType: orderData.customDiscountType || 'percent',
-      customDiscountValue: orderData.customDiscountValue || 0,
+      customDiscountValue: (orderData.customDiscountValue !== '' && orderData.customDiscountValue != null) ? Number(orderData.customDiscountValue) : 0,
       showCustomDiscount: orderData.showCustomDiscount || false,
-      priceOverride: orderData.priceOverride,
-      flattopPriceOverride: orderData.flattopPriceOverride,
-      shipping: orderData.shipping || 0,
+      priceOverride: (orderData.priceOverride !== '' && orderData.priceOverride != null) ? Number(orderData.priceOverride) : null,
+      flattopPriceOverride: (orderData.flattopPriceOverride !== '' && orderData.flattopPriceOverride != null) ? Number(orderData.flattopPriceOverride) : null,
+      shipping: (orderData.shipping !== '' && orderData.shipping != null) ? Number(orderData.shipping) : 0,
       tikkaOption: orderData.tikkaOption,
       status: status,
       statusId: orderData.statusId,
@@ -15022,7 +15078,7 @@ export class DatabaseStorage implements IStorage {
       replacedOrderId: null,
       isPaid: orderData.isPaid || false,
       paymentType: orderData.paymentType,
-      paymentAmount: orderData.paymentAmount,
+      paymentAmount: (orderData.paymentAmount !== '' && orderData.paymentAmount != null) ? Number(orderData.paymentAmount) : null,
       paymentDate: orderData.paymentDate,
       paymentTimestamp: orderData.paymentTimestamp,
       trackingNumber: null,
@@ -15059,8 +15115,23 @@ export class DatabaseStorage implements IStorage {
       hasAttachments: orderData.hasAttachments || false,
     };
 
+    // DEBUG: Log all real-type fields before insert
+    console.log('🔍 REAL-TYPE FIELDS DEBUG:', {
+      shipping: finalizedOrderData.shipping,
+      customDiscountValue: finalizedOrderData.customDiscountValue,
+      priceOverride: finalizedOrderData.priceOverride,
+      flattopPriceOverride: finalizedOrderData.flattopPriceOverride,
+      paymentAmount: finalizedOrderData.paymentAmount,
+      discountValue: finalizedOrderData.discountValue,
+      shippingType: typeof finalizedOrderData.shipping,
+      customDiscountValueType: typeof finalizedOrderData.customDiscountValue,
+      priceOverrideType: typeof finalizedOrderData.priceOverride,
+      flattopPriceOverrideType: typeof finalizedOrderData.flattopPriceOverride,
+      paymentAmountType: typeof finalizedOrderData.paymentAmount,
+      discountValueType: typeof finalizedOrderData.discountValue,
+    });
+
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
     const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
@@ -15354,31 +15425,48 @@ export class DatabaseStorage implements IStorage {
     orderId: string,
     data: Partial<InsertAllOrder>
   ): Promise<AllOrder> {
-    const [order] = await db
-      .update(allOrders)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(allOrders.orderId, orderId))
-      .returning();
+    try {
+      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
+      
+      await db
+        .update(allOrders)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(allOrders.orderId, orderId));
 
-    if (!order) {
-      throw new Error(`Finalized order with ID ${orderId} not found`);
+      const [order] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+
+      if (!order) {
+        throw new Error(`Finalized order with ID ${orderId} not found`);
+      }
+
+      return order;
+    } catch (err: any) {
+      console.error(`[updateFinalizedOrder] Error for ${orderId}:`, err.message);
+      throw err;
     }
-
-    return order;
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
     // Update the order to be fulfilled and move to shipping management
-    const [order] = await db
+    await db
       .update(allOrders)
       .set({
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
-        shippedDate: new Date(), // Set shipped date to current date when fulfilled
+        shippedDate: new Date(),
         updatedAt: new Date(),
       })
+      .where(eq(allOrders.orderId, orderId));
+
+    const [order] = await db
+      .select()
+      .from(allOrders)
       .where(eq(allOrders.orderId, orderId))
-      .returning();
+      .limit(1);
 
     if (!order) {
       throw new Error(`Order with ID ${orderId} not found`);

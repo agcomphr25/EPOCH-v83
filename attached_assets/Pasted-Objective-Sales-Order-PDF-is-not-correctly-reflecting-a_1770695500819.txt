@@ -1,0 +1,153 @@
+Objective:
+Sales Order PDF is not correctly reflecting all discount types.
+
+We support:
+- Persistent discounts (persistent_discounts table)
+- Seasonal / short-term sales (short_term_sales table)
+- Custom CSR discounts (customDiscountType + customDiscountValue)
+- Possibly promo code discounts
+
+We need a full trace of how EACH discount type is:
+1) Detected
+2) Calculated
+3) Combined
+4) Passed into the PDF
+5) Rendered
+
+DO NOT implement fixes yet.
+This is diagnosis only.
+
+---
+
+PART 1 — Confirm Raw Discount Data on Order
+
+For the order being tested, log and paste:
+
+From the orders table:
+- discountCode
+- customDiscountType
+- customDiscountValue
+- showCustomDiscount
+- priceOverride
+- Any seasonal sale reference field (if exists)
+
+Also confirm:
+- Whether this customer qualifies for a persistent discount
+- Whether a seasonal sale is active for this order
+
+---
+
+PART 2 — Trace resolveOrderPricingSummary()
+
+Inside resolveOrderPricingSummary(orderId), log and paste:
+
+{
+  basePrice,
+  basePriceSource,
+  featuresTotal,
+  subtotal,
+  discounts,          // FULL array of discount objects
+  discountTotal,
+  shipping,
+  finalTotal
+}
+
+For each discount in the discounts array, include:
+- source (Persistent, Seasonal, Custom, Promo)
+- type (percent or fixed)
+- value (e.g., 20%)
+- calculated dollar amount
+- appliesTo (stock_model or total_order)
+
+Explicitly confirm:
+- Are seasonal discounts being included?
+- Are persistent discounts being included?
+- Are both combined correctly?
+- Is discountTotal the SUM of all applicable discounts?
+
+---
+
+PART 3 — Confirm Discount Precedence Order
+
+Log the order in which discounts are applied:
+
+For example:
+1. Persistent discount
+2. Seasonal discount
+3. Custom discount
+
+Confirm:
+- Whether seasonal discounts override persistent discounts
+- Whether they stack
+- Whether only one applies
+
+We need the exact stacking behavior.
+
+---
+
+PART 4 — Snapshot Trace
+
+Inside createOrderSnapshot():
+
+Log:
+- snapshot.pricingSummary
+- Confirm snapshot.pricingSummary.discounts
+- Confirm snapshot.pricingSummary.discountTotal
+
+Confirm:
+- Is the snapshot including seasonal discounts?
+- Is snapshot missing any discount types?
+
+---
+
+PART 5 — PDF Input Trace
+
+Immediately before generateSalesOrderPdf():
+
+Log:
+{
+  pricingSummary: orderData.pricingSummary,
+  discountTotal: orderData.pricingSummary?.discountTotal,
+  discounts: orderData.pricingSummary?.discounts
+}
+
+Confirm:
+- Is pricingSummary undefined?
+- Is discounts array empty?
+- Is discountTotal zero?
+
+---
+
+PART 6 — PDF Rendering Trace
+
+Inside salesOrderPdf.ts:
+
+1. Log whether pricingSummary exists
+2. Log discountTotal being used
+3. Log finalTotal being used
+4. Confirm whether any discount breakdown is rendered on the PDF
+5. Confirm whether legacy fallback calculation is being used
+
+---
+
+PART 7 — Intent Path Confirmation
+
+Log:
+- PDF intent used (CUSTOMER_VIEW, SHIPPING_PRINT, SIGNATURE_EMAIL, etc.)
+- Whether pricing is live or snapshot
+- If snapshot is used, confirm snapshot creation date
+
+---
+
+Goal:
+Determine whether:
+
+A) Seasonal discounts are never detected
+B) Seasonal discounts are detected but not included in pricingSummary
+C) pricingSummary is correct but snapshot drops discount data
+D) PDF is using legacy fallback math
+E) Discount stacking logic is incorrect
+F) Only one discount type is being applied when multiple should stack
+
+Do not implement changes yet.
+Provide logs and file names only.

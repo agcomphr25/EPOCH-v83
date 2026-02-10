@@ -828,46 +828,21 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Handle bulk print all - opens merged PDF with all sales orders and QC checklists
-  const handleBulkPrintAll = async () => {
+  // Handle bulk print all - opens individual PDFs for sales orders and QC checklists
+  const handleBulkPrintAll = () => {
     if (selectedOrders.size === 0) return;
 
     const orderIds = Array.from(selectedOrders);
+    const queue: { orderId: string; type: 'sales' | 'qc' }[] = [];
     
-    toast({
-      title: 'Generating Documents',
-      description: `Preparing ${orderIds.length * 2} documents for printing...`,
+    orderIds.forEach((orderId) => {
+      queue.push({ orderId, type: 'sales' });
+      queue.push({ orderId, type: 'qc' });
     });
 
-    // Call the bulk print endpoint to get merged PDF
-    try {
-      const response = await fetch('/api/shipping-pdf/bulk-print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate bulk PDF');
-      }
-
-      // Create a blob URL and open it
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-
-      toast({
-        title: 'Documents Ready',
-        description: `Opened ${orderIds.length} orders (${orderIds.length * 2} pages) for printing`,
-      });
-    } catch (error) {
-      console.error('Bulk print error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate bulk print document',
-        variant: 'destructive',
-      });
-    }
+    setPrintQueue(queue);
+    setCurrentPrintIndex(0);
+    setShowBulkPrintModal(true);
   };
 
   // Open current PDF in queue

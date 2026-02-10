@@ -2819,12 +2819,19 @@ export class DatabaseStorage implements IStorage {
       const currentPrefix = getCurrentYearMonthPrefix(now);
 
       // Find the highest existing order ID with this prefix to ensure continuity
-      const existingOrders = await db
-        .select({ orderId: allOrders.orderId })
-        .from(allOrders)
-        .where(like(allOrders.orderId, `${currentPrefix}%`))
-        .orderBy(desc(allOrders.orderId))
-        .limit(1);
+      let existingOrders: { orderId: string }[] = [];
+      try {
+        const rawResult = await db
+          .select({ orderId: allOrders.orderId })
+          .from(allOrders)
+          .where(like(allOrders.orderId, `${currentPrefix}%`))
+          .orderBy(desc(allOrders.orderId))
+          .limit(1);
+        existingOrders = rawResult || [];
+      } catch (queryError) {
+        console.warn(`[generateNextOrderId] Query for existing orders failed, starting fresh:`, queryError);
+        existingOrders = [];
+      }
 
       let startSequence = 0;
       if (existingOrders.length > 0) {
@@ -2834,30 +2841,34 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Use atomic INSERT...ON CONFLICT to increment sequence
-      // This is natively atomic in PostgreSQL and works with neon-http driver
-      const [result] = await db
-        .insert(orderIdSequences)
-        .values({
-          yearMonthPrefix: currentPrefix,
-          currentSequence: startSequence + 1,
-          lastUsedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: orderIdSequences.yearMonthPrefix,
-          set: {
-            currentSequence: sql`${orderIdSequences.currentSequence} + 1`,
-            lastUsedAt: now,
-            updatedAt: now,
-          },
-        })
-        .returning();
+      // Use raw SQL for atomic upsert to avoid Neon HTTP driver null issues with RETURNING
+      const upsertResult = await db.execute(sql`
+        INSERT INTO order_id_sequences (year_month_prefix, current_sequence, last_used_at, created_at, updated_at)
+        VALUES (${currentPrefix}, ${startSequence + 1}, NOW(), NOW(), NOW())
+        ON CONFLICT (year_month_prefix) DO UPDATE SET
+          current_sequence = order_id_sequences.current_sequence + 1,
+          last_used_at = NOW(),
+          updated_at = NOW()
+        RETURNING current_sequence
+      `);
 
-      // Format the order ID with prefix and sequence
-      const nextOrderId = formatOrderId(currentPrefix, result.currentSequence);
-      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${result.currentSequence}, prefix: ${currentPrefix})`);
+      let currentSequence: number;
+      if (upsertResult && upsertResult.rows && upsertResult.rows.length > 0) {
+        currentSequence = Number(upsertResult.rows[0].current_sequence);
+      } else {
+        // Fallback: query the table directly
+        const seqResult = await db.execute(sql`
+          SELECT current_sequence FROM order_id_sequences WHERE year_month_prefix = ${currentPrefix}
+        `);
+        if (seqResult && seqResult.rows && seqResult.rows.length > 0) {
+          currentSequence = Number(seqResult.rows[0].current_sequence);
+        } else {
+          currentSequence = startSequence + 1;
+        }
+      }
+
+      const nextOrderId = formatOrderId(currentPrefix, currentSequence);
+      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${currentSequence}, prefix: ${currentPrefix})`);
       return nextOrderId;
 
     } catch (error) {

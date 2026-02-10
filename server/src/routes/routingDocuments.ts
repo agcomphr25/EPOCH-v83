@@ -519,6 +519,63 @@ router.post('/extract-text', async (req: Request, res: Response) => {
   }
 });
 
+// Extract text from a stored document by ID (for AI analysis of already-imported documents)
+router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
+  try {
+    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, description, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const rows = (results as any)?.rows || results || [];
+    const document = rows[0];
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    let extractedText = '';
+
+    // First try to get text from AI extracted content if available
+    if (document.ai_extracted_content) {
+      const content = typeof document.ai_extracted_content === 'string'
+        ? JSON.parse(document.ai_extracted_content)
+        : document.ai_extracted_content;
+      if (content.fullText) {
+        extractedText = content.fullText;
+      } else {
+        extractedText = JSON.stringify(content, null, 2);
+      }
+    }
+
+    // If no extracted content, try downloading from object storage
+    if (!extractedText.trim() && document.file_url) {
+      try {
+        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        const fileType = (document.file_type || document.file_name || '').toLowerCase();
+        if (fileType.includes('pdf')) {
+          extractedText = await extractPdfText(fileBuffer);
+        } else {
+          extractedText = fileBuffer.toString('utf-8');
+        }
+      } catch (dlError) {
+        console.error('Error downloading stored file for text extraction:', dlError);
+      }
+    }
+
+    // Fall back to description
+    if (!extractedText.trim() && document.description) {
+      extractedText = document.description;
+    }
+
+    res.json({
+      extractedText,
+      extractedLength: extractedText.length,
+      fileName: document.file_name || document.title,
+      hasStoredFile: !!document.file_url,
+    });
+  } catch (error) {
+    console.error('Error extracting text from stored document:', error);
+    res.status(500).json({ error: 'Failed to extract text from stored document' });
+  }
+});
+
 // Create document without file (metadata only)
 router.post('/create', async (req: Request, res: Response) => {
   try {

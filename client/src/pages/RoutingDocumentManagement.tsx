@@ -352,6 +352,23 @@ export default function RoutingDocumentManagement() {
     });
   };
 
+  const loadStoredDocumentText = async (docId: string) => {
+    setIsExtractingText(true);
+    try {
+      const response = await apiRequest(`/api/routing-documents/${docId}/extract-stored-text`, {
+        method: 'GET',
+      });
+      if (response.extractedText && response.extractedText.trim()) {
+        setParseContent(response.extractedText);
+        toast({ title: 'Document Text Loaded', description: `Loaded ${response.extractedLength} characters from stored document` });
+      }
+    } catch (error: any) {
+      console.error('Failed to load stored document text:', error);
+    } finally {
+      setIsExtractingText(false);
+    }
+  };
+
   const handleParseFileSelect = async (file: File) => {
     setParseFile(file);
     setIsExtractingText(true);
@@ -582,6 +599,9 @@ export default function RoutingDocumentManagement() {
                               onClick={() => {
                                 setSelectedDocument(doc);
                                 setShowParseDialog(true);
+                                if (doc.fileUrl) {
+                                  loadStoredDocumentText(doc.id);
+                                }
                               }}
                             >
                               <Brain className="h-4 w-4" />
@@ -828,7 +848,13 @@ export default function RoutingDocumentManagement() {
                 {isExtractingText ? (
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <span className="text-sm text-muted-foreground">Extracting text from PDF...</span>
+                    <span className="text-sm text-muted-foreground">Loading document text...</span>
+                  </div>
+                ) : parseContent && !parseFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                    <span className="text-sm font-medium">Document text loaded from storage</span>
+                    <span className="text-xs text-muted-foreground">Click to upload a different file instead</span>
                   </div>
                 ) : parseFile ? (
                   <div className="flex flex-col items-center gap-2">
@@ -1142,6 +1168,9 @@ export default function RoutingDocumentManagement() {
               <Button onClick={() => {
                 setShowViewDialog(false);
                 setShowParseDialog(true);
+                if (selectedDocument.fileUrl) {
+                  loadStoredDocumentText(selectedDocument.id);
+                }
               }}>
                 <Brain className="h-4 w-4 mr-2" />
                 Analyze with AI

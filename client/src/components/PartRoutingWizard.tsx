@@ -62,6 +62,7 @@ import {
   Search,
   Eye,
   CheckSquare,
+  Settings,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -325,8 +326,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
   const [ovenTimeInput, setOvenTimeInput] = useState<string>('');
   
+  const [showStdProcessDialog, setShowStdProcessDialog] = useState(false);
+  const [stdProcessDept, setStdProcessDept] = useState<string>('');
+  const [stdProcessEditIdx, setStdProcessEditIdx] = useState<number | null>(null);
   const [stdProcessName, setStdProcessName] = useState<string>('');
   const [stdProcessDescription, setStdProcessDescription] = useState<string>('');
+  const [stdTechnicianId, setStdTechnicianId] = useState<string>('');
+  const [stdMaterialSearch, setStdMaterialSearch] = useState<string>('');
+  const [stdQcStandard, setStdQcStandard] = useState<string>('');
+  const [stdQcTolerance, setStdQcTolerance] = useState<string>('');
+  const [stdQcRequirement, setStdQcRequirement] = useState<string>('');
+  const [stdFieldName, setStdFieldName] = useState<string>('');
+  const [stdFieldType, setStdFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
+  const [stdFieldRequired, setStdFieldRequired] = useState<boolean>(false);
 
   // UI state for special process dialog
   const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
@@ -917,19 +929,179 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addStandardProcess = (dept: string) => {
-    if (!stdProcessName.trim() || selectedDeptForConfig !== dept) return;
+  const getStdProcessConfig = (dept: string, idx: number): StandardProcessConfig => {
     const config = getOrCreateDeptConfig(dept);
-    const existing = config.standardProcesses || [];
+    const proc = config.standardProcesses?.[idx];
+    return proc?.config || {
+      processName: proc?.name || '',
+      notes: proc?.description || '',
+      requiredTechnicianId: null,
+      materials: [],
+      qcStandards: [],
+      customDataFields: [],
+    };
+  };
+
+  const updateStdProcessConfig = (updates: Partial<StandardProcessConfig>) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const config = getOrCreateDeptConfig(stdProcessDept);
+    const procs = [...(config.standardProcesses || [])];
+    const proc = procs[stdProcessEditIdx];
+    if (!proc) return;
+    const currentConfig = proc.config || {
+      processName: proc.name,
+      notes: proc.description,
+      requiredTechnicianId: null,
+      materials: [],
+      qcStandards: [],
+      customDataFields: [],
+    };
+    procs[stdProcessEditIdx] = {
+      ...proc,
+      config: { ...currentConfig, ...updates },
+    };
+    if (updates.processName !== undefined) procs[stdProcessEditIdx].name = updates.processName;
+    if (updates.notes !== undefined) procs[stdProcessEditIdx].description = updates.notes;
     setDepartmentConfig({
       ...departmentConfig,
-      [dept]: {
-        ...config,
-        standardProcesses: [...existing, { name: stdProcessName.trim(), description: stdProcessDescription.trim() }],
-      },
+      [stdProcessDept]: { ...config, standardProcesses: procs },
     });
+  };
+
+  const addStdMaterial = (item: InventoryItem) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    if (cfg.materials.some(m => m.partId === item.id)) {
+      toast({ title: 'Material already added', variant: 'destructive' });
+      return;
+    }
+    updateStdProcessConfig({
+      materials: [...cfg.materials, {
+        partId: item.id,
+        partNumber: item.agPartNumber,
+        partName: item.name,
+        requiredFields: [],
+        entryMethod: 'manual',
+      }],
+    });
+    setStdMaterialSearch('');
+  };
+
+  const removeStdMaterial = (partId: string) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({ materials: cfg.materials.filter(m => m.partId !== partId) });
+  };
+
+  const toggleStdMaterialField = (partId: string, fieldId: string) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({
+      materials: cfg.materials.map(m => {
+        if (m.partId === partId) {
+          const fields = m.requiredFields.includes(fieldId)
+            ? m.requiredFields.filter(f => f !== fieldId)
+            : [...m.requiredFields, fieldId];
+          return { ...m, requiredFields: fields };
+        }
+        return m;
+      }),
+    });
+  };
+
+  const addStdQcStandard = () => {
+    if (!stdQcStandard.trim() || !stdQcTolerance.trim() || !stdQcRequirement.trim()) return;
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({
+      qcStandards: [...cfg.qcStandards, {
+        standard: stdQcStandard.trim(),
+        tolerance: stdQcTolerance.trim(),
+        requirement: stdQcRequirement.trim(),
+      }],
+    });
+    setStdQcStandard('');
+    setStdQcTolerance('');
+    setStdQcRequirement('');
+  };
+
+  const removeStdQcStandard = (index: number) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({ qcStandards: cfg.qcStandards.filter((_, i) => i !== index) });
+  };
+
+  const addStdCustomField = () => {
+    if (!stdFieldName.trim()) return;
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({
+      customDataFields: [...cfg.customDataFields, {
+        fieldName: stdFieldName.trim(),
+        fieldType: stdFieldType,
+        isRequired: stdFieldRequired,
+      }],
+    });
+    setStdFieldName('');
+    setStdFieldType('text');
+    setStdFieldRequired(false);
+  };
+
+  const removeStdCustomField = (index: number) => {
+    if (!stdProcessDept || stdProcessEditIdx === null) return;
+    const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+    updateStdProcessConfig({ customDataFields: cfg.customDataFields.filter((_, i) => i !== index) });
+  };
+
+  const openStdProcessDialog = (dept: string, idx: number) => {
+    const cfg = getStdProcessConfig(dept, idx);
+    setStdProcessDept(dept);
+    setStdProcessEditIdx(idx);
+    setStdProcessName(cfg.processName);
+    setStdProcessDescription(cfg.notes);
+    setStdTechnicianId(cfg.requiredTechnicianId?.toString() || '');
+    setShowStdProcessDialog(true);
+  };
+
+  const openNewStdProcessDialog = (dept: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    const procs = config.standardProcesses || [];
+    const newIdx = procs.length;
+    const newProc: StandardProcess = {
+      name: '',
+      description: '',
+      config: {
+        processName: '',
+        notes: '',
+        requiredTechnicianId: null,
+        materials: [],
+        qcStandards: [],
+        customDataFields: [],
+      },
+    };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, standardProcesses: [...procs, newProc] },
+    });
+    setStdProcessDept(dept);
+    setStdProcessEditIdx(newIdx);
     setStdProcessName('');
     setStdProcessDescription('');
+    setStdTechnicianId('');
+    setShowStdProcessDialog(true);
+  };
+
+  const clearStdInputState = () => {
+    setStdProcessName('');
+    setStdProcessDescription('');
+    setStdTechnicianId('');
+    setStdMaterialSearch('');
+    setStdQcStandard('');
+    setStdQcTolerance('');
+    setStdQcRequirement('');
+    setStdFieldName('');
+    setStdFieldType('text');
+    setStdFieldRequired(false);
   };
 
   const removeStandardProcess = (dept: string, idx: number) => {
@@ -2203,42 +2375,41 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   Standard Processes ({config.standardProcesses?.length || 0})
                                 </h4>
                                 <p className="text-xs text-muted-foreground mb-3">
-                                  Routine operations performed at this department (e.g. sanding, trimming, drilling).
+                                  Routine operations performed at this department (e.g. lathe wrapping, sanding, trimming).
                                 </p>
                                 {config.standardProcesses && config.standardProcesses.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.standardProcesses.map((proc, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background border-l-4 border-l-blue-400">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium">{proc.name}</p>
-                                          {proc.description && <p className="text-[10px] text-muted-foreground">{proc.description}</p>}
+                                      <Card key={idx} className="p-3 bg-muted/30 border-l-4 border-l-blue-500">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-sm">{proc.name || '(Unnamed Process)'}</p>
+                                            {proc.description && <p className="text-[10px] text-muted-foreground mt-0.5">{proc.description}</p>}
+                                            <div className="flex gap-3 text-[10px] text-muted-foreground mt-1">
+                                              <span>Materials: {proc.config?.materials?.length || 0}</span>
+                                              <span>QC: {proc.config?.qcStandards?.length || 0}</span>
+                                              <span>Fields: {proc.config?.customDataFields?.length || 0}</span>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            {proc.config?.requiredTechnicianId && (
+                                              <Badge variant="default" className="text-[10px]">Tech Assigned</Badge>
+                                            )}
+                                            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openStdProcessDialog(dept, idx)}>
+                                              <Settings className="h-3 w-3 mr-1" /> Edit
+                                            </Button>
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => removeStandardProcess(dept, idx)}>
+                                              <X className="h-3 w-3" />
+                                            </Button>
+                                          </div>
                                         </div>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStandardProcess(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
+                                      </Card>
                                     ))}
                                   </div>
                                 )}
-                                <div className="space-y-2">
-                                  <Input
-                                    placeholder="Process name (e.g. Sanding, Trimming)"
-                                    value={selectedDeptForConfig === dept ? stdProcessName : ''}
-                                    onChange={(e) => { setSelectedDeptForConfig(dept); setStdProcessName(e.target.value); }}
-                                    onFocus={() => setSelectedDeptForConfig(dept)}
-                                    className="text-sm"
-                                  />
-                                  <Input
-                                    placeholder="Description (optional)"
-                                    value={selectedDeptForConfig === dept ? stdProcessDescription : ''}
-                                    onChange={(e) => { setSelectedDeptForConfig(dept); setStdProcessDescription(e.target.value); }}
-                                    onFocus={() => setSelectedDeptForConfig(dept)}
-                                    className="text-sm"
-                                  />
-                                  <Button size="sm" onClick={() => addStandardProcess(dept)} disabled={!stdProcessName.trim() || selectedDeptForConfig !== dept}>
-                                    <Plus className="h-4 w-4 mr-1" /> Add Standard Process
-                                  </Button>
-                                </div>
+                                <Button size="sm" variant="outline" onClick={() => openNewStdProcessDialog(dept)}>
+                                  <Plus className="h-4 w-4 mr-1" /> Add Standard Process
+                                </Button>
                               </div>
 
                               {/* Special Process */}
@@ -3200,6 +3371,331 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
             >
               <Check className="mr-2 h-4 w-4" />
               Save Special Process
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showStdProcessDialog} onOpenChange={(open) => {
+        if (!open) {
+          if (stdProcessDept && stdProcessEditIdx !== null) {
+            const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+            if (!cfg.processName?.trim()) {
+              removeStandardProcess(stdProcessDept, stdProcessEditIdx);
+            }
+          }
+          clearStdInputState();
+          setStdProcessDept('');
+          setStdProcessEditIdx(null);
+        }
+        setShowStdProcessDialog(open);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Configure Standard Process
+            </DialogTitle>
+            <DialogDescription>
+              Configure process with materials, QC standards, custom data fields, and optional technician assignment
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-6 py-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="std-process-name">Process Name *</Label>
+                  <Input
+                    id="std-process-name"
+                    placeholder="e.g., Lathe Wrapping, Sanding, Trimming..."
+                    value={stdProcessName}
+                    onChange={(e) => {
+                      setStdProcessName(e.target.value);
+                      updateStdProcessConfig({ processName: e.target.value });
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4" />
+                    Assigned Technician
+                    <Badge variant="outline" className="text-xs">Optional</Badge>
+                  </Label>
+                  <Select
+                    value={stdTechnicianId || 'NONE'}
+                    onValueChange={(val) => {
+                      setStdTechnicianId(val);
+                      updateStdProcessConfig({
+                        requiredTechnicianId: val === 'NONE' ? null : parseInt(val),
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select technician (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">-- No Technician --</SelectItem>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          {emp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label htmlFor="std-notes">Process Instructions</Label>
+                <Textarea
+                  id="std-notes"
+                  placeholder="Enter process details, requirements, and instructions..."
+                  value={stdProcessDept && stdProcessEditIdx !== null ? (getStdProcessConfig(stdProcessDept, stdProcessEditIdx).notes || '') : ''}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                    updateStdProcessConfig({ notes: e.target.value });
+                  }}
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Materials Requiring Traceability ({stdProcessDept && stdProcessEditIdx !== null ? getStdProcessConfig(stdProcessDept, stdProcessEditIdx).materials.length : 0})
+                </h4>
+
+                {stdProcessDept && stdProcessEditIdx !== null && getStdProcessConfig(stdProcessDept, stdProcessEditIdx).materials.length > 0 && (
+                  <div className="space-y-2">
+                    {getStdProcessConfig(stdProcessDept, stdProcessEditIdx).materials.map((material) => (
+                      <Card key={material.partId} className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-mono text-sm">{material.partNumber}</p>
+                            <p className="text-xs text-muted-foreground">{material.partName}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStdMaterial(material.partId)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {TRACEABILITY_FIELDS.map((field) => (
+                            <Badge
+                              key={field.id}
+                              variant={material.requiredFields.includes(field.id) ? "default" : "outline"}
+                              className="cursor-pointer text-xs"
+                              onClick={() => toggleStdMaterialField(material.partId, field.id)}
+                            >
+                              {field.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-sm mb-2 block">Add Material:</Label>
+                  <Input
+                    placeholder="Search inventory..."
+                    value={stdMaterialSearch}
+                    onChange={(e) => setStdMaterialSearch(e.target.value)}
+                    className="mb-2"
+                  />
+                  {stdMaterialSearch && (
+                    <ScrollArea className="h-32 border rounded">
+                      {inventoryItems
+                        .filter(item =>
+                          (item.agPartNumber?.toLowerCase() || '').includes(stdMaterialSearch.toLowerCase()) ||
+                          (item.name?.toLowerCase() || '').includes(stdMaterialSearch.toLowerCase())
+                        )
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-2 hover:bg-muted cursor-pointer"
+                            onClick={() => addStdMaterial(item)}
+                          >
+                            <p className="font-mono text-sm">{item.agPartNumber}</p>
+                            <p className="text-xs text-muted-foreground">{item.name}</p>
+                          </div>
+                        ))}
+                    </ScrollArea>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-semibold">QC Standards ({stdProcessDept && stdProcessEditIdx !== null ? getStdProcessConfig(stdProcessDept, stdProcessEditIdx).qcStandards.length : 0})</h4>
+
+                {stdProcessDept && stdProcessEditIdx !== null && getStdProcessConfig(stdProcessDept, stdProcessEditIdx).qcStandards.length > 0 && (
+                  <div className="space-y-2">
+                    {getStdProcessConfig(stdProcessDept, stdProcessEditIdx).qcStandards.map((qc, idx) => (
+                      <Card key={idx} className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-sm">{qc.standard}</p>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStdQcStandard(idx)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Tolerance:</span>
+                            <p className="font-mono">{qc.tolerance}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Requirement:</span>
+                            <p className="font-mono">{qc.requirement}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="QC Standard (e.g., Surface Finish)"
+                    value={stdQcStandard}
+                    onChange={(e) => setStdQcStandard(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Tolerance (e.g., ±0.001 in)"
+                    value={stdQcTolerance}
+                    onChange={(e) => setStdQcTolerance(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Requirement (e.g., 32 Ra max)"
+                    value={stdQcRequirement}
+                    onChange={(e) => setStdQcRequirement(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={addStdQcStandard}
+                    disabled={!stdQcStandard.trim() || !stdQcTolerance.trim() || !stdQcRequirement.trim()}
+                  >
+                    Add QC Standard
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-semibold">Custom Data Fields ({stdProcessDept && stdProcessEditIdx !== null ? getStdProcessConfig(stdProcessDept, stdProcessEditIdx).customDataFields.length : 0})</h4>
+                <p className="text-sm text-muted-foreground">
+                  Define custom data entry fields technicians must complete during this process
+                </p>
+
+                {stdProcessDept && stdProcessEditIdx !== null && getStdProcessConfig(stdProcessDept, stdProcessEditIdx).customDataFields.length > 0 && (
+                  <div className="space-y-2">
+                    {getStdProcessConfig(stdProcessDept, stdProcessEditIdx).customDataFields.map((field, idx) => (
+                      <Card key={idx} className="p-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{field.fieldName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Type: {field.fieldType} {field.isRequired && <Badge variant="secondary" className="ml-1">Required</Badge>}
+                            </p>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStdCustomField(idx)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Field Name (e.g., Temperature Reading)"
+                    value={stdFieldName}
+                    onChange={(e) => setStdFieldName(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Select value={stdFieldType} onValueChange={(v: 'text' | 'number' | 'date' | 'textarea') => setStdFieldType(v)}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="textarea">Text Area</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="std-field-required"
+                        checked={stdFieldRequired}
+                        onCheckedChange={(checked) => setStdFieldRequired(checked === true)}
+                      />
+                      <Label htmlFor="std-field-required" className="text-sm">Required</Label>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={addStdCustomField}
+                    disabled={!stdFieldName.trim()}
+                  >
+                    Add Custom Field
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (stdProcessDept && stdProcessEditIdx !== null) {
+                  const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+                  if (!cfg.processName?.trim()) {
+                    removeStandardProcess(stdProcessDept, stdProcessEditIdx);
+                  }
+                }
+                clearStdInputState();
+                setShowStdProcessDialog(false);
+                setStdProcessDept('');
+                setStdProcessEditIdx(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (stdProcessDept && stdProcessEditIdx !== null) {
+                  const cfg = getStdProcessConfig(stdProcessDept, stdProcessEditIdx);
+                  if (!cfg.processName?.trim()) {
+                    toast({
+                      title: 'Process Name Required',
+                      description: 'Please enter a process name',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                }
+                clearStdInputState();
+                setShowStdProcessDialog(false);
+                setStdProcessDept('');
+                setStdProcessEditIdx(null);
+                toast({
+                  title: 'Standard Process Saved',
+                  description: `Process configured successfully`,
+                });
+              }}
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Save Standard Process
             </Button>
           </DialogFooter>
         </DialogContent>

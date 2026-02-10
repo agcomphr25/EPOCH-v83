@@ -65,6 +65,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
+import StartProductionTimerModal from '@/components/StartProductionTimerModal';
+import { Timer } from 'lucide-react';
 
 interface TravelerTaskField {
   id: string;
@@ -242,6 +244,8 @@ export default function TravelerExecution() {
   const [instructionSheetTaskId, setInstructionSheetTaskId] = useState<string | null>(null);
   const [wiModalOpen, setWiModalOpen] = useState(false);
   const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
+  const [showTimerModal, setShowTimerModal] = useState(false);
+  const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -280,6 +284,34 @@ export default function TravelerExecution() {
   });
 
   const { traveler, steps = [], events = [] } = travelerData || {};
+
+  interface PartRoutingData {
+    id: string;
+    partNumber: string;
+    departmentConfig?: Record<string, {
+      timerConfig?: {
+        enabled: boolean;
+        defaultProgramId?: string;
+        defaultProgramName?: string;
+      };
+    }>;
+  }
+
+  const { data: partRoutings = [] } = useQuery<PartRoutingData[]>({
+    queryKey: ['/api/part-routings'],
+    enabled: !!traveler?.partNumber,
+  });
+
+  const currentPartRouting = partRoutings.find(
+    (r) => r.partNumber === traveler?.partNumber
+  );
+
+  const getTimerConfigForDepartment = (departmentName: string) => {
+    if (!currentPartRouting?.departmentConfig) return null;
+    const deptConfig = currentPartRouting.departmentConfig[departmentName];
+    if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
+    return null;
+  };
 
   useEffect(() => {
     if (steps.length > 0 && !currentStepId) {
@@ -737,6 +769,7 @@ export default function TravelerExecution() {
                               </p>
                             </div>
                           ) : (
+                            <>
                             <Accordion 
                               type="multiple" 
                               defaultValue={phaseTasks.map((t) => t.id)}
@@ -1002,6 +1035,46 @@ export default function TravelerExecution() {
                                 );
                               })}
                             </Accordion>
+
+                            {phase === 'WORK' && (() => {
+                              const timerConfig = getTimerConfigForDepartment(currentStep.departmentName);
+                              if (!timerConfig) return null;
+                              const stepTimerStarted = timerStartedForStep[currentStep.id];
+                              return (
+                                <div className="mx-4 my-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Timer className="h-5 w-5 text-amber-600" />
+                                      <div>
+                                        <p className="font-medium text-amber-800 text-sm">Production Timer</p>
+                                        <p className="text-xs text-amber-600">
+                                          {timerConfig.defaultProgramName
+                                            ? `Program: ${timerConfig.defaultProgramName}`
+                                            : 'Start a timer on the timer station'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {stepTimerStarted ? (
+                                      <Badge className="bg-green-100 text-green-700 border-green-300">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Timer Running
+                                      </Badge>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                                        onClick={() => setShowTimerModal(true)}
+                                      >
+                                        <Timer className="h-4 w-4 mr-1" />
+                                        Start Timer
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            </>
                           )}
                         </div>
                       );
@@ -1387,6 +1460,26 @@ export default function TravelerExecution() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {traveler && currentStep && (
+        <StartProductionTimerModal
+          open={showTimerModal}
+          onOpenChange={setShowTimerModal}
+          defaultSerialNumber={traveler.serialNumber || traveler.lotNumber || ''}
+          defaultProgramId={getTimerConfigForDepartment(currentStep.departmentName)?.defaultProgramId}
+          navigateToStation={false}
+          onTimerStarted={() => {
+            setTimerStartedForStep((prev) => ({
+              ...prev,
+              [currentStep.id]: true,
+            }));
+            toast({
+              title: 'Timer Started',
+              description: 'Timer is now running on the timer station. You may continue with traveler tasks.',
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

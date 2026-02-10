@@ -35,11 +35,19 @@ interface ProductionProgram {
 interface StartProductionTimerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultSerialNumber?: string;
+  defaultProgramId?: string;
+  onTimerStarted?: () => void;
+  navigateToStation?: boolean;
 }
 
 export default function StartProductionTimerModal({
   open,
   onOpenChange,
+  defaultSerialNumber,
+  defaultProgramId,
+  onTimerStarted,
+  navigateToStation = true,
 }: StartProductionTimerModalProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -70,8 +78,16 @@ export default function StartProductionTimerModal({
 
   useEffect(() => {
     if (open) {
+      if (defaultSerialNumber) {
+        setSerialNumber(defaultSerialNumber);
+      }
+      if (defaultProgramId) {
+        setProgramId(defaultProgramId);
+      }
       setTimeout(() => {
-        serialInputRef.current?.focus();
+        if (!defaultSerialNumber) {
+          serialInputRef.current?.focus();
+        }
       }, 100);
     } else {
       stopScanning();
@@ -83,7 +99,7 @@ export default function StartProductionTimerModal({
       setOvenSlot('');
       setNotes('');
     }
-  }, [open]);
+  }, [open, defaultSerialNumber, defaultProgramId]);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -103,7 +119,12 @@ export default function StartProductionTimerModal({
       queryClient.invalidateQueries({ queryKey: ['/api/production/timers/runs'] });
       toast({ title: 'Timer started successfully' });
       onOpenChange(false);
-      setLocation('/app/production/stations');
+      if (onTimerStarted) {
+        onTimerStarted();
+      }
+      if (navigateToStation) {
+        setLocation('/app/production/stations');
+      }
     },
     onError: (error: any) => {
       toast({

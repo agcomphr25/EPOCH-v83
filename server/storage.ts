@@ -2642,7 +2642,21 @@ export class DatabaseStorage implements IStorage {
 
   // Stock Models CRUD
   async getAllStockModels(): Promise<StockModel[]> {
-    return await db.select().from(stockModels).orderBy(stockModels.sortOrder);
+    // Use pgPool for proper boolean handling - Neon HTTP driver has boolean coercion issues
+    const { pgPool } = await import('./db');
+    const { rows } = await pgPool.query('SELECT id, name, display_name, price, description, handedness, is_active, sort_order, created_at, updated_at FROM stock_models ORDER BY sort_order');
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      displayName: row.display_name || row.name,
+      price: Number(row.price || 0),
+      description: row.description,
+      handedness: row.handedness,
+      isActive: row.is_active === true,
+      sortOrder: row.sort_order ?? 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
   }
 
   async getStockModel(id: string): Promise<StockModel | undefined> {

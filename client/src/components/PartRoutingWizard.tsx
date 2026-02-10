@@ -57,6 +57,7 @@ import {
   ChevronUp,
   CircleCheck,
   AlertCircle,
+  Timer,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -167,6 +168,12 @@ interface SignatureConfig {
   requiredSignatures: string[];
 }
 
+interface TimerConfig {
+  enabled: boolean;
+  defaultProgramId?: string;
+  defaultProgramName?: string;
+}
+
 interface DepartmentConfiguration {
   materials: MaterialRequirement[];
   assignedTechnicianId: number | null;
@@ -179,6 +186,7 @@ interface DepartmentConfiguration {
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
   instructionPack?: InstructionPack;
+  timerConfig?: TimerConfig;
 }
 
 interface PartRouting {
@@ -402,6 +410,18 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const { data: routingDepartments = [], isLoading: deptLoading } = useQuery<RoutingDepartment[]>({
     queryKey: ['/api/part-routings/departments/list'],
     enabled: open,
+  });
+
+  interface TimerProgram {
+    id: string;
+    name: string;
+    description: string | null;
+    isActive: boolean;
+  }
+
+  const { data: timerPrograms = [] } = useQuery<TimerProgram[]>({
+    queryKey: ['/api/production/timers/programs'],
+    enabled: open && step === 3,
   });
 
   const departmentNames = routingDepartments.length > 0
@@ -1562,7 +1582,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.materials.length > 0 ? 1 : 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + config.qcStandards.length + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -2150,6 +2170,89 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   </div>
                                 </>
                               )}
+
+                              {/* Start Timer */}
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <Timer className="h-4 w-4 text-blue-600" />
+                                  Start Timer
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  Enable a production timer that operators can start from the traveler. The serial number will auto-fill from the traveler.
+                                </p>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Checkbox
+                                      id={`timer-enabled-${dept}`}
+                                      checked={config.timerConfig?.enabled || false}
+                                      onCheckedChange={(checked) => {
+                                        setDepartmentConfig(prev => ({
+                                          ...prev,
+                                          [dept]: {
+                                            ...config,
+                                            timerConfig: {
+                                              ...config.timerConfig,
+                                              enabled: !!checked,
+                                              defaultProgramId: config.timerConfig?.defaultProgramId,
+                                              defaultProgramName: config.timerConfig?.defaultProgramName,
+                                            },
+                                          },
+                                        }));
+                                      }}
+                                    />
+                                    <Label htmlFor={`timer-enabled-${dept}`} className="text-sm cursor-pointer">
+                                      Enable timer for this department
+                                    </Label>
+                                  </div>
+                                  {config.timerConfig?.enabled && (
+                                    <div className="pl-7 space-y-2">
+                                      <Label className="text-xs">Default Timer Program (optional)</Label>
+                                      <Select
+                                        value={config.timerConfig?.defaultProgramId || 'none'}
+                                        onValueChange={(val) => {
+                                          const isNone = val === 'none';
+                                          const program = isNone ? undefined : timerPrograms.find(p => p.id === val);
+                                          setDepartmentConfig(prev => ({
+                                            ...prev,
+                                            [dept]: {
+                                              ...config,
+                                              timerConfig: {
+                                                ...config.timerConfig!,
+                                                enabled: true,
+                                                defaultProgramId: isNone ? undefined : val,
+                                                defaultProgramName: program?.name || undefined,
+                                              },
+                                            },
+                                          }));
+                                        }}
+                                      >
+                                        <SelectTrigger className="text-sm">
+                                          <SelectValue placeholder="Select a timer program..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="none">No default (operator chooses)</SelectItem>
+                                          {timerPrograms.filter(p => p.isActive).map(program => (
+                                            <SelectItem key={program.id} value={program.id}>
+                                              {program.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {config.timerConfig?.defaultProgramName && (
+                                        <p className="text-xs text-muted-foreground">
+                                          Currently set: {config.timerConfig.defaultProgramName}
+                                        </p>
+                                      )}
+                                      <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded border border-blue-100 dark:border-blue-900">
+                                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                                          When an operator reaches this department in the traveler, they can start a timer. The serial number from the traveler fills in automatically. Once started, the timer runs on the Timer Station and the operator continues with the traveler.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
 
                               {/* Special Process */}
                               <Separator />

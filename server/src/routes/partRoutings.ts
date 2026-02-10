@@ -32,15 +32,20 @@ async function ensureTablesExist() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS part_routings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        inventory_item_id TEXT NOT NULL,
         part_number TEXT NOT NULL,
-        revision TEXT NOT NULL DEFAULT 'A',
-        name TEXT NOT NULL,
-        description TEXT,
-        inventory_item_id TEXT,
-        departments JSONB NOT NULL DEFAULT '[]',
+        part_name TEXT NOT NULL,
+        routing_name TEXT NOT NULL DEFAULT 'Default',
+        routing_revision INTEGER NOT NULL DEFAULT 1,
+        department_sequence JSONB NOT NULL DEFAULT '[]',
+        traceability_config JSONB NOT NULL DEFAULT '{}',
+        department_config JSONB,
+        special_process_config JSONB,
+        materials_config JSONB,
+        qc_standards JSONB,
+        custom_fields JSONB,
         is_active BOOLEAN NOT NULL DEFAULT true,
-        created_by TEXT,
-        updated_by TEXT,
+        created_by TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -48,35 +53,46 @@ async function ensureTablesExist() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS routing_documents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        department_id UUID NOT NULL,
-        title TEXT NOT NULL,
+        part_routing_id UUID,
+        part_number VARCHAR(255),
+        department_name VARCHAR(255),
+        title VARCHAR(500) NOT NULL,
         description TEXT,
-        document_type TEXT NOT NULL DEFAULT 'work_instruction',
-        content TEXT,
+        version INTEGER NOT NULL DEFAULT 1,
+        document_type VARCHAR(100) NOT NULL DEFAULT 'work_instruction',
+        source_type VARCHAR(50) NOT NULL DEFAULT 'uploaded',
         file_url TEXT,
-        file_name TEXT,
-        revision TEXT NOT NULL DEFAULT 'A',
-        is_active BOOLEAN NOT NULL DEFAULT true,
-        created_by TEXT,
-        updated_by TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        file_name VARCHAR(500),
+        file_type VARCHAR(100),
+        file_size INTEGER,
+        ai_extracted_content JSONB,
+        ai_extracted_fields JSONB,
+        ai_processed_at TIMESTAMPTZ,
+        is_template BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_by VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS routing_training_packages (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        routing_id UUID NOT NULL,
-        department_id UUID NOT NULL,
-        training_content JSONB NOT NULL DEFAULT '{}',
-        quiz_questions JSONB NOT NULL DEFAULT '[]',
-        source_document_ids JSONB NOT NULL DEFAULT '[]',
-        generated_at TIMESTAMP DEFAULT NOW(),
-        generated_by TEXT,
-        model_version TEXT,
-        is_active BOOLEAN NOT NULL DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        part_routing_id UUID,
+        department_name VARCHAR(255) NOT NULL,
+        process_name VARCHAR(255),
+        source_document_ids JSONB DEFAULT '[]',
+        source_document_titles JSONB DEFAULT '[]',
+        training_content JSONB,
+        quiz_questions JSONB DEFAULT '[]',
+        total_questions INTEGER DEFAULT 0,
+        passing_score INTEGER DEFAULT 80,
+        model_version VARCHAR(50) DEFAULT 'gpt-4o-mini',
+        status VARCHAR(50) DEFAULT 'generated',
+        generated_by VARCHAR(255),
+        generated_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     const existing = await pool.query(`SELECT COUNT(*) as count FROM p2_routing_departments`);
@@ -383,7 +399,7 @@ router.post('/:id/generate-training', async (req: Request, res: Response) => {
     }
 
     const routingRows = await pool.query(
-      `SELECT id::text, part_number AS "partNumber", revision FROM part_routings WHERE id = $1`,
+      `SELECT id::text, part_number AS "partNumber", routing_revision AS "routingRevision" FROM part_routings WHERE id = $1`,
       [routingId]
     );
     if (routingRows.length === 0) {
@@ -470,7 +486,7 @@ Rules:
     const userMessage = `Generate training content and certification quiz for:
 Department: ${departmentName}
 Part Number: ${routing.partNumber || 'N/A'}
-Revision: ${routing.revision || 'N/A'}
+Revision: ${routing.routingRevision || 'N/A'}
 Number of source documents: ${docRows.length}
 
 Work Instruction Content:

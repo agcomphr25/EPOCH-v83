@@ -27,6 +27,10 @@ import {
   DollarSign,
   Truck,
   Factory,
+  CreditCard,
+  Undo2,
+  Ban,
+  FileText,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -91,6 +95,16 @@ const actionIcons: Record<string, any> = {
   SCRAP_DECLARED: XCircle,
   ORDER_RESTARTED: RefreshCw,
   PAYMENT_RECEIVED: DollarSign,
+  PAYMENT_ADDED: CreditCard,
+  PAYMENT_VOIDED: Ban,
+  CREDIT_MEMO_CREATED: FileText,
+  CREDIT_APPLIED: DollarSign,
+  CREDIT_MEMO_UPDATED: FileText,
+  CREDIT_MEMO_CANCELLED: Ban,
+  REFUND_REQUESTED: Undo2,
+  REFUND_APPROVED: CheckCircle,
+  REFUND_REJECTED: XCircle,
+  REFUND_PROCESSED: Undo2,
   SHIPPED: Truck,
   TRACKING_ADDED: Package,
   default: History,
@@ -104,6 +118,16 @@ const actionColors: Record<string, string> = {
   SCRAP_DECLARED: 'bg-red-100 text-red-700 border-red-300',
   ORDER_RESTARTED: 'bg-orange-100 text-orange-700 border-orange-300',
   PAYMENT_RECEIVED: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  PAYMENT_ADDED: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  PAYMENT_VOIDED: 'bg-red-100 text-red-700 border-red-300',
+  CREDIT_MEMO_CREATED: 'bg-teal-100 text-teal-700 border-teal-300',
+  CREDIT_APPLIED: 'bg-teal-100 text-teal-700 border-teal-300',
+  CREDIT_MEMO_UPDATED: 'bg-teal-100 text-teal-700 border-teal-300',
+  CREDIT_MEMO_CANCELLED: 'bg-red-100 text-red-700 border-red-300',
+  REFUND_REQUESTED: 'bg-amber-100 text-amber-700 border-amber-300',
+  REFUND_APPROVED: 'bg-green-100 text-green-700 border-green-300',
+  REFUND_REJECTED: 'bg-red-100 text-red-700 border-red-300',
+  REFUND_PROCESSED: 'bg-indigo-100 text-indigo-700 border-indigo-300',
   SHIPPED: 'bg-cyan-100 text-cyan-700 border-cyan-300',
   ORDER_CANCELLED: 'bg-red-100 text-red-700 border-red-300',
   default: 'bg-gray-100 text-gray-700 border-gray-300',
@@ -237,6 +261,51 @@ export default function AuditDrawer({ entityType, entityId, trigger }: AuditDraw
                                       </span>
                                     </div>
                                   ))}
+                                </div>
+                              )}
+
+                              {event.meta && typeof event.meta === 'object' && Object.keys(event.meta).length > 0 && (
+                                <div className="mt-2 pt-2 border-t">
+                                  {event.meta.amount !== undefined && (
+                                    <div className="text-sm font-medium text-emerald-700">
+                                      ${Number(event.meta.amount).toFixed(2)}
+                                    </div>
+                                  )}
+                                  {event.meta.amountApplied !== undefined && (
+                                    <div className="text-sm font-medium text-teal-700">
+                                      Applied: ${Number(event.meta.amountApplied).toFixed(2)}
+                                    </div>
+                                  )}
+                                  {event.meta.refundAmount !== undefined && (
+                                    <div className="text-sm font-medium text-red-600">
+                                      Refund: ${Number(event.meta.refundAmount).toFixed(2)}
+                                    </div>
+                                  )}
+                                  {event.meta.paymentType && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Method: {String(event.meta.paymentType).replace(/_/g, ' ')}
+                                    </div>
+                                  )}
+                                  {event.meta.memoNumber && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Memo: {event.meta.memoNumber}
+                                    </div>
+                                  )}
+                                  {event.meta.lastFour && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Card: ****{event.meta.lastFour}
+                                    </div>
+                                  )}
+                                  {event.meta.reason && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Reason: {event.meta.reason}
+                                    </div>
+                                  )}
+                                  {event.meta.rejectionReason && (
+                                    <div className="text-xs text-red-600">
+                                      Rejection: {event.meta.rejectionReason}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

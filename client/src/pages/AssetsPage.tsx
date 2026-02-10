@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/table';
 import {
   Plus,
+  Trash2,
   ChevronRight,
   ChevronDown,
   Folder,
@@ -108,11 +109,13 @@ function CategoryTreeItem({
   node,
   selectedId,
   onSelect,
+  onDelete,
   level = 0,
 }: {
   node: TreeNode;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  onDelete?: (id: string, name: string) => void;
   level?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -121,32 +124,46 @@ function CategoryTreeItem({
 
   return (
     <div>
-      <button
-        className={`w-full flex items-center gap-1 px-2 py-1.5 text-sm rounded-md hover:bg-gray-100 ${
-          isSelected ? 'bg-primary/10 text-primary font-medium' : ''
-        }`}
-        style={{ paddingLeft: `${level * 16 + 8}px` }}
-        onClick={() => {
-          if (hasChildren) setExpanded(!expanded);
-          onSelect(isSelected ? null : node.id);
-        }}
-      >
-        {hasChildren ? (
-          expanded ? (
-            <ChevronDown className="h-3 w-3 flex-shrink-0" />
+      <div className="group flex items-center">
+        <button
+          className={`flex-1 flex items-center gap-1 px-2 py-1.5 text-sm rounded-md hover:bg-gray-100 ${
+            isSelected ? 'bg-primary/10 text-primary font-medium' : ''
+          }`}
+          style={{ paddingLeft: `${level * 16 + 8}px` }}
+          onClick={() => {
+            if (hasChildren) setExpanded(!expanded);
+            onSelect(isSelected ? null : node.id);
+          }}
+        >
+          {hasChildren ? (
+            expanded ? (
+              <ChevronDown className="h-3 w-3 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 flex-shrink-0" />
+            )
           ) : (
-            <ChevronRight className="h-3 w-3 flex-shrink-0" />
-          )
-        ) : (
-          <span className="w-3" />
+            <span className="w-3" />
+          )}
+          {expanded && hasChildren ? (
+            <FolderOpen className="h-4 w-4 flex-shrink-0 text-amber-500" />
+          ) : (
+            <Folder className="h-4 w-4 flex-shrink-0 text-amber-500" />
+          )}
+          <span className="truncate">{node.name}</span>
+        </button>
+        {onDelete && (
+          <button
+            className="opacity-0 group-hover:opacity-100 p-1 mr-1 text-red-400 hover:text-red-600 rounded transition-opacity"
+            title={`Delete ${node.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(node.id, node.name);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         )}
-        {expanded && hasChildren ? (
-          <FolderOpen className="h-4 w-4 flex-shrink-0 text-amber-500" />
-        ) : (
-          <Folder className="h-4 w-4 flex-shrink-0 text-amber-500" />
-        )}
-        <span className="truncate">{node.name}</span>
-      </button>
+      </div>
       {expanded &&
         hasChildren &&
         node.children.map((child) => (
@@ -154,6 +171,7 @@ function CategoryTreeItem({
             key={child.id}
             node={child}
             selectedId={selectedId}
+            onDelete={onDelete}
             onSelect={onSelect}
             level={level + 1}
           />
@@ -262,8 +280,7 @@ export default function AssetsPage() {
 
   const createAssetMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
@@ -278,8 +295,7 @@ export default function AssetsPage() {
 
   const updateAssetMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await apiRequest(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
@@ -295,8 +311,7 @@ export default function AssetsPage() {
 
   const createCategoryMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets/categories', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets/categories', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets/categories'] });
@@ -309,10 +324,49 @@ export default function AssetsPage() {
     },
   });
 
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/assets/categories/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assets/categories'] });
+      if (selectedCategoryId) setSelectedCategoryId(null);
+      toast({ title: 'Category deleted' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteLocationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/assets/locations/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assets/locations'] });
+      toast({ title: 'Location deleted' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteAssetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/assets/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
+      toast({ title: 'Asset deleted' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
   const createLocationMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets/locations', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets/locations', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets/locations'] });
@@ -431,6 +485,11 @@ export default function AssetsPage() {
                 node={node}
                 selectedId={selectedCategoryId}
                 onSelect={setSelectedCategoryId}
+                onDelete={isAdmin ? (id, name) => {
+                  if (window.confirm(`Delete category "${name}"? This cannot be undone.`)) {
+                    deleteCategoryMutation.mutate(id);
+                  }
+                } : undefined}
               />
             ))}
             {tree.length === 0 && (
@@ -517,9 +576,18 @@ export default function AssetsPage() {
                         </TableCell>
                         <TableCell>
                           {isAdmin && (
+                            <div className="flex gap-1">
                             <Button variant="ghost" size="sm" onClick={() => openEdit(asset)}>
                               <Edit className="h-4 w-4" />
                             </Button>
+                            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-600" onClick={() => {
+                              if (window.confirm(`Delete asset "${asset.assetTag} - ${asset.name}"? This cannot be undone.`)) {
+                                deleteAssetMutation.mutate(asset.id);
+                              }
+                            }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>

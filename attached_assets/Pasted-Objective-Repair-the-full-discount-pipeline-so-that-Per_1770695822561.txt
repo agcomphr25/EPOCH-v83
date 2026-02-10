@@ -1,0 +1,159 @@
+Objective:
+Repair the full discount pipeline so that:
+
+- Persistent discounts (persistent_)
+- Seasonal / short-term discounts (short_term_)
+- Custom discounts
+
+are ALL:
+
+1) Detected
+2) Calculated
+3) Stored in snapshot
+4) Passed to the PDF generator
+5) Rendered correctly
+6) Reflected in final totals
+
+We are fixing structural gaps identified in diagnostics.
+Do not implement partial fixes.
+
+---
+
+PART 1 — Fix Pricing Engine (resolveOrderPricingSummary)
+
+File: server/storage.ts
+
+Add explicit handling for discountCode starting with "short_term_".
+
+Requirements:
+
+1. Detect discountCode starting with "short_term_".
+2. Look up corresponding record in short_term_sales table.
+3. Validate:
+   - isActive
+   - date within startDate / endDate
+   - overrideActive rules (if applicable)
+4. Calculate discountAmount based on:
+   - percent OR fixed
+   - appliesTo (stock_model vs total_order)
+5. Push into discounts array with:
+   {
+     source: 'Seasonal Sale',
+     code: discountCode,
+     type: 'percent' | 'fixed',
+     value,
+     amount,
+     appliesTo
+   }
+6. Ensure discountTotal includes seasonal discount.
+7. Maintain stacking order:
+   - Persistent (if allowed)
+   - Seasonal (if allowed)
+   - Custom
+   (Confirm intended stacking behavior before finalizing)
+
+Do NOT modify existing persistent or custom logic.
+Extend it cleanly.
+
+---
+
+PART 2 — Fix Snapshot Data Source
+
+File: server/services/orderPdfService.ts
+
+Update getOrderCoreDataForPdf() SQL query to include:
+
+- discount_code
+- custom_discount_type
+- custom_discount_value
+- show_custom_discount
+- price_override
+
+These must be selected directly from database columns,
+NOT extracted only from features JSONB.
+
+Ensure createOrderSnapshot() uses real column values,
+and does not rely solely on extractDiscountFromFeatures().
+
+Confirm snapshot includes:
+
+snapshot.discountCode
+snapshot.customDiscountType
+snapshot.customDiscountValue
+snapshot.showCustomDiscount
+snapshot.priceOverride
+snapshot.pricingSummary
+
+---
+
+PART 3 — Pass pricingSummary to PDF Renderer
+
+File: server/services/orderPdfService.ts
+
+When building pdfOrderData (around line ~838),
+explicitly pass:
+
+pricingSummary: snapshot.pricingSummary
+
+so the PDF renderer can use the pricingSummary path
+instead of legacy fallback math.
+
+---
+
+PART 4 — Remove Legacy Discount Calculation Path
+
+File: server/utils/pdf/salesOrderPdf.ts
+
+If pricingSummary exists:
+- Use pricingSummary exclusively
+- Do not run legacy custom/promo discount math
+
+Legacy fallback should ONLY be used if pricingSummary is undefined
+(for extreme backward compatibility).
+
+---
+
+PART 5 — Ensure Discount Breakdown Renders
+
+In the PDF:
+
+If pricingSummary.discounts.length > 0:
+- Render each discount line separately
+- Show:
+  - Source (Persistent / Seasonal / Custom)
+  - Percent or fixed amount
+  - Dollar amount deducted
+
+Example:
+
+Discounts:
+  GB-20 (20%) ........ -$140.00
+  Winter Sale (10%) .. -$70.00
+
+Ensure discountTotal equals SUM of all discount amounts.
+
+---
+
+PART 6 — Validation
+
+After implementation:
+
+1. Test persistent discount only
+2. Test seasonal discount only
+3. Test custom discount only
+4. Test stacking scenarios (if supported)
+5. Confirm:
+   - resolveOrderPricingSummary returns correct discountTotal
+   - snapshot contains pricingSummary with correct discounts
+   - PDF shows correct discount breakdown
+   - finalTotal matches UI exactly
+
+Do not mutate historical signed snapshots.
+Live views must match UI totals.
+Snapshot views must remain frozen.
+
+Deliverables:
+- Files modified
+- Confirmation of seasonal handling
+- Example pricingSummary object
+- Example regenerated PDF totals

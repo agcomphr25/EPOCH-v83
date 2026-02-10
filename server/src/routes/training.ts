@@ -5947,10 +5947,10 @@ router.post('/content-library/topics/bulk-trash', async (req, res) => {
       return res.status(400).json({ error: 'ids array is required' });
     }
     
-    const { rawSql } = await import('../../db');
+    const { pool } = await import('../../db');
     const idList = ids.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
     
-    await rawSql(`UPDATE training_library_topics SET is_trashed = $1, updated_at = NOW() WHERE id = ANY($2)`, [trashed === true, idList]);
+    await pool.query(`UPDATE training_library_topics SET is_trashed = $1, updated_at = NOW() WHERE id = ANY($2)`, [trashed === true, idList]);
     
     res.json({ success: true, count: idList.length });
   } catch (error: any) {
@@ -6088,9 +6088,8 @@ router.put('/content-library/topics/:id', async (req, res) => {
     updates.push('updated_at = NOW()');
     params.push(id);
 
-    // Perform the update without RETURNING (Neon driver has issues with it)
-    const { rawSql } = await import('../../db');
-    await rawSql(`UPDATE training_library_topics SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
+    const { rawSql, pool: dbPool } = await import('../../db');
+    await dbPool.query(`UPDATE training_library_topics SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
     
     // Fetch the updated topic separately
     const fetchResult = await rawSql`SELECT * FROM training_library_topics WHERE id = ${id}`;

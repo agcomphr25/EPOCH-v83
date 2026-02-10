@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 import * as schema from '../../schema';
 
@@ -9,11 +9,11 @@ const PROD_DATABASE_URL =
   'postgresql://neondb_owner:npg_8ybQvUYfuNm6@ep-wispy-sun-adm062ft.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
 
 async function checkUserMapping() {
-  const devSql = neon(DEV_DATABASE_URL);
-  const devDb = drizzle(devSql, { schema });
+  const devPool = new Pool({ connectionString: DEV_DATABASE_URL });
+  const devDb = drizzle(devPool, { schema });
 
-  const prodSql = neon(PROD_DATABASE_URL);
-  const prodDb = drizzle(prodSql, { schema });
+  const prodPool = new Pool({ connectionString: PROD_DATABASE_URL });
+  const prodDb = drizzle(prodPool, { schema });
 
   console.log('🔍 Checking user data in both databases...\n');
 

@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from '../../schema';
 
 const DEV_DATABASE_URL =
@@ -14,11 +14,11 @@ interface IdMapping {
 async function migrateTrainingData() {
   console.log('🚀 Starting training data migration from DEV to PROD...\n');
 
-  const devSql = neon(DEV_DATABASE_URL);
-  const devDb = drizzle(devSql, { schema });
+  const devPool = new Pool({ connectionString: DEV_DATABASE_URL });
+  const devDb = drizzle(devPool, { schema });
 
-  const prodSql = neon(PROD_DATABASE_URL);
-  const prodDb = drizzle(prodSql, { schema });
+  const prodPool = new Pool({ connectionString: PROD_DATABASE_URL });
+  const prodDb = drizzle(prodPool, { schema });
 
   try {
     // Step 1: Export training modules from DEV

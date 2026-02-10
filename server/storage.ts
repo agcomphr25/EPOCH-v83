@@ -481,7 +481,7 @@ import {
   type TicketActivity,
   type InsertTicketActivity,
 } from './schema';
-import { db, dbPool, pool, rawSql } from './db';
+import { db, pool, rawSql } from './db';
 import {
   eq,
   desc,
@@ -8018,7 +8018,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Received date cannot be in the future. Received: ${receivedDate.toISOString()}, Current: ${now.toISOString()}`);
     }
 
-    // Note: neon-http driver doesn't support transactions, so we execute queries sequentially
+    // Execute queries sequentially
     // Get the PO line item details
     const [poLineItem] = await db
       .select({
@@ -13920,7 +13920,7 @@ export class DatabaseStorage implements IStorage {
     shipment: InsertShipmentRecord;
     items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
   }): Promise<ShipmentRecord> {
-    // Create the shipment record first (without transaction - neon-http doesn't support transactions)
+    // Create the shipment record first
     const [shipment] = await db
       .insert(shipmentRecords)
       .values(data.shipment)
@@ -15132,8 +15132,7 @@ export class DatabaseStorage implements IStorage {
     });
 
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    // Uses pgPool-based Drizzle to avoid Neon HTTP driver serialization issues with real/numeric types
-    const result = await dbPool
+    const result = await db
       .insert(allOrders)
       .values(finalizedOrderData)
       .returning();

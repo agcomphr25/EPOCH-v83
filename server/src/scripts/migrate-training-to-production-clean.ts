@@ -1,15 +1,11 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import ws from 'ws';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import {
   trainingModules,
   trainingQuestions,
   trainingQuestionOptions,
 } from '../../schema';
 import { sql } from 'drizzle-orm';
-
-// WebSocket for Neon serverless
-neonConfig.webSocketConstructor = ws;
 
 // Database URLs
 const DEV_DATABASE_URL =

@@ -50,6 +50,38 @@ router.post('/categories', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
+router.put('/categories/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, parentCategoryId } = req.body;
+    const [updated] = await db.update(assetCategories).set({ name, parentCategoryId: parentCategoryId || null }).where(eq(assetCategories.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: 'Category not found' });
+    res.json(updated);
+  } catch (error) {
+    console.error('[AssetManagement] Error updating category:', error);
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+router.delete('/categories/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const linkedAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.categoryId, id)).limit(1);
+    if (linkedAssets.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete category with assets assigned to it. Reassign or remove those assets first.' });
+    }
+    const childCategories = await db.select({ id: assetCategories.id }).from(assetCategories).where(eq(assetCategories.parentCategoryId, id)).limit(1);
+    if (childCategories.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete category with sub-categories. Delete sub-categories first.' });
+    }
+    await db.delete(assetCategories).where(eq(assetCategories.id, id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('[AssetManagement] Error deleting category:', error);
+    res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
 // ==================== ASSET LOCATIONS ====================
 
 router.get('/locations', async (_req: Request, res: Response) => {
@@ -73,6 +105,54 @@ router.post('/locations', requireAdmin, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[AssetManagement] Error creating location:', error);
     res.status(500).json({ error: 'Failed to create location' });
+  }
+});
+
+router.put('/locations/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const [updated] = await db.update(assetLocations).set({ name, description: description || null }).where(eq(assetLocations.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: 'Location not found' });
+    res.json(updated);
+  } catch (error) {
+    console.error('[AssetManagement] Error updating location:', error);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+router.delete('/locations/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const linkedAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.physicalLocationId, id)).limit(1);
+    if (linkedAssets.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete location with assets assigned to it. Reassign those assets first.' });
+    }
+    await db.delete(assetLocations).where(eq(assetLocations.id, id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('[AssetManagement] Error deleting location:', error);
+    res.status(500).json({ error: 'Failed to delete location' });
+  }
+});
+
+router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const linkedWOs = await db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.assetId, id)).limit(1);
+    if (linkedWOs.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete asset with work orders. Delete or reassign work orders first.' });
+    }
+    const childAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.parentAssetId, id)).limit(1);
+    if (childAssets.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete asset with child assets. Delete or reassign child assets first.' });
+    }
+    await db.delete(assetLocationHistory).where(eq(assetLocationHistory.assetId, id));
+    await db.delete(assets).where(eq(assets.id, id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('[AssetManagement] Error deleting asset:', error);
+    res.status(500).json({ error: 'Failed to delete asset' });
   }
 });
 

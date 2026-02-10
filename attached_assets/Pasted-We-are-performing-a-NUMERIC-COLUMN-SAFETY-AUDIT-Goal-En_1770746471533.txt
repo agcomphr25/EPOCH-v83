@@ -1,0 +1,96 @@
+We are performing a NUMERIC COLUMN SAFETY AUDIT.
+
+Goal:
+Ensure no numeric column in the entire system can receive an empty string ("") and cause a Postgres type error.
+
+This is an audit only.
+Do NOT modify code yet.
+
+====================================
+PHASE 1 — IDENTIFY NUMERIC COLUMNS
+====================================
+
+1. Open server/schema.ts.
+2. List every column defined as:
+   - real()
+   - numeric()
+   - integer()
+   - doublePrecision()
+   - smallint()
+   - bigint()
+
+For each column provide:
+   - Table name
+   - Field name (Drizzle name)
+   - DB column name
+   - Type
+   - Default value (if any)
+
+====================================
+PHASE 2 — VALIDATION CHECK
+====================================
+
+For each table that has numeric columns:
+
+1. Locate corresponding Zod schema (createInsertSchema usage).
+2. Confirm:
+   - Is the numeric field explicitly extended?
+   - Or using auto-generated type?
+   - Does it allow string input?
+   - Does it have default()?
+   - Does it coerce string to number?
+   - Could "" pass validation?
+
+====================================
+PHASE 3 — INSERT PATH CHECK
+====================================
+
+Search entire repo for:
+
+   db.insert(
+   .values(
+   createFinalizedOrder
+   finalizeDraftOrder
+
+For each insert involving numeric columns:
+
+Confirm:
+   - Does it use Zod-validated data?
+   - Is there any post-parse reassignment?
+   - Is any value copied from draft tables without sanitation?
+   - Is any numeric field conditionally omitted?
+
+====================================
+PHASE 4 — FRONTEND CHECK
+====================================
+
+Search frontend for:
+
+   type="number"
+   parseFloat(
+   Number(
+   || ''
+
+For each numeric input:
+
+Confirm:
+   - How state is initialized
+   - How onChange sets state
+   - What is sent in payload
+   - Whether "" can be sent
+
+====================================
+PHASE 5 — RISK REPORT
+====================================
+
+Return a structured report:
+
+1. SAFE NUMERIC FIELDS (fully protected)
+2. MODERATE RISK FIELDS (validated but reassigned later)
+3. HIGH RISK FIELDS (can receive "" or bypass validation)
+4. Draft copy risks
+5. Recommended structural fix (system-wide, not per-field)
+
+DO NOT change code.
+DO NOT implement fixes.
+Only audit and classify risk.

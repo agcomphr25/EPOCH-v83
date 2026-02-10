@@ -262,8 +262,7 @@ export default function AssetsPage() {
 
   const createAssetMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
@@ -278,8 +277,7 @@ export default function AssetsPage() {
 
   const updateAssetMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await apiRequest(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
@@ -295,8 +293,7 @@ export default function AssetsPage() {
 
   const createCategoryMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets/categories', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets/categories', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets/categories'] });
@@ -311,8 +308,7 @@ export default function AssetsPage() {
 
   const createLocationMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/assets/locations', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
-      return res.json();
+      return await apiRequest('/api/assets/locations', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assets/locations'] });

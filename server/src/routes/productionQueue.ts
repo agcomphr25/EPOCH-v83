@@ -45,12 +45,14 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
       }
       // Orders with missing stock model or missing action_length need attention
       // Flattop orders are excluded - they never need attention
+      // M1A models are excluded from action_length/action_inlet/barrel_inlet/bottom_metal checks
       else if (
         !order.isFlattop &&
         (!stockModel ||
         stockModel === '' ||
-        !features.action_length ||
-        features.action_length === '')
+        (!features.action_length &&
+          features.action_length !== 0 &&
+          !(stockModel && stockModel.toLowerCase().includes('m1a'))))
       ) {
         ordersNeedingAttention.push(order);
       }
@@ -386,7 +388,10 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND o.model_id != 'None'
         AND LOWER(o.model_id) != 'no stock'
         AND LOWER(o.model_id) != 'no_stock'
-        AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
+        AND (
+          (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
+          OR LOWER(o.model_id) LIKE '%m1a%'
+        )
       ORDER BY 
         o.due_date ASC,
         o.created_at ASC
@@ -1135,7 +1140,10 @@ router.get('/attention', async (req: Request, res: Response) => {
         AND (o.is_flattop IS NULL OR o.is_flattop = false)
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
-          (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
+          (
+            (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
+            AND (LOWER(o.model_id) NOT LIKE '%m1a%')
+          )
         )
       ORDER BY 
         o.due_date ASC,

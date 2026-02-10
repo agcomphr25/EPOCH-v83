@@ -73,6 +73,13 @@ export default function QCShippingQueuePage() {
     { orderId: string; type: 'sales' | 'qc' }[]
   >([]);
   const [currentPrintIndex, setCurrentPrintIndex] = useState(0);
+  
+  // State for Print All popup with document selection
+  const [showPrintAllPopup, setShowPrintAllPopup] = useState(false);
+  const [printAllDocuments, setPrintAllDocuments] = useState<
+    { orderId: string; type: 'sales' | 'qc'; selected: boolean; label: string }[]
+  >([]);
+  const [isPrintingAll, setIsPrintingAll] = useState(false);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
@@ -828,30 +835,71 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Handle bulk print all - opens all documents at once for selected orders
+  // Handle bulk print all - shows popup with all documents pre-selected
   const handleBulkPrintAll = () => {
     if (selectedOrders.size === 0) return;
 
     const orderIds = Array.from(selectedOrders);
-    const urls: string[] = [];
+    const docs: { orderId: string; type: 'sales' | 'qc'; selected: boolean; label: string }[] = [];
 
     orderIds.forEach((orderId) => {
-      urls.push(`/api/shipping-pdf/sales-order/${orderId}`);
-      urls.push(`/api/shipping-pdf/qc-checklist/${orderId}`);
+      docs.push({
+        orderId,
+        type: 'sales',
+        selected: true,
+        label: `Sales Order - ${orderId}`,
+      });
+      docs.push({
+        orderId,
+        type: 'qc',
+        selected: true,
+        label: `QC Checklist - ${orderId}`,
+      });
     });
 
-    let opened = 0;
+    setPrintAllDocuments(docs);
+    setIsPrintingAll(false);
+    setShowPrintAllPopup(true);
+  };
+
+  const handlePrintAllDocumentsToggle = (index: number) => {
+    setPrintAllDocuments(prev => prev.map((doc, i) => 
+      i === index ? { ...doc, selected: !doc.selected } : doc
+    ));
+  };
+
+  const handlePrintAllSelectAll = () => {
+    const allSelected = printAllDocuments.every(doc => doc.selected);
+    setPrintAllDocuments(prev => prev.map(doc => ({ ...doc, selected: !allSelected })));
+  };
+
+  const handlePrintAllExecute = () => {
+    const selectedDocs = printAllDocuments.filter(doc => doc.selected);
+    if (selectedDocs.length === 0) return;
+
+    setIsPrintingAll(true);
+
+    const urls = selectedDocs.map(doc => 
+      doc.type === 'sales'
+        ? `/api/shipping-pdf/sales-order/${doc.orderId}`
+        : `/api/shipping-pdf/qc-checklist/${doc.orderId}`
+    );
+
     urls.forEach((url, index) => {
       setTimeout(() => {
         window.open(url, '_blank');
-        opened++;
       }, index * 150);
     });
 
     toast({
-      title: 'Opening Documents',
-      description: `Opening ${urls.length} documents (${orderIds.length} sales orders + ${orderIds.length} QC checklists) for printing`,
+      title: 'Printing Documents',
+      description: `Opening ${selectedDocs.length} documents for printing`,
     });
+
+    setTimeout(() => {
+      setIsPrintingAll(false);
+      setShowPrintAllPopup(false);
+    }, urls.length * 150 + 500);
   };
 
   // Open current PDF in queue
@@ -2109,6 +2157,84 @@ export default function QCShippingQueuePage() {
                 >
                   <X className="h-4 w-4 mr-1" />
                   Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Print All Documents Popup */}
+      {showPrintAllPopup && (
+        <Dialog open={showPrintAllPopup} onOpenChange={(open) => { if (!isPrintingAll) setShowPrintAllPopup(open); }}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-purple-600" />
+                Print All Documents
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="text-sm text-gray-500">
+                  {printAllDocuments.filter(d => d.selected).length} of {printAllDocuments.length} documents selected
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrintAllSelectAll}
+                >
+                  {printAllDocuments.every(d => d.selected) ? 'Deselect All' : 'Select All'}
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+                {printAllDocuments.map((doc, index) => (
+                  <div
+                    key={`${doc.orderId}-${doc.type}`}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      doc.selected
+                        ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-60'
+                    }`}
+                    onClick={() => handlePrintAllDocumentsToggle(index)}
+                  >
+                    <Checkbox
+                      checked={doc.selected}
+                      onCheckedChange={() => handlePrintAllDocumentsToggle(index)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                      doc.type === 'sales'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                    }`}>
+                      <FileText className="h-3 w-3" />
+                      {doc.type === 'sales' ? 'Sales Order' : 'QC Checklist'}
+                    </div>
+                    <span className="font-medium text-sm">{doc.orderId}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t pt-4 flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPrintAllPopup(false)}
+                  disabled={isPrintingAll}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handlePrintAllExecute}
+                  disabled={isPrintingAll || printAllDocuments.filter(d => d.selected).length === 0}
+                  className="bg-purple-600 hover:bg-purple-700 text-white min-w-[200px]"
+                  size="lg"
+                >
+                  <Printer className="h-5 w-5 mr-2" />
+                  {isPrintingAll
+                    ? 'Opening Documents...'
+                    : `Print All (${printAllDocuments.filter(d => d.selected).length})`}
                 </Button>
               </div>
             </div>

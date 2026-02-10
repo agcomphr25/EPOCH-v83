@@ -1625,9 +1625,10 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
 router.post('/:id/progress', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
-    const { nextDepartment } = req.body;
+    const { nextDepartment, toDepartment } = req.body;
+    const targetDepartment = toDepartment || nextDepartment;
 
-    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+    const updatedOrder = await storage.progressOrder(orderId, targetDepartment);
     res.json(updatedOrder);
   } catch (error) {
     console.error('Progress order error:', error);

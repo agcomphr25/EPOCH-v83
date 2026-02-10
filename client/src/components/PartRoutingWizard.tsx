@@ -1593,9 +1593,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           {/* Phase Tabs */}
                           <div className="flex gap-1 mt-3">
                             {([
-                              { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.materials.length > 0 ? 1 : 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
-                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + config.qcStandards.length + (sigConfig.requiredSignatures.length) },
+                              { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
+                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
                                 key={phase.key}
@@ -1724,76 +1724,6 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 )}
                               </div>
 
-                              <Separator />
-
-                              {/* Materials (START phase - material verification) */}
-                              <div>
-                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
-                                  <Package className="h-4 w-4 text-blue-600" />
-                                  Material Traceability ({config.materials.length})
-                                </h4>
-                                {config.materials.length > 0 && (
-                                  <div className="space-y-2 mb-3">
-                                    {config.materials.map((material) => (
-                                      <Card key={material.partId} className="p-3">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <div>
-                                            <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
-                                            <p className="text-xs text-muted-foreground">{material.partName}</p>
-                                          </div>
-                                          <div className="flex items-center gap-1">
-                                            <Button size="sm" variant={material.entryMethod === 'manual' ? 'default' : 'outline'} className="h-6 text-[10px]" onClick={() => toggleMaterialEntryMethod(dept, material.partId)}>
-                                              {material.entryMethod === 'manual' ? 'Manual' : 'Barcode'}
-                                            </Button>
-                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeMaterialFromDepartment(dept, material.partId)}>
-                                              <X className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                        </div>
-                                        {material.entryMethod === 'barcode' && (
-                                          <div className="mb-2 p-1.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
-                                            All traceability auto-captured via barcode
-                                          </div>
-                                        )}
-                                        <div className="grid grid-cols-2 gap-1">
-                                          {TRACEABILITY_FIELDS.map((field) => (
-                                            <div key={field.id} className="flex items-center space-x-1">
-                                              <Checkbox
-                                                id={`${dept}-${material.partId}-${field.id}`}
-                                                checked={(material.requiredFields || []).includes(field.id)}
-                                                disabled={material.entryMethod === 'barcode'}
-                                                onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
-                                              />
-                                              <Label htmlFor={`${dept}-${material.partId}-${field.id}`} className={`text-[11px] ${material.entryMethod === 'barcode' ? 'opacity-60' : 'cursor-pointer'}`}>
-                                                {field.label}
-                                              </Label>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </Card>
-                                    ))}
-                                  </div>
-                                )}
-                                <div>
-                                  <Input
-                                    placeholder="Search inventory to add material..."
-                                    value={selectedDeptForConfig === dept ? materialSearchTerm : ''}
-                                    onChange={(e) => { setSelectedDeptForConfig(dept); setMaterialSearchTerm(e.target.value); }}
-                                    onFocus={() => setSelectedDeptForConfig(dept)}
-                                    className="mb-1 text-sm"
-                                  />
-                                  {selectedDeptForConfig === dept && materialSearchTerm && (
-                                    <ScrollArea className="h-28 border rounded">
-                                      {filteredMaterialItems.map((item) => (
-                                        <div key={item.id} className="p-2 hover:bg-muted cursor-pointer" onClick={() => { addMaterialToDepartment(dept, item); setMaterialSearchTerm(''); setSelectedDeptForConfig(''); }}>
-                                          <p className="font-mono text-xs">{item.agPartNumber}</p>
-                                          <p className="text-[10px] text-muted-foreground">{item.name}</p>
-                                        </div>
-                                      ))}
-                                    </ScrollArea>
-                                  )}
-                                </div>
-                              </div>
                             </div>
                           )}
 
@@ -2103,54 +2033,6 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 })()}
                               </div>
 
-                              <Separator />
-
-                              {/* Custom Data Fields */}
-                              <div>
-                                <h4 className="font-semibold mb-2 text-sm">Custom Data Entry ({config.customDataFields?.length || 0})</h4>
-                                {config.customDataFields && config.customDataFields.length > 0 && (
-                                  <div className="space-y-2 mb-3">
-                                    {config.customDataFields.map((field, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium">{field.fieldName}</p>
-                                          <div className="flex gap-1 mt-0.5">
-                                            <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
-                                            {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
-                                          </div>
-                                        </div>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeCustomDataField(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="space-y-2">
-                                  <div className="flex gap-2">
-                                    <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                    <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
-                                      <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="text">Text</SelectItem>
-                                        <SelectItem value="number">Number</SelectItem>
-                                        <SelectItem value="date">Date</SelectItem>
-                                        <SelectItem value="textarea">Text Area</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                      <Checkbox id={`custom-field-required-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
-                                      <Label htmlFor={`custom-field-required-${dept}`} className="text-xs cursor-pointer">Required</Label>
-                                    </div>
-                                    <Button size="sm" onClick={() => addCustomDataField(dept)} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
-                                      <Plus className="h-4 w-4 mr-1" /> Add Field
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-
                               {/* Oven Curing */}
                               {dept === 'Assemble/Disassembly' && (
                                 <>
@@ -2409,38 +2291,6 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                               <Separator />
 
-                              {/* QC Standards */}
-                              <div>
-                                <h4 className="font-semibold mb-2 text-sm">QC Standards ({config.qcStandards.length})</h4>
-                                {config.qcStandards.length > 0 && (
-                                  <div className="space-y-2 mb-3">
-                                    {config.qcStandards.map((qcStandard, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium">{qcStandard.standard}</p>
-                                          <p className="text-[10px] text-muted-foreground">Tol: {qcStandard.tolerance} | Req: {qcStandard.requirement}</p>
-                                        </div>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeQcStandard(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="space-y-1">
-                                  <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                  <div className="flex gap-2">
-                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                  </div>
-                                  <Button size="sm" onClick={() => addQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
-                                    <Plus className="h-4 w-4 mr-1" /> Add QC Standard
-                                  </Button>
-                                </div>
-                              </div>
-
-                              <Separator />
-
                               {/* Step-Level (Department) Signature Configuration */}
                               <div>
                                 <h4 className="font-semibold mb-1 text-sm flex items-center gap-2">
@@ -2507,6 +2357,171 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                               )}
                             </div>
                           )}
+
+                          {/* ==================== ALWAYS-VISIBLE: Material Traceability, Custom Data, QC Standards ==================== */}
+                          <Separator className="my-3" />
+                          <div className="space-y-4">
+                            <div className="p-3 bg-slate-50/50 dark:bg-slate-950/30 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                                Department-level configuration for material tracking, data collection, and quality standards.
+                              </p>
+                            </div>
+
+                            {/* Material Traceability */}
+                            <div>
+                              <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                <Package className="h-4 w-4 text-blue-600" />
+                                Material Traceability ({config.materials.length})
+                              </h4>
+                              {config.materials.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                  {config.materials.map((material) => (
+                                    <Card key={material.partId} className="p-3">
+                                      <div className="flex items-start justify-between mb-2">
+                                        <div>
+                                          <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
+                                          <p className="text-xs text-muted-foreground">{material.partName}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button size="sm" variant={material.entryMethod === 'manual' ? 'default' : 'outline'} className="h-6 text-[10px]" onClick={() => toggleMaterialEntryMethod(dept, material.partId)}>
+                                            {material.entryMethod === 'manual' ? 'Manual' : 'Barcode'}
+                                          </Button>
+                                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeMaterialFromDepartment(dept, material.partId)}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      {material.entryMethod === 'barcode' && (
+                                        <div className="mb-2 p-1.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
+                                          All traceability auto-captured via barcode
+                                        </div>
+                                      )}
+                                      <div className="grid grid-cols-2 gap-1">
+                                        {TRACEABILITY_FIELDS.map((field) => (
+                                          <div key={field.id} className="flex items-center space-x-1">
+                                            <Checkbox
+                                              id={`${dept}-${material.partId}-${field.id}`}
+                                              checked={(material.requiredFields || []).includes(field.id)}
+                                              disabled={material.entryMethod === 'barcode'}
+                                              onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
+                                            />
+                                            <Label htmlFor={`${dept}-${material.partId}-${field.id}`} className={`text-[11px] ${material.entryMethod === 'barcode' ? 'opacity-60' : 'cursor-pointer'}`}>
+                                              {field.label}
+                                            </Label>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </Card>
+                                  ))}
+                                </div>
+                              )}
+                              <div>
+                                <Input
+                                  placeholder="Search inventory to add material..."
+                                  value={selectedDeptForConfig === dept ? materialSearchTerm : ''}
+                                  onChange={(e) => { setSelectedDeptForConfig(dept); setMaterialSearchTerm(e.target.value); }}
+                                  onFocus={() => setSelectedDeptForConfig(dept)}
+                                  className="mb-1 text-sm"
+                                />
+                                {selectedDeptForConfig === dept && materialSearchTerm && (
+                                  <ScrollArea className="h-28 border rounded">
+                                    {filteredMaterialItems.map((item) => (
+                                      <div key={item.id} className="p-2 hover:bg-muted cursor-pointer" onClick={() => { addMaterialToDepartment(dept, item); setMaterialSearchTerm(''); setSelectedDeptForConfig(''); }}>
+                                        <p className="font-mono text-xs">{item.agPartNumber}</p>
+                                        <p className="text-[10px] text-muted-foreground">{item.name}</p>
+                                      </div>
+                                    ))}
+                                  </ScrollArea>
+                                )}
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Custom Data Entry */}
+                            <div>
+                              <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                <PenLine className="h-4 w-4 text-amber-600" />
+                                Custom Data Entry ({config.customDataFields?.length || 0})
+                              </h4>
+                              {config.customDataFields && config.customDataFields.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                  {config.customDataFields.map((field, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium">{field.fieldName}</p>
+                                        <div className="flex gap-1 mt-0.5">
+                                          <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
+                                          {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                                        </div>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeCustomDataField(dept, idx)}>
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
+                                    <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">Text</SelectItem>
+                                      <SelectItem value="number">Number</SelectItem>
+                                      <SelectItem value="date">Date</SelectItem>
+                                      <SelectItem value="textarea">Text Area</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox id={`custom-field-required-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
+                                    <Label htmlFor={`custom-field-required-${dept}`} className="text-xs cursor-pointer">Required</Label>
+                                  </div>
+                                  <Button size="sm" onClick={() => addCustomDataField(dept)} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add Field
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* QC Standards */}
+                            <div>
+                              <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                <CheckSquare className="h-4 w-4 text-green-600" />
+                                QC Standards ({config.qcStandards.length})
+                              </h4>
+                              {config.qcStandards.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                  {config.qcStandards.map((qcStandard, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium">{qcStandard.standard}</p>
+                                        <p className="text-[10px] text-muted-foreground">Tol: {qcStandard.tolerance} | Req: {qcStandard.requirement}</p>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeQcStandard(dept, idx)}>
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="space-y-1">
+                                <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                <div className="flex gap-2">
+                                  <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                </div>
+                                <Button size="sm" onClick={() => addQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                  <Plus className="h-4 w-4 mr-1" /> Add QC Standard
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
 
                           {/* Training & Quiz Generation Section */}
                           <Separator className="my-3" />

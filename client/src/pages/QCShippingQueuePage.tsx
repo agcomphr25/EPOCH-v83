@@ -828,21 +828,30 @@ export default function QCShippingQueuePage() {
     setShowBulkPrintModal(true);
   };
 
-  // Handle bulk print all - opens individual PDFs for sales orders and QC checklists
+  // Handle bulk print all - opens all documents at once for selected orders
   const handleBulkPrintAll = () => {
     if (selectedOrders.size === 0) return;
 
     const orderIds = Array.from(selectedOrders);
-    const queue: { orderId: string; type: 'sales' | 'qc' }[] = [];
-    
+    const urls: string[] = [];
+
     orderIds.forEach((orderId) => {
-      queue.push({ orderId, type: 'sales' });
-      queue.push({ orderId, type: 'qc' });
+      urls.push(`/api/shipping-pdf/sales-order/${orderId}`);
+      urls.push(`/api/shipping-pdf/qc-checklist/${orderId}`);
     });
 
-    setPrintQueue(queue);
-    setCurrentPrintIndex(0);
-    setShowBulkPrintModal(true);
+    let opened = 0;
+    urls.forEach((url, index) => {
+      setTimeout(() => {
+        window.open(url, '_blank');
+        opened++;
+      }, index * 150);
+    });
+
+    toast({
+      title: 'Opening Documents',
+      description: `Opening ${urls.length} documents (${orderIds.length} sales orders + ${orderIds.length} QC checklists) for printing`,
+    });
   };
 
   // Open current PDF in queue

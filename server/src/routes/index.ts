@@ -126,6 +126,31 @@ import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
 
 export function registerRoutes(app: Express): Server {
+  // TEMPORARY: Production DB diagnostic endpoint - REMOVE AFTER VERIFICATION
+  app.get('/api/debug/db-info', async (req, res) => {
+    const token = req.query.token;
+    if (token !== 'epoch-db-audit-2026') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    try {
+      const { pgPool } = await import('../../db');
+      const result = await pgPool.query('SELECT current_database(), current_user, inet_server_addr()::text, inet_server_port(), version()');
+      const dbUrl = process.env.DATABASE_URL || '';
+      const hostMatch = dbUrl.match(/@([^/]+)\//);
+      const dbMatch = dbUrl.match(/\/([^?]+)\??/);
+      res.json({
+        env: {
+          NODE_ENV: process.env.NODE_ENV || '<unset>',
+          DATABASE_URL_host: hostMatch ? hostMatch[1] : '<parse_failed>',
+          DATABASE_URL_db: dbMatch ? dbMatch[1] : '<parse_failed>',
+        },
+        liveQuery: result.rows[0],
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Authentication routes
   app.use('/api/auth', authRoutes);
 

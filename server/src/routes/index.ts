@@ -5433,6 +5433,67 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============ REASSIGN PO CUSTOMER ============
+  app.put('/api/pos/:poId/reassign-customer', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { newCustomerId } = req.body;
+
+      if (!newCustomerId) {
+        return res.status(400).json({ error: 'newCustomerId is required' });
+      }
+
+      const { storage } = await import('../../storage');
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+
+      const newCustomer = await storage.getCustomer(parseInt(newCustomerId));
+      if (!newCustomer) {
+        return res.status(404).json({ error: 'Target customer not found' });
+      }
+
+      await db.execute(
+        sql`UPDATE purchase_orders SET customer_id = ${String(newCustomerId)}, customer_name = ${newCustomer.name} WHERE id = ${parseInt(poId)}`
+      );
+
+      console.log(`🔄 PO ${poId} reassigned to customer ${newCustomerId} (${newCustomer.name})`);
+      res.json({ success: true, message: `PO reassigned to ${newCustomer.name}` });
+    } catch (_error) {
+      console.error('Reassign PO customer error:', _error);
+      res.status(500).json({ error: 'Failed to reassign PO customer' });
+    }
+  });
+
+  // Bulk reassign all POs from one customer to another
+  app.put('/api/pos/bulk-reassign-customer', async (req, res) => {
+    try {
+      const { fromCustomerId, toCustomerId } = req.body;
+
+      if (!fromCustomerId || !toCustomerId) {
+        return res.status(400).json({ error: 'fromCustomerId and toCustomerId are required' });
+      }
+
+      const { storage } = await import('../../storage');
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+
+      const toCustomer = await storage.getCustomer(parseInt(toCustomerId));
+      if (!toCustomer) {
+        return res.status(404).json({ error: 'Target customer not found' });
+      }
+
+      const result = await db.execute(
+        sql`UPDATE purchase_orders SET customer_id = ${String(toCustomerId)}, customer_name = ${toCustomer.name} WHERE customer_id = ${String(fromCustomerId)}`
+      );
+
+      console.log(`🔄 Bulk reassigned POs from customer ${fromCustomerId} → ${toCustomerId} (${toCustomer.name})`);
+      res.json({ success: true, message: `POs reassigned to ${toCustomer.name}` });
+    } catch (_error) {
+      console.error('Bulk reassign PO customer error:', _error);
+      res.status(500).json({ error: 'Failed to bulk reassign PO customers' });
+    }
+  });
+
   // ============ PO ATTACHMENTS ============
   // Request presigned upload URL for PO attachment
   app.post('/api/pos/:id/attachments/request-upload-url', async (req, res) => {

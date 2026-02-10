@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Dialog,
   DialogContent,
@@ -120,6 +121,7 @@ export default function P2ProductionQueue() {
   const [holdReason, setHoldReason] = useState('');
   const [scrapReason, setScrapReason] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
+  const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
 
   const { data: queueData, isLoading } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
@@ -233,12 +235,41 @@ export default function P2ProductionQueue() {
     return colors[name] || 'bg-slate-50 dark:bg-slate-900 border-slate-300';
   };
 
-  // Print Avery labels for items in a department
-  const handlePrintAveryLabels = (dept: Department) => {
-    if (dept.items.length === 0) {
+  const toggleLayupItem = (itemId: string) => {
+    setSelectedLayupItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllLayupItems = (dept: Department) => {
+    const allIds = dept.items.map(i => i.id);
+    const allSelected = allIds.every(id => selectedLayupItems.has(id));
+    if (allSelected) {
+      setSelectedLayupItems(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedLayupItems(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const printAveryLabels = (items: QueueItem[], title: string) => {
+    if (items.length === 0) {
       toast({
         title: 'No Items',
-        description: 'No items in queue to print labels for',
+        description: 'No items selected to print labels for',
         variant: 'destructive',
       });
       return;
@@ -273,7 +304,7 @@ export default function P2ProductionQueue() {
     printWindow.document.write(`
       <html>
         <head>
-          <title>P2 ${dept.name} Queue Labels</title>
+          <title>${title}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: Arial, sans-serif; }
@@ -314,7 +345,7 @@ export default function P2ProductionQueue() {
         </head>
         <body>
           <div class="labels-container">
-            ${dept.items.map((item, i) => generateLabelContent(item, i)).join('')}
+            ${items.map((item, i) => generateLabelContent(item, i)).join('')}
           </div>
         </body>
       </html>
@@ -323,7 +354,7 @@ export default function P2ProductionQueue() {
     printWindow.focus();
 
     setTimeout(() => {
-      dept.items.forEach((item, i) => {
+      items.forEach((item, i) => {
         const canvas = printWindow.document.getElementById(`barcode-${i}`) as HTMLCanvasElement;
         if (canvas && item.barcode) {
           try {
@@ -344,6 +375,16 @@ export default function P2ProductionQueue() {
       printWindow.print();
       printWindow.close();
     }, 500);
+  };
+
+  const handlePrintAveryLabels = (dept: Department) => {
+    printAveryLabels(dept.items, `P2 ${dept.name} Queue Labels`);
+  };
+
+  const handlePrintSelectedLabels = (dept: Department) => {
+    const selected = dept.items.filter(item => selectedLayupItems.has(item.id));
+    printAveryLabels(selected, `P2 Layup Selected Labels (${selected.length})`);
+    setSelectedLayupItems(new Set());
   };
 
   if (isLoading) {
@@ -481,16 +522,46 @@ export default function P2ProductionQueue() {
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4">
                   {dept.name === 'Layup' && dept.items.length > 0 && (
-                    <div className="mb-4 flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePrintAveryLabels(dept)}
-                        data-testid="button-print-layup-labels"
-                      >
-                        <Printer className="mr-2 h-4 w-4" />
-                        Print Avery Labels ({dept.items.length})
-                      </Button>
+                    <div className="mb-4 flex items-center justify-between gap-2 p-3 bg-blue-50/50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="select-all-layup"
+                            checked={dept.items.length > 0 && dept.items.every(i => selectedLayupItems.has(i.id))}
+                            onCheckedChange={() => toggleAllLayupItems(dept)}
+                          />
+                          <label htmlFor="select-all-layup" className="text-sm font-medium cursor-pointer">
+                            Select All
+                          </label>
+                        </div>
+                        {selectedLayupItems.size > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {dept.items.filter(i => selectedLayupItems.has(i.id)).length} selected
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {selectedLayupItems.size > 0 && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handlePrintSelectedLabels(dept)}
+                            data-testid="button-print-selected-labels"
+                          >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print Selected ({dept.items.filter(i => selectedLayupItems.has(i.id)).length})
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePrintAveryLabels(dept)}
+                          data-testid="button-print-layup-labels"
+                        >
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print All ({dept.items.length})
+                        </Button>
+                      </div>
                     </div>
                   )}
                   {dept.items.length === 0 ? (
@@ -502,6 +573,7 @@ export default function P2ProductionQueue() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {dept.name === 'Layup' && <TableHead className="w-10"></TableHead>}
                           <TableHead>Barcode</TableHead>
                           <TableHead>Part Number</TableHead>
                           <TableHead>PO / Customer</TableHead>
@@ -511,7 +583,15 @@ export default function P2ProductionQueue() {
                       </TableHeader>
                       <TableBody>
                         {dept.items.map((item) => (
-                          <TableRow key={item.id}>
+                          <TableRow key={item.id} className={dept.name === 'Layup' && selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
+                            {dept.name === 'Layup' && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedLayupItems.has(item.id)}
+                                  onCheckedChange={() => toggleLayupItem(item.id)}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell className="font-mono font-semibold">
                               {item.barcode || item.serialNumber}
                             </TableCell>

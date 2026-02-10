@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -116,12 +117,27 @@ interface NotificationHistoryResponse {
   notifications: NotificationHistoryItem[];
 }
 
+type DateRangeMode = 'week' | 'month' | 'quarter';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const QUARTER_LABELS = ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
+
 export default function ShippingTracker() {
   const { week: currentWeek, year: currentOpYear } = getCurrentOperationalWeek();
   const { toast } = useToast();
 
+  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
+
   const [selectedYear, setSelectedYear] = useState<number>(currentOpYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
+  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>('week');
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3));
   const [searchTerm, setSearchTerm] = useState('');
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -254,21 +270,48 @@ export default function ShippingTracker() {
     retry: 1,
   });
 
-  // Filter orders by search term (order number or customer name)
+  const getDateRangeForMode = useMemo(() => {
+    if (dateRangeMode === 'month') {
+      const start = startOfMonth(new Date(selectedYear, selectedMonth));
+      const end = endOfMonth(new Date(selectedYear, selectedMonth));
+      return { start, end };
+    }
+    if (dateRangeMode === 'quarter') {
+      const quarterStartMonth = selectedQuarter * 3;
+      const start = startOfQuarter(new Date(selectedYear, quarterStartMonth));
+      const end = endOfQuarter(new Date(selectedYear, quarterStartMonth));
+      return { start, end };
+    }
+    if (dateRangeMode === 'week') {
+      const start = getOperationalWeekStart(selectedWeek, selectedYear);
+      const end = getOperationalWeekEnd(selectedWeek, selectedYear);
+      return { start, end };
+    }
+    return null;
+  }, [dateRangeMode, selectedYear, selectedMonth, selectedQuarter, selectedWeek]);
+
+  // Filter orders by search term (order number or customer name) and date range
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
 
     const fulfilled = orders.filter((order) => order.status === 'FULFILLED');
 
     let filtered = fulfilled;
+
+    if (isAdmin && dateRangeMode !== 'week' && getDateRangeForMode) {
+      const { start, end } = getDateRangeForMode;
+      filtered = filtered.filter((order) => {
+        const shippedDate = order.shippedDate ? new Date(order.shippedDate) : null;
+        if (!shippedDate) return false;
+        return shippedDate >= start && shippedDate <= end;
+      });
+    }
     
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = fulfilled.filter((order) => {
-        // Search by order number
+      filtered = filtered.filter((order) => {
         if (order.orderId.toLowerCase().includes(searchLower)) return true;
 
-        // Search by customer name
         if (order.customerId && customers) {
           const customer = customers.find(
             (c) => String(c.id) === String(order.customerId)
@@ -281,17 +324,14 @@ export default function ShippingTracker() {
       });
     }
 
-    // Sort by shipped date (most recent first)
     return filtered.sort((a, b) => {
-      // Orders without a shipped date go to the end
       if (!a.shippedDate && !b.shippedDate) return 0;
       if (!a.shippedDate) return 1;
       if (!b.shippedDate) return -1;
       
-      // Sort by shipped date descending (most recent first)
       return new Date(b.shippedDate).getTime() - new Date(a.shippedDate).getTime();
     });
-  }, [orders, searchTerm, customers]);
+  }, [orders, searchTerm, customers, isAdmin, dateRangeMode, getDateRangeForMode]);
 
   // Group orders by tracking number to identify consolidated shipments
   const trackingGroups = useMemo(() => {
@@ -428,16 +468,36 @@ export default function ShippingTracker() {
         </CardContent>
       </Card>
 
-      {/* View Specific Week - Moved under Current Week Summary */}
+      {/* View Specific Period */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            View Specific Week
+            {dateRangeMode === 'week' ? 'View Specific Week' : dateRangeMode === 'month' ? 'View by Month' : 'View by Quarter'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4 flex-wrap">
+            {isAdmin && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">
+                  View by:
+                </label>
+                <Select
+                  value={dateRangeMode}
+                  onValueChange={(v) => setDateRangeMode(v as DateRangeMode)}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">Week</SelectItem>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="quarter">Quarter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium whitespace-nowrap">
                 Year:
@@ -458,29 +518,87 @@ export default function ShippingTracker() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">
-                Week:
-              </label>
-              <Select
-                value={selectedWeek.toString()}
-                onValueChange={(v) => setSelectedWeek(parseInt(v))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {weekOptions.map((week) => (
-                    <SelectItem key={week} value={week.toString()}>
-                      Week {week}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-sm text-gray-600">
-              {formatOperationalWeekRange(selectedWeek, selectedYear)}
-            </div>
+            {dateRangeMode === 'week' && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">
+                  Week:
+                </label>
+                <Select
+                  value={selectedWeek.toString()}
+                  onValueChange={(v) => setSelectedWeek(parseInt(v))}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map((week) => (
+                      <SelectItem key={week} value={week.toString()}>
+                        Week {week}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {dateRangeMode === 'month' && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">
+                  Month:
+                </label>
+                <Select
+                  value={selectedMonth.toString()}
+                  onValueChange={(v) => setSelectedMonth(parseInt(v))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTH_NAMES.map((name, i) => (
+                      <SelectItem key={i} value={i.toString()}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {dateRangeMode === 'quarter' && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">
+                  Quarter:
+                </label>
+                <Select
+                  value={selectedQuarter.toString()}
+                  onValueChange={(v) => setSelectedQuarter(parseInt(v))}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUARTER_LABELS.map((label, i) => (
+                      <SelectItem key={i} value={i.toString()}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {dateRangeMode === 'week' && (
+              <div className="text-sm text-gray-600">
+                {formatOperationalWeekRange(selectedWeek, selectedYear)}
+              </div>
+            )}
+            {dateRangeMode === 'month' && (
+              <div className="text-sm text-gray-600">
+                {MONTH_NAMES[selectedMonth]} {selectedYear}
+              </div>
+            )}
+            {dateRangeMode === 'quarter' && (
+              <div className="text-sm text-gray-600">
+                {QUARTER_LABELS[selectedQuarter]} {selectedYear}
+              </div>
+            )}
           </div>
 
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
@@ -488,17 +606,21 @@ export default function ShippingTracker() {
               <div>
                 <div className="text-sm text-gray-600">Stocks Shipped</div>
                 <div className="text-3xl font-bold text-blue-600">
-                  {selectedWeekStats.stocksShipped}
+                  {dateRangeMode === 'week'
+                    ? selectedWeekStats.stocksShipped
+                    : filteredOrders.length}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-sm text-gray-600">Orders</div>
                 <div className="text-xl font-semibold text-gray-700">
-                  {selectedWeekStats.orders.length}
+                  {dateRangeMode === 'week'
+                    ? selectedWeekStats.orders.length
+                    : filteredOrders.length}
                 </div>
               </div>
             </div>
-            {selectedWeekStats.orders.length > 0 && (
+            {dateRangeMode === 'week' && selectedWeekStats.orders.length > 0 && (
               <div className="mt-4">
                 <div className="text-xs text-gray-600 mb-2">Order IDs:</div>
                 <div className="flex flex-wrap gap-1">
@@ -508,6 +630,21 @@ export default function ShippingTracker() {
                       className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs"
                     >
                       {orderId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {dateRangeMode !== 'week' && filteredOrders.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs text-gray-600 mb-2">Order IDs ({filteredOrders.length}):</div>
+                <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                  {filteredOrders.map((order) => (
+                    <span
+                      key={order.orderId}
+                      className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs"
+                    >
+                      {order.orderId}
                     </span>
                   ))}
                 </div>
@@ -550,6 +687,14 @@ export default function ShippingTracker() {
                   {filteredOrders.length !== 1 ? 's' : ''}
                 </p>
               )}
+              {isAdmin && dateRangeMode !== 'week' && !searchTerm && (
+                <p className="text-sm text-blue-600 mt-2 font-medium">
+                  Showing {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} shipped in{' '}
+                  {dateRangeMode === 'month'
+                    ? `${MONTH_NAMES[selectedMonth]} ${selectedYear}`
+                    : `${QUARTER_LABELS[selectedQuarter]} ${selectedYear}`}
+                </p>
+              )}
             </div>
 
             {/* Detailed Shipping Table */}
@@ -568,7 +713,7 @@ export default function ShippingTracker() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.slice(0, 50).map((order) => {
+                    {filteredOrders.slice(0, dateRangeMode === 'week' ? 50 : 200).map((order) => {
                       const customer = customers?.find(
                         (c) => String(c.id) === String(order.customerId)
                       );

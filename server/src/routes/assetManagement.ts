@@ -16,6 +16,17 @@ import { z } from 'zod';
 
 const router = Router();
 
+async function safeQuery<T>(queryFn: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await queryFn();
+  } catch (err: any) {
+    if (err?.message?.includes('Cannot read properties of null')) {
+      return [];
+    }
+    throw err;
+  }
+}
+
 function requireAdmin(req: Request, res: Response, next: Function) {
   const user = (req as any).user;
   if (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER')) {
@@ -66,11 +77,11 @@ router.put('/categories/:id', requireAdmin, async (req: Request, res: Response) 
 router.delete('/categories/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const linkedAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.categoryId, id)).limit(1);
+    const linkedAssets = await safeQuery(() => db.select({ id: assets.id }).from(assets).where(eq(assets.categoryId, id)).limit(1));
     if (linkedAssets.length > 0) {
       return res.status(400).json({ error: 'Cannot delete category with assets assigned to it. Reassign or remove those assets first.' });
     }
-    const childCategories = await db.select({ id: assetCategories.id }).from(assetCategories).where(eq(assetCategories.parentCategoryId, id)).limit(1);
+    const childCategories = await safeQuery(() => db.select({ id: assetCategories.id }).from(assetCategories).where(eq(assetCategories.parentCategoryId, id)).limit(1));
     if (childCategories.length > 0) {
       return res.status(400).json({ error: 'Cannot delete category with sub-categories. Delete sub-categories first.' });
     }
@@ -86,7 +97,7 @@ router.delete('/categories/:id', requireAdmin, async (req: Request, res: Respons
 
 router.get('/locations', async (_req: Request, res: Response) => {
   try {
-    const locations = await db.select().from(assetLocations).orderBy(assetLocations.name);
+    const locations = await safeQuery(() => db.select().from(assetLocations).orderBy(assetLocations.name));
     res.json(locations);
   } catch (error) {
     console.error('[AssetManagement] Error fetching locations:', error);
@@ -124,7 +135,7 @@ router.put('/locations/:id', requireAdmin, async (req: Request, res: Response) =
 router.delete('/locations/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const linkedAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.physicalLocationId, id)).limit(1);
+    const linkedAssets = await safeQuery(() => db.select({ id: assets.id }).from(assets).where(eq(assets.physicalLocationId, id)).limit(1));
     if (linkedAssets.length > 0) {
       return res.status(400).json({ error: 'Cannot delete location with assets assigned to it. Reassign those assets first.' });
     }
@@ -139,11 +150,11 @@ router.delete('/locations/:id', requireAdmin, async (req: Request, res: Response
 router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const linkedWOs = await db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.assetId, id)).limit(1);
+    const linkedWOs = await safeQuery(() => db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.assetId, id)).limit(1));
     if (linkedWOs.length > 0) {
       return res.status(400).json({ error: 'Cannot delete asset with work orders. Delete or reassign work orders first.' });
     }
-    const childAssets = await db.select({ id: assets.id }).from(assets).where(eq(assets.parentAssetId, id)).limit(1);
+    const childAssets = await safeQuery(() => db.select({ id: assets.id }).from(assets).where(eq(assets.parentAssetId, id)).limit(1));
     if (childAssets.length > 0) {
       return res.status(400).json({ error: 'Cannot delete asset with child assets. Delete or reassign child assets first.' });
     }
@@ -261,7 +272,7 @@ router.get('/analytics', async (_req: Request, res: Response) => {
 
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    const allAssets = await db
+    const allAssets = await safeQuery(() => db
       .select({
         id: assets.id,
         assetTag: assets.assetTag,
@@ -284,7 +295,7 @@ router.get('/', async (_req: Request, res: Response) => {
       .from(assets)
       .leftJoin(assetCategories, eq(assets.categoryId, assetCategories.id))
       .leftJoin(assetLocations, eq(assets.physicalLocationId, assetLocations.id))
-      .orderBy(desc(assets.createdAt));
+      .orderBy(desc(assets.createdAt)));
     res.json(allAssets);
   } catch (error) {
     console.error('[AssetManagement] Error fetching assets:', error);

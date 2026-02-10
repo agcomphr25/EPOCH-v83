@@ -12538,9 +12538,9 @@ export type InsertOnboardingSessionCapture = z.infer<typeof insertOnboardingSess
 // ============================================================
 
 export const assetCategories = pgTable('asset_categories', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
-  parentCategoryId: uuid('parent_category_id'),
+  parentCategoryId: varchar('parent_category_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -12549,7 +12549,7 @@ export type AssetCategory = typeof assetCategories.$inferSelect;
 export type InsertAssetCategory = z.infer<typeof insertAssetCategorySchema>;
 
 export const assetLocations = pgTable('asset_locations', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
   description: text('description'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -12560,12 +12560,12 @@ export type AssetLocation = typeof assetLocations.$inferSelect;
 export type InsertAssetLocation = z.infer<typeof insertAssetLocationSchema>;
 
 export const assets = pgTable('assets', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
   assetTag: text('asset_tag').notNull().unique(),
   name: text('name').notNull(),
-  categoryId: uuid('category_id').references(() => assetCategories.id),
-  parentAssetId: uuid('parent_asset_id'),
-  physicalLocationId: uuid('physical_location_id').references(() => assetLocations.id),
+  categoryId: varchar('category_id').references(() => assetCategories.id),
+  parentAssetId: varchar('parent_asset_id'),
+  physicalLocationId: varchar('physical_location_id').references(() => assetLocations.id),
   status: text('status').notNull().default('active'),
   purchaseDate: date('purchase_date'),
   purchaseCost: numeric('purchase_cost'),
@@ -12582,9 +12582,9 @@ export type Asset = typeof assets.$inferSelect;
 export type InsertAsset = z.infer<typeof insertAssetSchema>;
 
 export const assetLocationHistory = pgTable('asset_location_history', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  assetId: uuid('asset_id').references(() => assets.id).notNull(),
-  locationId: uuid('location_id').references(() => assetLocations.id).notNull(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  assetId: varchar('asset_id').references(() => assets.id).notNull(),
+  locationId: varchar('location_id').references(() => assetLocations.id).notNull(),
   movedAt: timestamp('moved_at').defaultNow().notNull(),
   movedBy: integer('moved_by').references(() => users.id),
   notes: text('notes'),
@@ -12595,8 +12595,8 @@ export type AssetLocationHistory = typeof assetLocationHistory.$inferSelect;
 export type InsertAssetLocationHistory = z.infer<typeof insertAssetLocationHistorySchema>;
 
 export const workOrders = pgTable('work_orders', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  assetId: uuid('asset_id').references(() => assets.id),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  assetId: varchar('asset_id').references(() => assets.id),
   type: text('type').notNull().default('reactive'),
   title: text('title').notNull(),
   description: text('description'),
@@ -12619,8 +12619,8 @@ export type WorkOrder = typeof workOrders.$inferSelect;
 export type InsertWorkOrder = z.infer<typeof insertWorkOrderSchema>;
 
 export const workOrderParts = pgTable('work_order_parts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  workOrderId: uuid('work_order_id').references(() => workOrders.id).notNull(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: varchar('work_order_id').references(() => workOrders.id).notNull(),
   inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id),
   partName: text('part_name'),
   quantity: numeric('quantity').notNull(),
@@ -12632,8 +12632,8 @@ export type WorkOrderPart = typeof workOrderParts.$inferSelect;
 export type InsertWorkOrderPart = z.infer<typeof insertWorkOrderPartSchema>;
 
 export const workOrderAttachments = pgTable('work_order_attachments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  workOrderId: uuid('work_order_id').references(() => workOrders.id).notNull(),
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: varchar('work_order_id').references(() => workOrders.id).notNull(),
   fileUrl: text('file_url').notNull(),
   fileName: text('file_name'),
   uploadedBy: integer('uploaded_by').references(() => users.id),

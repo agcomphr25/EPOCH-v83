@@ -108,13 +108,29 @@ export default function RoutingDocumentManagement() {
   });
   const [showMediaLibraryPicker, setShowMediaLibraryPicker] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showEditTemplateDialog, setShowEditTemplateDialog] = useState(false);
+  const [showEditSpecSheetDialog, setShowEditSpecSheetDialog] = useState(false);
+  const [showViewSpecSheetDialog, setShowViewSpecSheetDialog] = useState(false);
+  const [showViewTemplateDialog, setShowViewTemplateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'document' | 'template' | 'spec_sheet'; id: string; title: string } | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
+  const [selectedSpecSheet, setSelectedSpecSheet] = useState<SpecSheet | null>(null);
   const [editForm, setEditForm] = useState({
     title: '',
     partNumber: '',
     departmentName: '',
     documentType: 'work_instruction',
+    isTemplate: false,
+  });
+  const [editTemplateForm, setEditTemplateForm] = useState({
+    templateName: '',
+    templateType: 'work_instruction',
+    description: '',
+  });
+  const [editSpecSheetForm, setEditSpecSheetForm] = useState({
+    title: '',
+    partNumber: '',
     isTemplate: false,
   });
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
@@ -405,6 +421,50 @@ export default function RoutingDocumentManagement() {
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to delete spec sheet', variant: 'destructive' });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: async (data: { id: string; templateName: string; templateType: string; description: string }) => {
+      return apiRequest(`/api/routing-documents/templates/${data.id}`, {
+        method: 'PUT',
+        body: {
+          templateName: data.templateName,
+          templateType: data.templateType,
+          description: data.description || null,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Template Updated', description: 'Template details have been saved' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      setShowEditTemplateDialog(false);
+      setSelectedTemplate(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to update template', variant: 'destructive' });
+    },
+  });
+
+  const updateSpecSheetMutation = useMutation({
+    mutationFn: async (data: { id: string; title: string; partNumber: string; isTemplate: boolean }) => {
+      return apiRequest(`/api/routing-documents/spec-sheets/${data.id}`, {
+        method: 'PUT',
+        body: {
+          title: data.title,
+          partNumber: data.partNumber || null,
+          isTemplate: data.isTemplate,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Spec Sheet Updated', description: 'Spec sheet details have been saved' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
+      setShowEditSpecSheetDialog(false);
+      setSelectedSpecSheet(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to update spec sheet', variant: 'destructive' });
     },
   });
 
@@ -786,8 +846,47 @@ export default function RoutingDocumentManagement() {
                   {templates.map((template) => (
                     <Card key={template.id}>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">{template.templateName}</CardTitle>
-                        <CardDescription>{template.description}</CardDescription>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{template.templateName}</CardTitle>
+                            <CardDescription>{template.description}</CardDescription>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedTemplate(template);
+                                setShowViewTemplateDialog(true);
+                              }}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedTemplate(template);
+                                setEditTemplateForm({
+                                  templateName: template.templateName,
+                                  templateType: template.templateType,
+                                  description: template.description || '',
+                                });
+                                setShowEditTemplateDialog(true);
+                              }}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit Template
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => confirmDelete('template', template.id, template.templateName)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
@@ -802,14 +901,6 @@ export default function RoutingDocumentManagement() {
                             <Button variant="outline" className="flex-1" size="sm">
                               <Sparkles className="h-4 w-4 mr-2" />
                               Use Template
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => confirmDelete('template', template.id, template.templateName)}
-                            >
-                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
@@ -860,18 +951,40 @@ export default function RoutingDocumentManagement() {
                         <TableCell>{new Date(sheet.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" title="View">
+                            <Button variant="ghost" size="sm" title="View" onClick={() => {
+                              setSelectedSpecSheet(sheet);
+                              setShowViewSpecSheetDialog(true);
+                            }}>
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => confirmDelete('spec_sheet', sheet.id, sheet.title)}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => {
+                                  setSelectedSpecSheet(sheet);
+                                  setEditSpecSheetForm({
+                                    title: sheet.title,
+                                    partNumber: sheet.partNumber || '',
+                                    isTemplate: sheet.isTemplate,
+                                  });
+                                  setShowEditSpecSheetDialog(true);
+                                }}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => confirmDelete('spec_sheet', sheet.id, sheet.title)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1570,6 +1683,218 @@ export default function RoutingDocumentManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showEditTemplateDialog} onOpenChange={setShowEditTemplateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Template</DialogTitle>
+            <DialogDescription>Update the template details below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Template Name</Label>
+              <Input
+                value={editTemplateForm.templateName}
+                onChange={(e) => setEditTemplateForm({ ...editTemplateForm, templateName: e.target.value })}
+                placeholder="Template name"
+              />
+            </div>
+            <div>
+              <Label>Template Type</Label>
+              <Select value={editTemplateForm.templateType} onValueChange={(v) => setEditTemplateForm({ ...editTemplateForm, templateType: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
+                  <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                  <SelectItem value="traveler_template">Traveler Template</SelectItem>
+                  <SelectItem value="quality_procedure">Quality Procedure</SelectItem>
+                  <SelectItem value="mixed">Mixed</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={editTemplateForm.description}
+                onChange={(e) => setEditTemplateForm({ ...editTemplateForm, description: e.target.value })}
+                placeholder="Template description"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditTemplateDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!selectedTemplate || !editTemplateForm.templateName.trim()) {
+                  toast({ title: 'Error', description: 'Template name is required', variant: 'destructive' });
+                  return;
+                }
+                updateTemplateMutation.mutate({ id: selectedTemplate.id, ...editTemplateForm });
+              }}
+              disabled={updateTemplateMutation.isPending}
+            >
+              {updateTemplateMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showViewTemplateDialog} onOpenChange={setShowViewTemplateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplate?.templateName}</DialogTitle>
+            <DialogDescription>{selectedTemplate?.description || 'No description'}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{selectedTemplate?.templateType?.replace('_', ' ')}</Badge>
+              <Badge variant="secondary">Learned from {selectedTemplate?.learnedFromCount || 0} docs</Badge>
+            </div>
+            {selectedTemplate?.sections && selectedTemplate.sections.length > 0 && (
+              <div>
+                <Label className="text-sm font-semibold">Sections</Label>
+                <div className="mt-1 space-y-1">
+                  {selectedTemplate.sections.map((section: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <Badge variant="outline" className="text-xs">{i + 1}</Badge>
+                      <span className="font-medium">{section.name}</span>
+                      {section.description && <span className="text-muted-foreground">— {section.description}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedTemplate?.defaultFields && selectedTemplate.defaultFields.length > 0 && (
+              <div>
+                <Label className="text-sm font-semibold">Fields ({selectedTemplate.defaultFields.length})</Label>
+                <ScrollArea className="h-[200px] mt-1">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Field</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead>Required</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedTemplate.defaultFields.map((field: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{field.fieldLabel || field.fieldName}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-xs">{field.fieldType}</Badge></TableCell>
+                          <TableCell className="text-muted-foreground">{field.sectionName || '-'}</TableCell>
+                          <TableCell>{field.isRequired ? <CheckCircle className="h-4 w-4 text-green-600" /> : '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">
+              Created: {selectedTemplate?.createdAt ? new Date(selectedTemplate.createdAt).toLocaleString() : '-'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewTemplateDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditSpecSheetDialog} onOpenChange={setShowEditSpecSheetDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Spec Sheet</DialogTitle>
+            <DialogDescription>Update the spec sheet details below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={editSpecSheetForm.title}
+                onChange={(e) => setEditSpecSheetForm({ ...editSpecSheetForm, title: e.target.value })}
+                placeholder="Spec sheet title"
+              />
+            </div>
+            <div>
+              <Label>Part Number</Label>
+              <Input
+                value={editSpecSheetForm.partNumber}
+                onChange={(e) => setEditSpecSheetForm({ ...editSpecSheetForm, partNumber: e.target.value })}
+                placeholder="e.g., AG-1001"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="editSpecIsTemplate"
+                checked={editSpecSheetForm.isTemplate}
+                onCheckedChange={(checked) => setEditSpecSheetForm({ ...editSpecSheetForm, isTemplate: checked === true })}
+              />
+              <Label htmlFor="editSpecIsTemplate">Mark as Template</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditSpecSheetDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!selectedSpecSheet || !editSpecSheetForm.title.trim()) {
+                  toast({ title: 'Error', description: 'Title is required', variant: 'destructive' });
+                  return;
+                }
+                updateSpecSheetMutation.mutate({ id: selectedSpecSheet.id, ...editSpecSheetForm });
+              }}
+              disabled={updateSpecSheetMutation.isPending}
+            >
+              {updateSpecSheetMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showViewSpecSheetDialog} onOpenChange={setShowViewSpecSheetDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{selectedSpecSheet?.title}</DialogTitle>
+            <DialogDescription>Spec Sheet Details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-semibold">Part Number</Label>
+                <p className="text-sm text-muted-foreground">{selectedSpecSheet?.partNumber || 'Not specified'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Template</Label>
+                <p className="text-sm">{selectedSpecSheet?.isTemplate ? <Badge>Yes</Badge> : 'No'}</p>
+              </div>
+            </div>
+            {selectedSpecSheet?.specifications && (
+              <div>
+                <Label className="text-sm font-semibold">Specifications</Label>
+                <ScrollArea className="h-[200px] mt-1">
+                  <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap">
+                    {JSON.stringify(selectedSpecSheet.specifications, null, 2)}
+                  </pre>
+                </ScrollArea>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">
+              Created: {selectedSpecSheet?.createdAt ? new Date(selectedSpecSheet.createdAt).toLocaleString() : '-'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewSpecSheetDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

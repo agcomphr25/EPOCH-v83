@@ -1042,6 +1042,8 @@ router.post(
         return res.status(404).json({ error: `Order ${orderId} not found` });
       }
 
+      console.log("ORDER DEBUG:", JSON.stringify({ orderId: (order as any).orderId, customerId: (order as any).customerId, customer_id: (order as any).customer_id, keys: Object.keys(order as any).filter(k => k.toLowerCase().includes('customer')) }, null, 2));
+
       // Get customer and shipping information (for fallback if no custom address provided)
       let customerInfo = null;
       let customerAddress = null;

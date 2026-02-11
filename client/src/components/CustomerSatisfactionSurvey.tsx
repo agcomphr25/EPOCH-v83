@@ -113,8 +113,8 @@ export default function CustomerSatisfactionSurvey({
 
   // Fetch active surveys from generic survey engine
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
-    queryKey: ['/api/survey-engine/surveys'],
-    queryFn: () => apiRequest('/api/survey-engine/surveys'),
+    queryKey: ['/api/customer-satisfaction/surveys'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
   });
 
   // Fetch customers for selection
@@ -140,8 +140,8 @@ export default function CustomerSatisfactionSurvey({
     mutationFn: async (data: any) => {
       const isUpdating = existingResponse?.id;
       const url = isUpdating
-        ? `/api/survey-engine/responses/${existingResponse.id}`
-        : '/api/survey-engine/responses';
+        ? `/api/customer-satisfaction/responses/${existingResponse.id}`
+        : '/api/customer-satisfaction/responses';
       const method = isUpdating ? 'PUT' : 'POST';
 
       return apiRequest(url, {
@@ -167,7 +167,7 @@ export default function CustomerSatisfactionSurvey({
         onComplete(response.id);
       }
       queryClient.invalidateQueries({
-        queryKey: ['/api/survey-engine/responses'],
+        queryKey: ['/api/customer-satisfaction/responses'],
       });
     },
     onError: (error: any) => {

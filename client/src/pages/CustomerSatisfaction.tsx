@@ -296,20 +296,20 @@ export default function CustomerSatisfaction() {
 
   // Fetch surveys from generic survey engine
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
-    queryKey: ['/api/survey-engine/surveys'],
-    queryFn: () => apiRequest('/api/survey-engine/surveys'),
+    queryKey: ['/api/customer-satisfaction/surveys'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
   });
 
   // Fetch responses from generic survey engine
   const { data: responses = [], isLoading: responsesLoading } = useQuery({
-    queryKey: ['/api/survey-engine/responses'],
-    queryFn: () => apiRequest('/api/survey-engine/responses'),
+    queryKey: ['/api/customer-satisfaction/responses'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/responses'),
   });
 
   // Fetch analytics from generic survey engine
   const { data: analytics } = useQuery<Analytics>({
-    queryKey: ['/api/survey-engine/analytics'],
-    queryFn: () => apiRequest('/api/survey-engine/analytics'),
+    queryKey: ['/api/customer-satisfaction/analytics'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/analytics'),
   });
 
   // Fetch customers (still needed for customer lookup display)
@@ -321,7 +321,7 @@ export default function CustomerSatisfaction() {
   // Delete response mutation using generic survey engine
   const deleteResponse = useMutation({
     mutationFn: (responseId: string) =>
-      apiRequest(`/api/survey-engine/responses/${responseId}`, {
+      apiRequest(`/api/customer-satisfaction/responses/${responseId}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
@@ -330,10 +330,10 @@ export default function CustomerSatisfaction() {
         description: 'Survey response has been deleted successfully.',
       });
       queryClient.invalidateQueries({
-        queryKey: ['/api/survey-engine/responses'],
+        queryKey: ['/api/customer-satisfaction/responses'],
       });
       queryClient.invalidateQueries({
-        queryKey: ['/api/survey-engine/analytics'],
+        queryKey: ['/api/customer-satisfaction/analytics'],
       });
     },
     onError: (error: any) => {
@@ -878,10 +878,10 @@ export default function CustomerSatisfaction() {
                   setIsTakeSurveyOpen(false);
                   setSelectedCustomer(null);
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/survey-engine/responses'],
+                    queryKey: ['/api/customer-satisfaction/responses'],
                   });
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/survey-engine/analytics'],
+                    queryKey: ['/api/customer-satisfaction/analytics'],
                   });
                 }}
               />
@@ -919,10 +919,10 @@ export default function CustomerSatisfaction() {
                   setIsEditResponseOpen(false);
                   setEditingResponse(null);
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/survey-engine/responses'],
+                    queryKey: ['/api/customer-satisfaction/responses'],
                   });
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/survey-engine/analytics'],
+                    queryKey: ['/api/customer-satisfaction/analytics'],
                   });
                   toast({
                     title: 'Response Updated',

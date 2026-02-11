@@ -17,18 +17,38 @@ import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 
-// Dynamic PDF parser function
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
-    const { PDFParse } = await import('pdf-parse/node');
-    const parser = new PDFParse({ data: new Uint8Array(buffer), verbosity: 0 });
-    const textResult = await parser.getText();
-    await parser.destroy();
-    return textResult.text || '';
-  } catch (error) {
-    console.error('Error parsing PDF:', error);
-    return '';
+    const pdfParse = await import('pdf-parse');
+    const PDFParseClass = (pdfParse as any).PDFParse || (pdfParse as any).default?.PDFParse;
+    if (PDFParseClass) {
+      const parser = new PDFParseClass({ data: new Uint8Array(buffer), verbosity: 0 });
+      const textResult = await parser.getText();
+      await parser.destroy();
+      const text = textResult?.text || '';
+      if (text.trim()) {
+        console.log(`[PDF] Extracted ${text.length} chars via PDFParse`);
+        return text;
+      }
+    }
+  } catch (e1) {
+    console.log('[PDF] PDFParse class method failed, trying default export:', (e1 as Error).message);
   }
+  try {
+    const pdfParse = await import('pdf-parse');
+    const fn = (pdfParse as any).default || pdfParse;
+    if (typeof fn === 'function') {
+      const result = await fn(buffer);
+      const text = result?.text || '';
+      if (text.trim()) {
+        console.log(`[PDF] Extracted ${text.length} chars via default export`);
+        return text;
+      }
+    }
+  } catch (e2) {
+    console.error('[PDF] All extraction methods failed:', (e2 as Error).message);
+  }
+  return '';
 }
 
 const router = Router();
@@ -668,7 +688,6 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
       extractedText = fileBuffer.toString('utf-8');
     }
     
-    // Create the document with extracted content
     const [document] = await db.insert(routingDocuments).values({
       title: title || fileName,
       partNumber: partNumber || null,
@@ -678,6 +697,7 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
       fileName: fileName,
       fileType: mimeType || 'application/octet-stream',
       fileSize: fileBuffer.length,
+      extractedText: extractedText || null,
       description: extractedText ? `Extracted ${extractedText.length} characters from file` : `Original file: ${fileName}`,
       isTemplate: isTemplate === true || isTemplate === 'true',
       createdBy: user?.username || 'system',
@@ -816,12 +836,18 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Document not found' });
     }
     
-    // For now, we'll use text content from the request body since PDF parsing requires additional processing
-    const { textContent } = req.body;
+    let textContent = req.body.textContent || '';
     
-    if (!textContent) {
-      return res.status(400).json({ error: 'Text content is required for AI parsing' });
+    if (!textContent.trim() && document.extracted_text) {
+      textContent = document.extracted_text;
+      console.log(`[AI Parse] Using stored extracted text (${textContent.length} chars) for document: ${document.title}`);
     }
+    
+    if (!textContent.trim()) {
+      return res.status(400).json({ error: 'No text content available. Please upload a document with readable text or paste content manually.' });
+    }
+    
+    console.log(`[AI Parse] Analyzing ${textContent.length} chars for document: ${document.title}`);
     
     const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
 
@@ -829,7 +855,7 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\n${textContent}` }
+        { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\nDocument Title: ${document.title}\n\n${textContent.substring(0, 50000)}` }
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 4096,
@@ -837,14 +863,18 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     
     const parsedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
     
-    // Update document with AI extracted content
+    const updateData: any = {
+      aiExtractedContent: parsedContent,
+      aiExtractedFields: parsedContent.dataFields || [],
+      aiProcessedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (!document.extracted_text && textContent.trim()) {
+      updateData.extractedText = textContent;
+    }
+    
     const [updatedDocument] = await db.update(routingDocuments)
-      .set({
-        aiExtractedContent: parsedContent,
-        aiExtractedFields: parsedContent.dataFields || [],
-        aiProcessedAt: new Date(),
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(routingDocuments.id, req.params.id))
       .returning();
     
@@ -883,7 +913,14 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
       }
       
       referenceContent = refDocs.map((doc: any) => {
-        return `Document: ${doc.title}\nExtracted Content: ${JSON.stringify(doc.ai_extracted_content || {})}`;
+        const parts = [`Document: ${doc.title}`];
+        if (doc.extracted_text && doc.extracted_text.trim()) {
+          parts.push(`Full Text:\n${doc.extracted_text.substring(0, 15000)}`);
+        }
+        if (doc.ai_extracted_content) {
+          parts.push(`AI Analysis: ${JSON.stringify(doc.ai_extracted_content)}`);
+        }
+        return parts.join('\n');
       }).join('\n\n---\n\n');
     }
     
@@ -988,17 +1025,29 @@ router.post('/templates/learn', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Referenced documents not found: ${missingIds.join(', ')}` });
     }
     
-    // Analyze patterns across documents - using snake_case for raw SQL result columns
-    const documentAnalysis = refDocs.map((doc: any) => ({
-      title: doc.title,
-      documentType: doc.document_type,
-      extractedContent: doc.ai_extracted_content,
-      extractedFields: doc.ai_extracted_fields,
-    }));
+    const documentAnalysis = refDocs.map((doc: any) => {
+      const analysis: any = {
+        title: doc.title,
+        documentType: doc.document_type,
+        partNumber: doc.part_number,
+        department: doc.department_name,
+      };
+      if (doc.extracted_text && doc.extracted_text.trim()) {
+        analysis.fullText = doc.extracted_text.substring(0, 15000);
+      }
+      if (doc.ai_extracted_content) {
+        analysis.aiAnalysis = doc.ai_extracted_content;
+      }
+      return analysis;
+    });
+    
+    const hasActualText = refDocs.some((doc: any) => doc.extracted_text && doc.extracted_text.trim());
     
     const systemPrompt = `You are an expert at analyzing composite manufacturing documents (work instructions, spec sheets, travelers) for composite layup, mold creation, curing, and fabrication processes. Analyze the provided documents and identify common patterns, fields, and structure to create a reusable template.
 
 You understand composite manufacturing processes deeply: ply layup, fiber orientation, prepreg handling, vacuum bagging, cure cycles, mold prep, bonding, trimming, and NDI/NDT inspection.
+
+CRITICAL: Base your analysis on the ACTUAL document text provided in the "fullText" field. This is the real content from the user's uploaded documents. Do NOT make up generic content - extract the actual structure, fields, steps, and requirements found in these specific documents.
 
 Return a JSON object with:
 {
@@ -1008,11 +1057,13 @@ Return a JSON object with:
   "aiGeneratedPrompt": "A prompt that can be used to generate similar composite manufacturing documents in the future"
 }`;
 
+    console.log(`[Learn Template] Analyzing ${refDocs.length} documents, ${hasActualText ? 'with' : 'WITHOUT'} actual text content`);
+
     const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze these documents and create a template:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
+        { role: 'user', content: `Analyze these ${refDocs.length} documents and create a template based on their ACTUAL content:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 4096,

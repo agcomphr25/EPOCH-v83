@@ -11217,6 +11217,7 @@ export const routingDocuments = pgTable('routing_documents', {
   fileType: varchar('file_type', { length: 100 }),
   fileSize: integer('file_size'),
   
+  extractedText: text('extracted_text'),
   aiExtractedContent: jsonb('ai_extracted_content'),
   aiExtractedFields: jsonb('ai_extracted_fields'),
   aiProcessedAt: timestamp('ai_processed_at', { withTimezone: true }),

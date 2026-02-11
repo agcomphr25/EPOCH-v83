@@ -13528,10 +13528,39 @@ export class DatabaseStorage implements IStorage {
     const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
     const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
 
+    let stepCounter = 0;
     for (let i = 0; i < departmentSequence.length; i++) {
       const deptName = departmentSequence[i];
-      const stepNumber = (i + 1) * 10; // 10, 20, 30, etc.
       const deptConfig = departmentConfig[deptName] || {};
+
+      const hasStartChecks = (deptConfig.startChecks || []).length > 0;
+      const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
+      const hasMaterials = (deptConfig.materials || []).length > 0;
+      const hasTraceFields = (traceabilityConfig[deptName] || []).length > 0;
+      const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
+      const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
+      const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
+      const routingInstPack = deptConfig.instructionPack || null;
+      const hasInstructionPackContent = routingInstPack && (
+        (routingInstPack.workInstructionRefs?.length > 0) ||
+        (routingInstPack.aiSnippets?.length > 0) ||
+        (routingInstPack.specialNotes) ||
+        (routingInstPack.media?.length > 0)
+      );
+      const hasTimerConfig = deptConfig.timerConfig?.enabled;
+      const hasStdProcesses = (deptConfig.standardProcesses || []).length > 0;
+      const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
+
+      const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
+        hasCustomFields || hasQcStandards || hasOvenCuring || hasInstructionPackContent ||
+        hasTimerConfig || hasStdProcesses || hasSpecialProcess;
+
+      if (!hasAnyContent) {
+        continue;
+      }
+
+      stepCounter++;
+      const stepNumber = stepCounter * 10; // 10, 20, 30, etc.
 
       // Create the step
       const step = await this.createTravelerStep({
@@ -13852,7 +13881,8 @@ export class DatabaseStorage implements IStorage {
       details: {
         fromRoutingId: routing.id,
         fromRoutingRevision: (routing as any).routingRevision || 1,
-        departmentCount: departmentSequence.length,
+        departmentCount: stepCounter,
+        skippedDepartments: departmentSequence.length - stepCounter,
       },
     });
 

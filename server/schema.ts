@@ -4144,7 +4144,9 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   attachments: text('attachments').array(), // PDF file paths
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  createdAtIdx: index('idx_rfq_created').on(table.createdAt),
+}));
 
 // P2 Part Certification Requirements - defines which certifications are required for parts by department
 export const p2PartCertifications = pgTable('p2_part_certifications', {
@@ -7447,7 +7449,9 @@ export const featureSelections = pgTable('feature_selections', {
   lastSelectedAt: timestamp('last_selected_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  selectionCountIdx: index('idx_feature_selections_count').on(table.selectionCount),
+}));
 
 export const insertFeatureSelectionSchema = createInsertSchema(
   featureSelections

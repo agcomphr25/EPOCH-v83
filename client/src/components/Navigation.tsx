@@ -67,6 +67,7 @@ import {
   Ticket,
   Database,
   QrCode,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -509,6 +510,12 @@ export default function Navigation() {
       label: 'Shipping Tracker',
       icon: Package,
       description: 'Track stocks shipped by company week',
+    },
+    {
+      path: '/urgent-orders-report',
+      label: 'Urgent Orders Report',
+      icon: AlertTriangle,
+      description: 'View all orders flagged as Urgent or Critical priority',
     },
     {
       path: '/gateway-reports',

@@ -37,14 +37,6 @@ import {
   FileText,
 } from 'lucide-react';
 import CustomerSatisfactionSurvey from '@/components/CustomerSatisfactionSurvey';
-import {
-  pdf,
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-} from '@react-pdf/renderer';
 
 interface Survey {
   id: string;
@@ -58,25 +50,24 @@ interface Survey {
 }
 
 interface SurveyResponse {
-  id: string;
-  surveyId: string;
+  id: number;
+  surveyId: number;
   surveyTitle: string;
-  respondentId: string;
-  respondentType: string;
-  respondentName: string;
-  respondentEmail?: string;
-  contextId?: string;
-  contextType?: string;
+  customerId: number;
+  customerName: string;
+  customerEmail?: string;
+  orderId?: string;
   responses: Record<string, any>;
   overallSatisfaction?: number;
   npsScore?: number;
   aggregateScore?: number;
   responseTimeSeconds?: number;
-  submittedBy?: string;
+  csrName?: string;
   isComplete: boolean;
   surveyDate?: string;
   submittedAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 interface Analytics {
@@ -105,8 +96,7 @@ interface Analytics {
   }>;
 }
 
-// PDF Styles
-const pdfStyles = StyleSheet.create({
+const pdfStyles: Record<string, any> = {
   page: {
     padding: 40,
     fontSize: 11,
@@ -171,89 +161,77 @@ const pdfStyles = StyleSheet.create({
     color: '#999',
     fontSize: 9,
   },
-});
+};
 
-// PDF Document Component
-const SurveyResponsePDF = ({
-  response,
-  survey,
-}: {
-  response: SurveyResponse;
-  survey: Survey | null;
-}) => (
-  <Document>
-    <Page size="A4" style={pdfStyles.page}>
-      <View style={pdfStyles.header}>
-        <Text style={pdfStyles.title}>
-          Customer Satisfaction Survey Response
-        </Text>
-        <Text style={pdfStyles.subtitle}>{response.surveyTitle}</Text>
-        <Text style={pdfStyles.subtitle}>
-          Submitted:{' '}
-          {response.submittedAt
-            ? new Date(response.submittedAt).toLocaleDateString()
-            : 'N/A'}
-        </Text>
-      </View>
+async function generateSurveyResponsePDF(response: SurveyResponse, survey: Survey | null): Promise<Blob> {
+  const { pdf, Document, Page, Text, View } = await import('@react-pdf/renderer');
 
-      <View style={pdfStyles.section}>
-        <Text style={pdfStyles.sectionTitle}>Respondent Information</Text>
-        <View style={pdfStyles.row}>
-          <Text style={pdfStyles.label}>Name:</Text>
-          <Text style={pdfStyles.value}>{response.respondentName}</Text>
+  const doc = (
+    <Document>
+      <Page size="A4" style={pdfStyles.page}>
+        <View style={pdfStyles.header}>
+          <Text style={pdfStyles.title}>Customer Satisfaction Survey Response</Text>
+          <Text style={pdfStyles.subtitle}>{response.surveyTitle}</Text>
+          <Text style={pdfStyles.subtitle}>
+            Submitted: {response.submittedAt ? new Date(response.submittedAt).toLocaleDateString() : 'N/A'}
+          </Text>
         </View>
-        {response.respondentEmail && (
+
+        <View style={pdfStyles.section}>
+          <Text style={pdfStyles.sectionTitle}>Customer Information</Text>
           <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Email:</Text>
-            <Text style={pdfStyles.value}>{response.respondentEmail}</Text>
+            <Text style={pdfStyles.label}>Name:</Text>
+            <Text style={pdfStyles.value}>{response.customerName}</Text>
           </View>
-        )}
-        {response.contextId && (
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Reference #:</Text>
-            <Text style={pdfStyles.value}>{response.contextId}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={pdfStyles.section}>
-        <Text style={pdfStyles.sectionTitle}>Overall Scores</Text>
-        <View style={pdfStyles.row}>
-          <Text style={pdfStyles.label}>Aggregate Score:</Text>
-          <Text style={pdfStyles.value}>{response.aggregateScore || 0}/50</Text>
-        </View>
-        <View style={pdfStyles.row}>
-          <Text style={pdfStyles.label}>NPS Score:</Text>
-          <Text style={pdfStyles.value}>{response.npsScore}/10</Text>
-        </View>
-      </View>
-
-      <View style={pdfStyles.section}>
-        <Text style={pdfStyles.sectionTitle}>Survey Responses</Text>
-        {survey?.questions.map((question: any, index: number) => {
-          const answer = response.responses[question.id];
-          if (!answer && answer !== 0) return null;
-
-          return (
-            <View key={question.id} style={pdfStyles.question}>
-              <Text style={pdfStyles.questionText}>
-                {index + 1}. {question.question}
-              </Text>
-              <Text style={pdfStyles.answer}>
-                {typeof answer === 'number' ? `${answer}/10` : answer}
-              </Text>
+          {response.customerEmail && (
+            <View style={pdfStyles.row}>
+              <Text style={pdfStyles.label}>Email:</Text>
+              <Text style={pdfStyles.value}>{response.customerEmail}</Text>
             </View>
-          );
-        })}
-      </View>
+          )}
+          {response.orderId && (
+            <View style={pdfStyles.row}>
+              <Text style={pdfStyles.label}>Order #:</Text>
+              <Text style={pdfStyles.value}>{response.orderId}</Text>
+            </View>
+          )}
+        </View>
 
-      <Text style={pdfStyles.footer}>
-        Generated on {new Date().toLocaleDateString()} • Customer Satisfaction
-        Survey System
-      </Text>
-    </Page>
-  </Document>
-);
+        <View style={pdfStyles.section}>
+          <Text style={pdfStyles.sectionTitle}>Overall Scores</Text>
+          <View style={pdfStyles.row}>
+            <Text style={pdfStyles.label}>Aggregate Score:</Text>
+            <Text style={pdfStyles.value}>{response.aggregateScore || 0}/50</Text>
+          </View>
+          <View style={pdfStyles.row}>
+            <Text style={pdfStyles.label}>NPS Score:</Text>
+            <Text style={pdfStyles.value}>{response.npsScore}/10</Text>
+          </View>
+        </View>
+
+        <View style={pdfStyles.section}>
+          <Text style={pdfStyles.sectionTitle}>Survey Responses</Text>
+          {survey?.questions.map((question: any, index: number) => {
+            const answer = response.responses[question.id];
+            if (!answer && answer !== 0) return null;
+            return (
+              <View key={question.id} style={pdfStyles.question}>
+                <Text style={pdfStyles.questionText}>{index + 1}. {question.question}</Text>
+                <Text style={pdfStyles.answer}>{typeof answer === 'number' ? `${answer}/10` : answer}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        <Text style={pdfStyles.footer}>
+          Generated on {new Date().toLocaleDateString()} - Customer Satisfaction Survey System
+        </Text>
+      </Page>
+    </Document>
+  );
+
+  return pdf(doc).toBlob();
+}
 
 export default function CustomerSatisfaction() {
   const { toast } = useToast();
@@ -267,17 +245,14 @@ export default function CustomerSatisfaction() {
     null
   );
 
-  // Export response as PDF
   const exportResponseToPDF = async (response: SurveyResponse) => {
     try {
-      const survey = surveys.find((s: Survey) => s.id === response.surveyId);
-      const blob = await pdf(
-        <SurveyResponsePDF response={response} survey={survey || null} />
-      ).toBlob();
+      const survey = surveys.find((s: Survey) => String(s.id) === String(response.surveyId));
+      const blob = await generateSurveyResponsePDF(response, survey || null);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `survey-response-${response.respondentName.replace(/\s+/g, '-')}-${response.id}.pdf`;
+      link.download = `survey-response-${(response.customerName || 'unknown').replace(/\s+/g, '-')}-${response.id}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
 
@@ -434,7 +409,7 @@ export default function CustomerSatisfaction() {
                   className="flex items-center justify-between p-4 border rounded-lg"
                 >
                   <div className="space-y-1">
-                    <div className="font-medium">{response.respondentName}</div>
+                    <div className="font-medium">{response.customerName}</div>
                     <div className="text-sm text-gray-600">
                       {response.surveyTitle}
                     </div>
@@ -533,11 +508,11 @@ export default function CustomerSatisfaction() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="font-medium text-gray-900">
-                            {response.respondentName}
+                            {response.customerName}
                           </div>
-                          {response.respondentEmail && (
+                          {response.customerEmail && (
                             <div className="text-sm text-gray-500">
-                              {response.respondentEmail}
+                              {response.customerEmail}
                             </div>
                           )}
                         </div>
@@ -609,7 +584,7 @@ export default function CustomerSatisfaction() {
                                   'Are you sure you want to delete this response? This action cannot be undone.'
                                 )
                               ) {
-                                deleteResponse.mutate(response.id);
+                                deleteResponse.mutate(String(response.id));
                               }
                             }}
                             className="text-red-600 hover:text-red-900"
@@ -900,9 +875,9 @@ export default function CustomerSatisfaction() {
           {editingResponse && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded">
-                <strong>Respondent:</strong> {editingResponse.respondentName}
-                {editingResponse.respondentEmail &&
-                  ` (${editingResponse.respondentEmail})`}
+                <strong>Customer:</strong> {editingResponse.customerName}
+                {editingResponse.customerEmail &&
+                  ` (${editingResponse.customerEmail})`}
                 <br />
                 <strong>Survey:</strong> {editingResponse.surveyTitle}
                 <br />
@@ -911,9 +886,9 @@ export default function CustomerSatisfaction() {
               </div>
 
               <CustomerSatisfactionSurvey
-                surveyId={editingResponse.surveyId}
-                customerId={editingResponse.respondentId ? parseInt(editingResponse.respondentId) : undefined}
-                orderId={editingResponse.contextId}
+                surveyId={String(editingResponse.surveyId)}
+                customerId={editingResponse.customerId}
+                orderId={editingResponse.orderId}
                 existingResponse={editingResponse}
                 onComplete={() => {
                   setIsEditResponseOpen(false);

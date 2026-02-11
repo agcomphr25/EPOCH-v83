@@ -97,13 +97,13 @@ export default function CustomerSatisfactionSurvey({
     Record<string, string>
   >({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    customerId ?? (existingResponse?.respondentId ? parseInt(existingResponse.respondentId) : null)
+    customerId ?? (existingResponse?.customerId || null)
   );
   const [orderNumber, setOrderNumber] = useState<string>(
-    existingResponse?.contextId || ''
+    existingResponse?.orderId || ''
   );
   const [csrName, setCsrName] = useState<string>(
-    existingResponse?.submittedBy || ''
+    existingResponse?.csrName || ''
   );
   const [surveyDate, setSurveyDate] = useState<Date | undefined>(
     existingResponse?.surveyDate
@@ -253,17 +253,10 @@ export default function CustomerSatisfactionSurvey({
     // Get selected customer details for respondent fields
     const selectedCustomer = customers.find((c: Customer) => c.id === selectedCustomerId);
 
-    // Build response data using generic survey engine schema
     const responseData = {
-      surveyId: selectedSurvey.id,
-      // Respondent abstraction - ensure respondentId is a valid non-empty string
-      respondentId: selectedCustomerId ? String(selectedCustomerId) : 'anonymous',
-      respondentType: selectedCustomerId ? 'customer' as const : 'anonymous' as const,
-      respondentName: selectedCustomer?.name || null,
-      respondentEmail: selectedCustomer?.email || null,
-      // Context abstraction
-      contextId: orderNumber || orderId || null,
-      contextType: (orderNumber || orderId) ? 'order' as const : 'general' as const,
+      surveyId: typeof selectedSurvey.id === 'string' ? parseInt(selectedSurvey.id) : selectedSurvey.id,
+      customerId: selectedCustomerId,
+      orderId: orderNumber || orderId || null,
       responses,
       overallSatisfaction: productQuality || null,
       npsScore: recommendationLikelihood || null,
@@ -271,7 +264,7 @@ export default function CustomerSatisfactionSurvey({
       responseTimeSeconds: Math.floor(
         (new Date().getTime() - startTime.getTime()) / 1000
       ),
-      submittedBy: csrName || null,
+      csrName: csrName || null,
       surveyDate: surveyDate
         ? surveyDate.toISOString()
         : new Date().toISOString(),

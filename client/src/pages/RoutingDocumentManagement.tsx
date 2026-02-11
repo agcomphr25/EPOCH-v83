@@ -28,8 +28,13 @@ import {
   CheckCircle,
   AlertCircle,
   Route,
-  Library
+  Library,
+  Pencil,
+  Trash2,
+  MoreHorizontal
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import MediaLibraryPicker from '@/components/MediaLibraryPicker';
 
 interface RoutingDocument {
@@ -102,6 +107,16 @@ export default function RoutingDocumentManagement() {
     description: '',
   });
   const [showMediaLibraryPicker, setShowMediaLibraryPicker] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'document' | 'template' | 'spec_sheet'; id: string; title: string } | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    partNumber: '',
+    departmentName: '',
+    documentType: 'work_instruction',
+    isTemplate: false,
+  });
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
   const [generateRoutingForm, setGenerateRoutingForm] = useState({
     partNumber: '',
@@ -323,6 +338,101 @@ export default function RoutingDocumentManagement() {
       toast({ title: 'Error', description: error.message || 'Failed to generate part routing', variant: 'destructive' });
     },
   });
+
+  const updateDocMutation = useMutation({
+    mutationFn: async (data: { id: string; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean }) => {
+      return apiRequest(`/api/routing-documents/${data.id}`, {
+        method: 'PUT',
+        body: {
+          title: data.title,
+          partNumber: data.partNumber || null,
+          departmentName: data.departmentName || null,
+          documentType: data.documentType,
+          isTemplate: data.isTemplate,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Document Updated', description: 'Document details have been saved' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+      setShowEditDialog(false);
+      setSelectedDocument(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to update document', variant: 'destructive' });
+    },
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/routing-documents/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast({ title: 'Document Deleted', description: 'Document has been removed' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to delete document', variant: 'destructive' });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/routing-documents/templates/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast({ title: 'Template Deleted', description: 'Template has been removed' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to delete template', variant: 'destructive' });
+    },
+  });
+
+  const deleteSpecSheetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/routing-documents/spec-sheets/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast({ title: 'Spec Sheet Deleted', description: 'Spec sheet has been removed' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to delete spec sheet', variant: 'destructive' });
+    },
+  });
+
+  const openEditDialog = (doc: RoutingDocument) => {
+    setSelectedDocument(doc);
+    setEditForm({
+      title: doc.title,
+      partNumber: doc.partNumber || '',
+      departmentName: doc.departmentName || '',
+      documentType: doc.documentType,
+      isTemplate: doc.isTemplate,
+    });
+    setShowEditDialog(true);
+  };
+
+  const confirmDelete = (type: 'document' | 'template' | 'spec_sheet', id: string, title: string) => {
+    setDeleteTarget({ type, id, title });
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDelete = () => {
+    if (!deleteTarget) return;
+    switch (deleteTarget.type) {
+      case 'document': deleteDocMutation.mutate(deleteTarget.id); break;
+      case 'template': deleteTemplateMutation.mutate(deleteTarget.id); break;
+      case 'spec_sheet': deleteSpecSheetMutation.mutate(deleteTarget.id); break;
+    }
+  };
 
   const handleGenerateRouting = () => {
     if (!selectedDocument) return;
@@ -599,24 +709,49 @@ export default function RoutingDocumentManagement() {
                               size="sm"
                               onClick={() => {
                                 setSelectedDocument(doc);
-                                setShowParseDialog(true);
-                                if (doc.fileUrl) {
-                                  loadStoredDocumentText(doc.id);
-                                }
-                              }}
-                            >
-                              <Brain className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedDocument(doc);
                                 setShowViewDialog(true);
                               }}
+                              title="View"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(doc)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  setSelectedDocument(doc);
+                                  setShowParseDialog(true);
+                                  if (doc.fileUrl) {
+                                    loadStoredDocumentText(doc.id);
+                                  }
+                                }}>
+                                  <Brain className="h-4 w-4 mr-2" />
+                                  Analyze with AI
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  setSelectedDocument(doc);
+                                  setShowGenerateRoutingDialog(true);
+                                }}>
+                                  <Route className="h-4 w-4 mr-2" />
+                                  Generate Routing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => confirmDelete('document', doc.id, doc.title)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -663,10 +798,20 @@ export default function RoutingDocumentManagement() {
                           <div className="text-sm text-muted-foreground">
                             {template.defaultFields?.length || 0} fields defined
                           </div>
-                          <Button variant="outline" className="w-full mt-2" size="sm">
-                            <Sparkles className="h-4 w-4 mr-2" />
-                            Use Template
-                          </Button>
+                          <div className="flex gap-2 mt-2">
+                            <Button variant="outline" className="flex-1" size="sm">
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Use Template
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => confirmDelete('template', template.id, template.templateName)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -714,9 +859,20 @@ export default function RoutingDocumentManagement() {
                         </TableCell>
                         <TableCell>{new Date(sheet.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" title="View">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => confirmDelete('spec_sheet', sheet.id, sheet.title)}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1318,6 +1474,102 @@ export default function RoutingDocumentManagement() {
         acceptedTypes={['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
         title="Select Reference Document from Media Library"
       />
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Document</DialogTitle>
+            <DialogDescription>Update the document details below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                placeholder="Document title"
+              />
+            </div>
+            <div>
+              <Label>Part Number</Label>
+              <Input
+                value={editForm.partNumber}
+                onChange={(e) => setEditForm({ ...editForm, partNumber: e.target.value })}
+                placeholder="e.g., AG-1001"
+              />
+            </div>
+            <div>
+              <Label>Department</Label>
+              <Input
+                value={editForm.departmentName}
+                onChange={(e) => setEditForm({ ...editForm, departmentName: e.target.value })}
+                placeholder="e.g., Layup, Trim, Paint"
+              />
+            </div>
+            <div>
+              <Label>Document Type</Label>
+              <Select value={editForm.documentType} onValueChange={(v) => setEditForm({ ...editForm, documentType: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
+                  <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                  <SelectItem value="traveler_template">Traveler Template</SelectItem>
+                  <SelectItem value="quality_procedure">Quality Procedure</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="editIsTemplate"
+                checked={editForm.isTemplate}
+                onCheckedChange={(checked) => setEditForm({ ...editForm, isTemplate: checked === true })}
+              />
+              <Label htmlFor="editIsTemplate">Mark as Template</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!selectedDocument || !editForm.title.trim()) {
+                  toast({ title: 'Error', description: 'Title is required', variant: 'destructive' });
+                  return;
+                }
+                updateDocMutation.mutate({ id: selectedDocument.id, ...editForm });
+              }}
+              disabled={updateDocMutation.isPending}
+            >
+              {updateDocMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete "{deleteTarget?.title}". This action cannot be easily undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {(deleteDocMutation.isPending || deleteTemplateMutation.isPending || deleteSpecSheetMutation.isPending)
+                ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

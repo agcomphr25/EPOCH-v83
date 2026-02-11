@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCw, FileText, Edit } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { useLocation } from 'wouter';
 
+import { useQuery } from '@tanstack/react-query';
 import useNonconformance from '../hooks/useNonconformance';
 import NonconformanceFormModal from './NonconformanceFormModal';
 
@@ -33,6 +34,14 @@ export default function NonconformanceDashboard() {
   const { records, loading, error, setRecords } = useNonconformance({ ...filters, refreshTrigger });
   const [modalOpen, setModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
+
+  const { data: stockModels = [] } = useQuery<any[]>({
+    queryKey: ['/api/stock-models'],
+  });
+  const stockModelDisplayMap: Record<string, string> = {};
+  stockModels.forEach((sm: any) => {
+    stockModelDisplayMap[sm.id] = sm.displayName || sm.name || sm.id;
+  });
 
   const resetFilters = () => {
     setFilters({
@@ -283,6 +292,7 @@ export default function NonconformanceDashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
+                    <th className="text-left p-2 font-medium">Created</th>
                     <th className="text-left p-2 font-medium">Order ID</th>
                     <th className="text-left p-2 font-medium">Serial #</th>
                     <th className="text-left p-2 font-medium">Customer</th>
@@ -290,6 +300,7 @@ export default function NonconformanceDashboard() {
                     <th className="text-left p-2 font-medium">Stock Model</th>
                     <th className="text-left p-2 font-medium">Qty</th>
                     <th className="text-left p-2 font-medium">Issue Cause</th>
+                    <th className="text-left p-2 font-medium">Mfr Defect</th>
                     <th className="text-left p-2 font-medium">Disposition</th>
                     <th className="text-left p-2 font-medium">Status</th>
                     <th className="text-left p-2 font-medium">Progress</th>
@@ -301,6 +312,9 @@ export default function NonconformanceDashboard() {
                     const statusBadge = getStatusBadge(record);
                     return (
                       <tr key={record.id} className="border-b hover:bg-gray-50">
+                        <td className="p-2 text-sm text-gray-600 whitespace-nowrap">
+                          {record.createdAt ? format(new Date(record.createdAt), 'MM/dd/yyyy') : '—'}
+                        </td>
                         <td className="p-2">
                           <button
                             onClick={() => setLocation(`/order-entry?orderId=${record.orderId}`)}
@@ -313,9 +327,16 @@ export default function NonconformanceDashboard() {
                         <td className="p-2">{record.serialNumber}</td>
                         <td className="p-2">{record.customerName}</td>
                         <td className="p-2">{record.poNumber}</td>
-                        <td className="p-2">{record.stockModel}</td>
+                        <td className="p-2">{stockModelDisplayMap[record.stockModel] || record.stockModel}</td>
                         <td className="p-2">{record.quantity}</td>
                         <td className="p-2 text-sm">{record.issueCause}</td>
+                        <td className="p-2 text-center">
+                          {record.manufacturerDefect ? (
+                            <Badge variant="destructive" className="text-xs">Yes</Badge>
+                          ) : (
+                            <span className="text-gray-400 text-xs">No</span>
+                          )}
+                        </td>
                         <td className="p-2">{record.disposition}</td>
                         <td className="p-2">
                           <Badge

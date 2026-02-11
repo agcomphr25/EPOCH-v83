@@ -86,7 +86,10 @@ export default function UrgentOrdersReport() {
 
   const urgentOrders = useMemo(() => {
     let result = orders.filter(
-      (order) => order.urgency === 'high' || order.urgency === 'critical'
+      (order) =>
+        (order.urgency === 'high' || order.urgency === 'critical') &&
+        order.status !== 'FULFILLED' &&
+        order.status !== 'CANCELLED'
     );
 
     result.sort((a, b) => {

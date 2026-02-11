@@ -1125,7 +1125,8 @@ export default function RoutingDocumentManagement() {
                           <div key={idx} className="p-3 bg-muted rounded-lg flex justify-between">
                             <div>
                               <div className="font-medium">{cp.checkpoint}</div>
-                              <div className="text-sm text-muted-foreground">Standard: {cp.standard}</div>
+                              <div className="text-sm text-muted-foreground">Standard: {cp.standard} | Tolerance: {cp.tolerance}</div>
+                              {cp.inspectionMethod && <div className="text-xs text-blue-600 mt-0.5">Method: {cp.inspectionMethod}</div>}
                             </div>
                             <Badge variant="secondary">{cp.department}</Badge>
                           </div>
@@ -1144,6 +1145,45 @@ export default function RoutingDocumentManagement() {
                             <div className="text-sm text-muted-foreground">
                               {cert.department} - {cert.task}
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedDocument.aiExtractedContent.materialRequirements?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Material Requirements</Label>
+                      <div className="space-y-2">
+                        {selectedDocument.aiExtractedContent.materialRequirements.map((mat: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted rounded-lg flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{mat.material}</div>
+                              <div className="text-sm text-muted-foreground">{mat.specification}</div>
+                              {mat.traceabilityRequired && <div className="text-xs text-amber-600 mt-0.5">Lot traceability required</div>}
+                            </div>
+                            <Badge variant="secondary">{mat.department}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedDocument.aiExtractedContent.curingParameters?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="font-medium">Curing Parameters</Label>
+                      <div className="space-y-2">
+                        {selectedDocument.aiExtractedContent.curingParameters.map((cure: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted rounded-lg flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{cure.step}</div>
+                              <div className="text-sm text-muted-foreground">
+                                Temp: {cure.temperature} | Time: {cure.time}
+                                {cure.vacuumPressure && ` | Vacuum: ${cure.vacuumPressure}`}
+                                {cure.rampRate && ` | Ramp: ${cure.rampRate}`}
+                              </div>
+                            </div>
+                            <Badge variant="secondary">{cure.department}</Badge>
                           </div>
                         ))}
                       </div>

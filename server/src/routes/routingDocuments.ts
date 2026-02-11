@@ -86,6 +86,48 @@ function getOpenAI(): OpenAI {
   return openaiClient;
 }
 
+const COMPOSITE_ANALYSIS_PROMPT = `You are an expert composite manufacturing and fabrication document analyzer, specializing in composite layup, mold creation, and production processes used in firearms stock and component manufacturing.
+
+You understand the following composite manufacturing concepts deeply:
+- **Layup processes**: Ply cutting, ply orientation (0°/45°/90°), prepreg placement, wet layup, hand layup, fiber placement, stacking sequences, debulking cycles
+- **Mold operations**: Mold preparation, mold release application, gel coat, mold assembly/disassembly, flash removal, mold maintenance
+- **Curing**: Autoclave curing, oven curing (temperature ramps, hold times, cool-down), vacuum bag curing, press curing, post-cure cycles
+- **Materials**: Carbon fiber, fiberglass, Kevlar, prepreg (pre-impregnated), resin systems (epoxy, polyester, vinyl ester), adhesives, core materials (foam, honeycomb), release films, peel ply, breather cloth, vacuum bag film, sealant tape
+- **Quality control**: Dimensional checks, surface finish inspection, void content, fiber volume fraction, ultrasonic testing (NDT/NDI), tap testing, visual inspection criteria, coupon testing
+- **Assembly**: Bonding, secondary bonding, co-bonding, mechanical fastening, trimming, drilling, countersinking, surface preparation (sanding, solvent wipe, abrasion)
+- **Traceability**: Material lot numbers, expiration dates, out-time tracking, batch numbers, serial numbers, shelf life management, freezer storage logs
+- **Equipment**: Ovens, autoclaves, vacuum pumps, cutting tables, CNC machines, laser projectors, templates/patterns
+
+When analyzing documents, map operations to these standard departments when applicable: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure.
+
+Extract department-specific data fields relevant to composite manufacturing:
+- Layup: ply count, fiber orientation, material lot number, prepreg out-time, debulk cycles performed, room temperature/humidity
+- Oven/Cure: cure temperature, cure time, ramp rate, vacuum pressure (inHg), thermocouple readings, cure cycle ID
+- Quality Control: dimensional measurements, surface defects noted, void percentage, NDI results, go/no-go checks
+- Trim/CNC: tool numbers, program IDs, edge quality, dimensional tolerances
+- Paint/Finish: surface prep method, primer type, paint lot, coating thickness, cure conditions
+- Assembly/Bonding: adhesive lot number, bond line thickness, surface prep verification, fixture ID
+
+`;
+
+const COMPOSITE_ANALYSIS_JSON_SCHEMA = `Return a JSON object with the following structure:
+{
+  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
+  "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode|checkbox", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string", "unit": "string or null"}],
+  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string", "inspectionMethod": "string or null"}],
+  "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
+  "specialProcesses": [{"process": "string", "requirements": "string", "department": "string", "processParameters": "string or null"}],
+  "materialRequirements": [{"material": "string", "specification": "string", "department": "string", "traceabilityRequired": boolean}],
+  "curingParameters": [{"step": "string", "temperature": "string", "time": "string", "vacuumPressure": "string or null", "rampRate": "string or null", "department": "string"}]
+}
+
+IMPORTANT:
+- Use actual department names found in the document when possible, mapping to standard names: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure
+- Include units for numeric fields (e.g., "°F", "minutes", "inHg", "mils")
+- For quality checkpoints, specify the inspection method (visual, dimensional, NDI, tap test, etc.)
+- Identify material traceability requirements (lot numbers, expiration tracking)
+- Extract cure cycle parameters separately in curingParameters when present`;
+
 // Get all routing documents
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -645,27 +687,13 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
     let aiResult = null;
     if (autoAnalyze && extractedText.trim()) {
       try {
-        const systemPrompt = `You are an expert manufacturing document analyzer. Analyze the provided document content and extract:
-1. Routing steps (operations/departments in order)
-2. Data fields that need to be captured for each part (serial numbers, measurements, dates, signatures, etc.)
-3. Quality checkpoints and standards
-4. Certification requirements
-5. Special process requirements
-
-Return a JSON object with the following structure:
-{
-  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
-  "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string"}],
-  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string"}],
-  "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
-  "specialProcesses": [{"process": "string", "requirements": "string", "department": "string"}]
-}`;
+        const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
 
         const response = await getOpenAI().chat.completions.create({
           model: 'gpt-4o',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Please analyze this document and extract the routing information:\n\n${extractedText.substring(0, 50000)}` }
+            { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\n${extractedText.substring(0, 50000)}` }
           ],
           response_format: { type: 'json_object' },
           max_completion_tokens: 4096,
@@ -795,27 +823,13 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Text content is required for AI parsing' });
     }
     
-    const systemPrompt = `You are an expert manufacturing document analyzer. Analyze the provided document content and extract:
-1. Routing steps (operations/departments in order)
-2. Data fields that need to be captured for each part (serial numbers, measurements, dates, signatures, etc.)
-3. Quality checkpoints and standards
-4. Certification requirements
-5. Special process requirements
-
-Return a JSON object with the following structure:
-{
-  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
-  "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string"}],
-  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string"}],
-  "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
-  "specialProcesses": [{"process": "string", "requirements": "string", "department": "string"}]
-}`;
+    const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
 
     const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Please analyze this document and extract the routing information:\n\n${textContent}` }
+        { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\n${textContent}` }
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 4096,
@@ -887,15 +901,19 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
       templateContent = `Template: ${template.template_name}\nStructure: ${JSON.stringify(template.structure)}\nSections: ${JSON.stringify(template.sections)}\nFields: ${JSON.stringify(fields)}`;
     }
     
-    const systemPrompt = `You are an expert at creating manufacturing work instructions, spec sheets, and travelers. Based on the provided reference documents and template, generate a new document structure with all necessary fields.
+    const systemPrompt = `You are an expert at creating composite manufacturing work instructions, spec sheets, and travelers for composite layup, mold creation, curing, bonding, and fabrication processes. Based on the provided reference documents and template, generate a new document structure with all necessary fields.
+
+You deeply understand composite manufacturing terminology: ply layup, fiber orientation, prepreg handling/out-time, vacuum bagging, autoclave/oven cure cycles, mold prep, surface prep, bonding, trimming, and NDI/NDT inspection. Use standard departments: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure.
 
 Return a JSON object with:
 {
   "title": "Generated document title",
   "sections": [{"name": "string", "content": "string", "fields": [...]}],
-  "fields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "string", "isRequired": boolean, "isUniquePerSerial": boolean, "defaultValue": "string"}],
+  "fields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "string", "isRequired": boolean, "isUniquePerSerial": boolean, "defaultValue": "string", "unit": "string or null"}],
   "routingSteps": [...],
-  "qualityCheckpoints": [...]
+  "qualityCheckpoints": [...],
+  "materialRequirements": [{"material": "string", "specification": "string", "department": "string", "traceabilityRequired": boolean}],
+  "curingParameters": [{"step": "string", "temperature": "string", "time": "string", "vacuumPressure": "string or null", "department": "string"}]
 }`;
 
     const userPrompt = `Generate a document for:
@@ -978,14 +996,16 @@ router.post('/templates/learn', async (req: Request, res: Response) => {
       extractedFields: doc.ai_extracted_fields,
     }));
     
-    const systemPrompt = `You are an expert at analyzing manufacturing documents and creating templates. Analyze the provided documents and identify common patterns, fields, and structure to create a reusable template.
+    const systemPrompt = `You are an expert at analyzing composite manufacturing documents (work instructions, spec sheets, travelers) for composite layup, mold creation, curing, and fabrication processes. Analyze the provided documents and identify common patterns, fields, and structure to create a reusable template.
+
+You understand composite manufacturing processes deeply: ply layup, fiber orientation, prepreg handling, vacuum bagging, cure cycles, mold prep, bonding, trimming, and NDI/NDT inspection.
 
 Return a JSON object with:
 {
   "structure": {"sections": [...], "layout": "string"},
   "sections": [{"name": "string", "description": "string", "order": number}],
-  "defaultFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "string", "isRequired": boolean, "isUniquePerSerial": boolean, "sectionName": "string", "sortOrder": number}],
-  "aiGeneratedPrompt": "A prompt that can be used to generate similar documents in the future"
+  "defaultFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "string", "isRequired": boolean, "isUniquePerSerial": boolean, "sectionName": "string", "sortOrder": number, "unit": "string or null"}],
+  "aiGeneratedPrompt": "A prompt that can be used to generate similar composite manufacturing documents in the future"
 }`;
 
     const response = await getOpenAI().chat.completions.create({
@@ -1826,7 +1846,9 @@ router.post('/:id/generate-snippets', async (req: Request, res: Response) => {
 
     const { departmentName, operationName } = req.body;
 
-    const systemPrompt = `You are an expert manufacturing quality engineer reviewing a work instruction document. Generate structured shop-floor reference snippets that operators will see during production.
+    const systemPrompt = `You are an expert composite manufacturing quality engineer reviewing work instructions for composite layup, mold creation, curing, and fabrication processes. Generate structured shop-floor reference snippets that operators will see during production.
+
+You deeply understand composite manufacturing: ply layup sequences, fiber orientations, prepreg handling, vacuum bagging, autoclave/oven curing, mold prep, surface prep, bonding, trimming, and NDI/NDT inspection.
 
 Return a JSON object with this exact structure:
 {
@@ -1847,6 +1869,11 @@ Return a JSON object with this exact structure:
       "confidence": 0.0-1.0
     },
     {
+      "title": "Material Handling",
+      "bullets": ["bullet 1", "bullet 2", ...],
+      "confidence": 0.0-1.0
+    },
+    {
       "title": "Do Not Do",
       "bullets": ["bullet 1", "bullet 2", ...],
       "confidence": 0.0-1.0
@@ -1858,7 +1885,10 @@ Rules:
 - Each bullet should be a concise, actionable statement (max 15 words).
 - Only include categories that have relevant content — omit empty categories.
 - Set confidence to reflect how explicitly the document supports each snippet (1.0 = directly stated, 0.5 = inferred).
-- Focus on practical shop-floor relevance, not general theory.
+- Focus on practical shop-floor relevance for composite manufacturing, not general theory.
+- For layup: emphasize ply orientation, stacking sequence, debulk requirements, and prepreg out-time limits.
+- For curing: emphasize temperature/time parameters, vacuum requirements, ramp rates, and thermocouple placement.
+- For quality: emphasize dimensional tolerances, surface finish criteria, void limits, and inspection methods.
 - If a department or operation context is given, tailor snippets to that context.`;
 
     const userMessage = `Generate shop-floor instruction snippets from this work instruction document.${departmentName ? `\nDepartment: ${departmentName}` : ''}${operationName ? `\nOperation: ${operationName}` : ''}\n\nDocument content:\n${textContent.substring(0, 40000)}`;

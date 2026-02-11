@@ -242,6 +242,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest('/api/routing-documents/ai-generate', {
         method: 'POST',
         body: data,
+        timeout: 120000,
       });
     },
     onSuccess: () => {
@@ -819,14 +820,14 @@ export default function RoutingDocumentManagement() {
           setParseFile(null);
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>AI Document Analysis</DialogTitle>
             <DialogDescription>
               Upload a PDF or paste document content for AI to extract routing steps, data fields, and requirements
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             {selectedDocument && (
               <div className="p-3 bg-muted rounded-lg">
                 <div className="font-medium">{selectedDocument.title}</div>

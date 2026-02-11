@@ -335,536 +335,505 @@ function buildUPSShipmentRequest(
   };
 }
 
-// Generate QC Checklist PDF
-router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
+// Shared QC Checklist PDF generator - returns PDF bytes
+async function generateQCChecklistPdf(orderId: string): Promise<Uint8Array> {
+  const { storage } = await import('../../storage');
+  let order = await storage.getOrderById(orderId);
 
-    // Get order data from storage using the proper method
-    const { storage } = await import('../../storage');
-    let order = await storage.getOrderById(orderId);
+  if (!order) {
+    throw new Error(`Order not found: ${orderId}`);
+  }
 
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+  const { width, height } = page.getSize();
+  const { margin, width: printableWidth, height: printableHeight } = getPrintableArea(width, height);
 
-    // Create a new PDF document with standard settings
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
-    const { width, height } = page.getSize();
-    const { margin, width: printableWidth, height: printableHeight } = getPrintableArea(width, height);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Load fonts
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  let currentY = height - margin;
 
-    // Header with company logo
-    let currentY = height - margin;
+  const logo = await embedCompanyLogo(pdfDoc);
+  if (logo) {
+    const { width: logoWidth, height: logoHeight } = getLogoDimensions(logo);
 
-    // Load and embed company logo using centralized function
-    const logo = await embedCompanyLogo(pdfDoc);
-    if (logo) {
-      const { width: logoWidth, height: logoHeight } = getLogoDimensions(logo);
+    page.drawImage(logo, {
+      x: margin,
+      y: currentY - logoHeight,
+      width: logoWidth,
+      height: logoHeight,
+    });
 
-      page.drawImage(logo, {
-        x: margin,
-        y: currentY - logoHeight,
-        width: logoWidth,
-        height: logoHeight,
-      });
-
-      currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
-    } else {
-      // Fallback to text if logo fails to load
-      page.drawText(COMPANY_INFO.NAME, {
-        x: margin,
-        y: currentY,
-        size: FONT_SIZES.TITLE_LARGE,
-        font: boldFont,
-        color: COLORS.TEXT_PRIMARY,
-      });
-      currentY -= SPACING.SECTION_GAP_SMALL;
-    }
-
-    page.drawText('Quality Control Inspection Report', {
+    currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
+  } else {
+    page.drawText(COMPANY_INFO.NAME, {
       x: margin,
       y: currentY,
-      size: FONT_SIZES.TITLE_SMALL,
+      size: FONT_SIZES.TITLE_LARGE,
       font: boldFont,
       color: COLORS.TEXT_PRIMARY,
     });
+    currentY -= SPACING.SECTION_GAP_SMALL;
+  }
 
-    // Document control box
-    const docBoxWidth = 200;
-    const docBoxHeight = 80;
-    const docBoxX = width - margin - docBoxWidth;
+  page.drawText('Quality Control Inspection Report', {
+    x: margin,
+    y: currentY,
+    size: FONT_SIZES.TITLE_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  const docBoxWidth = 200;
+  const docBoxHeight = 80;
+  const docBoxX = width - margin - docBoxWidth;
+  
+  page.drawRectangle({
+    x: docBoxX,
+    y: currentY - 10,
+    width: docBoxWidth,
+    height: docBoxHeight,
+    borderColor: COLORS.BORDER_BLACK,
+    borderWidth: 1,
+  });
+
+  page.drawText('Document No:', {
+    x: docBoxX + SPACING.BOX_PADDING_SMALL,
+    y: currentY + 50,
+    size: FONT_SIZES.BODY_LARGE,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  page.drawText(`QC-${orderId}`, {
+    x: docBoxX + 80,
+    y: currentY + 50,
+    size: FONT_SIZES.BODY_LARGE,
+    font: font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  page.drawText('Revision:', {
+    x: docBoxX + SPACING.BOX_PADDING_SMALL,
+    y: currentY + 35,
+    size: FONT_SIZES.BODY_LARGE,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  page.drawText('Rev. A', {
+    x: docBoxX + 80,
+    y: currentY + 35,
+    size: FONT_SIZES.BODY_LARGE,
+    font: font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  page.drawText('Date:', {
+    x: docBoxX + SPACING.BOX_PADDING_SMALL,
+    y: currentY + 20,
+    size: FONT_SIZES.BODY_LARGE,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  page.drawText(new Date().toLocaleDateString(), {
+    x: docBoxX + 80,
+    y: currentY + 20,
+    size: FONT_SIZES.BODY_LARGE,
+    font: font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  page.drawText('Page 1 of 1', {
+    x: docBoxX + SPACING.BOX_PADDING_SMALL,
+    y: currentY + 5,
+    size: FONT_SIZES.BODY_SMALL,
+    font: font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  currentY -= 100;
+  page.drawText('ORDER INFORMATION', {
+    x: margin,
+    y: currentY,
+    size: FONT_SIZES.SECTION_HEADER,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  const orderInfoHeight = 40;
+  page.drawRectangle({
+    x: margin,
+    y: currentY - 50,
+    width: printableWidth,
+    height: orderInfoHeight,
+    borderColor: COLORS.BORDER_BLACK,
+    borderWidth: 1,
+  });
+
+  currentY -= SPACING.SECTION_GAP_SMALL;
+  page.drawText(`Order ID: ${orderId}`, {
+    x: margin + SPACING.BOX_PADDING_SMALL,
+    y: currentY,
+    size: FONT_SIZES.BODY_LARGE,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  page.drawText(
+    `Order Date: ${order.orderDate || new Date().toLocaleDateString()}`,
+    {
+      x: margin + 250,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
+    }
+  );
+
+  const stockModels = await storage.getAllStockModels();
+  const customers = await storage.getAllCustomers();
+  const addresses = await storage.getAllAddresses();
+  const features: any[] = await storage.getAllFeatures();
+
+  const getStockModelName = (modelId: string) => {
+    const model = stockModels.find((m) => m.id === modelId);
+    return model?.displayName || model?.name || modelId || 'Unknown Model';
+  };
+
+  const getCustomerInfo = (customerId: string) => {
+    const customer = customers.find(
+      (c) => c.id?.toString() === customerId?.toString()
+    );
+    return customer;
+  };
+
+  const getShippingAddress = (customerId: string) => {
+    const customerAddresses = addresses.filter(
+      (a) => a.customerId?.toString() === customerId?.toString()
+    );
+    const shippingAddr =
+      customerAddresses.find((a) => a.type === 'shipping') ||
+      customerAddresses[0];
+    if (shippingAddr) {
+      return `${shippingAddr.street}${shippingAddr.street2 ? ', ' + shippingAddr.street2 : ''}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zipCode}`;
+    }
+    return 'Address not found';
+  };
+
+  const getFeatureValue = (featureId: string, value: any) => {
+    const feature = features.find((f: any) => f.id === featureId);
+    const featureOptions = (feature as any)?.options || [];
+    if (!feature || !featureOptions) return value;
+
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => {
+          const option = featureOptions.find((opt: any) => opt.value === v);
+          return option?.label || v;
+        })
+        .join(', ');
+    } else {
+      const option = featureOptions.find((opt: any) => opt.value === value);
+      return option?.label || value;
+    }
+  };
+
+  const formatOrderFeatures = (orderFeatures: any) => {
+    if (!orderFeatures) return {};
+
+    const formatted: any = {};
+    Object.entries(orderFeatures).forEach(([key, value]) => {
+      formatted[key] = getFeatureValue(key, value);
+    });
+    return formatted;
+  };
+
+  const stockModelName = getStockModelName(order.modelId || '');
+  const customer = getCustomerInfo((order as any).customerId || '');
+  const shippingAddress = getShippingAddress((order as any).customerId || '');
+  const orderFeatures = formatOrderFeatures(order.features || {});
+
+  if (order.notes) {
+    currentY -= 30;
     
-    page.drawRectangle({
-      x: docBoxX,
-      y: currentY - 10,
-      width: docBoxWidth,
-      height: docBoxHeight,
-      borderColor: COLORS.BORDER_BLACK,
-      borderWidth: 1,
-    });
-
-    page.drawText('Document No:', {
-      x: docBoxX + SPACING.BOX_PADDING_SMALL,
-      y: currentY + 50,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-      color: COLORS.TEXT_PRIMARY,
-    });
-
-    page.drawText(`QC-${orderId}`, {
-      x: docBoxX + 80,
-      y: currentY + 50,
-      size: FONT_SIZES.BODY_LARGE,
-      font: font,
-      color: COLORS.TEXT_SECONDARY,
-    });
-
-    page.drawText('Revision:', {
-      x: docBoxX + SPACING.BOX_PADDING_SMALL,
-      y: currentY + 35,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-      color: COLORS.TEXT_PRIMARY,
-    });
-
-    page.drawText('Rev. A', {
-      x: docBoxX + 80,
-      y: currentY + 35,
-      size: FONT_SIZES.BODY_LARGE,
-      font: font,
-      color: COLORS.TEXT_SECONDARY,
-    });
-
-    page.drawText('Date:', {
-      x: docBoxX + SPACING.BOX_PADDING_SMALL,
-      y: currentY + 20,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-      color: COLORS.TEXT_PRIMARY,
-    });
-
-    page.drawText(new Date().toLocaleDateString(), {
-      x: docBoxX + 80,
-      y: currentY + 20,
-      size: FONT_SIZES.BODY_LARGE,
-      font: font,
-      color: COLORS.TEXT_SECONDARY,
-    });
-
-    page.drawText('Page 1 of 1', {
-      x: docBoxX + SPACING.BOX_PADDING_SMALL,
-      y: currentY + 5,
-      size: FONT_SIZES.BODY_SMALL,
-      font: font,
-      color: COLORS.TEXT_SECONDARY,
-    });
-
-    // Order information section
-    currentY -= 100;
-    page.drawText('ORDER INFORMATION', {
+    page.drawText('ORDER NOTES', {
       x: margin,
       y: currentY,
       size: FONT_SIZES.SECTION_HEADER,
       font: boldFont,
       color: COLORS.TEXT_PRIMARY,
     });
-
-    // Draw a border around order info
-    const orderInfoHeight = 40;
+    
+    currentY -= SPACING.SECTION_GAP_SMALL;
+    
+    const notesText = order.notes as string;
+    const notesLines = notesText.split('\n');
+    const notesBoxHeight = Math.max(30, notesLines.length * 14 + 16);
+    
     page.drawRectangle({
       x: margin,
-      y: currentY - 50,
+      y: currentY - notesBoxHeight + 8,
       width: printableWidth,
-      height: orderInfoHeight,
+      height: notesBoxHeight,
+      color: rgb(1, 0.98, 0.8),
+      borderColor: rgb(0.9, 0.7, 0.1),
+      borderWidth: 1,
+    });
+    
+    notesLines.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + SPACING.BOX_PADDING_SMALL,
+        y: currentY - (index * 14) - 4,
+        size: FONT_SIZES.BODY_LARGE,
+        font: font,
+        color: COLORS.TEXT_PRIMARY,
+      });
+    });
+    
+    currentY -= notesBoxHeight + SPACING.SECTION_GAP_SMALL;
+  }
+
+  currentY -= 40;
+  const checklistItems = [
+    `1) The proper stock is being shipped:\n    Stock Model: ${stockModelName}`,
+
+    `2) Stock is inletted according to the work order:\n    ${[
+      (orderFeatures as any).handedness
+        ? `Handedness: ${(orderFeatures as any).handedness}`
+        : 'Handedness: Not specified',
+      (orderFeatures as any).bottom_metal
+        ? `Bottom Metal: ${(orderFeatures as any).bottom_metal}`
+        : 'Bottom Metal: Standard',
+      (orderFeatures as any).barrel_inlet
+        ? `Barrel Inlet: ${(orderFeatures as any).barrel_inlet}`
+        : 'Barrel Inlet: Standard',
+      (orderFeatures as any).action
+        ? `Action: ${(orderFeatures as any).action}`
+        : 'Action: Standard',
+      (orderFeatures as any).action_length
+        ? `Action Length: ${(orderFeatures as any).action_length}`
+        : 'Action Length: Standard',
+    ].join('\n    ')}`,
+
+    `3) Stock color:\n    Paint Option: ${(() => {
+      const currentPaint =
+        (order.features as OrderFeatures | undefined)?.metallic_finishes ||
+        (order.features as OrderFeatures | undefined)?.paint_options ||
+        (order.features as OrderFeatures | undefined)?.paint_options_combined;
+
+      if (!currentPaint || currentPaint === 'none') {
+        return 'Standard';
+      }
+
+      const paintFeatures = features.filter(
+        (f: any) =>
+          f.displayName?.includes('Options') ||
+          f.displayName?.includes('Camo') ||
+          f.displayName?.includes('Cerakote') ||
+          f.displayName?.includes('Terrain') ||
+          f.displayName?.includes('Rogue') ||
+          f.displayName?.includes('Standard') ||
+          f.id === 'metallic_finishes' ||
+          f.id === 'paint_options' ||
+          f.category === 'paint' ||
+          f.subCategory === 'paint'
+      );
+
+      for (const feature of paintFeatures) {
+        const featureOptions = (feature as any).options || [];
+        if (featureOptions) {
+          const option = featureOptions.find(
+            (opt: any) => opt.value === currentPaint
+          );
+          if (option) {
+            return option.label;
+          }
+        }
+      }
+
+      return currentPaint
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (l: string) => l.toUpperCase());
+    })()}`,
+
+    `4) Custom options are present and completed:\n    ${
+      Object.entries(orderFeatures)
+        .filter(([key, value]) => {
+          const excludedKeys = [
+            'handedness',
+            'action',
+            'action_length',
+            'bottom_metal',
+            'barrel_inlet',
+            'paint_options',
+            'metallic_finishes',
+            'paint_options_combined',
+          ];
+          return (
+            !excludedKeys.includes(key) &&
+            value &&
+            value !== 'none' &&
+            value !== ''
+          );
+        })
+        .map(([key, value]) => {
+          const displayKey = key
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase());
+          return `${displayKey}: ${value}`;
+        })
+        .join('\n    ') || 'No custom options specified'
+    }`,
+
+    `5) Swivel studs are installed correctly:\n    Swivel Studs: ${orderFeatures.swivel_studs || orderFeatures.studs || 'Standard configuration'}`,
+
+    `6) Stock is being shipped to the correct address:\n    Customer: ${customer?.name || 'Unknown'}\n    Address: ${shippingAddress}`,
+
+    '7) Buttpad and overall stock meets QC standards',
+
+    `8) All accessories are included:\n    ${
+      [
+        orderFeatures.bottom_metal &&
+        orderFeatures.bottom_metal !== 'Standard'
+          ? `Bottom Metal: ${orderFeatures.bottom_metal}`
+          : null,
+        orderFeatures.hat ? 'Hat included' : null,
+        orderFeatures.shirt ? 'Shirt included' : null,
+        orderFeatures.touch_up_paint ? 'Touch-up paint included' : null,
+        Object.entries(orderFeatures)
+          .filter(([key]) =>
+            ['accessories', 'extras', 'add_ons'].includes(key)
+          )
+          .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+          .join(', '),
+      ]
+        .filter(Boolean)
+        .join('\n    ') || 'No additional accessories'
+    }`,
+  ];
+
+  checklistItems.forEach((item, index) => {
+    const checkboxSize = 12;
+    page.drawRectangle({
+      x: margin,
+      y: currentY - checkboxSize,
+      width: checkboxSize,
+      height: checkboxSize,
       borderColor: COLORS.BORDER_BLACK,
       borderWidth: 1,
     });
 
-    currentY -= SPACING.SECTION_GAP_SMALL;
-    page.drawText(`Order ID: ${orderId}`, {
-      x: margin + SPACING.BOX_PADDING_SMALL,
-      y: currentY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-      color: COLORS.TEXT_PRIMARY,
-    });
+    const itemLines = item.split('\n');
+    let lineY = currentY - SPACING.BOX_PADDING;
 
-    page.drawText(
-      `Order Date: ${order.orderDate || new Date().toLocaleDateString()}`,
-      {
-        x: margin + 250,
-        y: currentY,
-        size: FONT_SIZES.BODY_LARGE,
-        font: boldFont,
-        color: COLORS.TEXT_PRIMARY,
-      }
-    );
-
-    // Get additional data needed for order-specific checklist
-    const stockModels = await storage.getAllStockModels();
-    const customers = await storage.getAllCustomers();
-    const addresses = await storage.getAllAddresses();
-    const features: any[] = await storage.getAllFeatures();
-
-    // Helper functions to extract order-specific details
-    const getStockModelName = (modelId: string) => {
-      const model = stockModels.find((m) => m.id === modelId);
-      return model?.displayName || model?.name || modelId || 'Unknown Model';
-    };
-
-    const getCustomerInfo = (customerId: string) => {
-      const customer = customers.find(
-        (c) => c.id?.toString() === customerId?.toString()
-      );
-      return customer;
-    };
-
-    const getShippingAddress = (customerId: string) => {
-      const customerAddresses = addresses.filter(
-        (a) => a.customerId?.toString() === customerId?.toString()
-      );
-      const shippingAddr =
-        customerAddresses.find((a) => a.type === 'shipping') ||
-        customerAddresses[0];
-      if (shippingAddr) {
-        return `${shippingAddr.street}${shippingAddr.street2 ? ', ' + shippingAddr.street2 : ''}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zipCode}`;
-      }
-      return 'Address not found';
-    };
-
-    const getFeatureValue = (featureId: string, value: any) => {
-      const feature = features.find((f: any) => f.id === featureId);
-      const featureOptions = (feature as any)?.options || [];
-      if (!feature || !featureOptions) return value;
-
-      if (Array.isArray(value)) {
-        return value
-          .map((v) => {
-            const option = featureOptions.find((opt: any) => opt.value === v);
-            return option?.label || v;
-          })
-          .join(', ');
-      } else {
-        const option = featureOptions.find((opt: any) => opt.value === value);
-        return option?.label || value;
-      }
-    };
-
-    const formatOrderFeatures = (orderFeatures: any) => {
-      if (!orderFeatures) return {};
-
-      const formatted: any = {};
-      Object.entries(orderFeatures).forEach(([key, value]) => {
-        formatted[key] = getFeatureValue(key, value);
-      });
-      return formatted;
-    };
-
-    // Extract order-specific details
-    const stockModelName = getStockModelName(order.modelId || '');
-    const customer = getCustomerInfo((order as any).customerId || '');
-    const shippingAddress = getShippingAddress((order as any).customerId || '');
-    const orderFeatures = formatOrderFeatures(order.features || {});
-
-    // Display order notes if present
-    if (order.notes) {
-      currentY -= 30;
-      
-      // Notes header
-      page.drawText('ORDER NOTES', {
-        x: margin,
-        y: currentY,
-        size: FONT_SIZES.SECTION_HEADER,
-        font: boldFont,
+    itemLines.forEach((line, lineIndex) => {
+      page.drawText(line, {
+        x: margin + 20,
+        y: lineY,
+        size: FONT_SIZES.BODY_SMALL,
+        font: lineIndex === 0 ? boldFont : font,
         color: COLORS.TEXT_PRIMARY,
       });
-      
-      currentY -= SPACING.SECTION_GAP_SMALL;
-      
-      // Notes box with yellow background for visibility
-      const notesText = order.notes as string;
-      const notesLines = notesText.split('\n');
-      const notesBoxHeight = Math.max(30, notesLines.length * 14 + 16);
-      
-      page.drawRectangle({
-        x: margin,
-        y: currentY - notesBoxHeight + 8,
-        width: printableWidth,
-        height: notesBoxHeight,
-        color: rgb(1, 0.98, 0.8), // Light yellow background
-        borderColor: rgb(0.9, 0.7, 0.1), // Yellow border
-        borderWidth: 1,
-      });
-      
-      // Draw each line of notes
-      notesLines.forEach((line, index) => {
-        page.drawText(line, {
-          x: margin + SPACING.BOX_PADDING_SMALL,
-          y: currentY - (index * 14) - 4,
-          size: FONT_SIZES.BODY_LARGE,
-          font: font,
-          color: COLORS.TEXT_PRIMARY,
-        });
-      });
-      
-      currentY -= notesBoxHeight + SPACING.SECTION_GAP_SMALL;
-    }
-
-    // Build order-specific checklist items
-    currentY -= 40;
-    const checklistItems = [
-      `1) The proper stock is being shipped:\n    Stock Model: ${stockModelName}`,
-
-      `2) Stock is inletted according to the work order:\n    ${[
-        (orderFeatures as any).handedness
-          ? `Handedness: ${(orderFeatures as any).handedness}`
-          : 'Handedness: Not specified',
-        (orderFeatures as any).bottom_metal
-          ? `Bottom Metal: ${(orderFeatures as any).bottom_metal}`
-          : 'Bottom Metal: Standard',
-        (orderFeatures as any).barrel_inlet
-          ? `Barrel Inlet: ${(orderFeatures as any).barrel_inlet}`
-          : 'Barrel Inlet: Standard',
-        (orderFeatures as any).action
-          ? `Action: ${(orderFeatures as any).action}`
-          : 'Action: Standard',
-        (orderFeatures as any).action_length
-          ? `Action Length: ${(orderFeatures as any).action_length}`
-          : 'Action Length: Standard',
-      ].join('\n    ')}`,
-
-      `3) Stock color:\n    Paint Option: ${(() => {
-        // Use the same logic as sales order PDF for paint display
-        const currentPaint =
-          (order.features as OrderFeatures | undefined)?.metallic_finishes ||
-          (order.features as OrderFeatures | undefined)?.paint_options ||
-          (order.features as OrderFeatures | undefined)?.paint_options_combined;
-
-        if (!currentPaint || currentPaint === 'none') {
-          return 'Standard';
-        }
-
-        // Search through paint-related features to find the display name
-        const paintFeatures = features.filter(
-          (f: any) =>
-            f.displayName?.includes('Options') ||
-            f.displayName?.includes('Camo') ||
-            f.displayName?.includes('Cerakote') ||
-            f.displayName?.includes('Terrain') ||
-            f.displayName?.includes('Rogue') ||
-            f.displayName?.includes('Standard') ||
-            f.id === 'metallic_finishes' ||
-            f.id === 'paint_options' ||
-            f.category === 'paint' ||
-            f.subCategory === 'paint'
-        );
-
-        for (const feature of paintFeatures) {
-          const featureOptions = (feature as any).options || [];
-          if (featureOptions) {
-            const option = featureOptions.find(
-              (opt: any) => opt.value === currentPaint
-            );
-            if (option) {
-              return option.label;
-            }
-          }
-        }
-
-        // Fallback to formatted value if no option found
-        return currentPaint
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (l: string) => l.toUpperCase());
-      })()}`,
-
-      `4) Custom options are present and completed:\n    ${
-        Object.entries(orderFeatures)
-          .filter(([key, value]) => {
-            // Exclude basic configuration items that are displayed elsewhere
-            const excludedKeys = [
-              'handedness',
-              'action',
-              'action_length',
-              'bottom_metal',
-              'barrel_inlet',
-              'paint_options',
-              'metallic_finishes',
-              'paint_options_combined',
-            ];
-            return (
-              !excludedKeys.includes(key) &&
-              value &&
-              value !== 'none' &&
-              value !== ''
-            );
-          })
-          .map(([key, value]) => {
-            const displayKey = key
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, (l) => l.toUpperCase());
-            return `${displayKey}: ${value}`;
-          })
-          .join('\n    ') || 'No custom options specified'
-      }`,
-
-      `5) Swivel studs are installed correctly:\n    Swivel Studs: ${orderFeatures.swivel_studs || orderFeatures.studs || 'Standard configuration'}`,
-
-      `6) Stock is being shipped to the correct address:\n    Customer: ${customer?.name || 'Unknown'}\n    Address: ${shippingAddress}`,
-
-      '7) Buttpad and overall stock meets QC standards',
-
-      `8) All accessories are included:\n    ${
-        [
-          orderFeatures.bottom_metal &&
-          orderFeatures.bottom_metal !== 'Standard'
-            ? `Bottom Metal: ${orderFeatures.bottom_metal}`
-            : null,
-          orderFeatures.hat ? 'Hat included' : null,
-          orderFeatures.shirt ? 'Shirt included' : null,
-          orderFeatures.touch_up_paint ? 'Touch-up paint included' : null,
-          Object.entries(orderFeatures)
-            .filter(([key]) =>
-              ['accessories', 'extras', 'add_ons'].includes(key)
-            )
-            .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
-            .join(', '),
-        ]
-          .filter(Boolean)
-          .join('\n    ') || 'No additional accessories'
-      }`,
-    ];
-
-    checklistItems.forEach((item, index) => {
-      // Checkbox
-      const checkboxSize = 12;
-      page.drawRectangle({
-        x: margin,
-        y: currentY - checkboxSize,
-        width: checkboxSize,
-        height: checkboxSize,
-        borderColor: COLORS.BORDER_BLACK,
-        borderWidth: 1,
-      });
-
-      // Item text - handle multi-line items
-      const itemLines = item.split('\n');
-      let lineY = currentY - SPACING.BOX_PADDING;
-
-      itemLines.forEach((line, lineIndex) => {
-        // Don't add prefix since numbering is already included in the text
-        page.drawText(line, {
-          x: margin + 20,
-          y: lineY,
-          size: FONT_SIZES.BODY_SMALL,
-          font: lineIndex === 0 ? boldFont : font,
-          color: COLORS.TEXT_PRIMARY,
-        });
-        lineY -= SPACING.LINE_SPACING_COMPACT;
-      });
-
-      currentY -= itemLines.length * 12 + 18;
+      lineY -= SPACING.LINE_SPACING_COMPACT;
     });
 
-    // Clean spacing before signature section
-    currentY -= 50;
+    currentY -= itemLines.length * 12 + 18;
+  });
 
-    // Simple clean signature section
-    currentY -= 70;
+  currentY -= 50;
+  currentY -= 70;
 
-    // Single signature and date section - clean and simple
-    page.drawText('INSPECTOR SIGNATURE:', {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: boldFont,
-    });
+  page.drawText('INSPECTOR SIGNATURE:', {
+    x: margin,
+    y: currentY,
+    size: 12,
+    font: boldFont,
+  });
 
-    // Signature line
-    page.drawLine({
-      start: { x: margin + 150, y: currentY - 5 },
-      end: { x: margin + 350, y: currentY - 5 },
-      thickness: 1.5,
-      color: rgb(0, 0, 0),
-    });
+  page.drawLine({
+    start: { x: margin + 150, y: currentY - 5 },
+    end: { x: margin + 350, y: currentY - 5 },
+    thickness: 1.5,
+    color: rgb(0, 0, 0),
+  });
 
-    // Date field
-    page.drawText('DATE:', {
-      x: margin + 380,
-      y: currentY,
-      size: 12,
-      font: boldFont,
-    });
+  page.drawText('DATE:', {
+    x: margin + 380,
+    y: currentY,
+    size: 12,
+    font: boldFont,
+  });
 
-    page.drawLine({
-      start: { x: margin + 420, y: currentY - 5 },
-      end: { x: width - margin, y: currentY - 5 },
-      thickness: 1.5,
-      color: rgb(0, 0, 0),
-    });
+  page.drawLine({
+    start: { x: margin + 420, y: currentY - 5 },
+    end: { x: width - margin, y: currentY - 5 },
+    thickness: 1.5,
+    color: rgb(0, 0, 0),
+  });
 
-    // Digital signature section - print optimized
-    currentY -= 60;
-    page.drawText('DIGITAL CERTIFICATION', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
+  currentY -= 60;
+  page.drawText('DIGITAL CERTIFICATION', {
+    x: margin,
+    y: currentY,
+    size: 11,
+    font: boldFont,
+    color: rgb(0, 0, 0),
+  });
 
-    currentY -= 25;
-    page.drawRectangle({
-      x: margin,
-      y: currentY - 45,
-      width: printableWidth,
-      height: 40,
-      borderColor: rgb(0.5, 0.5, 0.5),
-      borderWidth: 1,
-    });
+  currentY -= 25;
+  page.drawRectangle({
+    x: margin,
+    y: currentY - 45,
+    width: printableWidth,
+    height: 40,
+    borderColor: rgb(0.5, 0.5, 0.5),
+    borderWidth: 1,
+  });
 
-    currentY -= 15;
-    page.drawText('This document has been digitally certified by:', {
-      x: margin + 5,
+  currentY -= 15;
+  page.drawText('This document has been digitally certified by:', {
+    x: margin + 5,
+    y: currentY,
+    size: 10,
+    font: font,
+  });
+
+  currentY -= 18;
+  page.drawText('AG.QC.INSPECTOR', {
+    x: margin + 5,
+    y: currentY,
+    size: 11,
+    font: boldFont,
+  });
+
+  page.drawText(
+    `Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`,
+    {
+      x: margin + 250,
       y: currentY,
       size: 10,
       font: font,
-    });
+    }
+  );
 
-    currentY -= 18;
-    page.drawText('AG.QC.INSPECTOR', {
-      x: margin + 5,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
+  return await pdfDoc.save();
+}
 
-    page.drawText(
-      `Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`,
-      {
-        x: margin + 250,
-        y: currentY,
-        size: 10,
-        font: font,
-      }
-    );
+// Generate QC Checklist PDF
+router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const pdfBytes = await generateQCChecklistPdf(orderId);
 
-    // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
-
-    // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `inline; filename="QC-Checklist-${orderId}.pdf"`
     );
     res.setHeader('Content-Length', pdfBytes.length);
-
-    // Send PDF
     res.send(Buffer.from(pdfBytes));
   } catch (error: unknown) {
     console.error('Error generating QC checklist PDF:', error);
@@ -3183,151 +3152,12 @@ router.post('/bulk-print', async (req: Request, res: Response) => {
           console.log(`✅ [Bulk Print] Added sales order for ${orderId}`);
         }
 
-        // Generate QC Checklist PDF inline
-        const order = await storage.getOrderById(orderId);
-        if (order) {
-          const qcPdfDoc = await PDFDocument.create();
-          const qcPage = qcPdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
-          const { width, height } = qcPage.getSize();
-          const { margin, width: printableWidth } = getPrintableArea(width, height);
-
-          const font = await qcPdfDoc.embedFont(StandardFonts.Helvetica);
-          const boldFont = await qcPdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-          let currentY = height - margin;
-
-          // Logo
-          const logo = await embedCompanyLogo(qcPdfDoc);
-          if (logo) {
-            const { width: logoWidth, height: logoHeight } = getLogoDimensions(logo);
-            qcPage.drawImage(logo, {
-              x: margin,
-              y: currentY - logoHeight,
-              width: logoWidth,
-              height: logoHeight,
-            });
-            currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
-          }
-
-          // Title
-          qcPage.drawText('Quality Control Inspection Report', {
-            x: margin,
-            y: currentY,
-            size: FONT_SIZES.TITLE_SMALL,
-            font: boldFont,
-            color: COLORS.TEXT_PRIMARY,
-          });
-
-          // Order ID box
-          const docBoxWidth = 200;
-          const docBoxX = width - margin - docBoxWidth;
-          qcPage.drawRectangle({
-            x: docBoxX,
-            y: currentY - 10,
-            width: docBoxWidth,
-            height: 80,
-            borderColor: COLORS.BORDER_BLACK,
-            borderWidth: 1,
-          });
-          qcPage.drawText(`QC-${orderId}`, {
-            x: docBoxX + 10,
-            y: currentY + 50,
-            size: FONT_SIZES.BODY_LARGE,
-            font: boldFont,
-            color: COLORS.TEXT_PRIMARY,
-          });
-          qcPage.drawText(new Date().toLocaleDateString(), {
-            x: docBoxX + 10,
-            y: currentY + 30,
-            size: FONT_SIZES.BODY_LARGE,
-            font: font,
-            color: COLORS.TEXT_SECONDARY,
-          });
-
-          currentY -= 100;
-
-          // Order info
-          qcPage.drawText('ORDER INFORMATION', {
-            x: margin,
-            y: currentY,
-            size: FONT_SIZES.SECTION_HEADER,
-            font: boldFont,
-            color: COLORS.TEXT_PRIMARY,
-          });
-          currentY -= 20;
-
-          // Get customer name from related customer record or use customerId
-          let customerName = 'Unknown';
-          if (order.customerId) {
-            const customer = await storage.getCustomerById(order.customerId);
-            customerName = customer?.name || order.customerId;
-          }
-          const modelId = order.modelId || 'N/A';
-          
-          qcPage.drawText(`Order: ${orderId}    Customer: ${customerName}    Model: ${modelId}`, {
-            x: margin,
-            y: currentY,
-            size: FONT_SIZES.BODY_LARGE,
-            font: font,
-            color: COLORS.TEXT_PRIMARY,
-          });
-          currentY -= 40;
-
-          // QC Checklist items
-          qcPage.drawText('INSPECTION CHECKLIST', {
-            x: margin,
-            y: currentY,
-            size: FONT_SIZES.SECTION_HEADER,
-            font: boldFont,
-            color: COLORS.TEXT_PRIMARY,
-          });
-          currentY -= 25;
-
-          const checklistItems = [
-            'Visual inspection - No scratches, dents, or blemishes',
-            'Dimensional check - Verify against specifications',
-            'Fit and function test - All components operate correctly',
-            'Hardware check - All screws, bolts secured properly',
-            'Finish inspection - Paint/coating quality verified',
-            'Final approval - Ready for shipping',
-          ];
-
-          for (const item of checklistItems) {
-            // Draw checkbox
-            qcPage.drawRectangle({
-              x: margin,
-              y: currentY - 4,
-              width: 12,
-              height: 12,
-              borderColor: COLORS.BORDER_BLACK,
-              borderWidth: 1,
-            });
-            qcPage.drawText(item, {
-              x: margin + 20,
-              y: currentY,
-              size: FONT_SIZES.BODY_LARGE,
-              font: font,
-              color: COLORS.TEXT_PRIMARY,
-            });
-            currentY -= 25;
-          }
-
-          // Signature line
-          currentY -= 30;
-          qcPage.drawText('Inspector Signature: ________________________    Date: ____________', {
-            x: margin,
-            y: currentY,
-            size: FONT_SIZES.BODY_LARGE,
-            font: font,
-            color: COLORS.TEXT_PRIMARY,
-          });
-
-          const qcBytes = await qcPdfDoc.save();
-          const loadedQc = await PDFDocument.load(qcBytes);
-          const qcPages = await mergedPdf.copyPages(loadedQc, loadedQc.getPageIndices());
-          qcPages.forEach((page) => mergedPdf.addPage(page));
-          console.log(`✅ [Bulk Print] Added QC checklist for ${orderId}`);
-        }
+        // Generate QC Checklist PDF using the shared detailed generator
+        const qcBytes = await generateQCChecklistPdf(orderId);
+        const loadedQc = await PDFDocument.load(qcBytes);
+        const qcPages = await mergedPdf.copyPages(loadedQc, loadedQc.getPageIndices());
+        qcPages.forEach((page) => mergedPdf.addPage(page));
+        console.log(`✅ [Bulk Print] Added QC checklist for ${orderId}`);
       } catch (orderError) {
         console.error(`❌ [Bulk Print] Error processing order ${orderId}:`, orderError);
         // Continue with other orders

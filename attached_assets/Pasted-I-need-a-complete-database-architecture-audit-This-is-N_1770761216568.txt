@@ -1,0 +1,97 @@
+I need a complete database architecture audit.
+
+This is NOT about business logic.
+This is about infrastructure clarity.
+
+We previously:
+- Removed the Neon HTTP driver
+- Unified everything to node-postgres
+- Possibly changed DATABASE_URL
+- Possibly changed environments
+
+I need you to produce a factual report.
+
+PHASE 1 — RUNTIME ENVIRONMENT
+
+1. Print:
+   - NODE_ENV
+   - All environment variables that include:
+     DATABASE
+     DB
+     POSTGRES
+     PG
+   (mask passwords but show host and database name)
+
+2. Confirm:
+   - Is the runtime using node-postgres (pg)?
+   - Is any Neon HTTP driver import still present anywhere?
+   - Is Drizzle connected via pgPool or via Neon client?
+
+PHASE 2 — CONNECTION TARGET
+
+1. Parse the active DATABASE_URL and extract:
+   - Host
+   - Database name
+   - Username
+   - Port
+   - SSL mode
+
+2. Identify:
+   - Is this a Neon host? (neon.tech)
+   - Is this a local container?
+   - Is this Replit internal Postgres?
+   - Is this something else?
+
+PHASE 3 — DEV VS PROD ISOLATION
+
+1. Does this project use separate .env files?
+   - .env
+   - .env.local
+   - .env.production
+   - Replit Secrets
+
+2. Does the production deployment use a different DATABASE_URL?
+
+3. Is there a single database shared between dev and prod?
+
+4. If Neon:
+   - Are there multiple Neon branches?
+   - Is this using main branch?
+   - Or a preview branch?
+
+PHASE 4 — DRIVER VALIDATION
+
+1. Confirm which driver is used in server/db.ts.
+2. Confirm that:
+   - There is exactly ONE pgPool instance.
+   - There is exactly ONE Drizzle instance.
+   - No Neon HTTP imports remain.
+
+PHASE 5 — ACTUAL LIVE DATABASE CHECK
+
+Run this query against the active connection:
+
+SELECT
+  current_database(),
+  current_user,
+  inet_server_addr(),
+  inet_server_port(),
+  version();
+
+This tells us:
+- What database we are actually connected to
+- What server
+- What Postgres version
+
+PHASE 6 — SUMMARY
+
+Produce a final clear statement:
+
+- Are we hosted on Neon or not?
+- Are we using standard node-postgres driver?
+- Are dev and prod sharing the same database?
+- Is the architecture stable and correct?
+- Any risk areas?
+
+Do not speculate.
+Only report facts from code and runtime.

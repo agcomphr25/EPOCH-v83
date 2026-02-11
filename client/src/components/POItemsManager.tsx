@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Package, Plus, Trash2, Edit2, Eye, Barcode } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, Eye, Barcode, Save, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { AveryLabelPrint } from '@/components/AveryLabelPrint';
@@ -95,6 +99,9 @@ export default function POItemsManager({
 }: POItemsManagerProps) {
   const [selectedItem, setSelectedItem] = useState<POItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<POItem | null>(null);
+  const [editForm, setEditForm] = useState({ itemName: '', quantity: 1, unitPrice: 0, notes: '' });
   const [barcodeItemId, setBarcodeItemId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -144,9 +151,61 @@ export default function POItemsManager({
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ itemId, data }: { itemId: number; data: any }) => {
+      return await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
+      setIsEditDialogOpen(false);
+      setEditItem(null);
+      toast({
+        title: 'Item Updated',
+        description: 'Purchase order item has been updated successfully.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update item',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleViewItem = (item: POItem) => {
     setSelectedItem(item);
     setIsDialogOpen(true);
+  };
+
+  const handleEditItem = (item: POItem) => {
+    setEditItem(item);
+    setEditForm({
+      itemName: item.itemName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      notes: item.notes || '',
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editItem) return;
+    const totalPrice = editForm.quantity * editForm.unitPrice;
+    updateMutation.mutate({
+      itemId: editItem.id,
+      data: {
+        itemName: editForm.itemName,
+        quantity: editForm.quantity,
+        unitPrice: editForm.unitPrice,
+        totalPrice,
+        notes: editForm.notes || null,
+      },
+    });
   };
 
   const handleDeleteItem = async (itemId: number) => {
@@ -313,6 +372,15 @@ export default function POItemsManager({
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handleEditItem(item)}
+                      className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700"
+                      data-testid={`button-edit-item-${item.id}`}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDeleteItem(item.id)}
                       className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                       disabled={deleteMutation.isPending}
@@ -330,99 +398,200 @@ export default function POItemsManager({
 
       {/* Item Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Item Details</DialogTitle>
           </DialogHeader>
 
           {selectedItem && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Item Name
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.itemName}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Product Type
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {getProductTypeForItem(selectedItem)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Quantity
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.quantity}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Unit Price
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {formatPrice(selectedItem.unitPrice)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Total Price
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900 font-medium">
-                    {formatPrice(selectedItem.totalPrice)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Item ID
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.itemId}
-                  </p>
-                </div>
-              </div>
-
-              {selectedItem.specifications && Object.keys(selectedItem.specifications).length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Specifications
-                  </label>
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    {Object.entries(selectedItem.specifications)
-                      .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-                      .map(([key, value]) => (
-                        <div key={key} className="bg-gray-50 rounded-lg p-3 border">
-                          <div className="text-xs text-gray-500 uppercase tracking-wide">
-                            {specificationLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
-                          </div>
-                          <div className="text-sm font-medium text-gray-900 mt-1">
-                            {formatSpecValue(key, value)}
-                          </div>
-                        </div>
-                      ))}
+            <ScrollArea className="flex-1 max-h-[65vh] pr-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Item Name
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedItem.itemName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Product Type
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {getProductTypeForItem(selectedItem)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Quantity
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedItem.quantity}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Unit Price
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {formatPrice(selectedItem.unitPrice)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Total Price
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900 font-medium">
+                      {formatPrice(selectedItem.totalPrice)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Item ID
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedItem.itemId}
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {selectedItem.notes && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Notes
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.notes}
-                  </p>
+                {selectedItem.specifications && Object.keys(selectedItem.specifications).length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Specifications
+                    </label>
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                      {Object.entries(selectedItem.specifications)
+                        .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+                        .map(([key, value]) => (
+                          <div key={key} className="bg-gray-50 rounded-lg p-3 border">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                              {specificationLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
+                            </div>
+                            <div className="text-sm font-medium text-gray-900 mt-1">
+                              {formatSpecValue(key, value)}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedItem.notes && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Notes
+                    </label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedItem.notes}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      handleCloseDialog();
+                      handleEditItem(selectedItem);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button onClick={handleCloseDialog}>Close</Button>
                 </div>
-              )}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
 
-              <div className="flex justify-end">
-                <Button onClick={handleCloseDialog}>Close</Button>
+      {/* Edit Item Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => { if (!open) { setIsEditDialogOpen(false); setEditItem(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="h-5 w-5 text-amber-600" />
+              Edit Item
+            </DialogTitle>
+          </DialogHeader>
+
+          {editItem && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-item-name">Item Name</Label>
+                <Input
+                  id="edit-item-name"
+                  value={editForm.itemName}
+                  onChange={(e) => setEditForm({ ...editForm, itemName: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-quantity">Quantity</Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    min={1}
+                    value={editForm.quantity}
+                    onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-unit-price">Unit Price ($)</Label>
+                  <Input
+                    id="edit-unit-price"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editForm.unitPrice}
+                    onChange={(e) => setEditForm({ ...editForm, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border">
+                <div className="text-sm text-gray-500">Calculated Total</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {formatPrice(editForm.quantity * editForm.unitPrice)}
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setIsEditDialogOpen(false); setEditItem(null); }}
+                  disabled={updateMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateMutation.isPending || !editForm.itemName.trim()}
+                  className="flex items-center gap-2"
+                >
+                  {updateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
               </div>
             </div>
           )}

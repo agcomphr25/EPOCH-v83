@@ -63,6 +63,7 @@ import {
   Eye,
   ExternalLink,
   AlertCircle,
+  SkipForward,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -294,6 +295,23 @@ export default function TravelerExecution() {
         defaultProgramId?: string;
         defaultProgramName?: string;
       };
+      customDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
+      qcStandards?: { standard: string; tolerance: string; requirement: string }[];
+      materials?: { partId: string; partNumber: string; partName: string; requiredFields?: string[]; entryMethod?: string }[];
+      startChecks?: { title: string; taskType?: string; required?: boolean }[];
+      finishChecks?: { title: string; taskType?: string; required?: boolean }[];
+      ovenCuringSteps?: { temperature: string; time: string }[];
+      instructionPack?: {
+        workInstructionRefs?: any[];
+        aiSnippets?: any[];
+        specialNotes?: string;
+        media?: any[];
+      };
+      signatureConfig?: {
+        startRequiresSignature: boolean;
+        finishRequiresSignature: boolean;
+        requiredSignatures: string[];
+      };
     }>;
   }
 
@@ -306,11 +324,25 @@ export default function TravelerExecution() {
     (r) => r.partNumber === traveler?.partNumber
   );
 
-  const getTimerConfigForDepartment = (departmentName: string) => {
+  const getDeptConfig = (departmentName: string) => {
     if (!currentPartRouting?.departmentConfig) return null;
-    const deptConfig = currentPartRouting.departmentConfig[departmentName];
+    return currentPartRouting.departmentConfig[departmentName] || null;
+  };
+
+  const getTimerConfigForDepartment = (departmentName: string) => {
+    const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
     return null;
+  };
+
+  const isStepMinimal = (step: TravelerStep) => {
+    const nonGateTasks = step.tasks.filter(
+      (t) => t.taskType !== 'SIGNATURE' && t.taskType !== 'END_GATE'
+    );
+    const meaningfulTasks = nonGateTasks.filter(
+      (t) => !(t.taskType === 'CHECK' && t.title === 'Badge Scan')
+    );
+    return meaningfulTasks.length === 0;
   };
 
   useEffect(() => {
@@ -582,6 +614,12 @@ export default function TravelerExecution() {
                     )}
                   </div>
                   <p className="font-medium text-sm">{step.departmentName}</p>
+                  {isStepMinimal(step) && step.status !== 'COMPLETED' && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <SkipForward className="h-3 w-3 text-amber-500" />
+                      <span className="text-[10px] text-amber-600">No inputs configured</span>
+                    </div>
+                  )}
                 </button>
               ))}
             </CardContent>
@@ -658,6 +696,18 @@ export default function TravelerExecution() {
               <CardContent className="space-y-6">
                 {currentStep.status === 'NOT_STARTED' && (
                   <div className="text-center py-8">
+                    {isStepMinimal(currentStep) && (
+                      <div className="mb-4 mx-auto max-w-sm p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <SkipForward className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-medium text-amber-700">Passthrough Step</span>
+                        </div>
+                        <p className="text-xs text-amber-600">
+                          This step has no configured data entry, QC checks, or material tracking.
+                          Badge scan and sign to pass through.
+                        </p>
+                      </div>
+                    )}
                     <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
                       Badge scan required to start this step
@@ -697,8 +747,62 @@ export default function TravelerExecution() {
                   );
                   const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
 
+                  const routingDeptConfig = getDeptConfig(currentStep.departmentName);
+                  const deptQcStandards = routingDeptConfig?.qcStandards || [];
+                  const deptCustomFields = routingDeptConfig?.customDataFields || [];
+                  const deptMaterials = routingDeptConfig?.materials || [];
+
                   return (
                   <div className="space-y-6">
+                    {(deptQcStandards.length > 0 || deptCustomFields.length > 0 || deptMaterials.length > 0) && (
+                      <div className="rounded-lg border bg-slate-50 p-4 space-y-3">
+                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Routing Configuration Summary</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {deptCustomFields.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-amber-700 flex items-center gap-1">
+                                <PenTool className="h-3 w-3" />
+                                Custom Data Fields ({deptCustomFields.length})
+                              </p>
+                              {deptCustomFields.map((f, i) => (
+                                <p key={i} className="text-[11px] text-muted-foreground pl-4">
+                                  {f.fieldName} <span className="text-[10px]">({f.fieldType})</span>
+                                  {f.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {deptQcStandards.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-green-700 flex items-center gap-1">
+                                <Shield className="h-3 w-3" />
+                                QC Standards ({deptQcStandards.length})
+                              </p>
+                              {deptQcStandards.map((qc, i) => (
+                                <div key={i} className="text-[11px] text-muted-foreground pl-4">
+                                  <p className="font-medium">{qc.standard}</p>
+                                  <p className="text-[10px]">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {deptMaterials.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                                <ScanBarcode className="h-3 w-3" />
+                                Materials ({deptMaterials.length})
+                              </p>
+                              {deptMaterials.map((m, i) => (
+                                <p key={i} className="text-[11px] text-muted-foreground pl-4 font-mono">
+                                  {m.partNumber}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {PHASE_ORDER.map((phase, phaseIndex) => {
                       const phaseTasks = currentStep.tasks
                         .filter((t) => t.taskPhase === phase)
@@ -924,25 +1028,54 @@ export default function TravelerExecution() {
                                                       )}
                                                     </Label>
                                                     {field.fieldType === 'yes_no' ? (
-                                                      <div className="flex items-center gap-2">
-                                                        <Checkbox
-                                                          id={field.id}
-                                                          checked={
-                                                            fieldValues[task.id]?.[field.fieldKey] ===
-                                                              'yes' || field.value === 'yes'
-                                                          }
-                                                          onCheckedChange={(checked) =>
-                                                            handleFieldChange(
-                                                              task.id,
-                                                              field.fieldKey,
-                                                              checked ? 'yes' : 'no'
-                                                            )
-                                                          }
-                                                          disabled={isComplete}
-                                                        />
-                                                        <Label htmlFor={field.id} className="text-sm">
-                                                          Verified
-                                                        </Label>
+                                                      <div className="space-y-1">
+                                                        {field.validation && (field.validation.tolerance || field.validation.requirement) && (
+                                                          <div className="flex flex-wrap gap-2 text-xs mb-1">
+                                                            {field.validation.tolerance && (
+                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                                                <Wrench className="h-3 w-3" />
+                                                                Tolerance: {field.validation.tolerance}
+                                                              </span>
+                                                            )}
+                                                            {field.validation.requirement && (
+                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                                                                <Shield className="h-3 w-3" />
+                                                                Requirement: {field.validation.requirement}
+                                                              </span>
+                                                            )}
+                                                            {field.validation.temperature && (
+                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                                Temp: {field.validation.temperature}
+                                                              </span>
+                                                            )}
+                                                            {field.validation.time && (
+                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                                <Clock className="h-3 w-3" />
+                                                                Time: {field.validation.time}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                          <Checkbox
+                                                            id={field.id}
+                                                            checked={
+                                                              fieldValues[task.id]?.[field.fieldKey] ===
+                                                                'yes' || field.value === 'yes'
+                                                            }
+                                                            onCheckedChange={(checked) =>
+                                                              handleFieldChange(
+                                                                task.id,
+                                                                field.fieldKey,
+                                                                checked ? 'yes' : 'no'
+                                                              )
+                                                            }
+                                                            disabled={isComplete}
+                                                          />
+                                                          <Label htmlFor={field.id} className="text-sm">
+                                                            Verified
+                                                          </Label>
+                                                        </div>
                                                       </div>
                                                     ) : field.fieldType === 'textarea' ? (
                                                       <Textarea

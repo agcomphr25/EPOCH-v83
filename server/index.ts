@@ -249,7 +249,16 @@ async function initializeBackgroundServices() {
       console.error('Failed to connect to database. Server may not function properly.');
     } else {
       console.log('✅ Database connection successful');
-      
+
+      // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547
+      try {
+        const { sql } = await import('drizzle-orm');
+        await db.execute(sql`UPDATE purchase_orders SET customer_id = '547' WHERE customer_id = '698'`);
+        console.log('✅ One-time migration: Red Hawk Rifles LLC POs reassigned from customer 698 → 547');
+      } catch (migError: any) {
+        console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

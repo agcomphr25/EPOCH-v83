@@ -662,7 +662,7 @@ Return a JSON object with the following structure:
 }`;
 
         const response = await getOpenAI().chat.completions.create({
-          model: 'gpt-5.1',
+          model: 'gpt-4o',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Please analyze this document and extract the routing information:\n\n${extractedText.substring(0, 50000)}` }
@@ -812,7 +812,7 @@ Return a JSON object with the following structure:
 }`;
 
     const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-5.1',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Please analyze this document and extract the routing information:\n\n${textContent}` }
@@ -907,7 +907,7 @@ ${referenceContent ? `Reference Documents:\n${referenceContent}` : ''}
 ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
 
     const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-5.1',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -989,7 +989,7 @@ Return a JSON object with:
 }`;
 
     const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-5.1',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Analyze these documents and create a template:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }

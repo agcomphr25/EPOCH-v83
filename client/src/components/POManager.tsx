@@ -74,6 +74,7 @@ import {
   FileText,
   X,
   Loader2,
+  ArrowLeftRight,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -366,6 +367,7 @@ function POCard({
   onViewItems,
   onCalculateSchedule,
   onGenerateProductionOrders,
+  onReassignCustomer,
   isGeneratingOrders,
 }: {
   po: PurchaseOrder;
@@ -374,6 +376,7 @@ function POCard({
   onViewItems: (po: PurchaseOrder) => void;
   onCalculateSchedule: (id: number) => void;
   onGenerateProductionOrders: (id: number) => void;
+  onReassignCustomer: (po: PurchaseOrder) => void;
   isGeneratingOrders: boolean;
 }) {
   const { data: productionOrders = [], isLoading } = useQuery({
@@ -431,6 +434,14 @@ function POCard({
                 title="Edit PO Details"
               >
                 <Pencil className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onReassignCustomer(po)}
+                title="Reassign Customer"
+              >
+                <ArrowLeftRight className="w-4 h-4" />
               </Button>
 
               <div className="flex space-x-2">
@@ -529,6 +540,10 @@ export default function POManager() {
   const [scheduleData, setScheduleData] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [reassignPO, setReassignPO] = useState<PurchaseOrder | null>(null);
+  const [reassignCustomerSearch, setReassignCustomerSearch] = useState('');
+  const [reassignCustomerOpen, setReassignCustomerOpen] = useState(false);
+  const [reassignTargetCustomer, setReassignTargetCustomer] = useState<Customer | null>(null);
   const [newCustomerData, setNewCustomerData] = useState({
     name: '',
     email: '',
@@ -885,6 +900,24 @@ export default function POManager() {
 
   const handleViewItems = (po: PurchaseOrder) => {
     setSelectedPO(po);
+  };
+
+  const handleReassignCustomer = async () => {
+    if (!reassignPO || !reassignTargetCustomer) return;
+    try {
+      await apiRequest(`/api/pos/${reassignPO.id}/reassign-customer`, {
+        method: 'PUT',
+        body: JSON.stringify({ newCustomerId: reassignTargetCustomer.id }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      toast.success(`PO ${reassignPO.poNumber} reassigned to ${reassignTargetCustomer.name}`);
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      setReassignPO(null);
+      setReassignTargetCustomer(null);
+      setReassignCustomerSearch('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reassign customer');
+    }
   };
 
   const filteredPOs = pos.filter((po) => {
@@ -1248,6 +1281,11 @@ export default function POManager() {
                   onViewItems={handleViewItems}
                   onCalculateSchedule={handleCalculateSchedule}
                   onGenerateProductionOrders={handleGenerateProductionOrders}
+                  onReassignCustomer={(po) => {
+                    setReassignPO(po);
+                    setReassignTargetCustomer(null);
+                    setReassignCustomerSearch('');
+                  }}
                   isGeneratingOrders={isGeneratingOrders}
                 />
               ))
@@ -1635,6 +1673,84 @@ export default function POManager() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign Customer Dialog */}
+      <Dialog open={!!reassignPO} onOpenChange={(open) => { if (!open) setReassignPO(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reassign Customer</DialogTitle>
+          </DialogHeader>
+          {reassignPO && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                <span className="font-medium">PO:</span> {reassignPO.poNumber}
+              </div>
+              <div className="text-sm">
+                <span className="font-medium">Current Customer:</span> {reassignPO.customerName} ({reassignPO.customerId})
+              </div>
+              <div>
+                <Label>New Customer</Label>
+                <Popover open={reassignCustomerOpen} onOpenChange={setReassignCustomerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between mt-1"
+                    >
+                      {reassignTargetCustomer
+                        ? `${reassignTargetCustomer.name} (${reassignTargetCustomer.id})`
+                        : 'Select customer...'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search customers..."
+                        value={reassignCustomerSearch}
+                        onValueChange={setReassignCustomerSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No customer found.</CommandEmpty>
+                        <CommandGroup>
+                          {(customers || [])
+                            .filter((c: Customer) =>
+                              c.name.toLowerCase().includes(reassignCustomerSearch.toLowerCase()) ||
+                              String(c.id).includes(reassignCustomerSearch)
+                            )
+                            .slice(0, 20)
+                            .map((c: Customer) => (
+                              <CommandItem
+                                key={c.id}
+                                value={`${c.name} ${c.id}`}
+                                onSelect={() => {
+                                  setReassignTargetCustomer(c);
+                                  setReassignCustomerOpen(false);
+                                }}
+                              >
+                                <Check className={`mr-2 h-4 w-4 ${reassignTargetCustomer?.id === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                                {c.name} ({c.id})
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setReassignPO(null)}>Cancel</Button>
+                <Button
+                  onClick={handleReassignCustomer}
+                  disabled={!reassignTargetCustomer || reassignTargetCustomer.id === parseInt(reassignPO.customerId)}
+                >
+                  Reassign
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

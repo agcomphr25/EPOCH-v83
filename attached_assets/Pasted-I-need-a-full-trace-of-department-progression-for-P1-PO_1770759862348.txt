@@ -1,0 +1,87 @@
+I need a full trace of department progression for P1 PO Orders in EPOCH.
+
+We have a bug:
+
+- I moved items from Barcode to Shipping QC.
+- I received a success toast.
+- When I open the Shipping QC queue under PO Orders, the PO is not visible.
+
+I need you to perform a complete technical trace and report back with:
+
+PHASE 1 — FIND THE PROGRESSION MUTATION
+
+1. Locate the mutation or API endpoint triggered when moving a P1 PO item from Barcode → Shipping QC.
+2. Show:
+   - The exact route
+   - The handler function
+   - The SQL update statements executed
+   - The table(s) affected
+   - The fields updated (department, status, ready flags, etc.)
+
+PHASE 2 — IDENTIFY DATA MODEL FOR P1 PO ITEMS
+
+1. What table stores P1 PO items?
+   - po_line_items?
+   - p1_po_items?
+   - unified order_items?
+2. What column represents:
+   - current_department?
+   - department_slug?
+   - production_stage?
+3. Is Shipping QC represented by:
+   - string?
+   - enum?
+   - numeric stage?
+   - foreign key?
+
+PHASE 3 — FIND SHIPPING QC QUEUE QUERY
+
+Locate the query that populates:
+
+/department-queue/qc-shipping → PO Orders tab
+
+Show:
+- Full SQL query
+- WHERE conditions
+- JOIN logic
+- Any filters such as:
+    - ready_to_ship = true
+    - qty_ready > 0
+    - production_line = 'P1'
+    - department = 'shipping_qc'
+
+PHASE 4 — COMPARE EXPECTED VS ACTUAL FILTERS
+
+Based on the mutation and the queue query:
+
+1. What conditions must be true for a PO item to appear in Shipping QC?
+2. Which of those conditions are NOT being set during progression?
+3. Are we filtering at:
+   - item level?
+   - PO level?
+   - customer group level?
+
+PHASE 5 — DATABASE INSPECTION
+
+Generate a SQL query I can run in production that will:
+
+1. Find the PO number I just progressed.
+2. Show:
+   - current_department
+   - shipping_ready flag
+   - qty_complete
+   - qty_ready
+   - production_line
+   - status
+   - any is_archived / is_hidden flag
+
+PHASE 6 — ROOT CAUSE SUMMARY
+
+Conclude with:
+- Exact reason PO is not visible
+- Whether progression logic or queue filter logic is wrong
+- Minimal safe fix
+
+IMPORTANT:
+Do NOT modify code yet.
+Only analyze and report.

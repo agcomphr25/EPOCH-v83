@@ -605,6 +605,7 @@ export default function NonConformingItemsPage() {
                     <TableHead>Authorization</TableHead>
                     <TableHead>Serial/Tag #</TableHead>
                     <TableHead>Disp. Date</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -649,6 +650,9 @@ export default function NonConformingItemsPage() {
                         {item.dispositionDate
                           ? format(new Date(item.dispositionDate), 'MM/dd/yyyy')
                           : '-'}
+                      </TableCell>
+                      <TableCell data-testid={`text-created-${item.id}`}>
+                        {format(new Date(item.createdAt), 'MM/dd/yyyy')}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

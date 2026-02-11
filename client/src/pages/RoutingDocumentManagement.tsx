@@ -242,6 +242,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest('/api/routing-documents/ai-generate', {
         method: 'POST',
         body: data,
+        timeout: 120000,
       });
     },
     onSuccess: () => {

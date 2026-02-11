@@ -1,0 +1,27 @@
+api/routing-documents/import-from-library:1  Failed to load resource: the server responded with a status of 500 ()
+index-DigfvhgJ.js:4403 API error raw body: {"error":"Failed to import document from library"}
+console.error @ index-DigfvhgJ.js:4403
+ze @ index-DigfvhgJ.js:235
+index-DigfvhgJ.js:4403 💥 API Request failed for /api/routing-documents/import-from-library: Error: Failed to import document from library
+    at ze (index-DigfvhgJ.js:235:6254)
+console.error @ index-DigfvhgJ.js:4403
+ze @ index-DigfvhgJ.js:235
+api/cutting-table/fabric-types:1  Failed to load resource: the server responded with a status of 500 ()
+api/cutting-table/fabric-types:1  Failed to load resource: the server responded with a status of 500 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/enhanced/inventory/balances:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DigfvhgJ.js:4403 Failed to fetch session for redirect: Error: Not authenticated
+    at index-DigfvhgJ.js:4400:167649
+console.error @ index-DigfvhgJ.js:4403
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+index-DigfvhgJ.js:4403 🚨 API TIMEOUT: /api/routing-documents/ai-generate took longer than 15000ms
+console.error @ index-DigfvhgJ.js:4403
+index-DigfvhgJ.js:4403 💥 API Request failed for /api/routing-documents/ai-generate: AbortError: signal is aborted without reason
+    at index-DigfvhgJ.js:235:5298
+console.error @ index-DigfvhgJ.js:4403

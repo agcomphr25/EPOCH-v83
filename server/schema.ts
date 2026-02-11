@@ -9245,6 +9245,25 @@ export const insertPreproductionChecklistTaskSchema = createInsertSchema(preprod
 export type PreproductionChecklistTask = typeof preproductionChecklistTasks.$inferSelect;
 export type InsertPreproductionChecklistTask = z.infer<typeof insertPreproductionChecklistTaskSchema>;
 
+export const preproductionChecklistAllowedEmployees = pgTable('preproduction_checklist_allowed_employees', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  checklistId: uuid('checklist_id').notNull().references(() => preproductionChecklists.id),
+  employeeId: integer('employee_id').notNull().references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  checklistIdIdx: index('preproduction_checklist_allowed_employees_checklist_id_idx').on(table.checklistId),
+  employeeIdIdx: index('preproduction_checklist_allowed_employees_employee_id_idx').on(table.employeeId),
+  uniqueIdx: unique('preproduction_checklist_allowed_employees_unique_idx').on(table.checklistId, table.employeeId),
+}));
+
+export const insertPreproductionChecklistAllowedEmployeeSchema = createInsertSchema(preproductionChecklistAllowedEmployees).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PreproductionChecklistAllowedEmployee = typeof preproductionChecklistAllowedEmployees.$inferSelect;
+export type InsertPreproductionChecklistAllowedEmployee = z.infer<typeof insertPreproductionChecklistAllowedEmployeeSchema>;
+
 // ============================================
 // SYSTEM HEALTH CHECKS
 // ============================================

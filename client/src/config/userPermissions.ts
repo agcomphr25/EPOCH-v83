@@ -128,6 +128,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/business-review',
   '/filtered-orders-report',
   '/urgent-orders-report',
+  '/otd-report',
   '/order-heat-map',
   '/fabric-inventory',
   '/tickets',

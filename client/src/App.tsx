@@ -221,6 +221,7 @@ import MaterialInventoryPage from './pages/MaterialInventoryPage';
 import BusinessReviewPresentation from './pages/BusinessReviewPresentation';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
 import UrgentOrdersReport from './pages/UrgentOrdersReport';
+import OTDReport from './pages/OTDReport';
 import OrderHeatMap from './pages/OrderHeatMap';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
@@ -388,6 +389,7 @@ function App() {
                   <Route path="/due-date-capacity" component={DueDateCapacityReport} />
                   <Route path="/filtered-orders-report" component={FilteredOrdersReport} />
                   <Route path="/urgent-orders-report" component={UrgentOrdersReport} />
+                  <Route path="/otd-report" component={OTDReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/business-review" component={BusinessReviewPresentation} />
                   <Route path="/analytics" component={AnalyticsDashboard} />

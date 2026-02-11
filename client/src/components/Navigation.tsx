@@ -518,6 +518,12 @@ export default function Navigation() {
       description: 'View all orders flagged as Urgent or Critical priority',
     },
     {
+      path: '/otd-report',
+      label: 'OTD Report',
+      icon: TrendingUp,
+      description: 'On-Time Delivery percentage for shipped and fulfilled orders',
+    },
+    {
       path: '/gateway-reports',
       label: 'Gateway Reports',
       icon: BarChart3,

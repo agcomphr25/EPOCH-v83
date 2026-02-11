@@ -127,6 +127,8 @@ export const VALID_NAVBAR_ROUTES = [
   '/material-inventory',
   '/business-review',
   '/filtered-orders-report',
+  '/urgent-orders-report',
+  '/otd-report',
   '/order-heat-map',
   '/fabric-inventory',
   '/tickets',
@@ -172,6 +174,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/training',
       '/voice-notes',
       '/order-heat-map',
+      '/urgent-orders-report',
     ],
   },
 

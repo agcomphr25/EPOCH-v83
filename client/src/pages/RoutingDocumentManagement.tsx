@@ -255,6 +255,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest(`/api/routing-documents/${id}/ai-parse`, {
         method: 'POST',
         body: { textContent },
+        timeout: 120000,
       });
     },
     onSuccess: () => {

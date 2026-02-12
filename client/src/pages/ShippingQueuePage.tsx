@@ -514,6 +514,11 @@ export default function ShippingQueuePage() {
 
   // NEW: Get shipping address for an order (checks alt ship-to first, then falls back to customer address)
   const getOrderShippingAddress = (order: any) => {
+    // RMA orders already have their shipping address pre-computed by the backend
+    if (order.isRma && order.shippingAddress) {
+      return order.shippingAddress;
+    }
+
     // Check if order has alternative ship-to address
     if (order.hasAltShipTo) {
       // Handle existing customer mode
@@ -548,6 +553,17 @@ export default function ShippingQueuePage() {
 
   // Get customer info for alt ship-to addresses
   const getOrderShippingCustomerInfo = (order: any) => {
+    // RMA orders have customer name directly from the nonconformance record
+    if (order.isRma) {
+      const addr = order.shippingAddress;
+      return {
+        name: addr?.name || order.customerName || 'RMA Customer',
+        phone: '',
+        email: '',
+        company: '',
+      };
+    }
+
     // If order has alt ship-to with existing customer, get that customer's info
     if (order.hasAltShipTo && order.altShipToCustomerId) {
       return getCustomerInfo(order.altShipToCustomerId);

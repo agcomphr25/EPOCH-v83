@@ -259,6 +259,23 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
       }
 
+      // Sync serialized item part numbers to match their PO items
+      try {
+        const { sql: sqlSync } = await import('drizzle-orm');
+        await db.execute(sqlSync`
+          UPDATE p2_serialized_items si
+          SET part_number = poi.part_number,
+              part_name = poi.part_name,
+              updated_at = NOW()
+          FROM p2_purchase_order_items poi
+          WHERE si.po_item_id = poi.id
+            AND (si.part_number != poi.part_number OR si.part_name != poi.part_name)
+        `);
+        console.log('✅ Synced serialized item part numbers to match PO items');
+      } catch (syncErr: any) {
+        console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
+      }
+
       // Clean up resolved RMAs still showing in shipping queue
       try {
         const { sql: sqlCleanup } = await import('drizzle-orm');

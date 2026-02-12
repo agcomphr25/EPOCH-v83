@@ -11494,7 +11494,7 @@ export const insertHistoricalMonthlyDataSchema = createInsertSchema(historicalMo
     year: z.number().int().min(2020).max(2030),
     month: z.number().int().min(1).max(12),
     dataType: z.enum(['credit_card', 'revenue']),
-    category: z.enum(['online', 'phone', 'aerospace', 'combined']),
+    category: z.enum(['online', 'phone', 'aerospace', 'stocks', 'combined']),
     amount: z.string().or(z.number()),
   });
 

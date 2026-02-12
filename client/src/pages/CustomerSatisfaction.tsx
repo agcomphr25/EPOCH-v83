@@ -800,27 +800,34 @@ export default function CustomerSatisfaction() {
                 {editingResponse.isComplete ? 'Complete' : 'Draft'}
               </div>
 
-              <CustomerSatisfactionSurvey
-                surveyId={String(editingResponse.surveyId)}
-                customerId={editingResponse.customerId}
-                orderId={editingResponse.orderId}
-                existingResponse={editingResponse}
-                onComplete={() => {
-                  setIsEditResponseOpen(false);
-                  setEditingResponse(null);
-                  queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/responses'],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/analytics'],
-                  });
-                  toast({
-                    title: 'Response Updated',
-                    description:
-                      'Survey response has been updated successfully.',
-                  });
-                }}
-              />
+              <Suspense fallback={
+                <div className="p-6 text-center">
+                  <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+                  <p className="text-gray-600">Loading survey form...</p>
+                </div>
+              }>
+                <CustomerSatisfactionSurvey
+                  surveyId={String(editingResponse.surveyId)}
+                  customerId={editingResponse.customerId}
+                  orderId={editingResponse.orderId}
+                  existingResponse={editingResponse}
+                  onComplete={() => {
+                    setIsEditResponseOpen(false);
+                    setEditingResponse(null);
+                    queryClient.invalidateQueries({
+                      queryKey: ['/api/customer-satisfaction/responses'],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ['/api/customer-satisfaction/analytics'],
+                    });
+                    toast({
+                      title: 'Response Updated',
+                      description:
+                        'Survey response has been updated successfully.',
+                    });
+                  }}
+                />
+              </Suspense>
             </div>
           )}
         </DialogContent>

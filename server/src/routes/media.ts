@@ -313,16 +313,51 @@ router.get('/', async (req, res) => {
 
 // Serve media files - supports both cloud storage and local files
 router.get('/file/:filename', async (req, res) => {
+  const filename = req.params.filename;
+  
   // First try local file
-  const localFilePath = path.join(process.cwd(), 'uploads', 'media-library', req.params.filename);
+  const localFilePath = path.join(process.cwd(), 'uploads', 'media-library', filename);
   if (fs.existsSync(localFilePath)) {
     return res.sendFile(localFilePath);
   }
   
-  // Local file not found - this is a legacy file that was lost due to ephemeral storage
-  // Return a clear error message explaining the file needs to be re-uploaded
+  // Local file not found - check database for cloud storage path
+  try {
+    const result = await pool.query(
+      `SELECT storage_path, mime_type, filename FROM media_library 
+       WHERE storage_path LIKE $1 
+       OR filename = $2
+       LIMIT 1`,
+      [`%${filename}`, filename]
+    );
+    
+    const record = Array.isArray(result) ? result[0] : result?.rows?.[0];
+    
+    if (record && record.storage_path) {
+      // Check if there's a cloud storage version (object storage path)
+      if (record.storage_path.startsWith('/objects/') || record.storage_path.startsWith('objects/')) {
+        const objectPath = record.storage_path.startsWith('/') ? record.storage_path : `/${record.storage_path}`;
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+          if (record.mime_type) {
+            res.setHeader('Content-Type', record.mime_type);
+          }
+          if (record.filename) {
+            res.setHeader('Content-Disposition', `inline; filename="${record.filename}"`);
+          }
+          return await objectStorageService.downloadObject(objectFile, res);
+        } catch (objError) {
+          console.error('Cloud storage file not found:', objError);
+        }
+      }
+    }
+  } catch (dbError) {
+    console.error('Error looking up media file in database:', dbError);
+  }
+  
+  // Neither local nor cloud storage found
   res.status(404).json({ 
-    error: 'File not found - this file was uploaded before cloud storage was enabled and is no longer available. Please re-upload the file.' 
+    error: 'File not found - this file was uploaded before cloud storage was enabled and is no longer available on the server. Please re-upload the file through the Media Library.' 
   });
 });
 
@@ -470,6 +505,64 @@ router.patch('/:id/move', async (req, res) => {
 });
 
 // Get a single media item
+// Download/serve a media file by ID - handles both cloud and legacy storage
+router.get('/:id/download', async (req, res) => {
+  try {
+    const [media] = await db.select()
+      .from(mediaLibrary)
+      .where(eq(mediaLibrary.id, req.params.id));
+
+    if (!media) {
+      return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center"><h2>File Not Found</h2><p>This file could not be found.</p></body></html>');
+    }
+
+    const storagePath = media.storagePath;
+
+    // Cloud storage paths
+    if (storagePath && (storagePath.startsWith('/objects/') || storagePath.startsWith('objects/'))) {
+      const objectPath = storagePath.startsWith('/') ? storagePath : `/${storagePath}`;
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        if (media.mimeType) res.setHeader('Content-Type', media.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${media.filename || 'file'}"`);
+        return await objectStorageService.downloadObject(objectFile, res);
+      } catch (objError) {
+        console.error('Cloud storage download failed:', objError);
+      }
+    }
+
+    // Legacy local file path
+    if (storagePath) {
+      const localPath = path.join(process.cwd(), storagePath);
+      if (fs.existsSync(localPath)) {
+        if (media.mimeType) res.setHeader('Content-Type', media.mimeType);
+        return res.sendFile(localPath);
+      }
+      // Also try just the filename portion
+      const filename = storagePath.split('/').pop();
+      if (filename) {
+        const altPath = path.join(process.cwd(), 'uploads', 'media-library', filename);
+        if (fs.existsSync(altPath)) {
+          if (media.mimeType) res.setHeader('Content-Type', media.mimeType);
+          return res.sendFile(altPath);
+        }
+      }
+    }
+
+    // File is not available
+    res.status(404).send(
+      `<html><body style="font-family:sans-serif;padding:40px;text-align:center">` +
+      `<h2>File Not Available</h2>` +
+      `<p><strong>${media.filename || 'This file'}</strong> was uploaded before cloud storage was enabled and is no longer available on the server.</p>` +
+      `<p>Please re-upload this file through the Media Library.</p>` +
+      `</body></html>`
+    );
+  } catch (error) {
+    console.error('Error downloading media:', error);
+    res.status(500).json({ error: 'Failed to download media' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const [media] = await db.select()

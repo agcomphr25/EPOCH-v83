@@ -224,8 +224,9 @@ export default function RoutingDocumentManagement() {
           departmentName: data.departmentName,
           documentType: data.documentType,
           isTemplate: data.isTemplate,
-          autoAnalyze: data.autoAnalyze !== false, // Default to true
+          autoAnalyze: data.autoAnalyze !== false,
         },
+        timeout: 120000,
       });
     },
     onSuccess: (response: any, variables) => {
@@ -340,6 +341,7 @@ export default function RoutingDocumentManagement() {
           inventoryItemId: data.inventoryItemId,
           routingName: data.routingName,
         },
+        timeout: 120000,
       });
     },
     onSuccess: (result: any) => {

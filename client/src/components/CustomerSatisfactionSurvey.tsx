@@ -112,22 +112,23 @@ export default function CustomerSatisfactionSurvey({
   );
 
   // Fetch active surveys from generic survey engine
-  const { data: surveys = [], isLoading: surveysLoading } = useQuery({
+  const { data: rawSurveys, isLoading: surveysLoading } = useQuery({
     queryKey: ['/api/customer-satisfaction/surveys'],
     queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
   });
+  const surveys = Array.isArray(rawSurveys) ? rawSurveys : [];
 
-  // Fetch customers for selection
-  const { data: customers = [], isLoading: customersLoading } = useQuery({
+  const { data: rawCustomers, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
   });
+  const customers = Array.isArray(rawCustomers) ? rawCustomers : [];
 
-  // Fetch users for CSR selection
-  const { data: users = [], isLoading: usersLoading } = useQuery({
+  const { data: rawUsers, isLoading: usersLoading } = useQuery({
     queryKey: ['/api/users'],
     queryFn: () => apiRequest('/api/users'),
   });
+  const users = Array.isArray(rawUsers) ? rawUsers : [];
 
   // Selected survey (either from prop or first active survey)
   const selectedSurvey =
@@ -502,7 +503,7 @@ export default function CustomerSatisfactionSurvey({
                 <SelectValue placeholder="Search and select a customer" />
               </SelectTrigger>
               <SelectContent>
-                {customers.map((customer: Customer) => (
+                {(customers || []).map((customer: Customer) => (
                   <SelectItem key={customer.id} value={customer.id.toString()}>
                     {customer.name} {customer.email && `(${customer.email})`}
                   </SelectItem>
@@ -534,7 +535,7 @@ export default function CustomerSatisfactionSurvey({
                   <SelectValue placeholder="Select CSR" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user: any) => (
+                  {(users || []).map((user: any) => (
                     <SelectItem
                       key={user.id}
                       value={user.firstName || user.username}

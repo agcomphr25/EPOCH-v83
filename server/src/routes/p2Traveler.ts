@@ -45,12 +45,23 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     }
 
     // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
+    let serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(
         ilike(p2SerializedItems.barcode, barcode),
         ilike(p2SerializedItems.travelerBarcode, barcode)
       ),
     });
+
+    // If not found, try suffix/contains match (physical labels may omit prefix like "SG0")
+    if (!serializedItem) {
+      serializedItem = await db.query.p2SerializedItems.findFirst({
+        where: or(
+          ilike(p2SerializedItems.barcode, `%${barcode}`),
+          ilike(p2SerializedItems.travelerBarcode, `%${barcode}`),
+          ilike(p2SerializedItems.serialNumber, `%${barcode}`)
+        ),
+      });
+    }
 
     if (!serializedItem) {
       return res.status(404).json({ error: 'Part not found' });

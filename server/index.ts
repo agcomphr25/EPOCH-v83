@@ -267,6 +267,28 @@ async function initializeBackgroundServices() {
         // Column may already exist
       }
 
+      // Ensure routing_document_links table exists
+      try {
+        const { sql: sqlTag2 } = await import('drizzle-orm');
+        await db.execute(sqlTag2`
+          CREATE TABLE IF NOT EXISTS routing_document_links (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            part_routing_id UUID NOT NULL,
+            department_name VARCHAR(255),
+            document_type VARCHAR(100) NOT NULL,
+            document_id UUID NOT NULL,
+            is_primary BOOLEAN DEFAULT false,
+            sort_order INTEGER DEFAULT 0,
+            created_by VARCHAR(255),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlTag2`CREATE INDEX IF NOT EXISTS routing_document_links_routing_idx ON routing_document_links(part_routing_id)`);
+        await db.execute(sqlTag2`CREATE INDEX IF NOT EXISTS routing_document_links_document_idx ON routing_document_links(document_id)`);
+      } catch (linkTableError: any) {
+        console.warn('⚠️ routing_document_links migration:', linkTableError.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

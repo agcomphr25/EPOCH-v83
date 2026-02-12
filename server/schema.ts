@@ -3997,6 +3997,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
+  attachments: jsonb('attachments').$type<any[]>().default(sql`'[]'::jsonb`),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

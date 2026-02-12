@@ -64,8 +64,18 @@ export default function P2CertificationsManager() {
   });
 
   const { data: partRouting } = useQuery<{ departmentSequence: string[] }>({
-    queryKey: ['/api/part-routings/part', partNumber],
+    queryKey: ['/api/part-routings/by-part', partNumber],
     enabled: !!partNumber,
+    queryFn: async () => {
+      const res = await fetch(`/api/part-routings/by-part/${encodeURIComponent(partNumber)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error('Failed to fetch part routing');
+      }
+      return res.json();
+    },
   });
 
   const { data: routingDepartments = [] } = useQuery<Array<{ id: string; name: string; isActive: boolean }>>({

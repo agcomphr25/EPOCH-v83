@@ -1447,8 +1447,138 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
       }
       departmentConfig[dept].qcStandards.push({
         standard: qc.checkpoint,
-        requirement: 'Pass/Fail'
+        requirement: qc.requirement || 'Pass/Fail'
       });
+    }
+    
+    // Build QC standards array from qualityCheckpoints and curing parameters
+    const qcStandards: any[] = [];
+    for (const qc of qualityCheckpoints) {
+      qcStandards.push({
+        standardName: qc.checkpoint || qc.standard || 'Quality Check',
+        specification: qc.specification || qc.checkpoint || '',
+        tolerance: qc.tolerance || '',
+        requirement: qc.requirement || 'Pass/Fail',
+        measurementType: qc.measurementType || 'visual',
+        department: qc.department || ''
+      });
+    }
+    
+    // Add curing parameters as QC standards
+    const curingParameters = aiContent?.curingParameters;
+    if (curingParameters && typeof curingParameters === 'object') {
+      if (curingParameters.temperature) {
+        qcStandards.push({
+          standardName: 'Curing Temperature',
+          specification: curingParameters.temperature,
+          tolerance: curingParameters.temperatureTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'temperature'
+        });
+      }
+      if (curingParameters.duration) {
+        qcStandards.push({
+          standardName: 'Curing Duration',
+          specification: curingParameters.duration,
+          tolerance: curingParameters.durationTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'time'
+        });
+      }
+      if (curingParameters.pressure) {
+        qcStandards.push({
+          standardName: 'Curing Pressure',
+          specification: curingParameters.pressure,
+          tolerance: curingParameters.pressureTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'pressure'
+        });
+      }
+      if (curingParameters.rampRate) {
+        qcStandards.push({
+          standardName: 'Ramp Rate',
+          specification: curingParameters.rampRate,
+          tolerance: '',
+          requirement: 'Measured',
+          measurementType: 'rate'
+        });
+      }
+    }
+
+    // Build custom fields from dataFields and layupSchedule
+    const customFields: any[] = [];
+    const dataFields = Array.isArray(aiContent?.dataFields) ? aiContent.dataFields : [];
+    for (const field of dataFields) {
+      customFields.push({
+        fieldName: (field.fieldName || field.name || 'field').replace(/\s+/g, '_').toLowerCase(),
+        fieldLabel: field.fieldName || field.name || field.label || 'Custom Field',
+        fieldType: field.fieldType || field.type || 'text',
+        isRequired: field.isRequired ?? field.required ?? false,
+        options: field.options || [],
+        defaultValue: field.defaultValue || field.value || ''
+      });
+    }
+
+    // Add layup schedule as a structured custom field and also into department config
+    const layupSchedule = Array.isArray(aiContent?.layupSchedule) ? aiContent.layupSchedule : [];
+    if (layupSchedule.length > 0) {
+      customFields.push({
+        fieldName: 'layup_schedule',
+        fieldLabel: 'Layup Schedule (Ply Sequence)',
+        fieldType: 'json',
+        isRequired: true,
+        options: [],
+        defaultValue: JSON.stringify(layupSchedule)
+      });
+
+      const layupDept = departmentSequence.find(d => d.toLowerCase().includes('layup')) || 'Layup';
+      if (!departmentSequence.includes(layupDept)) {
+        departmentSequence.push(layupDept);
+        departmentConfig[layupDept] = { operations: [], qcStandards: [], technicianRequired: true, materials: [] };
+        traceabilityConfig[layupDept] = ['operator', 'timestamp', 'lot_number', 'batch_number'];
+      }
+      departmentConfig[layupDept].layupSchedule = layupSchedule;
+    }
+    
+    // Build materials config from materialRequirements
+    const materialsConfig: any[] = [];
+    const materialRequirements = Array.isArray(aiContent?.materialRequirements) ? aiContent.materialRequirements : [];
+    for (const mat of materialRequirements) {
+      materialsConfig.push({
+        partNumber: mat.partNumber || mat.materialPartNumber || '',
+        partName: mat.name || mat.materialName || mat.description || '',
+        quantity: mat.quantity || '',
+        unit: mat.unit || '',
+        requiresLotNumber: true,
+        requiresExpiration: mat.requiresExpiration ?? true,
+        entryMethod: 'manual'
+      });
+      
+      // Also add materials to the relevant department config
+      const matDept = mat.department || departmentSequence[0] || 'General';
+      if (departmentConfig[matDept]) {
+        departmentConfig[matDept].materials.push({
+          partNumber: mat.partNumber || mat.materialPartNumber || '',
+          partName: mat.name || mat.materialName || mat.description || '',
+          quantity: mat.quantity || '',
+          unit: mat.unit || ''
+        });
+      }
+    }
+
+    // Build special process config from curing parameters
+    const specialProcessConfig: Record<string, any> = {};
+    if (curingParameters && typeof curingParameters === 'object') {
+      specialProcessConfig['Curing'] = {
+        materials: [],
+        qcStandards: qcStandards.filter(s => s.measurementType !== 'visual'),
+        customFields: [
+          { fieldName: 'cure_temperature', fieldType: 'number', isRequired: true, label: 'Temperature' },
+          { fieldName: 'cure_duration', fieldType: 'number', isRequired: true, label: 'Duration' },
+          ...(curingParameters.pressure ? [{ fieldName: 'cure_pressure', fieldType: 'number', isRequired: true, label: 'Pressure' }] : []),
+        ],
+        parameters: curingParameters
+      };
     }
     
     // Create the part routing using storage interface
@@ -1463,6 +1593,10 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
       departmentSequence,
       traceabilityConfig,
       departmentConfig,
+      qcStandards: qcStandards.length > 0 ? qcStandards : undefined,
+      customFields: customFields.length > 0 ? customFields : undefined,
+      materialsConfig: materialsConfig.length > 0 ? materialsConfig : undefined,
+      specialProcessConfig: Object.keys(specialProcessConfig).length > 0 ? specialProcessConfig : undefined,
       isActive: true,
       createdBy: (req as any).user?.username || 'system',
     });
@@ -1488,6 +1622,11 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
         departmentsCreated: departmentSequence.length,
         operationsExtracted: routingSteps.length,
         qualityCheckpointsLinked: qualityCheckpoints.length,
+        qcStandardsCreated: qcStandards.length,
+        customFieldsCreated: customFields.length,
+        layupScheduleEntries: layupSchedule.length,
+        materialsConfigured: materialsConfig.length,
+        specialProcesses: Object.keys(specialProcessConfig).length,
         certificationRequirementsFound: certifications.length
       }
     });

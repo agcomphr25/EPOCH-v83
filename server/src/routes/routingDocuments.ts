@@ -857,12 +857,35 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     let textContent = req.body.textContent || '';
     
     if (!textContent.trim() && document.extracted_text) {
-      textContent = document.extracted_text;
-      console.log(`[AI Parse] Using stored extracted text (${textContent.length} chars) for document: ${document.title}`);
+      const isPlaceholder = document.extracted_text.startsWith('Imported from media library:') || 
+                            document.extracted_text.length < 200;
+      if (!isPlaceholder) {
+        textContent = document.extracted_text;
+        console.log(`[AI Parse] Using stored extracted text (${textContent.length} chars) for document: ${document.title}`);
+      }
+    }
+    
+    if (!textContent.trim() && document.file_url) {
+      console.log(`[AI Parse] No usable text stored. Attempting PDF extraction from file: ${document.file_url}`);
+      try {
+        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        if (fileBuffer && fileBuffer.length > 0) {
+          const extractedText = await extractPdfText(fileBuffer);
+          if (extractedText && extractedText.trim().length > 50) {
+            textContent = extractedText;
+            console.log(`[AI Parse] Extracted ${textContent.length} chars from PDF file`);
+            await db.execute(sql`UPDATE routing_documents SET extracted_text = ${textContent} WHERE id = ${req.params.id}`);
+          } else {
+            console.log(`[AI Parse] PDF text extraction returned insufficient text (${extractedText?.length || 0} chars)`);
+          }
+        }
+      } catch (pdfError) {
+        console.error('[AI Parse] Failed to extract text from PDF:', (pdfError as Error).message);
+      }
     }
     
     if (!textContent.trim()) {
-      return res.status(400).json({ error: 'No text content available. Please upload a document with readable text or paste content manually.' });
+      return res.status(400).json({ error: 'No text content available. The PDF may be image-based. Please use the manual text paste option or try Azure Document Intelligence to extract text from scanned documents.' });
     }
     
     console.log(`[AI Parse] Analyzing ${textContent.length} chars for document: ${document.title}`);

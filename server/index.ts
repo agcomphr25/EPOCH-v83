@@ -259,6 +259,16 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
       }
 
+      // Clean up resolved RMAs still showing in shipping queue
+      try {
+        const { sql: sqlCleanup } = await import('drizzle-orm');
+        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND tracking_number IS NOT NULL`);
+        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND resolved_at < NOW() - INTERVAL '1 day'`);
+        console.log('✅ Cleaned up resolved RMAs from shipping queue');
+      } catch (cleanupErr: any) {
+        console.warn('⚠️ RMA cleanup skipped:', cleanupErr.message);
+      }
+
       // Ensure routing_documents has extracted_text column
       try {
         const { sql: sqlTag } = await import('drizzle-orm');

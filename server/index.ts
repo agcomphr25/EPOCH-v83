@@ -259,6 +259,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
       }
 
+      // Ensure routing_documents has extracted_text column
+      try {
+        const { sql: sqlTag } = await import('drizzle-orm');
+        await db.execute(sqlTag`ALTER TABLE routing_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT`);
+      } catch (colError: any) {
+        // Column may already exist
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

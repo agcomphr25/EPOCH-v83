@@ -303,6 +303,7 @@ export default function NonconformanceDashboard() {
                     <th className="text-left p-2 font-medium">Mfr Defect</th>
                     <th className="text-left p-2 font-medium">Disposition</th>
                     <th className="text-left p-2 font-medium">Status</th>
+                    <th className="text-left p-2 font-medium">Tracking</th>
                     <th className="text-left p-2 font-medium">Progress</th>
                     <th className="text-left p-2 font-medium">Actions</th>
                   </tr>
@@ -348,6 +349,18 @@ export default function NonconformanceDashboard() {
                           >
                             {record.status}
                           </Badge>
+                        </td>
+                        <td className="p-2 text-sm">
+                          {record.trackingNumber ? (
+                            <div>
+                              <span className="font-medium">{record.trackingNumber}</span>
+                              {record.shippingCarrier && (
+                                <span className="text-xs text-gray-500 block">{record.shippingCarrier}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
                         </td>
                         <td className="p-2">
                           <Badge variant={statusBadge.variant}>

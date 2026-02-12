@@ -191,9 +191,15 @@ export default function ShippingQueuePage() {
   const fulfillOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
       if (isRmaOrder(orderId)) {
+        const rmaOrder = shippingOrders.find((o: any) => o.orderId === orderId);
         return await apiRequest('/api/nonconformance/fulfill', {
           method: 'POST',
-          body: { orderId },
+          body: {
+            orderId,
+            trackingNumber: rmaOrder?.trackingNumber || undefined,
+            shippingCarrier: rmaOrder?.shippingCarrier || undefined,
+            shippedDate: rmaOrder?.shippedDate || undefined,
+          },
         });
       }
       return await apiRequest('/api/orders/fulfill', {
@@ -242,9 +248,15 @@ export default function ShippingQueuePage() {
       const results = await Promise.all(
         orderIds.map(orderId => {
           if (isRmaOrder(orderId)) {
+            const rmaOrder = shippingOrders.find((o: any) => o.orderId === orderId);
             return apiRequest('/api/nonconformance/fulfill', {
               method: 'POST',
-              body: { orderId },
+              body: {
+                orderId,
+                trackingNumber: rmaOrder?.trackingNumber || undefined,
+                shippingCarrier: rmaOrder?.shippingCarrier || undefined,
+                shippedDate: rmaOrder?.shippedDate || undefined,
+              },
             });
           }
           return apiRequest('/api/orders/fulfill', {
@@ -793,7 +805,7 @@ export default function ShippingQueuePage() {
   };
 
   // Handle successful label creation
-  const handleLabelSuccess = (data: any) => {
+  const handleLabelSuccess = async (data: any) => {
     setLabelData(data);
     setShowLabelViewer(true);
     setShowLabelCreator(false);
@@ -802,6 +814,27 @@ export default function ShippingQueuePage() {
       title: 'Shipping Label Generated',
       description: `Label created with tracking number: ${data.trackingNumber}`,
     });
+
+    if (selectedOrderId && isRmaOrder(selectedOrderId)) {
+      try {
+        const rmaOrder = shippingOrders.find((o: any) => o.orderId === selectedOrderId);
+        const ncrId = rmaOrder?.rmaId;
+        if (ncrId) {
+          await apiRequest(`/api/nonconformance/${ncrId}/shipping`, {
+            method: 'PATCH',
+            body: {
+              trackingNumber: data.trackingNumber,
+              shippingCarrier: 'UPS',
+              shippedDate: new Date().toISOString().split('T')[0],
+              shippingStatus: 'Ready to Ship',
+            },
+          });
+          queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] });
+        }
+      } catch (error) {
+        console.error('Failed to save tracking info to RMA:', error);
+      }
+    }
   };
 
   // Generate shipping label with UPS API

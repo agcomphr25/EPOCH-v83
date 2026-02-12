@@ -210,7 +210,7 @@ router.get('/ready-to-ship', async (req, res) => {
 // POST /api/nonconformance/fulfill - Mark RMA as fulfilled/shipped (used from shipping queue)
 router.post('/fulfill', async (req, res) => {
   try {
-    const { rmaId, orderId } = req.body;
+    const { rmaId, orderId, trackingNumber, shippingCarrier, shippedDate } = req.body;
 
     // Support finding by rmaId (NCR integer id) or by orderId (RMA number string)
     let ncrId: number | null = null;
@@ -249,15 +249,27 @@ router.post('/fulfill', async (req, res) => {
       return res.status(400).json({ error: 'RMA ID or Order ID is required' });
     }
 
+    // Build update data - always mark as Shipped/Resolved, include tracking if provided
+    const updateData: any = {
+      shippingStatus: 'Shipped',
+      status: 'Resolved',
+      resolvedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // If tracking info wasn't already saved during label creation, save it now
+    if (trackingNumber) updateData.trackingNumber = trackingNumber;
+    if (shippingCarrier) updateData.shippingCarrier = shippingCarrier;
+    if (shippedDate) {
+      updateData.shippedDate = shippedDate;
+    } else {
+      updateData.shippedDate = new Date().toISOString().split('T')[0];
+    }
+
     // Update the NCR: mark shipping status as 'Shipped' and ensure status is 'Resolved'
     const [updated] = await db
       .update(nonconformanceRecords)
-      .set({
-        shippingStatus: 'Shipped',
-        status: 'Resolved',
-        resolvedAt: new Date(),
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(nonconformanceRecords.id, ncrId))
       .returning();
 

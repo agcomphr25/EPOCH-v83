@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ import {
   ThumbsDown,
   BarChart3,
   CalendarIcon,
+  ExternalLink,
 } from 'lucide-react';
 
 interface SurveyQuestion {
@@ -102,6 +104,7 @@ export default function CustomerSatisfactionSurvey({
   const [orderNumber, setOrderNumber] = useState<string>(
     existingResponse?.orderId || ''
   );
+  const [manualOrderEntry, setManualOrderEntry] = useState<boolean>(false);
   const [csrName, setCsrName] = useState<string>(
     existingResponse?.csrName || ''
   );
@@ -125,6 +128,13 @@ export default function CustomerSatisfactionSurvey({
   const customers = Array.isArray(rawCustomers) ? rawCustomers : [];
 
   const usersLoading = false;
+
+  const { data: rawCustomerOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: ['/api/orders/customer', selectedCustomerId],
+    queryFn: () => apiRequest(`/api/orders/customer/${selectedCustomerId}`),
+    enabled: !!selectedCustomerId,
+  });
+  const customerOrders = Array.isArray(rawCustomerOrders) ? rawCustomerOrders : [];
 
   // Selected survey (either from prop or first active survey)
   const selectedSurvey =
@@ -493,7 +503,11 @@ export default function CustomerSatisfactionSurvey({
             <Label htmlFor="customer">Select Customer *</Label>
             <Select
               value={selectedCustomerId?.toString() || ''}
-              onValueChange={(value) => setSelectedCustomerId(parseInt(value))}
+              onValueChange={(value) => {
+                setSelectedCustomerId(parseInt(value));
+                setOrderNumber('');
+                setManualOrderEntry(false);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Search and select a customer" />
@@ -511,15 +525,74 @@ export default function CustomerSatisfactionSurvey({
           {/* Order Details */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="orderNumber">Order #</Label>
-              <Input
-                id="orderNumber"
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="Enter order number"
-                className="w-full"
-                data-testid="input-order-number"
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="orderNumber">Order #</Label>
+                {selectedCustomerId && (
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() => {
+                      setManualOrderEntry(!manualOrderEntry);
+                      if (!manualOrderEntry) setOrderNumber('');
+                    }}
+                  >
+                    {manualOrderEntry ? 'Select from list' : 'Enter manually'}
+                  </button>
+                )}
+              </div>
+              {!selectedCustomerId ? (
+                <Input
+                  id="orderNumber"
+                  value={orderNumber}
+                  onChange={(e) => setOrderNumber(e.target.value)}
+                  placeholder="Select a customer first"
+                  className="w-full"
+                  disabled
+                />
+              ) : manualOrderEntry ? (
+                <Input
+                  id="orderNumber"
+                  value={orderNumber}
+                  onChange={(e) => setOrderNumber(e.target.value)}
+                  placeholder="Enter order number"
+                  className="w-full"
+                  data-testid="input-order-number"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={orderNumber}
+                    onValueChange={(value) => setOrderNumber(value)}
+                  >
+                    <SelectTrigger data-testid="select-order" className="flex-1">
+                      <SelectValue placeholder={ordersLoading ? "Loading orders..." : "Select an order"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customerOrders.map((order: any) => (
+                        <SelectItem key={order.orderId} value={order.orderId}>
+                          {order.orderId}
+                          {order.fbOrderNumber ? ` (FB: ${order.fbOrderNumber})` : ''}
+                          {order.status ? ` - ${order.status}` : ''}
+                        </SelectItem>
+                      ))}
+                      {customerOrders.length === 0 && !ordersLoading && (
+                        <SelectItem value="__none" disabled>No orders found</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {orderNumber && orderNumber !== '__none' && (
+                    <a
+                      href={`/order-entry?draft=${orderNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors shrink-0"
+                      title="Open order in Order Entry"
+                    >
+                      <ExternalLink className="h-4 w-4 text-blue-600" />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="csrName">CSR</Label>

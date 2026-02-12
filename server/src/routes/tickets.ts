@@ -655,6 +655,7 @@ router.post('/by-orders', sessionAwareAuth, async (req, res) => {
 
     const uniqueIds = [...new Set(orderIds)].slice(0, 500);
 
+    const orderIdArray = `{${uniqueIds.map(id => `"${id}"`).join(',')}}`;
     const result = await db.execute(sql`
       SELECT 
         tor.order_id,
@@ -663,7 +664,7 @@ router.post('/by-orders', sessionAwareAuth, async (req, res) => {
         ARRAY_AGG(DISTINCT t.status) as statuses
       FROM ticket_orders tor
       JOIN tickets t ON tor.ticket_id = t.id
-      WHERE tor.order_id = ANY(${uniqueIds})
+      WHERE tor.order_id = ANY(${orderIdArray}::text[])
         AND t.status NOT IN ('closed')
       GROUP BY tor.order_id
     `);

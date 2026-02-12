@@ -16,6 +16,47 @@ import {
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import * as fs from 'fs';
+import * as path from 'path';
+
+async function resolveFileToBuffer(fileUrl: string, objectStorageSvc: ObjectStorageService): Promise<Buffer | null> {
+  if (fileUrl.startsWith('/api/media/file/')) {
+    const filename = fileUrl.replace('/api/media/file/', '');
+    const localPath = path.join(process.cwd(), 'uploads', 'media-library', filename);
+    if (fs.existsSync(localPath)) {
+      console.log(`[FileResolve] Reading local file: ${localPath}`);
+      return fs.readFileSync(localPath);
+    }
+    const storagePath = `uploads/media-library/${filename}`;
+    try {
+      console.log(`[FileResolve] Trying object storage path: ${storagePath}`);
+      return await objectStorageSvc.downloadAsBuffer(storagePath);
+    } catch (e) {
+      console.log(`[FileResolve] Object storage failed, trying /objects/ prefix`);
+      try {
+        return await objectStorageSvc.downloadAsBuffer(`/objects/${storagePath}`);
+      } catch (e2) {
+        console.error(`[FileResolve] All attempts failed for: ${fileUrl}`);
+      }
+    }
+    return null;
+  }
+  if (fileUrl.startsWith('/api/media/cloud/')) {
+    const cloudPath = fileUrl.replace('/api/media/cloud/', '');
+    try {
+      return await objectStorageSvc.downloadAsBuffer(`/objects/${cloudPath}`);
+    } catch (e) {
+      console.error(`[FileResolve] Cloud download failed for: ${fileUrl}`);
+    }
+    return null;
+  }
+  try {
+    return await objectStorageSvc.downloadAsBuffer(fileUrl);
+  } catch (e) {
+    console.error(`[FileResolve] Direct download failed for: ${fileUrl}`);
+  }
+  return null;
+}
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
@@ -868,7 +909,30 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     if (!textContent.trim() && document.file_url) {
       console.log(`[AI Parse] No usable text stored. Attempting PDF extraction from file: ${document.file_url}`);
       try {
-        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        let fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        
+        if (!fileBuffer && document.file_url.startsWith('/api/media/file/')) {
+          const filename = document.file_url.replace('/api/media/file/', '');
+          console.log(`[AI Parse] Direct resolve failed. Querying media_library for storage_path of: ${filename}`);
+          try {
+            const mediaResult = await db.execute(sql`SELECT storage_path FROM media_library WHERE filename = ${filename} LIMIT 1`);
+            const mediaRows = (mediaResult as any)?.rows || mediaResult || [];
+            if (mediaRows[0]?.storage_path) {
+              const storagePath = mediaRows[0].storage_path;
+              console.log(`[AI Parse] Found media storage_path: ${storagePath}`);
+              const localMediaPath = path.join(process.cwd(), storagePath);
+              if (fs.existsSync(localMediaPath)) {
+                fileBuffer = fs.readFileSync(localMediaPath);
+                console.log(`[AI Parse] Read ${fileBuffer.length} bytes from local media path`);
+              } else {
+                fileBuffer = await resolveFileToBuffer(storagePath, objectStorageService);
+              }
+            }
+          } catch (mediaErr) {
+            console.error('[AI Parse] Media library lookup failed:', (mediaErr as Error).message);
+          }
+        }
+        
         if (fileBuffer && fileBuffer.length > 0) {
           const extractedText = await extractPdfText(fileBuffer);
           if (extractedText && extractedText.trim().length > 50) {
@@ -878,6 +942,8 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
           } else {
             console.log(`[AI Parse] PDF text extraction returned insufficient text (${extractedText?.length || 0} chars)`);
           }
+        } else {
+          console.log(`[AI Parse] Could not retrieve file buffer from any source for: ${document.file_url}`);
         }
       } catch (pdfError) {
         console.error('[AI Parse] Failed to extract text from PDF:', (pdfError as Error).message);

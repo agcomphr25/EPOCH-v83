@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, lazy, Suspense, Component, ErrorInfo, ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,8 +35,50 @@ import {
   Download,
   Filter,
   FileText,
+  AlertCircle as AlertCircleIcon,
 } from 'lucide-react';
-import CustomerSatisfactionSurvey from '@/components/CustomerSatisfactionSurvey';
+
+const CustomerSatisfactionSurvey = lazy(() => import('@/components/CustomerSatisfactionSurvey'));
+
+class SurveyErrorBoundary extends Component<
+  { children: ReactNode; onReset?: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode; onReset?: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Survey component error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 text-center space-y-4">
+          <AlertCircleIcon className="h-12 w-12 text-red-400 mx-auto" />
+          <h3 className="text-lg font-medium text-gray-900">Something went wrong</h3>
+          <p className="text-gray-600 text-sm">The survey form encountered an error. Please try again.</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              this.props.onReset?.();
+            }}
+          >
+            Try Again
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface Survey {
   id: string;
@@ -96,143 +138,6 @@ interface Analytics {
   }>;
 }
 
-const pdfStyles: Record<string, any> = {
-  page: {
-    padding: 40,
-    fontSize: 11,
-    fontFamily: 'Helvetica',
-  },
-  header: {
-    marginBottom: 20,
-    borderBottom: '2 solid #333',
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 3,
-  },
-  section: {
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 5,
-  },
-  label: {
-    fontWeight: 'bold',
-    width: '30%',
-  },
-  value: {
-    width: '70%',
-  },
-  question: {
-    marginBottom: 12,
-    padding: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 4,
-  },
-  questionText: {
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  answer: {
-    color: '#333',
-    marginLeft: 10,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 9,
-  },
-};
-
-async function generateSurveyResponsePDF(response: SurveyResponse, survey: Survey | null): Promise<Blob> {
-  const { pdf, Document, Page, Text, View } = await import('@react-pdf/renderer');
-
-  const doc = (
-    <Document>
-      <Page size="A4" style={pdfStyles.page}>
-        <View style={pdfStyles.header}>
-          <Text style={pdfStyles.title}>Customer Satisfaction Survey Response</Text>
-          <Text style={pdfStyles.subtitle}>{response.surveyTitle}</Text>
-          <Text style={pdfStyles.subtitle}>
-            Submitted: {response.submittedAt ? new Date(response.submittedAt).toLocaleDateString() : 'N/A'}
-          </Text>
-        </View>
-
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>Customer Information</Text>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Name:</Text>
-            <Text style={pdfStyles.value}>{response.customerName}</Text>
-          </View>
-          {response.customerEmail && (
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>Email:</Text>
-              <Text style={pdfStyles.value}>{response.customerEmail}</Text>
-            </View>
-          )}
-          {response.orderId && (
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>Order #:</Text>
-              <Text style={pdfStyles.value}>{response.orderId}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>Overall Scores</Text>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Aggregate Score:</Text>
-            <Text style={pdfStyles.value}>{response.aggregateScore || 0}/50</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>NPS Score:</Text>
-            <Text style={pdfStyles.value}>{response.npsScore}/10</Text>
-          </View>
-        </View>
-
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>Survey Responses</Text>
-          {survey?.questions.map((question: any, index: number) => {
-            const answer = response.responses[question.id];
-            if (!answer && answer !== 0) return null;
-            return (
-              <View key={question.id} style={pdfStyles.question}>
-                <Text style={pdfStyles.questionText}>{index + 1}. {question.question}</Text>
-                <Text style={pdfStyles.answer}>{typeof answer === 'number' ? `${answer}/10` : answer}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <Text style={pdfStyles.footer}>
-          Generated on {new Date().toLocaleDateString()} - Customer Satisfaction Survey System
-        </Text>
-      </Page>
-    </Document>
-  );
-
-  return pdf(doc).toBlob();
-}
-
 export default function CustomerSatisfaction() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -247,6 +152,7 @@ export default function CustomerSatisfaction() {
 
   const exportResponseToPDF = async (response: SurveyResponse) => {
     try {
+      const { generateSurveyResponsePDF } = await import('@/lib/customerSatisfactionPdf');
       const survey = surveys.find((s: Survey) => String(s.id) === String(response.surveyId));
       const blob = await generateSurveyResponsePDF(response, survey || null);
       const url = URL.createObjectURL(blob);
@@ -847,19 +753,28 @@ export default function CustomerSatisfaction() {
             )}
 
             {selectedCustomer && (
-              <CustomerSatisfactionSurvey
-                customerId={selectedCustomer}
-                onComplete={() => {
-                  setIsTakeSurveyOpen(false);
-                  setSelectedCustomer(null);
-                  queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/responses'],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/analytics'],
-                  });
-                }}
-              />
+              <SurveyErrorBoundary onReset={() => setSelectedCustomer(null)}>
+                <Suspense fallback={
+                  <div className="p-6 text-center">
+                    <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+                    <p className="text-gray-600">Loading survey form...</p>
+                  </div>
+                }>
+                  <CustomerSatisfactionSurvey
+                    customerId={selectedCustomer}
+                    onComplete={() => {
+                      setIsTakeSurveyOpen(false);
+                      setSelectedCustomer(null);
+                      queryClient.invalidateQueries({
+                        queryKey: ['/api/customer-satisfaction/responses'],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ['/api/customer-satisfaction/analytics'],
+                      });
+                    }}
+                  />
+                </Suspense>
+              </SurveyErrorBoundary>
             )}
           </div>
         </DialogContent>

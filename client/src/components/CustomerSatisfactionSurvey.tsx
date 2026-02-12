@@ -124,11 +124,7 @@ export default function CustomerSatisfactionSurvey({
   });
   const customers = Array.isArray(rawCustomers) ? rawCustomers : [];
 
-  const { data: rawUsers, isLoading: usersLoading } = useQuery({
-    queryKey: ['/api/users'],
-    queryFn: () => apiRequest('/api/users'),
-  });
-  const users = Array.isArray(rawUsers) ? rawUsers : [];
+  const usersLoading = false;
 
   // Selected survey (either from prop or first active survey)
   const selectedSurvey =
@@ -535,14 +531,10 @@ export default function CustomerSatisfactionSurvey({
                   <SelectValue placeholder="Select CSR" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(users || []).map((user: any) => (
-                    <SelectItem
-                      key={user.id}
-                      value={user.firstName || user.username}
-                    >
-                      {user.firstName || user.username}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Darlene B">Darlene B</SelectItem>
+                  <SelectItem value="Staci W">Staci W</SelectItem>
+                  <SelectItem value="Glenn J">Glenn J</SelectItem>
+                  <SelectItem value="Tandy M">Tandy M</SelectItem>
                 </SelectContent>
               </Select>
             </div>

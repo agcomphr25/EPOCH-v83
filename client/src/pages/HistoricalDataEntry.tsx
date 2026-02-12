@@ -139,9 +139,11 @@ export default function HistoricalDataEntry() {
     return total;
   };
 
+  const getMonthTotal = (year: number, month: number, cats: string[]): number => {
+    return cats.reduce((sum, cat) => sum + (parseFloat(getValue(year, month, cat)) || 0), 0);
+  };
+
   const renderCreditCardTab = () => {
-    const categories = ['online', 'phone'];
-    
     return (
       <div className="space-y-6">
         <div className="overflow-x-auto">
@@ -150,7 +152,7 @@ export default function HistoricalDataEntry() {
               <tr className="border-b">
                 <th className="py-2 px-3 text-left font-medium">Month</th>
                 {YEARS.map(year => (
-                  <th key={year} colSpan={2} className="py-2 px-3 text-center font-medium border-l">
+                  <th key={year} colSpan={3} className="py-2 px-3 text-center font-medium border-l">
                     {year}
                   </th>
                 ))}
@@ -164,6 +166,9 @@ export default function HistoricalDataEntry() {
                     </th>
                     <th key={`${year}-phone`} className="py-1 px-2 text-center text-xs text-muted-foreground">
                       Phone
+                    </th>
+                    <th key={`${year}-cctotal`} className="py-1 px-2 text-center text-xs font-semibold text-muted-foreground">
+                      Total
                     </th>
                   </>
                 ))}
@@ -197,6 +202,9 @@ export default function HistoricalDataEntry() {
                           onBlur={handleBlur}
                         />
                       </td>
+                      <td key={`${year}-${idx + 1}-cctotal`} className="py-1 px-2 text-right font-medium bg-muted/30">
+                        {formatCurrency(getMonthTotal(year, idx + 1, ['online', 'phone']))}
+                      </td>
                     </>
                   ))}
                 </tr>
@@ -211,6 +219,9 @@ export default function HistoricalDataEntry() {
                     <td key={`${year}-total-phone`} className="py-2 px-2 text-right">
                       {formatCurrency(getYearTotal(year, 'phone'))}
                     </td>
+                    <td key={`${year}-total-cctotal`} className="py-2 px-2 text-right font-bold">
+                      {formatCurrency(getYearTotal(year, 'online') + getYearTotal(year, 'phone'))}
+                    </td>
                   </>
                 ))}
               </tr>
@@ -222,8 +233,6 @@ export default function HistoricalDataEntry() {
   };
 
   const renderRevenueTab = () => {
-    const categories = ['aerospace', 'combined'];
-    
     return (
       <div className="space-y-6">
         <div className="overflow-x-auto">
@@ -232,7 +241,7 @@ export default function HistoricalDataEntry() {
               <tr className="border-b">
                 <th className="py-2 px-3 text-left font-medium">Month</th>
                 {YEARS.map(year => (
-                  <th key={year} colSpan={2} className="py-2 px-3 text-center font-medium border-l">
+                  <th key={year} colSpan={3} className="py-2 px-3 text-center font-medium border-l">
                     {year}
                   </th>
                 ))}
@@ -241,10 +250,13 @@ export default function HistoricalDataEntry() {
                 <th className="py-1 px-3"></th>
                 {YEARS.map(year => (
                   <>
-                    <th key={`${year}-aerospace`} className="py-1 px-2 text-center text-xs text-muted-foreground border-l">
+                    <th key={`${year}-stocks`} className="py-1 px-2 text-center text-xs text-muted-foreground border-l">
+                      Stocks
+                    </th>
+                    <th key={`${year}-aerospace`} className="py-1 px-2 text-center text-xs text-muted-foreground">
                       Aerospace
                     </th>
-                    <th key={`${year}-combined`} className="py-1 px-2 text-center text-xs text-muted-foreground">
+                    <th key={`${year}-combined`} className="py-1 px-2 text-center text-xs font-semibold text-muted-foreground">
                       Combined
                     </th>
                   </>
@@ -257,7 +269,18 @@ export default function HistoricalDataEntry() {
                   <td className="py-2 px-3 font-medium">{monthName}</td>
                   {YEARS.map(year => (
                     <>
-                      <td key={`${year}-${idx + 1}-aerospace`} className="py-1 px-1 border-l">
+                      <td key={`${year}-${idx + 1}-stocks`} className="py-1 px-1 border-l">
+                        <Input
+                          type="text"
+                          className="h-8 text-right text-sm"
+                          placeholder="$0.00"
+                          value={getDisplayValue(year, idx + 1, 'stocks')}
+                          onChange={(e) => handleChange(year, idx + 1, 'stocks', e.target.value)}
+                          onFocus={() => handleFocus(year, idx + 1, 'stocks')}
+                          onBlur={handleBlur}
+                        />
+                      </td>
+                      <td key={`${year}-${idx + 1}-aerospace`} className="py-1 px-1">
                         <Input
                           type="text"
                           className="h-8 text-right text-sm"
@@ -268,16 +291,8 @@ export default function HistoricalDataEntry() {
                           onBlur={handleBlur}
                         />
                       </td>
-                      <td key={`${year}-${idx + 1}-combined`} className="py-1 px-1">
-                        <Input
-                          type="text"
-                          className="h-8 text-right text-sm"
-                          placeholder="$0.00"
-                          value={getDisplayValue(year, idx + 1, 'combined')}
-                          onChange={(e) => handleChange(year, idx + 1, 'combined', e.target.value)}
-                          onFocus={() => handleFocus(year, idx + 1, 'combined')}
-                          onBlur={handleBlur}
-                        />
+                      <td key={`${year}-${idx + 1}-combined`} className="py-1 px-2 text-right font-medium bg-muted/30">
+                        {formatCurrency(getMonthTotal(year, idx + 1, ['stocks', 'aerospace']))}
                       </td>
                     </>
                   ))}
@@ -287,11 +302,14 @@ export default function HistoricalDataEntry() {
                 <td className="py-2 px-3">Year Totals</td>
                 {YEARS.map(year => (
                   <>
-                    <td key={`${year}-total-aerospace`} className="py-2 px-2 text-right border-l">
+                    <td key={`${year}-total-stocks`} className="py-2 px-2 text-right border-l">
+                      {formatCurrency(getYearTotal(year, 'stocks'))}
+                    </td>
+                    <td key={`${year}-total-aerospace`} className="py-2 px-2 text-right">
                       {formatCurrency(getYearTotal(year, 'aerospace'))}
                     </td>
-                    <td key={`${year}-total-combined`} className="py-2 px-2 text-right">
-                      {formatCurrency(getYearTotal(year, 'combined'))}
+                    <td key={`${year}-total-combined`} className="py-2 px-2 text-right font-bold">
+                      {formatCurrency(getYearTotal(year, 'stocks') + getYearTotal(year, 'aerospace'))}
                     </td>
                   </>
                 ))}

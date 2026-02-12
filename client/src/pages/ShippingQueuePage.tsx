@@ -182,35 +182,47 @@ export default function ShippingQueuePage() {
     }
   };
 
+  // Helper to check if an orderId belongs to an RMA
+  const isRmaOrder = (orderId: string) => {
+    return orderId.startsWith('RMA') || orderId.startsWith('rma');
+  };
+
   // Mutation to fulfill orders and move to shipping management
   const fulfillOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      if (isRmaOrder(orderId)) {
+        return await apiRequest('/api/nonconformance/fulfill', {
+          method: 'POST',
+          body: { orderId },
+        });
+      }
       return await apiRequest('/api/orders/fulfill', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
+        body: { orderId },
       });
     },
     onSuccess: async (_, orderId) => {
+      const isRma = isRmaOrder(orderId);
       toast({
-        title: 'Order Fulfilled',
-        description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
+        title: isRma ? 'RMA Fulfilled' : 'Order Fulfilled',
+        description: isRma
+          ? `RMA ${orderId} has been marked as shipped and resolved on the nonconformance tracker`
+          : `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
       });
       
-      // Clear local state first
       setSelectedCard(null);
       setSelectedOrders([]);
       
-      // Invalidate and actively refetch to ensure fresh data
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['/api/orders/with-payment-status'],
         }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance/ready-to-ship'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] }),
       ]);
       
-      // Force a refetch to update the UI immediately
       await queryClient.refetchQueries({
         queryKey: ['/api/orders/with-payment-status'],
       });
@@ -227,38 +239,47 @@ export default function ShippingQueuePage() {
   // Bulk fulfill mutation for marking multiple orders as fulfilled at once
   const bulkFulfillMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      // Fulfill each order sequentially
       const results = await Promise.all(
-        orderIds.map(orderId =>
-          apiRequest('/api/orders/fulfill', {
+        orderIds.map(orderId => {
+          if (isRmaOrder(orderId)) {
+            return apiRequest('/api/nonconformance/fulfill', {
+              method: 'POST',
+              body: { orderId },
+            });
+          }
+          return apiRequest('/api/orders/fulfill', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId }),
-          })
-        )
+            body: { orderId },
+          });
+        })
       );
       return results;
     },
     onSuccess: async (_, orderIds) => {
+      const rmaCount = orderIds.filter(id => isRmaOrder(id)).length;
+      const orderCount = orderIds.length - rmaCount;
+      const parts = [];
+      if (orderCount > 0) parts.push(`${orderCount} order${orderCount > 1 ? 's' : ''} fulfilled`);
+      if (rmaCount > 0) parts.push(`${rmaCount} RMA${rmaCount > 1 ? 's' : ''} resolved`);
+      
       toast({
-        title: 'Orders Fulfilled',
-        description: `${orderIds.length} order${orderIds.length > 1 ? 's have' : ' has'} been marked as fulfilled`,
+        title: 'Items Fulfilled',
+        description: parts.join(', '),
       });
       
-      // Clear local state
       setSelectedCard(null);
       setSelectedOrders([]);
       
-      // Invalidate and refetch
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['/api/orders/with-payment-status'],
         }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance/ready-to-ship'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] }),
       ]);
       
-      // Force refetch
       await queryClient.refetchQueries({
         queryKey: ['/api/orders/with-payment-status'],
       });

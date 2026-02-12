@@ -3742,9 +3742,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     setDocPickerUseWhole(true);
                     setDocPickerLoadingSections(true);
                     try {
-                      const res = await apiRequest(`/api/routing-documents/${doc.id}/sections`);
-                      const data = await res.json();
-                      setDocPickerSections(data.sections || []);
+                      const data = await apiRequest(`/api/routing-documents/${doc.id}/sections`);
+                      setDocPickerSections(data?.sections || []);
                     } catch (err) {
                       console.warn('Could not load sections:', err);
                       setDocPickerSections([]);

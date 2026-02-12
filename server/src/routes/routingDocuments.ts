@@ -374,7 +374,7 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
     if (document.ai_extracted_content) {
       const rawContent = document.ai_extracted_content;
       const isStructuredJson = typeof rawContent === 'object' && rawContent !== null && !Array.isArray(rawContent) &&
-        (rawContent.routingSteps || rawContent.dataFields || rawContent.qualityCheckpoints || rawContent.specialProcesses || rawContent.certificationRequirements);
+        (rawContent.routingSteps || rawContent.dataFields || rawContent.qualityCheckpoints || rawContent.specialProcesses || rawContent.certificationRequirements || rawContent.layupSchedule || rawContent.curingParameters || rawContent.materialRequirements || rawContent.materialsConfig || rawContent.qcStandards || rawContent.customFields || rawContent.specialProcessConfig);
 
       if (isStructuredJson) {
         const parts: string[] = [];
@@ -417,6 +417,74 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
           ).join('\n');
           sections.push({ id: `section-${sections.length}`, title: `Certification Requirements (${rawContent.certificationRequirements.length})`, content: certContent.trim(), startIndex: 0 });
           parts.push(`## Certification Requirements\n${certContent}`);
+        }
+
+        if (rawContent.layupSchedule && Array.isArray(rawContent.layupSchedule) && rawContent.layupSchedule.length > 0) {
+          const layupContent = rawContent.layupSchedule.map((l: any, i: number) =>
+            `Layer ${l.layer || l.layerNumber || (i + 1)}: ${l.material || l.materialType || ''} - ${l.orientation || ''} ${l.notes ? `(${l.notes})` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Layup Schedule (${rawContent.layupSchedule.length} layers)`, content: layupContent.trim(), startIndex: 0 });
+          parts.push(`## Layup Schedule\n${layupContent}`);
+        }
+
+        if (rawContent.curingParameters) {
+          const cp = rawContent.curingParameters;
+          const curingContent = typeof cp === 'string' ? cp : Object.entries(cp).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (curingContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Curing Parameters', content: curingContent.trim(), startIndex: 0 });
+            parts.push(`## Curing Parameters\n${curingContent}`);
+          }
+        }
+
+        if (rawContent.materialRequirements && Array.isArray(rawContent.materialRequirements) && rawContent.materialRequirements.length > 0) {
+          const matContent = rawContent.materialRequirements.map((m: any) =>
+            `${m.material || m.name || m.partNumber || 'Material'}: ${m.quantity || ''} ${m.unit || ''} ${m.specification ? `- Spec: ${m.specification}` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Material Requirements (${rawContent.materialRequirements.length})`, content: matContent.trim(), startIndex: 0 });
+          parts.push(`## Material Requirements\n${matContent}`);
+        }
+
+        if (rawContent.materialsConfig && typeof rawContent.materialsConfig === 'object') {
+          const mcContent = Object.entries(rawContent.materialsConfig).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (mcContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Materials Configuration', content: mcContent.trim(), startIndex: 0 });
+            parts.push(`## Materials Configuration\n${mcContent}`);
+          }
+        }
+
+        if (rawContent.qcStandards && typeof rawContent.qcStandards === 'object') {
+          const qcsContent = typeof rawContent.qcStandards === 'string' ? rawContent.qcStandards : Object.entries(rawContent.qcStandards).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (qcsContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'QC Standards', content: qcsContent.trim(), startIndex: 0 });
+            parts.push(`## QC Standards\n${qcsContent}`);
+          }
+        }
+
+        if (rawContent.specialProcessConfig && typeof rawContent.specialProcessConfig === 'object') {
+          const spcContent = Object.entries(rawContent.specialProcessConfig).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (spcContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Special Process Configuration', content: spcContent.trim(), startIndex: 0 });
+            parts.push(`## Special Process Configuration\n${spcContent}`);
+          }
+        }
+
+        if (rawContent.customFields && typeof rawContent.customFields === 'object') {
+          const cfEntries = Array.isArray(rawContent.customFields) ? rawContent.customFields : Object.entries(rawContent.customFields);
+          if (cfEntries.length > 0) {
+            const cfContent = Array.isArray(rawContent.customFields)
+              ? rawContent.customFields.map((f: any) => `${f.label || f.name || f.key}: ${f.value || f.type || ''}`).join('\n')
+              : Object.entries(rawContent.customFields).map(([k, v]: [string, any]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n');
+            sections.push({ id: `section-${sections.length}`, title: 'Custom Fields', content: cfContent.trim(), startIndex: 0 });
+            parts.push(`## Custom Fields\n${cfContent}`);
+          }
         }
 
         fullText = parts.join('\n\n');

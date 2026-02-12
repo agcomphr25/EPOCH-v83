@@ -106,47 +106,65 @@ function getOpenAI(): OpenAI {
   return openaiClient;
 }
 
-const COMPOSITE_ANALYSIS_PROMPT = `You are an expert composite manufacturing and fabrication document analyzer, specializing in composite layup, mold creation, and production processes used in firearms stock and component manufacturing.
+const COMPOSITE_ANALYSIS_PROMPT = `You are an expert composite manufacturing document analyzer. Your job is to EXTRACT information that is ACTUALLY PRESENT in the document text provided. You specialize in composite layup, mold creation, and production processes used in firearms stock and component manufacturing.
 
-You understand the following composite manufacturing concepts deeply:
-- **Layup processes**: Ply cutting, ply orientation (0°/45°/90°), prepreg placement, wet layup, hand layup, fiber placement, stacking sequences, debulking cycles
-- **Mold operations**: Mold preparation, mold release application, gel coat, mold assembly/disassembly, flash removal, mold maintenance
-- **Curing**: Autoclave curing, oven curing (temperature ramps, hold times, cool-down), vacuum bag curing, press curing, post-cure cycles
-- **Materials**: Carbon fiber, fiberglass, Kevlar, prepreg (pre-impregnated), resin systems (epoxy, polyester, vinyl ester), adhesives, core materials (foam, honeycomb), release films, peel ply, breather cloth, vacuum bag film, sealant tape
-- **Quality control**: Dimensional checks, surface finish inspection, void content, fiber volume fraction, ultrasonic testing (NDT/NDI), tap testing, visual inspection criteria, coupon testing
-- **Assembly**: Bonding, secondary bonding, co-bonding, mechanical fastening, trimming, drilling, countersinking, surface preparation (sanding, solvent wipe, abrasion)
-- **Traceability**: Material lot numbers, expiration dates, out-time tracking, batch numbers, serial numbers, shelf life management, freezer storage logs
-- **Equipment**: Ovens, autoclaves, vacuum pumps, cutting tables, CNC machines, laser projectors, templates/patterns
+CRITICAL RULES:
+1. ONLY extract information that is EXPLICITLY stated in the document text. Do NOT invent, hallucinate, or fill in generic/assumed information.
+2. Use the EXACT part numbers, material names, temperatures, tolerances, dimensions, and specifications from the document.
+3. If the document mentions specific part numbers (e.g., "301j", "542f", "440"), include them exactly as written.
+4. If the document specifies exact temperatures (e.g., "335°F"), use those exact values — do NOT substitute generic values.
+5. If the document references specific standards (e.g., "ASTM D2563-08(2015)"), include them exactly.
+6. If a field is not mentioned in the document, do NOT include it. Omit it entirely rather than guessing.
+7. Preserve the document's own section names and structure (e.g., "Mandrel Preparation", "Lay Up Schedule", "Cello Wrap Schedule", "Oven Processes", "In-Process Inspection", "Final QC").
 
-When analyzing documents, map operations to these standard departments when applicable: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure.
+You understand composite manufacturing concepts:
+- Layup processes, ply schedules with specific part numbers and quantities
+- Mold/mandrel preparation steps
+- Curing/oven processes with specific temperatures and times
+- Quality inspections with tolerance levels and ASTM standards
+- Dimensional measurements with specific Go/No-Go values
+- Wrapping/bagging steps
+- Material traceability (lot numbers, serial numbers)
 
-Extract department-specific data fields relevant to composite manufacturing:
-- Layup: ply count, fiber orientation, material lot number, prepreg out-time, debulk cycles performed, room temperature/humidity
-- Oven/Cure: cure temperature, cure time, ramp rate, vacuum pressure (inHg), thermocouple readings, cure cycle ID
-- Quality Control: dimensional measurements, surface defects noted, void percentage, NDI results, go/no-go checks
-- Trim/CNC: tool numbers, program IDs, edge quality, dimensional tolerances
-- Paint/Finish: surface prep method, primer type, paint lot, coating thickness, cure conditions
-- Assembly/Bonding: adhesive lot number, bond line thickness, surface prep verification, fixture ID
+When analyzing documents, map operations to these standard departments when applicable: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure, Cello Wrap.
+
+For each routing step, include:
+- The EXACT description from the document including part numbers and quantities
+- The specific materials and their part numbers as listed
+- Any dimensional requirements exactly as specified
+
+For quality checkpoints, include:
+- The EXACT tolerance values from the document (e.g., "+/- .005", "Level I, none", "Go/No Go")
+- The EXACT requirement values (e.g., "11.891-11.901", ">/= 96\"")
+- The specific ASTM or other standards referenced
+- The specific inspection method described
 
 `;
 
-const COMPOSITE_ANALYSIS_JSON_SCHEMA = `Return a JSON object with the following structure:
+const COMPOSITE_ANALYSIS_JSON_SCHEMA = `Return a JSON object with the following structure. ONLY include sections and fields that are ACTUALLY PRESENT in the document:
 {
-  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
+  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string - use EXACT text from document including part numbers, quantities, and dimensions"}],
+  "layupSchedule": [{"plyNumber": "number or string", "partNumber": "string - exact part number from document", "quantity": number, "description": "string - exact description from document including dimensions"}],
   "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode|checkbox", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string", "unit": "string or null"}],
-  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string", "inspectionMethod": "string or null"}],
+  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string - exact standard from document (e.g. ASTM D2563-08(2015))", "tolerance": "string - exact tolerance from document", "requirement": "string - exact requirement value from document", "department": "string", "inspectionMethod": "string or null"}],
   "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
   "specialProcesses": [{"process": "string", "requirements": "string", "department": "string", "processParameters": "string or null"}],
-  "materialRequirements": [{"material": "string", "specification": "string", "department": "string", "traceabilityRequired": boolean}],
-  "curingParameters": [{"step": "string", "temperature": "string", "time": "string", "vacuumPressure": "string or null", "rampRate": "string or null", "department": "string"}]
+  "materialRequirements": [{"material": "string - exact name from document", "partNumber": "string or null - exact part number if listed", "specification": "string - exact spec from document", "department": "string", "traceabilityRequired": boolean}],
+  "curingParameters": [{"step": "string", "temperature": "string - exact temp from document", "time": "string - exact time from document", "vacuumPressure": "string or null", "rampRate": "string or null", "department": "string", "tolerance": "string or null - exact tolerance if specified"}]
 }
 
-IMPORTANT:
-- Use actual department names found in the document when possible, mapping to standard names: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure
-- Include units for numeric fields (e.g., "°F", "minutes", "inHg", "mils")
-- For quality checkpoints, specify the inspection method (visual, dimensional, NDI, tap test, etc.)
-- Identify material traceability requirements (lot numbers, expiration tracking)
-- Extract cure cycle parameters separately in curingParameters when present`;
+CRITICAL EXTRACTION RULES:
+- Extract ONLY what is written in the document. Do NOT add generic or assumed information.
+- Use the EXACT part numbers as they appear (e.g., "301j", "542f", "542k", "440", "485", "486").
+- Use the EXACT temperatures, times, and tolerances (e.g., "335°F", "105 mins", "+/- .005", "+/- 15°F").
+- Use the EXACT dimensional requirements (e.g., "11.780", "11.891-11.901", ">/= 96\"").
+- Use the EXACT standards referenced (e.g., "ASTM D2563-08(2015)").
+- Use the EXACT tolerance levels as described (e.g., "Level I, none", "Level III, 1/32\" & <50", "Go/No Go").
+- For layup schedules, include EVERY ply listed with its exact part number, quantity, and description.
+- For quality checkpoints, include the EXACT tolerance, requirement value, and standard — do not generalize.
+- Map departments to standard names when clear: Layup, Mold Prep, Oven/Cure, Quality Control, Cello Wrap, Trim, etc.
+- If the document has sections like "Mandrel Preparation", "Lay Up Schedule", "Cello Wrap Schedule", "Oven Processes", "In-Process Inspection", "Final QC" — create routing steps that match these exact sections.
+- Include signature fields where the document shows signature lines (e.g., "In-Process Verification Signature", "Approved to Ship Signature").`;
 
 // Get all routing documents
 router.get('/', async (req: Request, res: Response) => {
@@ -855,7 +873,7 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\nDocument Title: ${document.title}\n\n${textContent.substring(0, 50000)}` }
+        { role: 'user', content: `Extract the EXACT information from this document. Do NOT generate generic content — only include data that is explicitly written in the text below. Preserve all part numbers, temperatures, tolerances, dimensions, and standards exactly as they appear.\n\nDocument Title: ${document.title}\n\nDOCUMENT TEXT:\n${textContent.substring(0, 50000)}` }
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 4096,

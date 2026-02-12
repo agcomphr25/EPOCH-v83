@@ -643,7 +643,7 @@ router.post('/extract-text', async (req: Request, res: Response) => {
 // Extract text from a stored document by ID (for AI analysis of already-imported documents)
 router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
   try {
-    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, description, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, description, extracted_text, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
     const rows = (results as any)?.rows || results || [];
     const document = rows[0];
 
@@ -653,34 +653,40 @@ router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
 
     let extractedText = '';
 
-    // First try to get text from AI extracted content if available
-    if (document.ai_extracted_content) {
+    if (document.extracted_text && document.extracted_text.trim().length > 200 && 
+        !document.extracted_text.startsWith('Imported from media library:')) {
+      extractedText = document.extracted_text;
+    }
+
+    if (!extractedText.trim() && document.ai_extracted_content) {
       const content = typeof document.ai_extracted_content === 'string'
         ? JSON.parse(document.ai_extracted_content)
         : document.ai_extracted_content;
       if (content.fullText) {
         extractedText = content.fullText;
-      } else {
-        extractedText = JSON.stringify(content, null, 2);
       }
     }
 
-    // If no extracted content, try downloading from object storage
     if (!extractedText.trim() && document.file_url) {
       try {
-        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
-        const fileType = (document.file_type || document.file_name || '').toLowerCase();
-        if (fileType.includes('pdf')) {
-          extractedText = await extractPdfText(fileBuffer);
-        } else {
-          extractedText = fileBuffer.toString('utf-8');
+        const fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        if (fileBuffer && fileBuffer.length > 0) {
+          const fileType = (document.file_type || document.file_name || document.file_url || '').toLowerCase();
+          if (fileType.includes('pdf')) {
+            extractedText = await extractPdfText(fileBuffer);
+          } else {
+            extractedText = fileBuffer.toString('utf-8');
+          }
+          if (extractedText.trim().length > 50) {
+            await db.execute(sql`UPDATE routing_documents SET extracted_text = ${extractedText} WHERE id = ${req.params.id}`);
+            console.log(`[ExtractStoredText] Saved ${extractedText.length} chars for document ${req.params.id}`);
+          }
         }
       } catch (dlError) {
         console.error('Error downloading stored file for text extraction:', dlError);
       }
     }
 
-    // Fall back to description
     if (!extractedText.trim() && document.description) {
       extractedText = document.description;
     }
@@ -913,9 +919,9 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
         
         if (!fileBuffer && document.file_url.startsWith('/api/media/file/')) {
           const filename = document.file_url.replace('/api/media/file/', '');
-          console.log(`[AI Parse] Direct resolve failed. Querying media_library for storage_path of: ${filename}`);
+          console.log(`[AI Parse] Direct resolve failed. Querying media_library for storage_path matching: ${filename}`);
           try {
-            const mediaResult = await db.execute(sql`SELECT storage_path FROM media_library WHERE filename = ${filename} LIMIT 1`);
+            const mediaResult = await db.execute(sql`SELECT storage_path FROM media_library WHERE storage_path LIKE ${'%' + filename} LIMIT 1`);
             const mediaRows = (mediaResult as any)?.rows || mediaResult || [];
             if (mediaRows[0]?.storage_path) {
               const storagePath = mediaRows[0].storage_path;

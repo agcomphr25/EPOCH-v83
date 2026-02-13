@@ -347,20 +347,23 @@ router.post('/start-task', async (req: Request, res: Response) => {
       });
 
       if (employeeActiveTasks.length > 0) {
+        const activePartName = employeeActiveTasks[0]?.partName || employeeActiveTasks[0]?.partNumber || 'another part';
         return res.status(400).json({ 
-          error: `You must complete your current task on ${employeeActiveTasks[0].partName} before starting a new one`,
+          error: `You must complete your current task on ${activePartName} before starting a new one`,
           code: 'MULTI_TASK_NOT_ALLOWED'
         });
       }
     }
 
-    // Validate input - pull denormalized fields from serialized item
+    // Validate input - pull denormalized fields from serialized item (use DB values as source of truth)
+    const resolvedPartName = partName || serializedItem.partName || serializedItem.partNumber || 'Unknown';
+    const resolvedPartNumber = partNumber || serializedItem.partNumber;
     const validatedData = insertP2WorkTaskSchema.parse({
       serializedItemId,
-      barcode,
+      barcode: barcode || serializedItem.barcode,
       poNumber: serializedItem.poNumber,
-      partNumber,
-      partName,
+      partNumber: resolvedPartNumber,
+      partName: resolvedPartName,
       customerId: serializedItem.customerId,
       customerName: serializedItem.customerName,
       department,

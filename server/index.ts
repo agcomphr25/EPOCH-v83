@@ -286,6 +286,25 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ RMA cleanup skipped:', cleanupErr.message);
       }
 
+      // Ensure traveler_signatures has task-specific columns for role-based signing
+      try {
+        const { sql: sqlSig } = await import('drizzle-orm');
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS traveler_task_id VARCHAR(255)`);
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS signature_role VARCHAR(50)`);
+        console.log('✅ Ensured traveler_signatures has task_id and signature_role columns');
+      } catch (sigErr: any) {
+        console.warn('⚠️ Traveler signatures migration skipped:', sigErr.message);
+      }
+
+      // Ensure instruction_pack column exists on traveler_tasks
+      try {
+        const { sql: sqlInst } = await import('drizzle-orm');
+        await db.execute(sqlInst`ALTER TABLE traveler_tasks ADD COLUMN IF NOT EXISTS instruction_pack JSONB`);
+        console.log('✅ Ensured traveler_tasks has instruction_pack column');
+      } catch (instErr: any) {
+        console.warn('⚠️ Traveler tasks instruction_pack migration skipped:', instErr.message);
+      }
+
       // Ensure p2_customers has serial_sequences column and update old-format serial numbers
       try {
         const { sql: sqlSerial } = await import('drizzle-orm');

@@ -39,6 +39,7 @@ interface StartProductionTimerModalProps {
   defaultProgramId?: string;
   onTimerStarted?: () => void;
   navigateToStation?: boolean;
+  badgeId?: string;
 }
 
 export default function StartProductionTimerModal({
@@ -48,6 +49,7 @@ export default function StartProductionTimerModal({
   defaultProgramId,
   onTimerStarted,
   navigateToStation = true,
+  badgeId,
 }: StartProductionTimerModalProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -112,6 +114,7 @@ export default function StartProductionTimerModal({
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
+          ...(badgeId ? { badgeId } : {}),
         }),
       });
     },

@@ -29,17 +29,19 @@ const startRunSchema = z.object({
   instanceName: z.string().optional(),
   sku: z.string().optional(),
   serialNumber: z.string().min(1, 'Serial # is required'),
+  description: z.string().optional(),
   inventoryItemId: z.number().int().positive('Inventory Item is required').optional(),
   mandrelNumber: z.number().int().min(1).max(3),
   ovenNumber: z.number().int().min(1).max(2),
   ovenSlot: z.enum(['A', 'B']),
+  badgeId: z.string().optional(),
 });
 
 router.post('/runs/start', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.id || req.body?.badgeId;
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
 
     const parseResult = startRunSchema.safeParse(req.body);

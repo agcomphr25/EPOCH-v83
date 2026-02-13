@@ -13538,7 +13538,10 @@ export class DatabaseStorage implements IStorage {
       const hasMaterials = (deptConfig.materials || []).length > 0;
       const hasTraceFields = (traceabilityConfig[deptName] || []).length > 0;
       const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
+      const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
+      const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
       const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
+      const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
       const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
       const routingInstPack = deptConfig.instructionPack || null;
       const hasInstructionPackContent = routingInstPack && (
@@ -13552,7 +13555,8 @@ export class DatabaseStorage implements IStorage {
       const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
 
       const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
-        hasCustomFields || hasQcStandards || hasOvenCuring || hasInstructionPackContent ||
+        hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
+        hasQcStandards || hasStartQcStandards || hasOvenCuring || hasInstructionPackContent ||
         hasTimerConfig || hasStdProcesses || hasSpecialProcess;
 
       if (!hasAnyContent) {
@@ -13693,6 +13697,64 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // START Phase Custom Data Fields
+      const startCustomFields = deptConfig.startCustomDataFields || [];
+      if (startCustomFields.length > 0) {
+        const startDataTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'START',
+          title: 'Start Phase Data Entry',
+          instructions: 'Enter required data for the START phase',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const field of startCustomFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: startDataTask.id,
+            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+            fieldLabel: field.fieldName || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || false,
+          });
+        }
+      }
+
+      // START Phase QC Standards (incoming inspection)
+      const startQcStandards = deptConfig.startQcStandards || [];
+      if (startQcStandards.length > 0) {
+        const startQcTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          taskPhase: 'START',
+          title: 'Incoming Inspection',
+          instructions: 'Complete incoming quality checks before work begins',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: true,
+          signatureRole: 'QC',
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const qc of startQcStandards) {
+          await this.createTravelerTaskField({
+            travelerTaskId: startQcTask.id,
+            fieldKey: `start_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            fieldLabel: qc.standard || 'QC Check',
+            fieldType: 'yes_no',
+            required: true,
+            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+          });
+        }
+      }
+
       // ===== WORK PHASE =====
       // Snapshot instruction pack from routing (frozen at traveler creation time)
       const routingInstructionPack = deptConfig.instructionPack || null;
@@ -13798,6 +13860,34 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: check.requiresCertification || false,
           status: 'NOT_STARTED',
         });
+      }
+
+      // FINISH Phase Custom Data Fields
+      const finishCustomFields = deptConfig.finishCustomDataFields || [];
+      if (finishCustomFields.length > 0) {
+        const finishDataTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'FINISH',
+          title: 'Finish Phase Data Entry',
+          instructions: 'Enter required data for the FINISH phase (final measurements, results)',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const field of finishCustomFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: finishDataTask.id,
+            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+            fieldLabel: field.fieldName || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || false,
+          });
+        }
       }
 
       // QC verification tasks

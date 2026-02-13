@@ -12743,13 +12743,48 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`PO ${poItem.poId} not found`);
       }
 
+      // Get the customer's RFQ prefix for serial number generation
+      const currentYear = new Date().getFullYear().toString();
+      const yearSuffix = currentYear.slice(-2);
+      let prefix = '';
+
+      // Look up customer by customerId to get rfqPrefix
+      const customerResult = await tx.execute(sql`
+        SELECT rfq_prefix, customer_name, serial_sequences
+        FROM p2_customers
+        WHERE customer_id = ${po.customerId}::text
+        LIMIT 1
+      `);
+
+      if (customerResult.rows && customerResult.rows.length > 0) {
+        const customer = customerResult.rows[0] as any;
+        prefix = customer.rfq_prefix || customer.customer_name.substring(0, 3).toUpperCase();
+      } else {
+        prefix = (po.customerName || 'UNK').substring(0, 3).toUpperCase();
+      }
+
+      // Atomically increment serial sequence counter for this customer+year
+      const seqResult = await tx.execute(sql`
+        UPDATE p2_customers
+        SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
+          jsonb_build_object(
+            ${currentYear}::text,
+            COALESCE((serial_sequences->>${currentYear}::text)::int, 0) + ${poItem.quantity}
+          )
+        WHERE customer_id = ${po.customerId}::text
+        RETURNING (COALESCE((serial_sequences->>${currentYear}::text)::int, 0)) as end_sequence
+      `);
+
+      const endSequence = seqResult.rows?.[0] ? (seqResult.rows[0] as any).end_sequence : poItem.quantity;
+      const startSequence = endSequence - poItem.quantity + 1;
+
       const serializedItems: P2SerializedItem[] = [];
 
-      // Generate serialized items based on quantity
-      for (let i = 1; i <= poItem.quantity; i++) {
-        const sequenceNumber = i;
-        const serialNumber = `${po.poNumber}-${poItem.partNumber}-${String(sequenceNumber).padStart(4, '0')}`;
-        const barcode = serialNumber; // Same as serial number
+      // Generate serialized items with format: PREFIX + YY + NNNNN (e.g., STR2600001)
+      for (let i = 0; i < poItem.quantity; i++) {
+        const sequenceNumber = startSequence + i;
+        const serialNumber = `${prefix}${yearSuffix}${String(sequenceNumber).padStart(5, '0')}`;
+        const barcode = serialNumber;
 
         const itemData: InsertP2SerializedItem = {
           serialNumber,

@@ -4051,6 +4051,7 @@ export const p2Customers = pgTable('p2_customers', {
   notes: text('notes'),
   rfqPrefix: text('rfq_prefix'), // 3-letter prefix for RFQ numbers (e.g., "STR" for Strata-G)
   rfqSequences: jsonb('rfq_sequences').default('{}'), // Tracks RFQ sequence by year: {"2025": 15, "2024": 50}
+  serialSequences: jsonb('serial_sequences').default('{}'), // Tracks serial number sequence by year: {"2026": 1}
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

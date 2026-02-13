@@ -259,6 +259,63 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
       }
 
+      // Sync serialized item part numbers to match their PO items
+      try {
+        const { sql: sqlSync } = await import('drizzle-orm');
+        await db.execute(sqlSync`
+          UPDATE p2_serialized_items si
+          SET part_number = poi.part_number,
+              part_name = poi.part_name,
+              updated_at = NOW()
+          FROM p2_purchase_order_items poi
+          WHERE si.po_item_id = poi.id
+            AND (si.part_number != poi.part_number OR si.part_name != poi.part_name)
+        `);
+        console.log('✅ Synced serialized item part numbers to match PO items');
+      } catch (syncErr: any) {
+        console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
+      }
+
+      // Clean up resolved RMAs still showing in shipping queue
+      try {
+        const { sql: sqlCleanup } = await import('drizzle-orm');
+        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND tracking_number IS NOT NULL`);
+        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND resolved_at < NOW() - INTERVAL '1 day'`);
+        console.log('✅ Cleaned up resolved RMAs from shipping queue');
+      } catch (cleanupErr: any) {
+        console.warn('⚠️ RMA cleanup skipped:', cleanupErr.message);
+      }
+
+      // Ensure routing_documents has extracted_text column
+      try {
+        const { sql: sqlTag } = await import('drizzle-orm');
+        await db.execute(sqlTag`ALTER TABLE routing_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT`);
+      } catch (colError: any) {
+        // Column may already exist
+      }
+
+      // Ensure routing_document_links table exists
+      try {
+        const { sql: sqlTag2 } = await import('drizzle-orm');
+        await db.execute(sqlTag2`
+          CREATE TABLE IF NOT EXISTS routing_document_links (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            part_routing_id UUID NOT NULL,
+            department_name VARCHAR(255),
+            document_type VARCHAR(100) NOT NULL,
+            document_id UUID NOT NULL,
+            is_primary BOOLEAN DEFAULT false,
+            sort_order INTEGER DEFAULT 0,
+            created_by VARCHAR(255),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlTag2`CREATE INDEX IF NOT EXISTS routing_document_links_routing_idx ON routing_document_links(part_routing_id)`);
+        await db.execute(sqlTag2`CREATE INDEX IF NOT EXISTS routing_document_links_document_idx ON routing_document_links(document_id)`);
+      } catch (linkTableError: any) {
+        console.warn('⚠️ routing_document_links migration:', linkTableError.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

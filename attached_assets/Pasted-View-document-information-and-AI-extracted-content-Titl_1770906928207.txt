@@ -1,0 +1,87 @@
+View document information and AI-extracted content
+
+Title
+Traveler - Disruptor 12_ Tube Rev N Ver 1.2 - Google Sheets
+Document Typereference
+Part Number
+-
+Department
+-
+Sourcemedia_library
+AI StatusAnalyzed
+AI Extracted Content
+Routing Steps
+1
+Mold Prep
+Prepare mold surface
+Clean and apply mold release to mold surface.
+2
+Layup
+Perform composite layup
+Cut carbon fiber prepreg to specified ply count and orientations (0°, 45°, 90°) and place in mold according to stacking sequence.
+3
+Layup
+Debulk layup
+Apply vacuum and perform debulking after every 4 plies.
+4
+Oven/Cure
+Cure composite structure
+Perform oven cure cycle as specified in cure parameters.
+5
+Trim
+Trim excess material
+Trim cured part to final dimensions using CNC machine.
+6
+Quality Control
+Inspect dimensions and surface finish
+Conduct dimensional checks and surface finish inspection.
+Data Fields
+Field Name	Type	Required	Department
+Ply Count	number	Yes	Layup
+Fiber Orientation	text	Yes	Layup
+Material Lot Number	barcode	Yes	Layup
+Prepreg Out-Time	number	Yes	Layup
+Cure Temperature	number	Yes	Oven/Cure
+Cure Time	number	Yes	Oven/Cure
+Vacuum Pressure	number	Yes	Oven/Cure
+Trim Tool ID	text	Yes	Trim
+Dimensional Tolerance	number	Yes	Quality Control
+Quality Checkpoints
+Dimensional Checks
+Standard: ±0.005 in | Tolerance: 0.005 in
+Method: dimensional
+Quality Control
+Surface Finish
+Standard: Free of voids and defects | Tolerance: none
+Method: visual
+Quality Control
+Void Content
+Standard: <2% | Tolerance: 2%
+Method: NDI
+Quality Control
+Certification Requirements
+Material Lot Certification
+Layup - Verify material lot numbers and expiration dates.
+Cure Cycle Certification
+Oven/Cure - Log thermocouple readings and vacuum pressure results for certification.
+Dimensional Accuracy Certification
+Quality Control - Ensure dimensional results meet print tolerance specifications.
+Material Requirements
+Carbon Fiber Prepreg
+Toray T700, 125°F shelf life, out-life 30 days
+Lot traceability required
+Layup
+Epoxy Resin System
+High temp cure, RT cure capable
+Lot traceability required
+Oven/Cure
+Release Film
+Perforated, high temp stable
+Lot traceability required
+Layup
+Curing Parameters
+Initial Cure
+Temp: 275°F | Time: 90 minutes | Vacuum: 28 inHg | Ramp: 5°F/min
+Oven/Cure
+Post-Cure
+Temp: 350°F | Time: 120 minutes | Vacuum: 28 inHg | Ramp: 5°F/min

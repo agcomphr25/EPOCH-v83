@@ -76,6 +76,25 @@ async function ensureTablesExist() {
       )
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS routing_document_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        part_routing_id UUID NOT NULL,
+        department_name VARCHAR(255),
+        document_type VARCHAR(100) NOT NULL,
+        document_id UUID NOT NULL,
+        is_primary BOOLEAN DEFAULT false,
+        sort_order INTEGER DEFAULT 0,
+        created_by VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS routing_document_links_routing_idx ON routing_document_links(part_routing_id)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS routing_document_links_document_idx ON routing_document_links(document_id)
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS routing_training_packages (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         part_routing_id UUID,

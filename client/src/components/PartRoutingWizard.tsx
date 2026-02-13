@@ -203,6 +203,9 @@ interface DepartmentConfiguration {
   specialProcessConfig?: SpecialProcessConfig;
   standardProcesses?: StandardProcess[];
   customDataFields?: CustomDataField[];
+  startCustomDataFields?: CustomDataField[];
+  finishCustomDataFields?: CustomDataField[];
+  startQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
@@ -1310,6 +1313,55 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
+  const addPhaseCustomField = (dept: string, phase: 'start' | 'finish') => {
+    if (!customFieldName.trim()) {
+      toast({ title: 'Missing Field Name', description: 'Please enter a field name', variant: 'destructive' });
+      return;
+    }
+    const config = getOrCreateDeptConfig(dept);
+    const newField: CustomDataField = { fieldName: customFieldName.trim(), fieldType: customFieldType, isRequired: customFieldRequired };
+    const key = phase === 'start' ? 'startCustomDataFields' : 'finishCustomDataFields';
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, [key]: [...(config[key] || []), newField] },
+    });
+    setCustomFieldName('');
+    setCustomFieldType('text');
+    setCustomFieldRequired(false);
+    toast({ title: 'Field Added', description: `"${newField.fieldName}" added to ${phase.toUpperCase()} phase of ${dept}` });
+  };
+
+  const removePhaseCustomField = (dept: string, phase: 'start' | 'finish', index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    const key = phase === 'start' ? 'startCustomDataFields' : 'finishCustomDataFields';
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, [key]: (config[key] || []).filter((_, i) => i !== index) },
+    });
+  };
+
+  const addStartQcStandard = (dept: string) => {
+    if (!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim()) return;
+    const config = getOrCreateDeptConfig(dept);
+    const newStandard: QCStandard = { standard: qcStandardInput.trim(), tolerance: qcToleranceInput.trim(), requirement: qcRequirementInput.trim() };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, startQcStandards: [...(config.startQcStandards || []), newStandard] },
+    });
+    setQcStandardInput('');
+    setQcToleranceInput('');
+    setQcRequirementInput('');
+    toast({ title: 'QC Standard Added', description: `Added to START phase of ${dept}` });
+  };
+
+  const removeStartQcStandard = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, startQcStandards: (config.startQcStandards || []).filter((_, i) => i !== index) },
+    });
+  };
+
   const addStartCheck = (dept: string) => {
     if (!startCheckTitle.trim()) return;
     const config = getOrCreateDeptConfig(dept);
@@ -1809,9 +1861,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           {/* Phase Tabs */}
                           <div className="flex gap-1 mt-3">
                             {([
-                              { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) },
+                              { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.startCustomDataFields?.length || 0) + (config.startQcStandards?.length || 0) },
                               { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
-                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (sigConfig.requiredSignatures.length) },
+                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (config.finishCustomDataFields?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
                                 key={phase.key}
@@ -1938,6 +1990,94 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     className="text-sm mt-1"
                                   />
                                 )}
+                              </div>
+
+                              <Separator />
+
+                              {/* START Phase Custom Data Fields */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <PenLine className="h-4 w-4 text-blue-600" />
+                                  Start Phase Data Fields ({config.startCustomDataFields?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Fields operators fill in during the START phase (e.g., incoming inspection data).</p>
+                                {config.startCustomDataFields && config.startCustomDataFields.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.startCustomDataFields.map((field, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{field.fieldName}</p>
+                                          <div className="flex gap-1 mt-0.5">
+                                            <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
+                                            {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                                          </div>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePhaseCustomField(dept, 'start', idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
+                                      <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="number">Number</SelectItem>
+                                        <SelectItem value="date">Date</SelectItem>
+                                        <SelectItem value="textarea">Text Area</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id={`start-field-req-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
+                                      <Label htmlFor={`start-field-req-${dept}`} className="text-xs cursor-pointer">Required</Label>
+                                    </div>
+                                    <Button size="sm" onClick={() => addPhaseCustomField(dept, 'start')} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
+                                      <Plus className="h-4 w-4 mr-1" /> Add Field
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <Separator />
+
+                              {/* START Phase QC Standards (Incoming Inspection) */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <CheckSquare className="h-4 w-4 text-blue-600" />
+                                  Start Phase QC ({config.startQcStandards?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Incoming inspection or pre-work quality checks.</p>
+                                {config.startQcStandards && config.startQcStandards.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.startQcStandards.map((qc, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{qc.standard}</p>
+                                          <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStartQcStandard(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-1">
+                                  <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  </div>
+                                  <Button size="sm" onClick={() => addStartQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add QC Standard
+                                  </Button>
+                                </div>
                               </div>
 
                             </div>
@@ -2551,6 +2691,58 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     className="text-sm mt-1"
                                   />
                                 )}
+                              </div>
+
+                              <Separator />
+
+                              {/* FINISH Phase Custom Data Fields */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <PenLine className="h-4 w-4 text-green-600" />
+                                  Finish Phase Data Fields ({config.finishCustomDataFields?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Fields operators fill in during the FINISH phase (e.g., final measurements, results).</p>
+                                {config.finishCustomDataFields && config.finishCustomDataFields.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.finishCustomDataFields.map((field, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{field.fieldName}</p>
+                                          <div className="flex gap-1 mt-0.5">
+                                            <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
+                                            {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                                          </div>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePhaseCustomField(dept, 'finish', idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
+                                      <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="number">Number</SelectItem>
+                                        <SelectItem value="date">Date</SelectItem>
+                                        <SelectItem value="textarea">Text Area</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id={`finish-field-req-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
+                                      <Label htmlFor={`finish-field-req-${dept}`} className="text-xs cursor-pointer">Required</Label>
+                                    </div>
+                                    <Button size="sm" onClick={() => addPhaseCustomField(dept, 'finish')} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
+                                      <Plus className="h-4 w-4 mr-1" /> Add Field
+                                    </Button>
+                                  </div>
+                                </div>
                               </div>
 
                               <Separator />
@@ -3742,9 +3934,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     setDocPickerUseWhole(true);
                     setDocPickerLoadingSections(true);
                     try {
-                      const res = await apiRequest(`/api/routing-documents/${doc.id}/sections`);
-                      const data = await res.json();
-                      setDocPickerSections(data.sections || []);
+                      const data = await apiRequest(`/api/routing-documents/${doc.id}/sections`);
+                      setDocPickerSections(data?.sections || []);
                     } catch (err) {
                       console.warn('Could not load sections:', err);
                       setDocPickerSections([]);

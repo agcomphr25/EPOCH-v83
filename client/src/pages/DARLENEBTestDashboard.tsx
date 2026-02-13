@@ -343,6 +343,20 @@ export default function DARLENEBTestDashboard() {
               </CardContent>
             </Card>
           </Link>
+
+          <Link href="/urgent-orders-report">
+            <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-red-200 ${isDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
+              <CardContent className="p-4 text-center">
+                <ClipboardList className="w-8 h-8 text-red-600 mx-auto mb-3" />
+                <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  Urgent Orders Report
+                </h3>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  View urgent and priority orders
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
 

@@ -224,8 +224,9 @@ export default function RoutingDocumentManagement() {
           departmentName: data.departmentName,
           documentType: data.documentType,
           isTemplate: data.isTemplate,
-          autoAnalyze: data.autoAnalyze !== false, // Default to true
+          autoAnalyze: data.autoAnalyze !== false,
         },
+        timeout: 120000,
       });
     },
     onSuccess: (response: any, variables) => {
@@ -255,6 +256,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest(`/api/routing-documents/${id}/ai-parse`, {
         method: 'POST',
         body: { textContent },
+        timeout: 120000,
       });
     },
     onSuccess: () => {
@@ -339,6 +341,7 @@ export default function RoutingDocumentManagement() {
           inventoryItemId: data.inventoryItemId,
           routingName: data.routingName,
         },
+        timeout: 120000,
       });
     },
     onSuccess: (result: any) => {
@@ -528,13 +531,27 @@ export default function RoutingDocumentManagement() {
     try {
       const response = await apiRequest(`/api/routing-documents/${docId}/extract-stored-text`, {
         method: 'GET',
+        timeout: 60000,
       });
-      if (response.extractedText && response.extractedText.trim()) {
+      if (response.extractedText && response.extractedText.trim().length > 100 && 
+          !response.extractedText.startsWith('Imported from media library:')) {
         setParseContent(response.extractedText);
         toast({ title: 'Document Text Loaded', description: `Loaded ${response.extractedLength} characters from stored document` });
+      } else {
+        toast({ 
+          title: 'File Not Available', 
+          description: 'The original file is no longer on the server. Please upload the PDF or paste the text content below.', 
+          variant: 'destructive',
+          duration: 8000,
+        });
       }
     } catch (error: any) {
       console.error('Failed to load stored document text:', error);
+      toast({ 
+        title: 'Could Not Load Document', 
+        description: 'Please upload the PDF file or paste the text content manually.', 
+        variant: 'destructive' 
+      });
     } finally {
       setIsExtractingText(false);
     }

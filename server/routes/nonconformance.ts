@@ -207,6 +207,89 @@ router.get('/ready-to-ship', async (req, res) => {
   }
 });
 
+// POST /api/nonconformance/fulfill - Mark RMA as fulfilled/shipped (used from shipping queue)
+router.post('/fulfill', async (req, res) => {
+  try {
+    const { rmaId, orderId, trackingNumber, shippingCarrier, shippedDate } = req.body;
+
+    // Support finding by rmaId (NCR integer id) or by orderId (RMA number string)
+    let ncrId: number | null = null;
+
+    if (rmaId) {
+      ncrId = typeof rmaId === 'number' ? rmaId : parseInt(rmaId, 10);
+    } else if (orderId) {
+      // orderId might be like "RMA260130-2" or the rma_number field
+      // Try to find the NCR record by rma_number
+      const [found] = await db
+        .select()
+        .from(nonconformanceRecords)
+        .where(eq(nonconformanceRecords.rmaNumber, orderId))
+        .limit(1);
+
+      if (found) {
+        ncrId = found.id;
+      } else {
+        // Try stripping "RMA-" prefix and parsing as integer
+        const stripped = orderId.replace(/^RMA-?/i, '');
+        const parsed = parseInt(stripped, 10);
+        if (!isNaN(parsed)) {
+          const [foundById] = await db
+            .select()
+            .from(nonconformanceRecords)
+            .where(eq(nonconformanceRecords.id, parsed))
+            .limit(1);
+          if (foundById) {
+            ncrId = foundById.id;
+          }
+        }
+      }
+    }
+
+    if (!ncrId) {
+      return res.status(400).json({ error: 'RMA ID or Order ID is required' });
+    }
+
+    // Build update data - always mark as Shipped/Resolved, include tracking if provided
+    const updateData: any = {
+      shippingStatus: 'Shipped',
+      status: 'Resolved',
+      resolvedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // If tracking info wasn't already saved during label creation, save it now
+    if (trackingNumber) updateData.trackingNumber = trackingNumber;
+    if (shippingCarrier) updateData.shippingCarrier = shippingCarrier;
+    if (shippedDate) {
+      updateData.shippedDate = shippedDate;
+    } else {
+      updateData.shippedDate = new Date().toISOString().split('T')[0];
+    }
+
+    // Update the NCR: mark shipping status as 'Shipped' and ensure status is 'Resolved'
+    const [updated] = await db
+      .update(nonconformanceRecords)
+      .set(updateData)
+      .where(eq(nonconformanceRecords.id, ncrId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: `NCR record ${ncrId} not found` });
+    }
+
+    console.log(`✅ RMA FULFILLED: NCR #${ncrId} (${updated.rmaNumber || 'N/A'}) marked as Shipped and Resolved`);
+
+    res.json({
+      success: true,
+      message: `RMA ${updated.rmaNumber || ncrId} has been fulfilled and marked as resolved`,
+      record: updated,
+    });
+  } catch (error) {
+    console.error('Error fulfilling RMA:', error);
+    res.status(500).json({ error: 'Failed to fulfill RMA' });
+  }
+});
+
 // GET /api/nonconformance/:id - Get single record
 router.get('/:id', async (req, res) => {
   try {

@@ -16,6 +16,47 @@ import {
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import * as fs from 'fs';
+import * as path from 'path';
+
+async function resolveFileToBuffer(fileUrl: string, objectStorageSvc: ObjectStorageService): Promise<Buffer | null> {
+  if (fileUrl.startsWith('/api/media/file/')) {
+    const filename = fileUrl.replace('/api/media/file/', '');
+    const localPath = path.join(process.cwd(), 'uploads', 'media-library', filename);
+    if (fs.existsSync(localPath)) {
+      console.log(`[FileResolve] Reading local file: ${localPath}`);
+      return fs.readFileSync(localPath);
+    }
+    const storagePath = `uploads/media-library/${filename}`;
+    try {
+      console.log(`[FileResolve] Trying object storage path: ${storagePath}`);
+      return await objectStorageSvc.downloadAsBuffer(storagePath);
+    } catch (e) {
+      console.log(`[FileResolve] Object storage failed, trying /objects/ prefix`);
+      try {
+        return await objectStorageSvc.downloadAsBuffer(`/objects/${storagePath}`);
+      } catch (e2) {
+        console.error(`[FileResolve] All attempts failed for: ${fileUrl}`);
+      }
+    }
+    return null;
+  }
+  if (fileUrl.startsWith('/api/media/cloud/')) {
+    const cloudPath = fileUrl.replace('/api/media/cloud/', '');
+    try {
+      return await objectStorageSvc.downloadAsBuffer(`/objects/${cloudPath}`);
+    } catch (e) {
+      console.error(`[FileResolve] Cloud download failed for: ${fileUrl}`);
+    }
+    return null;
+  }
+  try {
+    return await objectStorageSvc.downloadAsBuffer(fileUrl);
+  } catch (e) {
+    console.error(`[FileResolve] Direct download failed for: ${fileUrl}`);
+  }
+  return null;
+}
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
@@ -106,47 +147,65 @@ function getOpenAI(): OpenAI {
   return openaiClient;
 }
 
-const COMPOSITE_ANALYSIS_PROMPT = `You are an expert composite manufacturing and fabrication document analyzer, specializing in composite layup, mold creation, and production processes used in firearms stock and component manufacturing.
+const COMPOSITE_ANALYSIS_PROMPT = `You are an expert composite manufacturing document analyzer. Your job is to EXTRACT information that is ACTUALLY PRESENT in the document text provided. You specialize in composite layup, mold creation, and production processes used in firearms stock and component manufacturing.
 
-You understand the following composite manufacturing concepts deeply:
-- **Layup processes**: Ply cutting, ply orientation (0°/45°/90°), prepreg placement, wet layup, hand layup, fiber placement, stacking sequences, debulking cycles
-- **Mold operations**: Mold preparation, mold release application, gel coat, mold assembly/disassembly, flash removal, mold maintenance
-- **Curing**: Autoclave curing, oven curing (temperature ramps, hold times, cool-down), vacuum bag curing, press curing, post-cure cycles
-- **Materials**: Carbon fiber, fiberglass, Kevlar, prepreg (pre-impregnated), resin systems (epoxy, polyester, vinyl ester), adhesives, core materials (foam, honeycomb), release films, peel ply, breather cloth, vacuum bag film, sealant tape
-- **Quality control**: Dimensional checks, surface finish inspection, void content, fiber volume fraction, ultrasonic testing (NDT/NDI), tap testing, visual inspection criteria, coupon testing
-- **Assembly**: Bonding, secondary bonding, co-bonding, mechanical fastening, trimming, drilling, countersinking, surface preparation (sanding, solvent wipe, abrasion)
-- **Traceability**: Material lot numbers, expiration dates, out-time tracking, batch numbers, serial numbers, shelf life management, freezer storage logs
-- **Equipment**: Ovens, autoclaves, vacuum pumps, cutting tables, CNC machines, laser projectors, templates/patterns
+CRITICAL RULES:
+1. ONLY extract information that is EXPLICITLY stated in the document text. Do NOT invent, hallucinate, or fill in generic/assumed information.
+2. Use the EXACT part numbers, material names, temperatures, tolerances, dimensions, and specifications from the document.
+3. If the document mentions specific part numbers (e.g., "301j", "542f", "440"), include them exactly as written.
+4. If the document specifies exact temperatures (e.g., "335°F"), use those exact values — do NOT substitute generic values.
+5. If the document references specific standards (e.g., "ASTM D2563-08(2015)"), include them exactly.
+6. If a field is not mentioned in the document, do NOT include it. Omit it entirely rather than guessing.
+7. Preserve the document's own section names and structure (e.g., "Mandrel Preparation", "Lay Up Schedule", "Cello Wrap Schedule", "Oven Processes", "In-Process Inspection", "Final QC").
 
-When analyzing documents, map operations to these standard departments when applicable: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure.
+You understand composite manufacturing concepts:
+- Layup processes, ply schedules with specific part numbers and quantities
+- Mold/mandrel preparation steps
+- Curing/oven processes with specific temperatures and times
+- Quality inspections with tolerance levels and ASTM standards
+- Dimensional measurements with specific Go/No-Go values
+- Wrapping/bagging steps
+- Material traceability (lot numbers, serial numbers)
 
-Extract department-specific data fields relevant to composite manufacturing:
-- Layup: ply count, fiber orientation, material lot number, prepreg out-time, debulk cycles performed, room temperature/humidity
-- Oven/Cure: cure temperature, cure time, ramp rate, vacuum pressure (inHg), thermocouple readings, cure cycle ID
-- Quality Control: dimensional measurements, surface defects noted, void percentage, NDI results, go/no-go checks
-- Trim/CNC: tool numbers, program IDs, edge quality, dimensional tolerances
-- Paint/Finish: surface prep method, primer type, paint lot, coating thickness, cure conditions
-- Assembly/Bonding: adhesive lot number, bond line thickness, surface prep verification, fixture ID
+When analyzing documents, map operations to these standard departments when applicable: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure, Cello Wrap.
+
+For each routing step, include:
+- The EXACT description from the document including part numbers and quantities
+- The specific materials and their part numbers as listed
+- Any dimensional requirements exactly as specified
+
+For quality checkpoints, include:
+- The EXACT tolerance values from the document (e.g., "+/- .005", "Level I, none", "Go/No Go")
+- The EXACT requirement values (e.g., "11.891-11.901", ">/= 96\"")
+- The specific ASTM or other standards referenced
+- The specific inspection method described
 
 `;
 
-const COMPOSITE_ANALYSIS_JSON_SCHEMA = `Return a JSON object with the following structure:
+const COMPOSITE_ANALYSIS_JSON_SCHEMA = `Return a JSON object with the following structure. ONLY include sections and fields that are ACTUALLY PRESENT in the document:
 {
-  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string"}],
+  "routingSteps": [{"stepNumber": 1, "department": "string", "operation": "string", "description": "string - use EXACT text from document including part numbers, quantities, and dimensions"}],
+  "layupSchedule": [{"plyNumber": "number or string", "partNumber": "string - exact part number from document", "quantity": number, "description": "string - exact description from document including dimensions"}],
   "dataFields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "text|number|date|signature|barcode|checkbox", "isRequired": boolean, "isUniquePerSerial": boolean, "department": "string", "unit": "string or null"}],
-  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string", "tolerance": "string", "department": "string", "inspectionMethod": "string or null"}],
+  "qualityCheckpoints": [{"checkpoint": "string", "standard": "string - exact standard from document (e.g. ASTM D2563-08(2015))", "tolerance": "string - exact tolerance from document", "requirement": "string - exact requirement value from document", "department": "string", "inspectionMethod": "string or null"}],
   "certificationRequirements": [{"certification": "string", "department": "string", "task": "string"}],
   "specialProcesses": [{"process": "string", "requirements": "string", "department": "string", "processParameters": "string or null"}],
-  "materialRequirements": [{"material": "string", "specification": "string", "department": "string", "traceabilityRequired": boolean}],
-  "curingParameters": [{"step": "string", "temperature": "string", "time": "string", "vacuumPressure": "string or null", "rampRate": "string or null", "department": "string"}]
+  "materialRequirements": [{"material": "string - exact name from document", "partNumber": "string or null - exact part number if listed", "specification": "string - exact spec from document", "department": "string", "traceabilityRequired": boolean}],
+  "curingParameters": [{"step": "string", "temperature": "string - exact temp from document", "time": "string - exact time from document", "vacuumPressure": "string or null", "rampRate": "string or null", "department": "string", "tolerance": "string or null - exact tolerance if specified"}]
 }
 
-IMPORTANT:
-- Use actual department names found in the document when possible, mapping to standard names: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure
-- Include units for numeric fields (e.g., "°F", "minutes", "inHg", "mils")
-- For quality checkpoints, specify the inspection method (visual, dimensional, NDI, tap test, etc.)
-- Identify material traceability requirements (lot numbers, expiration tracking)
-- Extract cure cycle parameters separately in curingParameters when present`;
+CRITICAL EXTRACTION RULES:
+- Extract ONLY what is written in the document. Do NOT add generic or assumed information.
+- Use the EXACT part numbers as they appear (e.g., "301j", "542f", "542k", "440", "485", "486").
+- Use the EXACT temperatures, times, and tolerances (e.g., "335°F", "105 mins", "+/- .005", "+/- 15°F").
+- Use the EXACT dimensional requirements (e.g., "11.780", "11.891-11.901", ">/= 96\"").
+- Use the EXACT standards referenced (e.g., "ASTM D2563-08(2015)").
+- Use the EXACT tolerance levels as described (e.g., "Level I, none", "Level III, 1/32\" & <50", "Go/No Go").
+- For layup schedules, include EVERY ply listed with its exact part number, quantity, and description.
+- For quality checkpoints, include the EXACT tolerance, requirement value, and standard — do not generalize.
+- Map departments to standard names when clear: Layup, Mold Prep, Oven/Cure, Quality Control, Cello Wrap, Trim, etc.
+- If the document has sections like "Mandrel Preparation", "Lay Up Schedule", "Cello Wrap Schedule", "Oven Processes", "In-Process Inspection", "Final QC" — create routing steps that match these exact sections.
+- Include signature fields where the document shows signature lines (e.g., "In-Process Verification Signature", "Approved to Ship Signature").`;
 
 // Get all routing documents
 router.get('/', async (req: Request, res: Response) => {
@@ -315,7 +374,7 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
     if (document.ai_extracted_content) {
       const rawContent = document.ai_extracted_content;
       const isStructuredJson = typeof rawContent === 'object' && rawContent !== null && !Array.isArray(rawContent) &&
-        (rawContent.routingSteps || rawContent.dataFields || rawContent.qualityCheckpoints || rawContent.specialProcesses || rawContent.certificationRequirements);
+        (rawContent.routingSteps || rawContent.dataFields || rawContent.qualityCheckpoints || rawContent.specialProcesses || rawContent.certificationRequirements || rawContent.layupSchedule || rawContent.curingParameters || rawContent.materialRequirements || rawContent.materialsConfig || rawContent.qcStandards || rawContent.customFields || rawContent.specialProcessConfig);
 
       if (isStructuredJson) {
         const parts: string[] = [];
@@ -358,6 +417,74 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
           ).join('\n');
           sections.push({ id: `section-${sections.length}`, title: `Certification Requirements (${rawContent.certificationRequirements.length})`, content: certContent.trim(), startIndex: 0 });
           parts.push(`## Certification Requirements\n${certContent}`);
+        }
+
+        if (rawContent.layupSchedule && Array.isArray(rawContent.layupSchedule) && rawContent.layupSchedule.length > 0) {
+          const layupContent = rawContent.layupSchedule.map((l: any, i: number) =>
+            `Layer ${l.layer || l.layerNumber || (i + 1)}: ${l.material || l.materialType || ''} - ${l.orientation || ''} ${l.notes ? `(${l.notes})` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Layup Schedule (${rawContent.layupSchedule.length} layers)`, content: layupContent.trim(), startIndex: 0 });
+          parts.push(`## Layup Schedule\n${layupContent}`);
+        }
+
+        if (rawContent.curingParameters) {
+          const cp = rawContent.curingParameters;
+          const curingContent = typeof cp === 'string' ? cp : Object.entries(cp).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (curingContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Curing Parameters', content: curingContent.trim(), startIndex: 0 });
+            parts.push(`## Curing Parameters\n${curingContent}`);
+          }
+        }
+
+        if (rawContent.materialRequirements && Array.isArray(rawContent.materialRequirements) && rawContent.materialRequirements.length > 0) {
+          const matContent = rawContent.materialRequirements.map((m: any) =>
+            `${m.material || m.name || m.partNumber || 'Material'}: ${m.quantity || ''} ${m.unit || ''} ${m.specification ? `- Spec: ${m.specification}` : ''}`
+          ).join('\n');
+          sections.push({ id: `section-${sections.length}`, title: `Material Requirements (${rawContent.materialRequirements.length})`, content: matContent.trim(), startIndex: 0 });
+          parts.push(`## Material Requirements\n${matContent}`);
+        }
+
+        if (rawContent.materialsConfig && typeof rawContent.materialsConfig === 'object') {
+          const mcContent = Object.entries(rawContent.materialsConfig).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (mcContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Materials Configuration', content: mcContent.trim(), startIndex: 0 });
+            parts.push(`## Materials Configuration\n${mcContent}`);
+          }
+        }
+
+        if (rawContent.qcStandards && typeof rawContent.qcStandards === 'object') {
+          const qcsContent = typeof rawContent.qcStandards === 'string' ? rawContent.qcStandards : Object.entries(rawContent.qcStandards).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (qcsContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'QC Standards', content: qcsContent.trim(), startIndex: 0 });
+            parts.push(`## QC Standards\n${qcsContent}`);
+          }
+        }
+
+        if (rawContent.specialProcessConfig && typeof rawContent.specialProcessConfig === 'object') {
+          const spcContent = Object.entries(rawContent.specialProcessConfig).map(([k, v]: [string, any]) =>
+            `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+          ).join('\n');
+          if (spcContent.trim()) {
+            sections.push({ id: `section-${sections.length}`, title: 'Special Process Configuration', content: spcContent.trim(), startIndex: 0 });
+            parts.push(`## Special Process Configuration\n${spcContent}`);
+          }
+        }
+
+        if (rawContent.customFields && typeof rawContent.customFields === 'object') {
+          const cfEntries = Array.isArray(rawContent.customFields) ? rawContent.customFields : Object.entries(rawContent.customFields);
+          if (cfEntries.length > 0) {
+            const cfContent = Array.isArray(rawContent.customFields)
+              ? rawContent.customFields.map((f: any) => `${f.label || f.name || f.key}: ${f.value || f.type || ''}`).join('\n')
+              : Object.entries(rawContent.customFields).map(([k, v]: [string, any]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n');
+            sections.push({ id: `section-${sections.length}`, title: 'Custom Fields', content: cfContent.trim(), startIndex: 0 });
+            parts.push(`## Custom Fields\n${cfContent}`);
+          }
         }
 
         fullText = parts.join('\n\n');
@@ -584,7 +711,7 @@ router.post('/extract-text', async (req: Request, res: Response) => {
 // Extract text from a stored document by ID (for AI analysis of already-imported documents)
 router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
   try {
-    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, description, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
+    const results = await db.execute(sql`SELECT id, title, file_name, file_url, file_type, description, extracted_text, ai_extracted_content FROM routing_documents WHERE id = ${req.params.id} LIMIT 1`);
     const rows = (results as any)?.rows || results || [];
     const document = rows[0];
 
@@ -594,34 +721,40 @@ router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
 
     let extractedText = '';
 
-    // First try to get text from AI extracted content if available
-    if (document.ai_extracted_content) {
+    if (document.extracted_text && document.extracted_text.trim().length > 200 && 
+        !document.extracted_text.startsWith('Imported from media library:')) {
+      extractedText = document.extracted_text;
+    }
+
+    if (!extractedText.trim() && document.ai_extracted_content) {
       const content = typeof document.ai_extracted_content === 'string'
         ? JSON.parse(document.ai_extracted_content)
         : document.ai_extracted_content;
       if (content.fullText) {
         extractedText = content.fullText;
-      } else {
-        extractedText = JSON.stringify(content, null, 2);
       }
     }
 
-    // If no extracted content, try downloading from object storage
     if (!extractedText.trim() && document.file_url) {
       try {
-        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
-        const fileType = (document.file_type || document.file_name || '').toLowerCase();
-        if (fileType.includes('pdf')) {
-          extractedText = await extractPdfText(fileBuffer);
-        } else {
-          extractedText = fileBuffer.toString('utf-8');
+        const fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        if (fileBuffer && fileBuffer.length > 0) {
+          const fileType = (document.file_type || document.file_name || document.file_url || '').toLowerCase();
+          if (fileType.includes('pdf')) {
+            extractedText = await extractPdfText(fileBuffer);
+          } else {
+            extractedText = fileBuffer.toString('utf-8');
+          }
+          if (extractedText.trim().length > 50) {
+            await db.execute(sql`UPDATE routing_documents SET extracted_text = ${extractedText} WHERE id = ${req.params.id}`);
+            console.log(`[ExtractStoredText] Saved ${extractedText.length} chars for document ${req.params.id}`);
+          }
         }
       } catch (dlError) {
         console.error('Error downloading stored file for text extraction:', dlError);
       }
     }
 
-    // Fall back to description
     if (!extractedText.trim() && document.description) {
       extractedText = document.description;
     }
@@ -839,12 +972,60 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     let textContent = req.body.textContent || '';
     
     if (!textContent.trim() && document.extracted_text) {
-      textContent = document.extracted_text;
-      console.log(`[AI Parse] Using stored extracted text (${textContent.length} chars) for document: ${document.title}`);
+      const isPlaceholder = document.extracted_text.startsWith('Imported from media library:') || 
+                            document.extracted_text.length < 200;
+      if (!isPlaceholder) {
+        textContent = document.extracted_text;
+        console.log(`[AI Parse] Using stored extracted text (${textContent.length} chars) for document: ${document.title}`);
+      }
+    }
+    
+    if (!textContent.trim() && document.file_url) {
+      console.log(`[AI Parse] No usable text stored. Attempting PDF extraction from file: ${document.file_url}`);
+      try {
+        let fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        
+        if (!fileBuffer && document.file_url.startsWith('/api/media/file/')) {
+          const filename = document.file_url.replace('/api/media/file/', '');
+          console.log(`[AI Parse] Direct resolve failed. Querying media_library for storage_path matching: ${filename}`);
+          try {
+            const mediaResult = await db.execute(sql`SELECT storage_path FROM media_library WHERE storage_path LIKE ${'%' + filename} LIMIT 1`);
+            const mediaRows = (mediaResult as any)?.rows || mediaResult || [];
+            if (mediaRows[0]?.storage_path) {
+              const storagePath = mediaRows[0].storage_path;
+              console.log(`[AI Parse] Found media storage_path: ${storagePath}`);
+              const localMediaPath = path.join(process.cwd(), storagePath);
+              if (fs.existsSync(localMediaPath)) {
+                fileBuffer = fs.readFileSync(localMediaPath);
+                console.log(`[AI Parse] Read ${fileBuffer.length} bytes from local media path`);
+              } else {
+                fileBuffer = await resolveFileToBuffer(storagePath, objectStorageService);
+              }
+            }
+          } catch (mediaErr) {
+            console.error('[AI Parse] Media library lookup failed:', (mediaErr as Error).message);
+          }
+        }
+        
+        if (fileBuffer && fileBuffer.length > 0) {
+          const extractedText = await extractPdfText(fileBuffer);
+          if (extractedText && extractedText.trim().length > 50) {
+            textContent = extractedText;
+            console.log(`[AI Parse] Extracted ${textContent.length} chars from PDF file`);
+            await db.execute(sql`UPDATE routing_documents SET extracted_text = ${textContent} WHERE id = ${req.params.id}`);
+          } else {
+            console.log(`[AI Parse] PDF text extraction returned insufficient text (${extractedText?.length || 0} chars)`);
+          }
+        } else {
+          console.log(`[AI Parse] Could not retrieve file buffer from any source for: ${document.file_url}`);
+        }
+      } catch (pdfError) {
+        console.error('[AI Parse] Failed to extract text from PDF:', (pdfError as Error).message);
+      }
     }
     
     if (!textContent.trim()) {
-      return res.status(400).json({ error: 'No text content available. Please upload a document with readable text or paste content manually.' });
+      return res.status(400).json({ error: 'No text content available. The PDF may be image-based. Please use the manual text paste option or try Azure Document Intelligence to extract text from scanned documents.' });
     }
     
     console.log(`[AI Parse] Analyzing ${textContent.length} chars for document: ${document.title}`);
@@ -855,7 +1036,7 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze this composite manufacturing document and extract the routing information, paying close attention to layup sequences, cure cycles, material traceability, and quality inspection requirements:\n\nDocument Title: ${document.title}\n\n${textContent.substring(0, 50000)}` }
+        { role: 'user', content: `Extract the EXACT information from this document. Do NOT generate generic content — only include data that is explicitly written in the text below. Preserve all part numbers, temperatures, tolerances, dimensions, and standards exactly as they appear.\n\nDocument Title: ${document.title}\n\nDOCUMENT TEXT:\n${textContent.substring(0, 50000)}` }
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 4096,
@@ -1334,8 +1515,138 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
       }
       departmentConfig[dept].qcStandards.push({
         standard: qc.checkpoint,
-        requirement: 'Pass/Fail'
+        requirement: qc.requirement || 'Pass/Fail'
       });
+    }
+    
+    // Build QC standards array from qualityCheckpoints and curing parameters
+    const qcStandards: any[] = [];
+    for (const qc of qualityCheckpoints) {
+      qcStandards.push({
+        standardName: qc.checkpoint || qc.standard || 'Quality Check',
+        specification: qc.specification || qc.checkpoint || '',
+        tolerance: qc.tolerance || '',
+        requirement: qc.requirement || 'Pass/Fail',
+        measurementType: qc.measurementType || 'visual',
+        department: qc.department || ''
+      });
+    }
+    
+    // Add curing parameters as QC standards
+    const curingParameters = aiContent?.curingParameters;
+    if (curingParameters && typeof curingParameters === 'object') {
+      if (curingParameters.temperature) {
+        qcStandards.push({
+          standardName: 'Curing Temperature',
+          specification: curingParameters.temperature,
+          tolerance: curingParameters.temperatureTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'temperature'
+        });
+      }
+      if (curingParameters.duration) {
+        qcStandards.push({
+          standardName: 'Curing Duration',
+          specification: curingParameters.duration,
+          tolerance: curingParameters.durationTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'time'
+        });
+      }
+      if (curingParameters.pressure) {
+        qcStandards.push({
+          standardName: 'Curing Pressure',
+          specification: curingParameters.pressure,
+          tolerance: curingParameters.pressureTolerance || '',
+          requirement: 'Measured',
+          measurementType: 'pressure'
+        });
+      }
+      if (curingParameters.rampRate) {
+        qcStandards.push({
+          standardName: 'Ramp Rate',
+          specification: curingParameters.rampRate,
+          tolerance: '',
+          requirement: 'Measured',
+          measurementType: 'rate'
+        });
+      }
+    }
+
+    // Build custom fields from dataFields and layupSchedule
+    const customFields: any[] = [];
+    const dataFields = Array.isArray(aiContent?.dataFields) ? aiContent.dataFields : [];
+    for (const field of dataFields) {
+      customFields.push({
+        fieldName: (field.fieldName || field.name || 'field').replace(/\s+/g, '_').toLowerCase(),
+        fieldLabel: field.fieldName || field.name || field.label || 'Custom Field',
+        fieldType: field.fieldType || field.type || 'text',
+        isRequired: field.isRequired ?? field.required ?? false,
+        options: field.options || [],
+        defaultValue: field.defaultValue || field.value || ''
+      });
+    }
+
+    // Add layup schedule as a structured custom field and also into department config
+    const layupSchedule = Array.isArray(aiContent?.layupSchedule) ? aiContent.layupSchedule : [];
+    if (layupSchedule.length > 0) {
+      customFields.push({
+        fieldName: 'layup_schedule',
+        fieldLabel: 'Layup Schedule (Ply Sequence)',
+        fieldType: 'json',
+        isRequired: true,
+        options: [],
+        defaultValue: JSON.stringify(layupSchedule)
+      });
+
+      const layupDept = departmentSequence.find(d => d.toLowerCase().includes('layup')) || 'Layup';
+      if (!departmentSequence.includes(layupDept)) {
+        departmentSequence.push(layupDept);
+        departmentConfig[layupDept] = { operations: [], qcStandards: [], technicianRequired: true, materials: [] };
+        traceabilityConfig[layupDept] = ['operator', 'timestamp', 'lot_number', 'batch_number'];
+      }
+      departmentConfig[layupDept].layupSchedule = layupSchedule;
+    }
+    
+    // Build materials config from materialRequirements
+    const materialsConfig: any[] = [];
+    const materialRequirements = Array.isArray(aiContent?.materialRequirements) ? aiContent.materialRequirements : [];
+    for (const mat of materialRequirements) {
+      materialsConfig.push({
+        partNumber: mat.partNumber || mat.materialPartNumber || '',
+        partName: mat.name || mat.materialName || mat.description || '',
+        quantity: mat.quantity || '',
+        unit: mat.unit || '',
+        requiresLotNumber: true,
+        requiresExpiration: mat.requiresExpiration ?? true,
+        entryMethod: 'manual'
+      });
+      
+      // Also add materials to the relevant department config
+      const matDept = mat.department || departmentSequence[0] || 'General';
+      if (departmentConfig[matDept]) {
+        departmentConfig[matDept].materials.push({
+          partNumber: mat.partNumber || mat.materialPartNumber || '',
+          partName: mat.name || mat.materialName || mat.description || '',
+          quantity: mat.quantity || '',
+          unit: mat.unit || ''
+        });
+      }
+    }
+
+    // Build special process config from curing parameters
+    const specialProcessConfig: Record<string, any> = {};
+    if (curingParameters && typeof curingParameters === 'object') {
+      specialProcessConfig['Curing'] = {
+        materials: [],
+        qcStandards: qcStandards.filter(s => s.measurementType !== 'visual'),
+        customFields: [
+          { fieldName: 'cure_temperature', fieldType: 'number', isRequired: true, label: 'Temperature' },
+          { fieldName: 'cure_duration', fieldType: 'number', isRequired: true, label: 'Duration' },
+          ...(curingParameters.pressure ? [{ fieldName: 'cure_pressure', fieldType: 'number', isRequired: true, label: 'Pressure' }] : []),
+        ],
+        parameters: curingParameters
+      };
     }
     
     // Create the part routing using storage interface
@@ -1350,6 +1661,10 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
       departmentSequence,
       traceabilityConfig,
       departmentConfig,
+      qcStandards: qcStandards.length > 0 ? qcStandards : undefined,
+      customFields: customFields.length > 0 ? customFields : undefined,
+      materialsConfig: materialsConfig.length > 0 ? materialsConfig : undefined,
+      specialProcessConfig: Object.keys(specialProcessConfig).length > 0 ? specialProcessConfig : undefined,
       isActive: true,
       createdBy: (req as any).user?.username || 'system',
     });
@@ -1375,6 +1690,11 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
         departmentsCreated: departmentSequence.length,
         operationsExtracted: routingSteps.length,
         qualityCheckpointsLinked: qualityCheckpoints.length,
+        qcStandardsCreated: qcStandards.length,
+        customFieldsCreated: customFields.length,
+        layupScheduleEntries: layupSchedule.length,
+        materialsConfigured: materialsConfig.length,
+        specialProcesses: Object.keys(specialProcessConfig).length,
         certificationRequirementsFound: certifications.length
       }
     });

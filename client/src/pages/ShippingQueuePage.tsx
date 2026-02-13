@@ -182,35 +182,53 @@ export default function ShippingQueuePage() {
     }
   };
 
+  // Helper to check if an orderId belongs to an RMA
+  const isRmaOrder = (orderId: string) => {
+    return orderId.startsWith('RMA') || orderId.startsWith('rma');
+  };
+
   // Mutation to fulfill orders and move to shipping management
   const fulfillOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      if (isRmaOrder(orderId)) {
+        const rmaOrder = shippingOrders.find((o: any) => o.orderId === orderId);
+        return await apiRequest('/api/nonconformance/fulfill', {
+          method: 'POST',
+          body: {
+            orderId,
+            trackingNumber: rmaOrder?.trackingNumber || undefined,
+            shippingCarrier: rmaOrder?.shippingCarrier || undefined,
+            shippedDate: rmaOrder?.shippedDate || undefined,
+          },
+        });
+      }
       return await apiRequest('/api/orders/fulfill', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
+        body: { orderId },
       });
     },
     onSuccess: async (_, orderId) => {
+      const isRma = isRmaOrder(orderId);
       toast({
-        title: 'Order Fulfilled',
-        description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
+        title: isRma ? 'RMA Fulfilled' : 'Order Fulfilled',
+        description: isRma
+          ? `RMA ${orderId} has been marked as shipped and resolved on the nonconformance tracker`
+          : `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
       });
       
-      // Clear local state first
       setSelectedCard(null);
       setSelectedOrders([]);
       
-      // Invalidate and actively refetch to ensure fresh data
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['/api/orders/with-payment-status'],
         }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance/ready-to-ship'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] }),
       ]);
       
-      // Force a refetch to update the UI immediately
       await queryClient.refetchQueries({
         queryKey: ['/api/orders/with-payment-status'],
       });
@@ -227,38 +245,53 @@ export default function ShippingQueuePage() {
   // Bulk fulfill mutation for marking multiple orders as fulfilled at once
   const bulkFulfillMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      // Fulfill each order sequentially
       const results = await Promise.all(
-        orderIds.map(orderId =>
-          apiRequest('/api/orders/fulfill', {
+        orderIds.map(orderId => {
+          if (isRmaOrder(orderId)) {
+            const rmaOrder = shippingOrders.find((o: any) => o.orderId === orderId);
+            return apiRequest('/api/nonconformance/fulfill', {
+              method: 'POST',
+              body: {
+                orderId,
+                trackingNumber: rmaOrder?.trackingNumber || undefined,
+                shippingCarrier: rmaOrder?.shippingCarrier || undefined,
+                shippedDate: rmaOrder?.shippedDate || undefined,
+              },
+            });
+          }
+          return apiRequest('/api/orders/fulfill', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId }),
-          })
-        )
+            body: { orderId },
+          });
+        })
       );
       return results;
     },
     onSuccess: async (_, orderIds) => {
+      const rmaCount = orderIds.filter(id => isRmaOrder(id)).length;
+      const orderCount = orderIds.length - rmaCount;
+      const parts = [];
+      if (orderCount > 0) parts.push(`${orderCount} order${orderCount > 1 ? 's' : ''} fulfilled`);
+      if (rmaCount > 0) parts.push(`${rmaCount} RMA${rmaCount > 1 ? 's' : ''} resolved`);
+      
       toast({
-        title: 'Orders Fulfilled',
-        description: `${orderIds.length} order${orderIds.length > 1 ? 's have' : ' has'} been marked as fulfilled`,
+        title: 'Items Fulfilled',
+        description: parts.join(', '),
       });
       
-      // Clear local state
       setSelectedCard(null);
       setSelectedOrders([]);
       
-      // Invalidate and refetch
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['/api/orders/with-payment-status'],
         }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance/ready-to-ship'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] }),
       ]);
       
-      // Force refetch
       await queryClient.refetchQueries({
         queryKey: ['/api/orders/with-payment-status'],
       });
@@ -481,6 +514,11 @@ export default function ShippingQueuePage() {
 
   // NEW: Get shipping address for an order (checks alt ship-to first, then falls back to customer address)
   const getOrderShippingAddress = (order: any) => {
+    // RMA orders already have their shipping address pre-computed by the backend
+    if (order.isRma && order.shippingAddress) {
+      return order.shippingAddress;
+    }
+
     // Check if order has alternative ship-to address
     if (order.hasAltShipTo) {
       // Handle existing customer mode
@@ -515,6 +553,17 @@ export default function ShippingQueuePage() {
 
   // Get customer info for alt ship-to addresses
   const getOrderShippingCustomerInfo = (order: any) => {
+    // RMA orders have customer name directly from the nonconformance record
+    if (order.isRma) {
+      const addr = order.shippingAddress;
+      return {
+        name: addr?.name || order.customerName || 'RMA Customer',
+        phone: '',
+        email: '',
+        company: '',
+      };
+    }
+
     // If order has alt ship-to with existing customer, get that customer's info
     if (order.hasAltShipTo && order.altShipToCustomerId) {
       return getCustomerInfo(order.altShipToCustomerId);
@@ -772,7 +821,7 @@ export default function ShippingQueuePage() {
   };
 
   // Handle successful label creation
-  const handleLabelSuccess = (data: any) => {
+  const handleLabelSuccess = async (data: any) => {
     setLabelData(data);
     setShowLabelViewer(true);
     setShowLabelCreator(false);
@@ -781,6 +830,27 @@ export default function ShippingQueuePage() {
       title: 'Shipping Label Generated',
       description: `Label created with tracking number: ${data.trackingNumber}`,
     });
+
+    if (selectedOrderId && isRmaOrder(selectedOrderId)) {
+      try {
+        const rmaOrder = shippingOrders.find((o: any) => o.orderId === selectedOrderId);
+        const ncrId = rmaOrder?.rmaId;
+        if (ncrId) {
+          await apiRequest(`/api/nonconformance/${ncrId}/shipping`, {
+            method: 'PATCH',
+            body: {
+              trackingNumber: data.trackingNumber,
+              shippingCarrier: 'UPS',
+              shippedDate: new Date().toISOString().split('T')[0],
+              shippingStatus: 'Ready to Ship',
+            },
+          });
+          queryClient.invalidateQueries({ queryKey: ['/api/nonconformance'] });
+        }
+      } catch (error) {
+        console.error('Failed to save tracking info to RMA:', error);
+      }
+    }
   };
 
   // Generate shipping label with UPS API

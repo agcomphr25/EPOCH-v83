@@ -1,0 +1,28 @@
+Great, so the data is definitely there in production — 12 responses all tied to survey_id 1. The issue is on the UI side, not a data problem.
+
+Let me quickly check what the page is doing when it loads to understand why it's showing empty:
+
+There's the problem. The page is fetching from /api/survey-engine/surveys and /api/survey-engine/responses, but the actual API routes are at /api/customer-satisfaction/surveys and /api/customer-satisfaction/responses. The page was likely refactored at some point to use a "generic survey engine" path that doesn't exist, so it's hitting a dead endpoint and getting empty results.
+
+Your data is in the customer_satisfaction_surveys and customer_satisfaction_responses tables (12 responses as you confirmed), but the UI is looking at the wrong API URLs.
+
+The fix is straightforward — update the query paths in the CustomerSatisfaction page to point to the correct /api/customer-satisfaction/ endpoints instead of /api/survey-engine/.
+
+Created task list
+Start building
+Let me fix the API paths and also check if there are any other references that need updating.
+
+Let me also check if there are mutation paths and the CustomerSatisfactionSurvey component that might also reference wrong paths:
+
+Both files need the fix. Let me do a simple find-and-replace across both files:
+
+Now let me restart the workflow and verify it works:
+
+Let me verify the API is returning data with the correct paths:
+
+Both endpoints are returning data correctly — 1 survey template and the responses. Let me now review the changes:
+
+That's fixed. The issue was that the Customer Satisfaction page was trying to fetch data from API paths that don't exist (/api/survey-engine/...) instead of the correct ones (/api/customer-satisfaction/...). I updated both the main page and the survey component to point to the right endpoints.
+
+I confirmed the API is returning your data correctly — 1 survey template and your responses. You should now see everything when you visit /customer-satisfaction. Once you redeploy, it'll also show the 12 responses you found in the production database.
+

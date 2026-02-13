@@ -45,24 +45,64 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     }
 
     // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
+    let serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(
         ilike(p2SerializedItems.barcode, barcode),
         ilike(p2SerializedItems.travelerBarcode, barcode)
       ),
     });
 
+    // If not found, try suffix/contains match (physical labels may omit prefix like "SG0")
+    if (!serializedItem) {
+      serializedItem = await db.query.p2SerializedItems.findFirst({
+        where: or(
+          ilike(p2SerializedItems.barcode, `%${barcode}`),
+          ilike(p2SerializedItems.travelerBarcode, `%${barcode}`),
+          ilike(p2SerializedItems.serialNumber, `%${barcode}`)
+        ),
+      });
+    }
+
     if (!serializedItem) {
       return res.status(404).json({ error: 'Part not found' });
     }
 
-    // Get part routing
-    const routing = await db.query.partRoutings.findFirst({
+    // Get part routing - try exact match first, then base part number (without revision)
+    let routing = await db.query.partRoutings.findFirst({
       where: and(
         eq(partRoutings.partNumber, serializedItem.partNumber),
         eq(partRoutings.isActive, true)
       ),
     });
+
+    if (!routing) {
+      // Try case-insensitive exact match
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          ilike(partRoutings.partNumber, serializedItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    if (!routing) {
+      // Try matching base part number (strip revision suffix like "Rev N", "REV P", etc.)
+      const basePartMatch = serializedItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
+      if (basePartMatch) {
+        const basePartNumber = basePartMatch[1].trim();
+        // Find any active routing whose part number starts with the same base
+        const allRoutings = await db
+          .select()
+          .from(partRoutings)
+          .where(and(
+            ilike(partRoutings.partNumber, `${basePartNumber} Rev%`),
+            eq(partRoutings.isActive, true)
+          ));
+        if (allRoutings.length > 0) {
+          routing = allRoutings[0];
+        }
+      }
+    }
 
     if (!routing) {
       return res.status(404).json({ error: 'No routing configuration found for this part' });

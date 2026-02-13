@@ -3997,6 +3997,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
+  attachments: jsonb('attachments').$type<any[]>().default(sql`'[]'::jsonb`),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4050,6 +4051,7 @@ export const p2Customers = pgTable('p2_customers', {
   notes: text('notes'),
   rfqPrefix: text('rfq_prefix'), // 3-letter prefix for RFQ numbers (e.g., "STR" for Strata-G)
   rfqSequences: jsonb('rfq_sequences').default('{}'), // Tracks RFQ sequence by year: {"2025": 15, "2024": 50}
+  serialSequences: jsonb('serial_sequences').default('{}'), // Tracks serial number sequence by year: {"2026": 1}
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -11494,7 +11496,7 @@ export const insertHistoricalMonthlyDataSchema = createInsertSchema(historicalMo
     year: z.number().int().min(2020).max(2030),
     month: z.number().int().min(1).max(12),
     dataType: z.enum(['credit_card', 'revenue']),
-    category: z.enum(['online', 'phone', 'aerospace', 'combined']),
+    category: z.enum(['online', 'phone', 'aerospace', 'stocks', 'combined']),
     amount: z.string().or(z.number()),
   });
 

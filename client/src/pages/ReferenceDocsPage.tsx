@@ -197,7 +197,8 @@ export default function ReferenceDocsPage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          filename: uploadFile.name,
+          name: uploadFile.name,
+          size: uploadFile.size,
           contentType: uploadFile.type,
         }),
       });

@@ -1057,17 +1057,18 @@ router.post('/create-label', async (req: Request, res: Response) => {
     );
 
     if (error.response?.data) {
-      // Extract detailed error information
-      const faultDetails = error.response.data.Fault?.detail;
+      const responseData = error.response.data;
       let errorMessage = 'UPS API error';
       let errorCode = null;
       let errorSeverity = null;
+      let faultString = null;
 
+      const faultDetails = responseData.Fault?.detail;
       if (faultDetails?.Errors) {
         const errors = Array.isArray(faultDetails.Errors)
           ? faultDetails.Errors
           : [faultDetails.Errors];
-        console.error('UPS Error Details:', JSON.stringify(errors, null, 2));
+        console.error('UPS Fault Error Details:', JSON.stringify(errors, null, 2));
 
         if (errors[0]) {
           errorMessage =
@@ -1080,17 +1081,38 @@ router.post('/create-label', async (req: Request, res: Response) => {
         }
       }
 
-      // Include fault string if available
-      const faultString = error.response.data.Fault?.faultstring;
+      faultString = responseData.Fault?.faultstring;
       if (faultString && !errorMessage.includes(faultString)) {
         errorMessage = `${errorMessage} (${faultString})`;
       }
+
+      const restErrors = responseData.response?.errors;
+      if (restErrors && Array.isArray(restErrors) && restErrors.length > 0) {
+        console.error('UPS REST API Error Details:', JSON.stringify(restErrors, null, 2));
+        errorMessage = restErrors.map((e: any) => e.message || e.description || e.code).filter(Boolean).join('; ') || errorMessage;
+        errorCode = restErrors[0]?.code || errorCode;
+      }
+
+      const shipmentErrors = responseData.ShipmentResponse?.Response?.Alert;
+      if (shipmentErrors) {
+        const alerts = Array.isArray(shipmentErrors) ? shipmentErrors : [shipmentErrors];
+        const errorAlerts = alerts.filter((a: any) => a.Code);
+        if (errorAlerts.length > 0) {
+          console.error('UPS Shipment Alerts:', JSON.stringify(errorAlerts, null, 2));
+          if (errorMessage === 'UPS API error') {
+            errorMessage = errorAlerts.map((a: any) => a.Description || a.Code).join('; ');
+            errorCode = errorAlerts[0]?.Code || errorCode;
+          }
+        }
+      }
+
+      console.error('Final parsed UPS error:', { errorMessage, errorCode, errorSeverity, faultString, httpStatus: error.response?.status });
 
       res.status(500).json({
         error: errorMessage,
         errorCode,
         errorSeverity,
-        details: error.response.data,
+        details: responseData,
         faultString,
       });
     } else {

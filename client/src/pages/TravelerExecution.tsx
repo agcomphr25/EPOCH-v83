@@ -238,6 +238,8 @@ export default function TravelerExecution() {
     meaning: 'COMPLETED',
     notes: '',
   });
+  const [activeBadge, setActiveBadge] = useState('');
+  const [activeTechName, setActiveTechName] = useState('');
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
@@ -350,17 +352,22 @@ export default function TravelerExecution() {
       const inProgressStep = steps.find((s) => s.status === 'IN_PROGRESS');
       const nextStep = steps.find((s) => s.status === 'NOT_STARTED');
       setCurrentStepId(inProgressStep?.id || nextStep?.id || steps[0].id);
+      if (inProgressStep?.startedBy && !activeBadge) {
+        setActiveBadge(inProgressStep.startedBy);
+      }
     }
   }, [steps, currentStepId]);
 
   const startStepMutation = useMutation({
-    mutationFn: (stepId: string) =>
+    mutationFn: ({ stepId, badge, techName }: { stepId: string; badge: string; techName: string }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: 'operator', badgeScan: signatureData.badgeScan }),
+        body: JSON.stringify({ startedBy: badge || 'operator', badgeScan: badge }),
         headers: { 'Content-Type': 'application/json' },
       }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      setActiveBadge(variables.badge);
+      setActiveTechName(variables.techName);
       toast({ title: 'Step Started', description: 'Work on this step has begun' });
       refetch();
     },
@@ -713,17 +720,35 @@ export default function TravelerExecution() {
                       Badge scan required to start this step
                     </p>
                     <div className="max-w-xs mx-auto space-y-3">
-                      <Input
-                        placeholder="Scan badge or enter ID..."
-                        value={signatureData.badgeScan}
-                        onChange={(e) =>
-                          setSignatureData({ ...signatureData, badgeScan: e.target.value })
-                        }
-                        data-testid="input-badge-scan"
-                      />
+                      <div className="space-y-1">
+                        <Label className="text-sm">Badge / Employee ID</Label>
+                        <Input
+                          placeholder="Scan badge or enter ID..."
+                          value={signatureData.badgeScan}
+                          onChange={(e) =>
+                            setSignatureData({ ...signatureData, badgeScan: e.target.value })
+                          }
+                          data-testid="input-badge-scan"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm">Technician Name</Label>
+                        <Input
+                          placeholder="Your full name"
+                          value={signatureData.signedByName}
+                          onChange={(e) =>
+                            setSignatureData({ ...signatureData, signedByName: e.target.value })
+                          }
+                          data-testid="input-tech-name"
+                        />
+                      </div>
                       <Button
-                        onClick={() => startStepMutation.mutate(currentStep.id)}
-                        disabled={startStepMutation.isPending}
+                        onClick={() => startStepMutation.mutate({
+                          stepId: currentStep.id,
+                          badge: signatureData.badgeScan,
+                          techName: signatureData.signedByName,
+                        })}
+                        disabled={startStepMutation.isPending || !signatureData.badgeScan}
                         data-testid="button-start-step"
                       >
                         {startStepMutation.isPending ? (
@@ -1056,6 +1081,17 @@ export default function TravelerExecution() {
                                                             )}
                                                           </div>
                                                         )}
+                                                        {task.taskType === 'QC' && (
+                                                          <div className="mb-1">
+                                                            <Input
+                                                              placeholder="Enter measured result..."
+                                                              value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || field.value?.split('|')[1] || ''}
+                                                              onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
+                                                              disabled={isComplete}
+                                                              className="text-sm h-8"
+                                                            />
+                                                          </div>
+                                                        )}
                                                         <div className="flex items-center gap-2">
                                                           <Checkbox
                                                             id={field.id}
@@ -1073,7 +1109,7 @@ export default function TravelerExecution() {
                                                             disabled={isComplete}
                                                           />
                                                           <Label htmlFor={field.id} className="text-sm">
-                                                            Verified
+                                                            Verified / Pass
                                                           </Label>
                                                         </div>
                                                       </div>
@@ -1127,6 +1163,12 @@ export default function TravelerExecution() {
                                                   onClick={() => {
                                                     setSigningTaskId(task.id);
                                                     setSigningRole(task.signatureRole);
+                                                    setSignatureData((prev) => ({
+                                                      ...prev,
+                                                      signedBy: activeBadge || prev.signedBy,
+                                                      signedByName: activeTechName || prev.signedByName,
+                                                      badgeScan: activeBadge || prev.badgeScan,
+                                                    }));
                                                     setShowSignDialog(true);
                                                   }}
                                                   disabled={!phaseUnlocked}
@@ -1246,6 +1288,12 @@ export default function TravelerExecution() {
                           onClick={() => {
                             setSigningTaskId(null);
                             setSigningRole(null);
+                            setSignatureData((prev) => ({
+                              ...prev,
+                              signedBy: activeBadge || prev.signedBy,
+                              signedByName: activeTechName || prev.signedByName,
+                              badgeScan: activeBadge || prev.badgeScan,
+                            }));
                             setShowSignDialog(true);
                           }}
                           disabled={!canSignStep}
@@ -1601,6 +1649,7 @@ export default function TravelerExecution() {
           defaultSerialNumber={traveler.serialNumber || traveler.lotNumber || ''}
           defaultProgramId={getTimerConfigForDepartment(currentStep.departmentName)?.defaultProgramId}
           navigateToStation={false}
+          badgeId={activeBadge || undefined}
           onTimerStarted={() => {
             setTimerStartedForStep((prev) => ({
               ...prev,

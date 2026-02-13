@@ -20,8 +20,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Percent, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Percent, Calendar, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
+
+type SortKey = keyof OrderDetail;
+type SortDir = 'asc' | 'desc';
 
 interface AnalyticsSummary {
   totalOrders: number;
@@ -59,6 +62,8 @@ export default function AnalyticsDashboard() {
   const [endDate, setEndDate] = useState('');
   const [appliedStartDate, setAppliedStartDate] = useState('');
   const [appliedEndDate, setAppliedEndDate] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('updatedAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   // Calculate date ranges based on preset
   useEffect(() => {
@@ -121,6 +126,34 @@ export default function AnalyticsDashboard() {
       style: 'currency',
       currency: 'USD',
     }).format(amount);
+  };
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'orderId' || key === 'customerId' ? 'asc' : 'desc');
+    }
+  };
+
+  const sortedOrders = data?.orders ? [...data.orders].sort((a, b) => {
+    const valA = a[sortKey];
+    const valB = b[sortKey];
+    let cmp = 0;
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      cmp = valA - valB;
+    } else {
+      cmp = String(valA).localeCompare(String(valB));
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  }) : [];
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="ml-1 h-3 w-3 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 inline" />;
   };
 
   return (
@@ -294,18 +327,18 @@ export default function AnalyticsDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Customer ID</TableHead>
-                    <TableHead>Fulfilled Date</TableHead>
-                    <TableHead className="text-right">Base Price</TableHead>
-                    <TableHead className="text-right">Features</TableHead>
-                    <TableHead className="text-right">Shipping</TableHead>
-                    <TableHead className="text-right">Discount</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('orderId')}>Order ID <SortIcon col="orderId" /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('customerId')}>Customer ID <SortIcon col="customerId" /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('updatedAt')}>Fulfilled Date <SortIcon col="updatedAt" /></TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('basePrice')}>Base Price <SortIcon col="basePrice" /></TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('featuresTotal')}>Features <SortIcon col="featuresTotal" /></TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('shipping')}>Shipping <SortIcon col="shipping" /></TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('discountAmount')}>Discount <SortIcon col="discountAmount" /></TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('orderTotal')}>Total <SortIcon col="orderTotal" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.orders.map((order) => (
+                  {sortedOrders.map((order) => (
                     <TableRow key={order.orderId} data-testid={`row-order-${order.orderId}`}>
                       <TableCell className="font-medium">{order.orderId}</TableCell>
                       <TableCell>{order.customerId}</TableCell>

@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Percent, Loader2, ArrowLeft } from 'lucide-react';
+import { Percent, Loader2, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
+
+type OrderSortKey = 'orderId' | 'discountAmount' | 'discountType';
+type SortDir = 'asc' | 'desc';
 
 interface ShippedDiscountsData {
   totalDiscountAmount: number;
@@ -34,6 +37,8 @@ export default function ShippedOrderDiscountsPage() {
   const currentDate = new Date();
   const [discountMonth, setDiscountMonth] = useState(String(currentDate.getMonth() + 1));
   const [discountYear, setDiscountYear] = useState(String(currentDate.getFullYear()));
+  const [sortKey, setSortKey] = useState<OrderSortKey>('orderId');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const { data: shippedDiscounts, isLoading: isDiscountsLoading } = useQuery<ShippedDiscountsData>({
     queryKey: ['/api/finance/shipped-order-discounts', discountMonth, discountYear],
@@ -46,6 +51,34 @@ export default function ShippedOrderDiscountsPage() {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  };
+
+  const handleSort = (key: OrderSortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'discountAmount' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortedOrders = shippedDiscounts?.orders ? [...shippedDiscounts.orders].sort((a, b) => {
+    const valA = a[sortKey];
+    const valB = b[sortKey];
+    let cmp = 0;
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      cmp = valA - valB;
+    } else {
+      cmp = String(valA).localeCompare(String(valB));
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  }) : [];
+
+  const SortIcon = ({ col }: { col: OrderSortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="ml-1 h-3 w-3 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 inline" />;
   };
 
   return (
@@ -124,13 +157,24 @@ export default function ShippedOrderDiscountsPage() {
               </div>
               {shippedDiscounts.orders.length > 0 && (
                 <div className="border-t pt-4">
-                  <p className="text-sm font-medium text-gray-500 mb-3">Order Details:</p>
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {shippedDiscounts.orders.map((order) => (
-                      <div key={order.orderId} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                        <span className="font-mono text-sm" data-testid={`text-order-id-${order.orderId}`}>{order.orderId}</span>
-                        <span className="text-amber-600 font-medium" data-testid={`text-order-discount-${order.orderId}`}>
-                          {formatCurrency(order.discountAmount)} ({order.discountType})
+                  <div className="flex items-center gap-1 p-3 bg-gray-100 dark:bg-gray-700 rounded-t-lg text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                    <span className="flex-1 cursor-pointer select-none hover:text-gray-900 dark:hover:text-white" onClick={() => handleSort('orderId')}>
+                      Order ID <SortIcon col="orderId" />
+                    </span>
+                    <span className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-white text-right w-32" onClick={() => handleSort('discountType')}>
+                      Type <SortIcon col="discountType" />
+                    </span>
+                    <span className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-white text-right w-36" onClick={() => handleSort('discountAmount')}>
+                      Amount <SortIcon col="discountAmount" />
+                    </span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto space-y-1">
+                    {sortedOrders.map((order) => (
+                      <div key={order.orderId} className="flex items-center gap-1 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <span className="flex-1 font-mono text-sm" data-testid={`text-order-id-${order.orderId}`}>{order.orderId}</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 text-right w-32">{order.discountType}</span>
+                        <span className="text-amber-600 font-medium text-right w-36" data-testid={`text-order-discount-${order.orderId}`}>
+                          {formatCurrency(order.discountAmount)}
                         </span>
                       </div>
                     ))}

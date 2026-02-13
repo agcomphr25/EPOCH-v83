@@ -37,18 +37,6 @@ import type {
   Employee 
 } from '../../../server/schema';
 
-// Department list
-const DEPARTMENTS = [
-  'Layup',
-  'Assembly/Disassembly',
-  'CNC',
-  'Lathe/Wrapping',
-  'Cores',
-  'Finish',
-  'Paint',
-  'Final QC',
-  'Cutting Table',
-];
 
 export default function P2CertificationsManager() {
   const { toast } = useToast();
@@ -74,6 +62,28 @@ export default function P2CertificationsManager() {
   const { data: partNumbers = [] } = useQuery<Array<{ partNumber: string; partName: string }>>({
     queryKey: ['/api/training/p2-certifications/part-numbers'],
   });
+
+  const { data: partRouting } = useQuery<{ departmentSequence: string[] }>({
+    queryKey: ['/api/part-routings/by-part', partNumber],
+    enabled: !!partNumber,
+    queryFn: async () => {
+      const res = await fetch(`/api/part-routings/by-part/${encodeURIComponent(partNumber)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error('Failed to fetch part routing');
+      }
+      return res.json();
+    },
+  });
+
+  const { data: routingDepartments = [] } = useQuery<Array<{ id: string; name: string; isActive: boolean }>>({
+    queryKey: ['/api/part-routings/departments/list'],
+  });
+
+  const availableRoutingDepts = partRouting?.departmentSequence 
+    || routingDepartments.map(d => d.name);
 
   const { data: partCertifications = [], isLoading: loadingPartCerts } = useQuery<P2PartCertification[]>({
     queryKey: ['/api/training/p2-certifications'],
@@ -325,6 +335,7 @@ export default function P2CertificationsManager() {
                 <Label htmlFor="part-number">Composite # (Part Number)</Label>
                 <Select value={partNumber} onValueChange={(val) => {
                   setPartNumber(val);
+                  setDepartments([]);
                   const selected = partNumbers.find((p: any) => p.partNumber === val);
                   if (selected) setPartName(selected.partName || '');
                 }}>
@@ -343,27 +354,42 @@ export default function P2CertificationsManager() {
 
               <div>
                 <Label>Departments (Select one or more)</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md max-h-64 overflow-y-auto">
-                  {DEPARTMENTS.map((dept) => (
-                    <div key={dept} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`dept-${dept}`}
-                        checked={departments.includes(dept)}
-                        onCheckedChange={() => toggleDepartment(dept)}
-                        data-testid={`checkbox-department-${dept}`}
-                      />
-                      <label
-                        htmlFor={`dept-${dept}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {dept}
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                {!partNumber ? (
+                  <p className="text-sm text-muted-foreground mt-2 p-3 border rounded-md bg-muted/30">
+                    Select a part number first to see available departments from its routing configuration.
+                  </p>
+                ) : availableRoutingDepts.length === 0 ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 mt-2 p-3 border rounded-md bg-amber-50 dark:bg-amber-950/30">
+                    No routing configuration found for this part. Set up a Part Routing first.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md max-h-64 overflow-y-auto">
+                    {availableRoutingDepts.map((dept) => (
+                      <div key={dept} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`dept-${dept}`}
+                          checked={departments.includes(dept)}
+                          onCheckedChange={() => toggleDepartment(dept)}
+                          data-testid={`checkbox-department-${dept}`}
+                        />
+                        <label
+                          htmlFor={`dept-${dept}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {dept}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {departments.length > 0 && (
                   <p className="text-sm text-muted-foreground mt-2">
                     Selected: {departments.join(', ')}
+                  </p>
+                )}
+                {partRouting?.departmentSequence && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Departments loaded from part routing configuration
                   </p>
                 )}
               </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ import {
   ThumbsDown,
   BarChart3,
   CalendarIcon,
+  ExternalLink,
 } from 'lucide-react';
 
 interface SurveyQuestion {
@@ -97,13 +99,14 @@ export default function CustomerSatisfactionSurvey({
     Record<string, string>
   >({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    customerId ?? (existingResponse?.respondentId ? parseInt(existingResponse.respondentId) : null)
+    customerId ?? (existingResponse?.customerId || null)
   );
   const [orderNumber, setOrderNumber] = useState<string>(
-    existingResponse?.contextId || ''
+    existingResponse?.orderId || ''
   );
+  const [manualOrderEntry, setManualOrderEntry] = useState<boolean>(false);
   const [csrName, setCsrName] = useState<string>(
-    existingResponse?.submittedBy || ''
+    existingResponse?.csrName || ''
   );
   const [surveyDate, setSurveyDate] = useState<Date | undefined>(
     existingResponse?.surveyDate
@@ -112,22 +115,26 @@ export default function CustomerSatisfactionSurvey({
   );
 
   // Fetch active surveys from generic survey engine
-  const { data: surveys = [], isLoading: surveysLoading } = useQuery({
-    queryKey: ['/api/survey-engine/surveys'],
-    queryFn: () => apiRequest('/api/survey-engine/surveys'),
+  const { data: rawSurveys, isLoading: surveysLoading } = useQuery({
+    queryKey: ['/api/customer-satisfaction/surveys'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
   });
+  const surveys = Array.isArray(rawSurveys) ? rawSurveys : [];
 
-  // Fetch customers for selection
-  const { data: customers = [], isLoading: customersLoading } = useQuery({
+  const { data: rawCustomers, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
   });
+  const customers = Array.isArray(rawCustomers) ? rawCustomers : [];
 
-  // Fetch users for CSR selection
-  const { data: users = [], isLoading: usersLoading } = useQuery({
-    queryKey: ['/api/users'],
-    queryFn: () => apiRequest('/api/users'),
+  const usersLoading = false;
+
+  const { data: rawCustomerOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: ['/api/orders/customer', selectedCustomerId],
+    queryFn: () => apiRequest(`/api/orders/customer/${selectedCustomerId}`),
+    enabled: !!selectedCustomerId,
   });
+  const customerOrders = Array.isArray(rawCustomerOrders) ? rawCustomerOrders : [];
 
   // Selected survey (either from prop or first active survey)
   const selectedSurvey =
@@ -140,8 +147,8 @@ export default function CustomerSatisfactionSurvey({
     mutationFn: async (data: any) => {
       const isUpdating = existingResponse?.id;
       const url = isUpdating
-        ? `/api/survey-engine/responses/${existingResponse.id}`
-        : '/api/survey-engine/responses';
+        ? `/api/customer-satisfaction/responses/${existingResponse.id}`
+        : '/api/customer-satisfaction/responses';
       const method = isUpdating ? 'PUT' : 'POST';
 
       return apiRequest(url, {
@@ -167,7 +174,7 @@ export default function CustomerSatisfactionSurvey({
         onComplete(response.id);
       }
       queryClient.invalidateQueries({
-        queryKey: ['/api/survey-engine/responses'],
+        queryKey: ['/api/customer-satisfaction/responses'],
       });
     },
     onError: (error: any) => {
@@ -253,17 +260,10 @@ export default function CustomerSatisfactionSurvey({
     // Get selected customer details for respondent fields
     const selectedCustomer = customers.find((c: Customer) => c.id === selectedCustomerId);
 
-    // Build response data using generic survey engine schema
     const responseData = {
-      surveyId: selectedSurvey.id,
-      // Respondent abstraction - ensure respondentId is a valid non-empty string
-      respondentId: selectedCustomerId ? String(selectedCustomerId) : 'anonymous',
-      respondentType: selectedCustomerId ? 'customer' as const : 'anonymous' as const,
-      respondentName: selectedCustomer?.name || null,
-      respondentEmail: selectedCustomer?.email || null,
-      // Context abstraction
-      contextId: orderNumber || orderId || null,
-      contextType: (orderNumber || orderId) ? 'order' as const : 'general' as const,
+      surveyId: typeof selectedSurvey.id === 'string' ? parseInt(selectedSurvey.id) : selectedSurvey.id,
+      customerId: selectedCustomerId,
+      orderId: orderNumber || orderId || null,
       responses,
       overallSatisfaction: productQuality || null,
       npsScore: recommendationLikelihood || null,
@@ -271,7 +271,7 @@ export default function CustomerSatisfactionSurvey({
       responseTimeSeconds: Math.floor(
         (new Date().getTime() - startTime.getTime()) / 1000
       ),
-      submittedBy: csrName || null,
+      csrName: csrName || null,
       surveyDate: surveyDate
         ? surveyDate.toISOString()
         : new Date().toISOString(),
@@ -503,13 +503,17 @@ export default function CustomerSatisfactionSurvey({
             <Label htmlFor="customer">Select Customer *</Label>
             <Select
               value={selectedCustomerId?.toString() || ''}
-              onValueChange={(value) => setSelectedCustomerId(parseInt(value))}
+              onValueChange={(value) => {
+                setSelectedCustomerId(parseInt(value));
+                setOrderNumber('');
+                setManualOrderEntry(false);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Search and select a customer" />
               </SelectTrigger>
               <SelectContent>
-                {customers.map((customer: Customer) => (
+                {(customers || []).map((customer: Customer) => (
                   <SelectItem key={customer.id} value={customer.id.toString()}>
                     {customer.name} {customer.email && `(${customer.email})`}
                   </SelectItem>
@@ -521,15 +525,74 @@ export default function CustomerSatisfactionSurvey({
           {/* Order Details */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="orderNumber">Order #</Label>
-              <Input
-                id="orderNumber"
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="Enter order number"
-                className="w-full"
-                data-testid="input-order-number"
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="orderNumber">Order #</Label>
+                {selectedCustomerId && (
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() => {
+                      setManualOrderEntry(!manualOrderEntry);
+                      if (!manualOrderEntry) setOrderNumber('');
+                    }}
+                  >
+                    {manualOrderEntry ? 'Select from list' : 'Enter manually'}
+                  </button>
+                )}
+              </div>
+              {!selectedCustomerId ? (
+                <Input
+                  id="orderNumber"
+                  value={orderNumber}
+                  onChange={(e) => setOrderNumber(e.target.value)}
+                  placeholder="Select a customer first"
+                  className="w-full"
+                  disabled
+                />
+              ) : manualOrderEntry ? (
+                <Input
+                  id="orderNumber"
+                  value={orderNumber}
+                  onChange={(e) => setOrderNumber(e.target.value)}
+                  placeholder="Enter order number"
+                  className="w-full"
+                  data-testid="input-order-number"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={orderNumber}
+                    onValueChange={(value) => setOrderNumber(value)}
+                  >
+                    <SelectTrigger data-testid="select-order" className="flex-1">
+                      <SelectValue placeholder={ordersLoading ? "Loading orders..." : "Select an order"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customerOrders.map((order: any) => (
+                        <SelectItem key={order.orderId} value={order.orderId}>
+                          {order.orderId}
+                          {order.fbOrderNumber ? ` (FB: ${order.fbOrderNumber})` : ''}
+                          {order.status ? ` - ${order.status}` : ''}
+                        </SelectItem>
+                      ))}
+                      {customerOrders.length === 0 && !ordersLoading && (
+                        <SelectItem value="__none" disabled>No orders found</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {orderNumber && orderNumber !== '__none' && (
+                    <a
+                      href={`/order-entry?draft=${orderNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors shrink-0"
+                      title="Open order in Order Entry"
+                    >
+                      <ExternalLink className="h-4 w-4 text-blue-600" />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="csrName">CSR</Label>
@@ -541,14 +604,10 @@ export default function CustomerSatisfactionSurvey({
                   <SelectValue placeholder="Select CSR" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user: any) => (
-                    <SelectItem
-                      key={user.id}
-                      value={user.firstName || user.username}
-                    >
-                      {user.firstName || user.username}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Darlene B">Darlene B</SelectItem>
+                  <SelectItem value="Staci W">Staci W</SelectItem>
+                  <SelectItem value="Glenn J">Glenn J</SelectItem>
+                  <SelectItem value="Tandy M">Tandy M</SelectItem>
                 </SelectContent>
               </Select>
             </div>

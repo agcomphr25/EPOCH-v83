@@ -12743,13 +12743,48 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`PO ${poItem.poId} not found`);
       }
 
+      // Get the customer's RFQ prefix for serial number generation
+      const currentYear = new Date().getFullYear().toString();
+      const yearSuffix = currentYear.slice(-2);
+      let prefix = '';
+
+      // Look up customer by customerId to get rfqPrefix
+      const customerResult = await tx.execute(sql`
+        SELECT rfq_prefix, customer_name, serial_sequences
+        FROM p2_customers
+        WHERE customer_id = ${po.customerId}::text
+        LIMIT 1
+      `);
+
+      if (customerResult.rows && customerResult.rows.length > 0) {
+        const customer = customerResult.rows[0] as any;
+        prefix = customer.rfq_prefix || customer.customer_name.substring(0, 3).toUpperCase();
+      } else {
+        prefix = (po.customerName || 'UNK').substring(0, 3).toUpperCase();
+      }
+
+      // Atomically increment serial sequence counter for this customer+year
+      const seqResult = await tx.execute(sql`
+        UPDATE p2_customers
+        SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
+          jsonb_build_object(
+            ${currentYear}::text,
+            COALESCE((serial_sequences->>${currentYear}::text)::int, 0) + ${poItem.quantity}
+          )
+        WHERE customer_id = ${po.customerId}::text
+        RETURNING (COALESCE((serial_sequences->>${currentYear}::text)::int, 0)) as end_sequence
+      `);
+
+      const endSequence = seqResult.rows?.[0] ? (seqResult.rows[0] as any).end_sequence : poItem.quantity;
+      const startSequence = endSequence - poItem.quantity + 1;
+
       const serializedItems: P2SerializedItem[] = [];
 
-      // Generate serialized items based on quantity
-      for (let i = 1; i <= poItem.quantity; i++) {
-        const sequenceNumber = i;
-        const serialNumber = `${po.poNumber}-${poItem.partNumber}-${String(sequenceNumber).padStart(4, '0')}`;
-        const barcode = serialNumber; // Same as serial number
+      // Generate serialized items with format: PREFIX + YY + NNNNN (e.g., STR2600001)
+      for (let i = 0; i < poItem.quantity; i++) {
+        const sequenceNumber = startSequence + i;
+        const serialNumber = `${prefix}${yearSuffix}${String(sequenceNumber).padStart(5, '0')}`;
+        const barcode = serialNumber;
 
         const itemData: InsertP2SerializedItem = {
           serialNumber,
@@ -13538,7 +13573,10 @@ export class DatabaseStorage implements IStorage {
       const hasMaterials = (deptConfig.materials || []).length > 0;
       const hasTraceFields = (traceabilityConfig[deptName] || []).length > 0;
       const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
+      const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
+      const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
       const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
+      const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
       const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
       const routingInstPack = deptConfig.instructionPack || null;
       const hasInstructionPackContent = routingInstPack && (
@@ -13552,7 +13590,8 @@ export class DatabaseStorage implements IStorage {
       const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
 
       const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
-        hasCustomFields || hasQcStandards || hasOvenCuring || hasInstructionPackContent ||
+        hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
+        hasQcStandards || hasStartQcStandards || hasOvenCuring || hasInstructionPackContent ||
         hasTimerConfig || hasStdProcesses || hasSpecialProcess;
 
       if (!hasAnyContent) {
@@ -13693,6 +13732,64 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // START Phase Custom Data Fields
+      const startCustomFields = deptConfig.startCustomDataFields || [];
+      if (startCustomFields.length > 0) {
+        const startDataTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'START',
+          title: 'Start Phase Data Entry',
+          instructions: 'Enter required data for the START phase',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const field of startCustomFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: startDataTask.id,
+            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+            fieldLabel: field.fieldName || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || false,
+          });
+        }
+      }
+
+      // START Phase QC Standards (incoming inspection)
+      const startQcStandards = deptConfig.startQcStandards || [];
+      if (startQcStandards.length > 0) {
+        const startQcTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          taskPhase: 'START',
+          title: 'Incoming Inspection',
+          instructions: 'Complete incoming quality checks before work begins',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: true,
+          signatureRole: 'QC',
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const qc of startQcStandards) {
+          await this.createTravelerTaskField({
+            travelerTaskId: startQcTask.id,
+            fieldKey: `start_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            fieldLabel: qc.standard || 'QC Check',
+            fieldType: 'yes_no',
+            required: true,
+            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+          });
+        }
+      }
+
       // ===== WORK PHASE =====
       // Snapshot instruction pack from routing (frozen at traveler creation time)
       const routingInstructionPack = deptConfig.instructionPack || null;
@@ -13798,6 +13895,34 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: check.requiresCertification || false,
           status: 'NOT_STARTED',
         });
+      }
+
+      // FINISH Phase Custom Data Fields
+      const finishCustomFields = deptConfig.finishCustomDataFields || [];
+      if (finishCustomFields.length > 0) {
+        const finishDataTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'FINISH',
+          title: 'Finish Phase Data Entry',
+          instructions: 'Enter required data for the FINISH phase (final measurements, results)',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        for (const field of finishCustomFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: finishDataTask.id,
+            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+            fieldLabel: field.fieldName || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || false,
+          });
+        }
       }
 
       // QC verification tasks

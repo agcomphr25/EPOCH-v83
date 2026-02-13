@@ -22,6 +22,7 @@ import {
   p2PartCertifications,
   p2EmployeePartCertifications,
   p2PurchaseOrderItems,
+  partRoutings,
   inventoryItems,
   poProducts,
   capabilities,
@@ -1943,12 +1944,12 @@ router.get('/p2-certifications/part-numbers', async (req, res) => {
   try {
     const items = await db
       .select({
-        partNumber: p2PurchaseOrderItems.partNumber,
-        partName: p2PurchaseOrderItems.partName,
+        partNumber: partRoutings.partNumber,
+        partName: partRoutings.partName,
       })
-      .from(p2PurchaseOrderItems)
-      .where(sql`${p2PurchaseOrderItems.partNumber} IS NOT NULL AND ${p2PurchaseOrderItems.partNumber} != ''`)
-      .orderBy(p2PurchaseOrderItems.partNumber);
+      .from(partRoutings)
+      .where(eq(partRoutings.isActive, true))
+      .orderBy(partRoutings.partNumber);
     
     const uniqueItems = Array.from(
       new Map(items.map(item => [item.partNumber, item])).values()

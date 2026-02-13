@@ -1,0 +1,47 @@
+api/tickets/by-orders:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 API error raw body: {"error":"Failed to fetch ticket counts"}
+console.error @ index-DgeS-3Tx.js:4410
+index-DgeS-3Tx.js:4410 💥 API Request failed for /api/tickets/by-orders: Error: Failed to fetch ticket counts
+    at Ue (index-DgeS-3Tx.js:235:6254)
+console.error @ index-DgeS-3Tx.js:4410
+api/tickets/by-orders:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 API error raw body: {"error":"Failed to fetch ticket counts"}
+console.error @ index-DgeS-3Tx.js:4410
+index-DgeS-3Tx.js:4410 💥 API Request failed for /api/tickets/by-orders: Error: Failed to fetch ticket counts
+    at Ue (index-DgeS-3Tx.js:235:6254)
+console.error @ index-DgeS-3Tx.js:4410
+api/tickets/by-orders:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 API error raw body: {"error":"Failed to fetch ticket counts"}
+console.error @ index-DgeS-3Tx.js:4410
+index-DgeS-3Tx.js:4410 💥 API Request failed for /api/tickets/by-orders: Error: Failed to fetch ticket counts
+    at Ue (index-DgeS-3Tx.js:235:6254)
+console.error @ index-DgeS-3Tx.js:4410
+api/tickets/by-orders:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 API error raw body: {"error":"Failed to fetch ticket counts"}
+console.error @ index-DgeS-3Tx.js:4410
+index-DgeS-3Tx.js:4410 💥 API Request failed for /api/tickets/by-orders: Error: Failed to fetch ticket counts
+    at Ue (index-DgeS-3Tx.js:235:6254)
+console.error @ index-DgeS-3Tx.js:4410
+api/shipping/create-label:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 UPS API Error Details: Object
+console.error @ index-DgeS-3Tx.js:4410
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/shipping/order/EK187:1  Failed to load resource: the server responded with a status of 403 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DgeS-3Tx.js:4410 Failed to fetch session for redirect: Error: Not authenticated
+    at index-DgeS-3Tx.js:4407:167649
+console.error @ index-DgeS-3Tx.js:4410
+api/routing-documents/be8e98bb-2c9b-470c-a083-ea3643acb926:1  Failed to load resource: the server responded with a status of 500 ()
+index-DgeS-3Tx.js:4410 API error raw body: {"error":"Failed to delete routing document"}
+console.error @ index-DgeS-3Tx.js:4410
+index-DgeS-3Tx.js:4410 💥 API Request failed for /api/routing-documents/be8e98bb-2c9b-470c-a083-ea3643acb926: Error: Failed to delete routing document
+    at Ue (index-DgeS-3Tx.js:235:6254)
+console.error @ index-DgeS-3Tx.js:4410

@@ -3804,6 +3804,27 @@ export function registerRoutes(app: Express): Server {
       }
       
       const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), updateData);
+
+      // If partNumber or partName changed, cascade update to all serialized items for this PO item
+      if (itemData.partNumber || itemData.partName) {
+        const { p2SerializedItems } = await import('../../schema');
+        const { eq } = await import('drizzle-orm');
+        const { db } = await import('../../db');
+
+        const serializedUpdateData: Record<string, any> = {};
+        if (itemData.partNumber) serializedUpdateData.partNumber = itemData.partNumber;
+        if (itemData.partName) serializedUpdateData.partName = itemData.partName;
+        serializedUpdateData.updatedAt = new Date();
+
+        const updated = await db
+          .update(p2SerializedItems)
+          .set(serializedUpdateData)
+          .where(eq(p2SerializedItems.poItemId, parseInt(itemId)))
+          .returning({ id: p2SerializedItems.id });
+
+        console.log(`[P2 PO Item Update] Cascaded part number/name change to ${updated.length} serialized items for PO item ${itemId}`);
+      }
+
       res.json(item);
     } catch (error) {
       console.error('Update P2 purchase order item error:', error);

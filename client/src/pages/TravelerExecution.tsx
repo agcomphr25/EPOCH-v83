@@ -842,6 +842,81 @@ export default function TravelerExecution() {
                       </div>
                     )}
 
+                    {/* Step-level Work Instructions from routing (always visible) */}
+                    {(() => {
+                      const deptConfig = getDeptConfig(currentStep.departmentName);
+                      const stepPack = normalizeInstructionPack(deptConfig?.instructionPack);
+                      const anyTaskHasPack = currentStep.tasks.some(t => t.instructionPack);
+                      if (!stepPack || anyTaskHasPack) return null;
+                      return (
+                        <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 mb-4">
+                          <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
+                            <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Work Instructions</p>
+                          </div>
+                          {stepPack.specialNotes && (
+                            <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">Special Notes</p>
+                                  <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{stepPack.specialNotes}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {stepPack.workInstructionRefs.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                <FileText className="h-3 w-3" /> Reference Documents
+                              </p>
+                              {stepPack.workInstructionRefs.map((ref, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900">
+                                  <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{ref.title || ref.documentId}</p>
+                                    <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                      {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                                      {ref.anchor && <span>Section: {ref.anchor}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {stepPack.aiSnippets.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                                <Lightbulb className="h-3 w-3" /> Tips & Guidance
+                              </p>
+                              {stepPack.aiSnippets.map((snippet, i) => (
+                                <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900">
+                                  <p className="text-sm font-medium mb-1">{snippet.title}</p>
+                                  <ul className="space-y-0.5 ml-3">
+                                    {snippet.bullets.map((b: string, j: number) => (
+                                      <li key={j} className="text-xs text-muted-foreground list-disc">{b}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {stepPack.media && stepPack.media.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                <ImageIcon className="h-3 w-3" /> Media References
+                              </p>
+                              {stepPack.media.map((m: any, i: number) => (
+                                <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900 text-xs">
+                                  {m.caption || m.documentId}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {PHASE_ORDER.map((phase, phaseIndex) => {
                       const phaseTasks = currentStep.tasks
                         .filter((t) => t.taskPhase === phase)

@@ -626,6 +626,68 @@ router.post('/complete-task', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/p2-traveler/admin/force-complete-task
+// Admin: Force-complete a stuck task (bypasses employee/barcode checks)
+router.post('/admin/force-complete-task', async (req: Request, res: Response) => {
+  try {
+    const { taskId, reason } = req.body;
+
+    if (!taskId) {
+      return res.status(400).json({ error: 'taskId is required' });
+    }
+
+    const workTask = await db.query.p2WorkTasks.findFirst({
+      where: eq(p2WorkTasks.id, taskId),
+    });
+
+    if (!workTask) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (workTask.status !== 'IN_PROGRESS') {
+      return res.status(400).json({ error: 'Task is not in progress' });
+    }
+
+    const startedAt = workTask.startedAt ? new Date(workTask.startedAt) : new Date();
+    const completedAt = new Date();
+    const durationMinutes = Math.round((completedAt.getTime() - startedAt.getTime()) / 60000);
+
+    await db.update(p2WorkTasks)
+      .set({
+        status: 'COMPLETED',
+        completedAt,
+        durationMinutes,
+        notes: `[ADMIN FORCE-COMPLETE] ${reason || 'Stuck task cleared by admin'}`,
+      })
+      .where(eq(p2WorkTasks.id, taskId));
+
+    console.log(`[ADMIN] Force-completed task ${taskId} for ${workTask.employeeName} in ${workTask.department}`);
+
+    return res.json({ 
+      success: true, 
+      message: `Task force-completed for ${workTask.employeeName}`,
+      taskId,
+    });
+  } catch (error: any) {
+    console.error('Error force-completing task:', error);
+    return res.status(500).json({ error: error.message || 'Failed to force-complete task' });
+  }
+});
+
+// GET /api/p2-traveler/admin/stuck-tasks
+// Admin: List all IN_PROGRESS tasks (for clearing stuck ones)
+router.get('/admin/stuck-tasks', async (_req: Request, res: Response) => {
+  try {
+    const stuckTasks = await db.query.p2WorkTasks.findMany({
+      where: eq(p2WorkTasks.status, 'IN_PROGRESS'),
+      orderBy: [desc(p2WorkTasks.startedAt)],
+    });
+    return res.json(stuckTasks);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to get stuck tasks' });
+  }
+});
+
 // GET /api/p2-traveler/traceability/:serializedItemId
 // Get complete traceability report for a serialized item
 router.get('/traceability/:serializedItemId', async (req: Request, res: Response) => {

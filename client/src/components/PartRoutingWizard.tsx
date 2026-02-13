@@ -1841,7 +1841,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {selectedDepartments.map((dept) => {
+                  {selectedDepartments.map((dept, deptIdx) => {
                     const config = getOrCreateDeptConfig(dept);
                     const sigConfig = config.signatureConfig || { startRequiresSignature: false, finishRequiresSignature: true, requiredSignatures: ['operator'] };
                     const currentPhase = activePhaseTab[dept] || 'START';
@@ -1850,11 +1850,29 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                       (item.name?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase())
                     );
 
+                    const deptColors = [
+                      { border: 'border-l-blue-500', bg: 'bg-blue-50/30 dark:bg-blue-950/20', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', dot: 'bg-blue-500' },
+                      { border: 'border-l-emerald-500', bg: 'bg-emerald-50/30 dark:bg-emerald-950/20', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', dot: 'bg-emerald-500' },
+                      { border: 'border-l-violet-500', bg: 'bg-violet-50/30 dark:bg-violet-950/20', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200', dot: 'bg-violet-500' },
+                      { border: 'border-l-orange-500', bg: 'bg-orange-50/30 dark:bg-orange-950/20', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200', dot: 'bg-orange-500' },
+                      { border: 'border-l-rose-500', bg: 'bg-rose-50/30 dark:bg-rose-950/20', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200', dot: 'bg-rose-500' },
+                      { border: 'border-l-cyan-500', bg: 'bg-cyan-50/30 dark:bg-cyan-950/20', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200', dot: 'bg-cyan-500' },
+                      { border: 'border-l-amber-500', bg: 'bg-amber-50/30 dark:bg-amber-950/20', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', dot: 'bg-amber-500' },
+                      { border: 'border-l-indigo-500', bg: 'bg-indigo-50/30 dark:bg-indigo-950/20', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200', dot: 'bg-indigo-500' },
+                      { border: 'border-l-teal-500', bg: 'bg-teal-50/30 dark:bg-teal-950/20', badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200', dot: 'bg-teal-500' },
+                      { border: 'border-l-pink-500', bg: 'bg-pink-50/30 dark:bg-pink-950/20', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200', dot: 'bg-pink-500' },
+                    ];
+                    const dc = deptColors[deptIdx % deptColors.length];
+
                     return (
-                      <Card key={dept}>
+                      <Card key={dept} className={`border-l-4 ${dc.border} ${dc.bg}`}>
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">{dept}</CardTitle>
+                            <div className="flex items-center gap-2">
+                              <div className={`h-3 w-3 rounded-full ${dc.dot}`} />
+                              <CardTitle className="text-base">{dept}</CardTitle>
+                              <Badge className={`text-[10px] px-1.5 py-0 ${dc.badge}`}>Step {deptIdx + 1}</Badge>
+                            </div>
                             <div className="flex items-center gap-2">
                               <UserCheck className="h-4 w-4 text-muted-foreground" />
                               {(() => {

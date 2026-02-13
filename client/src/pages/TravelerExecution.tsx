@@ -488,9 +488,19 @@ export default function TravelerExecution() {
 
   const handleCompleteTask = (task: TravelerTask) => {
     const taskFieldVals = fieldValues[task.id] || {};
+    const traceLabelMap: Record<string, string> = {
+      internalControlNumber: 'Internal Control Number',
+      supplier: 'Supplier',
+      inventoryPartNumber: 'Inventory Part Number',
+      batchLotNumber: 'Batch/Lot #',
+      manufacturer: 'Manufacturer',
+      rollNumber: 'Roll Number',
+      expirationDate: 'Expiration Date',
+      receivedDate: 'Received Date',
+    };
     const missingRequired = task.fields
       .filter((f) => f.required && !taskFieldVals[f.fieldKey] && !f.value)
-      .map((f) => f.fieldLabel);
+      .map((f) => traceLabelMap[f.fieldKey] || f.fieldLabel);
 
     if (missingRequired.length > 0) {
       toast({
@@ -1097,7 +1107,19 @@ export default function TravelerExecution() {
                                                 {task.fields.map((field) => (
                                                   <div key={field.id} className="space-y-1">
                                                     <Label className="text-sm">
-                                                      {field.fieldLabel}
+                                                      {(() => {
+                                                        const labelMap: Record<string, string> = {
+                                                          internalControlNumber: 'Internal Control Number',
+                                                          supplier: 'Supplier',
+                                                          inventoryPartNumber: 'Inventory Part Number',
+                                                          batchLotNumber: 'Batch/Lot #',
+                                                          manufacturer: 'Manufacturer',
+                                                          rollNumber: 'Roll Number',
+                                                          expirationDate: 'Expiration Date',
+                                                          receivedDate: 'Received Date',
+                                                        };
+                                                        return labelMap[field.fieldKey] || field.fieldLabel;
+                                                      })()}
                                                       {field.required && (
                                                         <span className="text-red-500 ml-1">*</span>
                                                       )}

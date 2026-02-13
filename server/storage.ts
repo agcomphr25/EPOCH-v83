@@ -13728,11 +13728,22 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
+        const traceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
+
         for (const fieldKey of traceFields) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
             fieldKey,
-            fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l) => l.toUpperCase()).trim(),
             fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
             required: true,
           });
@@ -13824,7 +13835,16 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        // Create fields from materials' requiredFields
+        const workTraceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
         const workTraceFieldKeys = new Set<string>();
         for (const mat of workMaterials) {
           const reqFields = (mat as any).requiredFields || [];
@@ -13834,7 +13854,7 @@ export class DatabaseStorage implements IStorage {
               await this.createTravelerTaskField({
                 travelerTaskId: workTraceTask.id,
                 fieldKey,
-                fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                fieldLabel: workTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
                 fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
                 required: true,
               });
@@ -13938,7 +13958,16 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        // Create fields from materials' requiredFields
+        const finishTraceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
         const finishTraceFieldKeys = new Set<string>();
         for (const mat of finishMaterials) {
           const reqFields = (mat as any).requiredFields || [];
@@ -13948,7 +13977,7 @@ export class DatabaseStorage implements IStorage {
               await this.createTravelerTaskField({
                 travelerTaskId: finishTraceTask.id,
                 fieldKey,
-                fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                fieldLabel: finishTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
                 fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
                 required: true,
               });

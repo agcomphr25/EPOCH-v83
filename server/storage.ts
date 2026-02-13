@@ -13577,6 +13577,7 @@ export class DatabaseStorage implements IStorage {
       const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
       const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
       const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
+      const hasFinishQcStandards = (deptConfig.finishQcStandards || []).length > 0;
       const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
       const routingInstPack = deptConfig.instructionPack || null;
       const hasInstructionPackContent = routingInstPack && (
@@ -13591,7 +13592,7 @@ export class DatabaseStorage implements IStorage {
 
       const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
         hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
-        hasQcStandards || hasStartQcStandards || hasOvenCuring || hasInstructionPackContent ||
+        hasQcStandards || hasStartQcStandards || hasFinishQcStandards || hasOvenCuring || hasInstructionPackContent ||
         hasTimerConfig || hasStdProcesses || hasSpecialProcess;
 
       if (!hasAnyContent) {
@@ -13925,9 +13926,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // QC verification tasks
+      // QC verification tasks (general qcStandards + finishQcStandards combined)
       const qcStandards = deptConfig.qcStandards || [];
-      if (qcStandards.length > 0) {
+      const finishQcStandards = deptConfig.finishQcStandards || [];
+      const allFinishQc = [...qcStandards, ...finishQcStandards];
+      if (allFinishQc.length > 0) {
         const qcTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'QC',
@@ -13943,7 +13946,7 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        for (const qc of qcStandards) {
+        for (const qc of allFinishQc) {
           await this.createTravelerTaskField({
             travelerTaskId: qcTask.id,
             fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,

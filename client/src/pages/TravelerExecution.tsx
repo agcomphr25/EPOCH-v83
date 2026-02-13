@@ -298,7 +298,11 @@ export default function TravelerExecution() {
         defaultProgramName?: string;
       };
       customDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
+      startCustomDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
+      finishCustomDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
       qcStandards?: { standard: string; tolerance: string; requirement: string }[];
+      startQcStandards?: { standard: string; tolerance: string; requirement: string }[];
+      finishQcStandards?: { standard: string; tolerance: string; requirement: string }[];
       materials?: { partId: string; partNumber: string; partName: string; requiredFields?: string[]; entryMethod?: string }[];
       startChecks?: { title: string; taskType?: string; required?: boolean }[];
       finishChecks?: { title: string; taskType?: string; required?: boolean }[];
@@ -961,12 +965,17 @@ export default function TravelerExecution() {
                                           </p>
                                         )}
 
-                                        {/* Instruction Pack — Prominent Display */}
+                                        {/* Instruction Pack — Always Visible During Work */}
                                         {(() => {
                                           const pack = normalizeInstructionPack(task.instructionPack);
                                           if (!pack) return null;
                                           return (
-                                            <div className="space-y-2">
+                                            <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                                              <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
+                                                <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                                <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Work Instructions</p>
+                                              </div>
+
                                               {pack.specialNotes && (
                                                 <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
                                                   <div className="flex items-start gap-2">
@@ -978,18 +987,59 @@ export default function TravelerExecution() {
                                                   </div>
                                                 </div>
                                               )}
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="w-full border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 font-medium"
-                                                onClick={() => { setInstructionSheetTaskId(task.id); setInstructionSheetOpen(true); }}
-                                              >
-                                                <BookOpen className="h-4 w-4 mr-2" />
-                                                View Instructions
-                                                <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
-                                                  {pack.workInstructionRefs.length + pack.aiSnippets.length + pack.media.length}
-                                                </Badge>
-                                              </Button>
+
+                                              {pack.workInstructionRefs.length > 0 && (
+                                                <div className="space-y-1.5">
+                                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                                    <FileText className="h-3 w-3" /> Reference Documents
+                                                  </p>
+                                                  {pack.workInstructionRefs.map((ref, i) => (
+                                                    <div key={i} className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900">
+                                                      <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                      <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium">{ref.title || ref.documentId}</p>
+                                                        <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                                          {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                                                          {ref.anchor && <span>Section: {ref.anchor}</span>}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+
+                                              {pack.aiSnippets.length > 0 && (
+                                                <div className="space-y-1.5">
+                                                  <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                                                    <Lightbulb className="h-3 w-3" /> Tips & Guidance
+                                                  </p>
+                                                  {pack.aiSnippets.map((snippet, i) => (
+                                                    <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900">
+                                                      <p className="text-sm font-medium mb-1">{snippet.title}</p>
+                                                      <ul className="space-y-0.5 ml-3">
+                                                        {snippet.bullets.map((b, bi) => (
+                                                          <li key={bi} className="text-xs text-muted-foreground flex items-start gap-1">
+                                                            <span className="shrink-0 mt-0.5">•</span>
+                                                            <span>{b}</span>
+                                                          </li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+
+                                              {pack.media.length > 0 && (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="w-full text-xs"
+                                                  onClick={() => { setInstructionSheetTaskId(task.id); setInstructionSheetOpen(true); }}
+                                                >
+                                                  <Eye className="h-3.5 w-3.5 mr-1" />
+                                                  View {pack.media.length} Attached Media
+                                                </Button>
+                                              )}
                                             </div>
                                           );
                                         })()}

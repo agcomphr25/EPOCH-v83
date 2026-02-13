@@ -356,6 +356,14 @@ async function initializeBackgroundServices() {
         // Column may already exist
       }
 
+      // Ensure customer_satisfaction_responses has scanned_pdf_path column
+      try {
+        const { sql: sqlPdf } = await import('drizzle-orm');
+        await db.execute(sqlPdf`ALTER TABLE customer_satisfaction_responses ADD COLUMN IF NOT EXISTS scanned_pdf_path TEXT`);
+      } catch (colError: any) {
+        // Column may already exist
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

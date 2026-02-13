@@ -1200,7 +1200,7 @@ export default function TravelerExecution() {
                                                       )}
                                                     </Label>
                                                     {field.fieldType === 'yes_no' ? (
-                                                      <div className="space-y-1">
+                                                      <div className="space-y-2">
                                                         {field.validation && (field.validation.tolerance || field.validation.requirement) && (
                                                           <div className="flex flex-wrap gap-2 text-xs mb-1">
                                                             {field.validation.tolerance && (
@@ -1229,13 +1229,13 @@ export default function TravelerExecution() {
                                                           </div>
                                                         )}
                                                         {task.taskType === 'QC' && (
-                                                          <div className="mb-1">
+                                                          <div>
                                                             <Input
                                                               placeholder="Enter measured result..."
-                                                              value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || field.value?.split('|')[1] || ''}
+                                                              value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
                                                               onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
                                                               disabled={isComplete}
-                                                              className="text-sm h-8"
+                                                              className="text-sm h-9"
                                                             />
                                                           </div>
                                                         )}
@@ -1243,8 +1243,9 @@ export default function TravelerExecution() {
                                                           <Checkbox
                                                             id={field.id}
                                                             checked={
-                                                              fieldValues[task.id]?.[field.fieldKey] ===
-                                                                'yes' || field.value === 'yes'
+                                                              fieldValues[task.id]?.[field.fieldKey] !== undefined
+                                                                ? fieldValues[task.id][field.fieldKey] === 'yes'
+                                                                : field.value === 'yes'
                                                             }
                                                             onCheckedChange={(checked) =>
                                                               handleFieldChange(
@@ -1255,7 +1256,7 @@ export default function TravelerExecution() {
                                                             }
                                                             disabled={isComplete}
                                                           />
-                                                          <Label htmlFor={field.id} className="text-sm">
+                                                          <Label htmlFor={field.id} className="text-sm cursor-pointer">
                                                             Verified / Pass
                                                           </Label>
                                                         </div>

@@ -312,10 +312,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [materialSearchTerm, setMaterialSearchTerm] = useState('');
   const [selectedDeptForConfig, setSelectedDeptForConfig] = useState<string>('');
   
-  // UI state for QC standards input
+  // UI state for QC standards input (per-department to prevent cross-department clearing)
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
+  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string }>>({});
   
   const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
   const [showDocPicker, setShowDocPicker] = useState(false);
@@ -1342,17 +1343,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addStartQcStandard = (dept: string) => {
-    if (!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim()) return;
+  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+    const s = standard || qcStandardInput;
+    const t = tolerance || qcToleranceInput;
+    const r = requirement || qcRequirementInput;
+    if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: qcStandardInput.trim(), tolerance: qcToleranceInput.trim(), requirement: qcRequirementInput.trim() };
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, startQcStandards: [...(config.startQcStandards || []), newStandard] },
     });
-    setQcStandardInput('');
-    setQcToleranceInput('');
-    setQcRequirementInput('');
     toast({ title: 'QC Standard Added', description: `Added to START phase of ${dept}` });
   };
 
@@ -1364,17 +1365,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addFinishQcStandard = (dept: string) => {
-    if (!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim()) return;
+  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+    const s = standard || qcStandardInput;
+    const t = tolerance || qcToleranceInput;
+    const r = requirement || qcRequirementInput;
+    if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: qcStandardInput.trim(), tolerance: qcToleranceInput.trim(), requirement: qcRequirementInput.trim() };
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, finishQcStandards: [...(config.finishQcStandards || []), newStandard] },
     });
-    setQcStandardInput('');
-    setQcToleranceInput('');
-    setQcRequirementInput('');
     toast({ title: 'QC Standard Added', description: `Added to FINISH phase of ${dept}` });
   };
 
@@ -2111,12 +2112,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   </div>
                                 )}
                                 <div className="space-y-1">
-                                  <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <Input placeholder="QC Standard" value={qcInputDept[`start_${dept}`]?.standard || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), standard: e.target.value } }))} className="text-sm" />
                                   <div className="flex gap-2">
-                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Input placeholder="Tolerance" value={qcInputDept[`start_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
+                                    <Input placeholder="Requirement" value={qcInputDept[`start_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
-                                  <Button size="sm" onClick={() => addStartQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                  <Button size="sm" onClick={() => {
+                                    const vals = qcInputDept[`start_${dept}`];
+                                    if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
+                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
+                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                  }} disabled={!qcInputDept[`start_${dept}`]?.standard?.trim() || !qcInputDept[`start_${dept}`]?.tolerance?.trim() || !qcInputDept[`start_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
                                 </div>
@@ -2812,12 +2818,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   </div>
                                 )}
                                 <div className="space-y-1">
-                                  <Input placeholder="QC Standard (e.g., Layup Rating)" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <Input placeholder="QC Standard (e.g., Layup Rating)" value={qcInputDept[`finish_${dept}`]?.standard || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), standard: e.target.value } }))} className="text-sm" />
                                   <div className="flex gap-2">
-                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Input placeholder="Tolerance" value={qcInputDept[`finish_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
+                                    <Input placeholder="Requirement" value={qcInputDept[`finish_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
-                                  <Button size="sm" onClick={() => addFinishQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                  <Button size="sm" onClick={() => {
+                                    const vals = qcInputDept[`finish_${dept}`];
+                                    if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
+                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
+                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                  }} disabled={!qcInputDept[`finish_${dept}`]?.standard?.trim() || !qcInputDept[`finish_${dept}`]?.tolerance?.trim() || !qcInputDept[`finish_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
                                 </div>

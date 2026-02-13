@@ -106,6 +106,7 @@ interface MaterialRequirement {
   partName: string;
   requiredFields: string[]; // Which traceability fields are required for this material
   entryMethod: 'manual' | 'barcode'; // How the material will be entered/tracked
+  traceabilityPhase?: 'START' | 'WORK' | 'FINISH'; // Which phase to capture traceability (default: START)
 }
 
 interface QCStandard {
@@ -2898,6 +2899,27 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <p className="text-xs text-muted-foreground">{material.partName}</p>
                                         </div>
                                         <div className="flex items-center gap-1">
+                                          <Select
+                                            value={material.traceabilityPhase || 'START'}
+                                            onValueChange={(val: string) => {
+                                              const updatedMaterials = config.materials.map(m =>
+                                                m.partId === material.partId ? { ...m, traceabilityPhase: val as 'START' | 'WORK' | 'FINISH' } : m
+                                              );
+                                              setDepartmentConfig(prev => ({
+                                                ...prev,
+                                                [dept]: { ...config, materials: updatedMaterials },
+                                              }));
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-6 w-[80px] text-[10px]">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="START">Start</SelectItem>
+                                              <SelectItem value="WORK">Work</SelectItem>
+                                              <SelectItem value="FINISH">Finish</SelectItem>
+                                            </SelectContent>
+                                          </Select>
                                           <Button size="sm" variant={material.entryMethod === 'manual' ? 'default' : 'outline'} className="h-6 text-[10px]" onClick={() => toggleMaterialEntryMethod(dept, material.partId)}>
                                             {material.entryMethod === 'manual' ? 'Manual' : 'Barcode'}
                                           </Button>

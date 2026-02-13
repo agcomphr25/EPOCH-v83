@@ -13705,9 +13705,15 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Material Lot Entry (TRACEABILITY tasks from materials config)
+      // Group materials by their traceabilityPhase (default START for backward compat)
       const traceFields = traceabilityConfig[deptName] || [];
       const materials = deptConfig.materials || [];
-      if (traceFields.length > 0 || materials.length > 0) {
+      const startMaterials = materials.filter((m: any) => !m.traceabilityPhase || m.traceabilityPhase === 'START');
+      const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
+      const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
+
+      // START phase traceability (default — includes legacy traceFields)
+      if (traceFields.length > 0 || startMaterials.length > 0) {
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
@@ -13801,6 +13807,42 @@ export class DatabaseStorage implements IStorage {
         (routingInstructionPack.media?.length > 0)
       );
 
+      // WORK phase material traceability
+      if (workMaterials.length > 0) {
+        const workTraceTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'TRACEABILITY',
+          taskPhase: 'WORK',
+          title: 'In-Process Material Traceability',
+          instructions: `Record traceability for: ${workMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: hasInstructionPack ? routingInstructionPack : null,
+          status: 'NOT_STARTED',
+        });
+
+        // Create fields from materials' requiredFields
+        const workTraceFieldKeys = new Set<string>();
+        for (const mat of workMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            if (!workTraceFieldKeys.has(fieldKey)) {
+              workTraceFieldKeys.add(fieldKey);
+              await this.createTravelerTaskField({
+                travelerTaskId: workTraceTask.id,
+                fieldKey,
+                fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
+            }
+          }
+        }
+      }
+
       // PROCESS tasks from customDataFields
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
@@ -13862,7 +13904,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       // If instruction pack exists but no WORK tasks were created, add a standalone task for it
-      if (hasInstructionPack && customFields.length === 0 && ovenCuringSteps.length === 0) {
+      if (hasInstructionPack && customFields.length === 0 && ovenCuringSteps.length === 0 && workMaterials.length === 0) {
         await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'PROCESS',
@@ -13880,6 +13922,41 @@ export class DatabaseStorage implements IStorage {
       }
 
       // ===== FINISH PHASE =====
+      // FINISH phase material traceability
+      if (finishMaterials.length > 0) {
+        const finishTraceTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'TRACEABILITY',
+          taskPhase: 'FINISH',
+          title: 'Final Material Traceability',
+          instructions: `Record traceability for: ${finishMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        });
+
+        // Create fields from materials' requiredFields
+        const finishTraceFieldKeys = new Set<string>();
+        for (const mat of finishMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            if (!finishTraceFieldKeys.has(fieldKey)) {
+              finishTraceFieldKeys.add(fieldKey);
+              await this.createTravelerTaskField({
+                travelerTaskId: finishTraceTask.id,
+                fieldKey,
+                fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
+            }
+          }
+        }
+      }
+
       // Explicit FINISH checks from routing template
       for (const check of finishChecks) {
         await this.createTravelerTask({

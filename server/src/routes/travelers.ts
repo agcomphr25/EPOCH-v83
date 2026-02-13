@@ -736,8 +736,13 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const fields = await storage.getTravelerTaskFields(taskId);
       for (const field of fields) {
         if (fieldValues[field.fieldKey] !== undefined) {
+          const resultKey = `${field.fieldKey}_result`;
+          const measuredResult = fieldValues[resultKey] || null;
+          const valueToStore = measuredResult
+            ? `${fieldValues[field.fieldKey]}|${measuredResult}`
+            : fieldValues[field.fieldKey];
           await storage.updateTravelerTaskField(field.id, {
-            value: fieldValues[field.fieldKey],
+            value: valueToStore,
             recordedBy: completedBy || 'unknown',
             recordedAt: new Date(),
           });

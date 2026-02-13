@@ -1081,6 +1081,17 @@ export default function TravelerExecution() {
                                                             )}
                                                           </div>
                                                         )}
+                                                        {task.taskType === 'QC' && (
+                                                          <div className="mb-1">
+                                                            <Input
+                                                              placeholder="Enter measured result..."
+                                                              value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || field.value?.split('|')[1] || ''}
+                                                              onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
+                                                              disabled={isComplete}
+                                                              className="text-sm h-8"
+                                                            />
+                                                          </div>
+                                                        )}
                                                         <div className="flex items-center gap-2">
                                                           <Checkbox
                                                             id={field.id}
@@ -1098,7 +1109,7 @@ export default function TravelerExecution() {
                                                             disabled={isComplete}
                                                           />
                                                           <Label htmlFor={field.id} className="text-sm">
-                                                            Verified
+                                                            Verified / Pass
                                                           </Label>
                                                         </div>
                                                       </div>

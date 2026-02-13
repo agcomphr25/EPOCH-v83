@@ -329,7 +329,8 @@ router.post('/start-task', async (req: Request, res: Response) => {
     
     if (existingTask && existingTask.employeeId === parseInt(employeeId)) {
       return res.json({ 
-        ...existingTask,
+        success: true,
+        workTask: existingTask,
         resumed: true,
         message: 'Resumed existing task' 
       });

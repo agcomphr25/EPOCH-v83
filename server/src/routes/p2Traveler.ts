@@ -312,17 +312,26 @@ router.post('/start-task', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if part is available (not already in progress by another tech)
+    // Check if part is available (not already in progress by another tech in same department)
     const existingTask = await db.query.p2WorkTasks.findFirst({
       where: and(
         eq(p2WorkTasks.serializedItemId, serializedItemId),
+        eq(p2WorkTasks.department, department),
         eq(p2WorkTasks.status, 'IN_PROGRESS')
       ),
     });
 
-    if (existingTask) {
+    if (existingTask && existingTask.employeeId !== parseInt(employeeId)) {
       return res.status(400).json({ 
         error: `Part is already being worked on by ${existingTask.employeeName}` 
+      });
+    }
+    
+    if (existingTask && existingTask.employeeId === parseInt(employeeId)) {
+      return res.json({ 
+        ...existingTask,
+        resumed: true,
+        message: 'Resumed existing task' 
       });
     }
 

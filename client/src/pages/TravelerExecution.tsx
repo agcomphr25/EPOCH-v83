@@ -786,61 +786,8 @@ export default function TravelerExecution() {
                   );
                   const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
 
-                  const routingDeptConfig = getDeptConfig(currentStep.departmentName);
-                  const deptQcStandards = routingDeptConfig?.qcStandards || [];
-                  const deptCustomFields = routingDeptConfig?.customDataFields || [];
-                  const deptMaterials = routingDeptConfig?.materials || [];
-
                   return (
                   <div className="space-y-6">
-                    {(deptQcStandards.length > 0 || deptCustomFields.length > 0 || deptMaterials.length > 0) && (
-                      <div className="rounded-lg border bg-slate-50 p-4 space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Routing Configuration Summary</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          {deptCustomFields.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-amber-700 flex items-center gap-1">
-                                <PenTool className="h-3 w-3" />
-                                Custom Data Fields ({deptCustomFields.length})
-                              </p>
-                              {deptCustomFields.map((f, i) => (
-                                <p key={i} className="text-[11px] text-muted-foreground pl-4">
-                                  {f.fieldName} <span className="text-[10px]">({f.fieldType})</span>
-                                  {f.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                          {deptQcStandards.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-green-700 flex items-center gap-1">
-                                <Shield className="h-3 w-3" />
-                                QC Standards ({deptQcStandards.length})
-                              </p>
-                              {deptQcStandards.map((qc, i) => (
-                                <div key={i} className="text-[11px] text-muted-foreground pl-4">
-                                  <p className="font-medium">{qc.standard}</p>
-                                  <p className="text-[10px]">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {deptMaterials.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-blue-700 flex items-center gap-1">
-                                <ScanBarcode className="h-3 w-3" />
-                                Materials ({deptMaterials.length})
-                              </p>
-                              {deptMaterials.map((m, i) => (
-                                <p key={i} className="text-[11px] text-muted-foreground pl-4 font-mono">
-                                  {m.partNumber}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
 
                     {/* Step-level Work Instructions from routing (always visible) */}
                     {(() => {

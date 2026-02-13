@@ -1284,14 +1284,14 @@ function P2CustomersTab() {
       </CardContent>
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Add P2 Customer</DialogTitle>
             <DialogDescription>
               Create a new customer for P2 purchase orders
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-2 gap-4 py-4 overflow-y-auto flex-1 pr-2">
             <div className="space-y-2">
               <Label htmlFor="customerId">Customer ID *</Label>
               <Input

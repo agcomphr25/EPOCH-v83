@@ -293,7 +293,7 @@ async function initializeBackgroundServices() {
         
         const oldFormatItems = await db.execute(sqlSerial`
           SELECT COUNT(*) as cnt FROM p2_serialized_items 
-          WHERE serial_number LIKE '%-%-%-%'
+          WHERE serial_number LIKE '% %'
         `);
         const oldCount = (oldFormatItems.rows[0] as any)?.cnt;
         if (oldCount && parseInt(oldCount) > 0) {
@@ -301,7 +301,7 @@ async function initializeBackgroundServices() {
             SELECT DISTINCT si.customer_id, c.rfq_prefix, c.customer_name
             FROM p2_serialized_items si
             LEFT JOIN p2_customers c ON c.customer_id = si.customer_id
-            WHERE si.serial_number LIKE '%-%-%-%'
+            WHERE si.serial_number LIKE '% %'
           `);
           for (const cust of (customers.rows || []) as any[]) {
             const prefix = cust.rfq_prefix || (cust.customer_name || 'UNK').substring(0, 3).toUpperCase();
@@ -311,7 +311,7 @@ async function initializeBackgroundServices() {
               SET serial_number = ${prefix + yearSuffix} || LPAD(sequence_number::text, 5, '0'),
                   barcode = ${prefix + yearSuffix} || LPAD(sequence_number::text, 5, '0')
               WHERE customer_id = ${cust.customer_id}
-                AND serial_number LIKE '%-%-%-%'
+                AND serial_number LIKE '% %'
             `);
             const maxSeq = await db.execute(sqlSerial`
               SELECT MAX(sequence_number) as max_seq FROM p2_serialized_items WHERE customer_id = ${cust.customer_id}

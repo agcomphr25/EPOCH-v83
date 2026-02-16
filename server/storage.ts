@@ -13863,6 +13863,26 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // Production Timer task — when timer is configured for this department
+      if (hasTimerConfig) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'WORK',
+          title: 'Production Timer',
+          instructions: deptConfig.timerConfig.defaultProgramName
+            ? `Start timer program: ${deptConfig.timerConfig.defaultProgramName}`
+            : 'Start a production timer for this operation',
+          required: false,
+          sortOrder: sortOrder++,
+          timePolicy: 'MANUAL_ENTRY',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: { timerConfig: deptConfig.timerConfig },
+          status: 'NOT_STARTED',
+        });
+      }
+
       // Work Instructions task — always create when instruction pack has content
       if (hasInstructionPack) {
         await this.createTravelerTask({

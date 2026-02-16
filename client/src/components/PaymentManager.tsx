@@ -229,7 +229,7 @@ export default function PaymentManager({
           if (!result.success) {
             toast({
               title: 'Unable to Process Payment',
-              description: 'Order must be saved before processing credit card. Please try again.',
+              description: 'Customer must be selected before processing credit card.',
               variant: 'destructive',
             });
             setIsSavingForPayment(false);
@@ -239,11 +239,14 @@ export default function PaymentManager({
             title: 'Order Saved',
             description: 'Order saved for payment processing.',
           });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to save order for payment:', error);
+          const errorMessage = error?.message?.includes('Customer')
+            ? 'Customer must be selected before processing credit card.'
+            : 'Could not save order for payment processing. Please try again.';
           toast({
             title: 'Save Failed',
-            description: 'Could not save order for payment processing.',
+            description: errorMessage,
             variant: 'destructive',
           });
           setIsSavingForPayment(false);
@@ -419,10 +422,40 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={(value) => {
+                <Select value={paymentType} onValueChange={async (value) => {
                   setPaymentType(value);
                   if (value === 'live') {
                     setShowPaymentModal(false);
+                    if (!isOrderSaved && onSaveForPayment) {
+                      setIsSavingForPayment(true);
+                      try {
+                        const result = await onSaveForPayment();
+                        if (!result.success) {
+                          toast({
+                            title: 'Unable to Process Payment',
+                            description: 'Customer must be selected before processing credit card.',
+                            variant: 'destructive',
+                          });
+                          setIsSavingForPayment(false);
+                          setPaymentType('');
+                          return;
+                        }
+                      } catch (error: any) {
+                        console.error('Failed to save order for payment:', error);
+                        const errorMessage = error?.message?.includes('Customer')
+                          ? 'Customer must be selected before processing credit card.'
+                          : 'Could not save order for payment processing. Please try again.';
+                        toast({
+                          title: 'Save Failed',
+                          description: errorMessage,
+                          variant: 'destructive',
+                        });
+                        setIsSavingForPayment(false);
+                        setPaymentType('');
+                        return;
+                      }
+                      setIsSavingForPayment(false);
+                    }
                     setShowLivePaymentModal(true);
                   }
                 }}>
@@ -560,10 +593,40 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={(value) => {
+                <Select value={paymentType} onValueChange={async (value) => {
                   setPaymentType(value);
                   if (value === 'live') {
                     setShowPaymentModal(false);
+                    if (!isOrderSaved && onSaveForPayment) {
+                      setIsSavingForPayment(true);
+                      try {
+                        const result = await onSaveForPayment();
+                        if (!result.success) {
+                          toast({
+                            title: 'Unable to Process Payment',
+                            description: 'Customer must be selected before processing credit card.',
+                            variant: 'destructive',
+                          });
+                          setIsSavingForPayment(false);
+                          setPaymentType('');
+                          return;
+                        }
+                      } catch (error: any) {
+                        console.error('Failed to save order for payment:', error);
+                        const errorMessage = error?.message?.includes('Customer')
+                          ? 'Customer must be selected before processing credit card.'
+                          : 'Could not save order for payment processing. Please try again.';
+                        toast({
+                          title: 'Save Failed',
+                          description: errorMessage,
+                          variant: 'destructive',
+                        });
+                        setIsSavingForPayment(false);
+                        setPaymentType('');
+                        return;
+                      }
+                      setIsSavingForPayment(false);
+                    }
                     setShowLivePaymentModal(true);
                   }
                 }}>

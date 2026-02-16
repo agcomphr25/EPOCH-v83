@@ -2556,8 +2556,7 @@ export default function OrderEntry() {
 
       const response = await apiRequest('/api/orders/pending-payment', {
         method: 'POST',
-        body: JSON.stringify(orderData),
-        headers: { 'Content-Type': 'application/json' },
+        body: orderData as any,
       });
 
       if (response.orderId) {

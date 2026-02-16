@@ -1,0 +1,91 @@
+Use This Simpler, Direct Audit Prompt
+
+This version avoids schema guessing and focuses on what matters:
+
+Paste this into your Replit agent:
+
+We are auditing why P1 PO orders do not display correct
+Material / Model / Action information in the Barcode Queue.
+
+Sales orders display correctly.
+PO orders display:
+- "Standard"
+- "Unknown Action"
+
+We do NOT want to change sales order logic.
+We need to extend PO logic to match the working sales logic.
+
+DO NOT MODIFY CODE.
+This is forensic only.
+
+------------------------------------------------------------
+STEP 1 — FIND WORKING PATH
+------------------------------------------------------------
+
+1. Locate backend code that builds queue data for regular sales orders.
+
+Return:
+- Route file
+- Query used
+- How material, model, and action are derived
+- Any helper functions used for display resolution
+
+------------------------------------------------------------
+STEP 2 — FIND PO PATH
+------------------------------------------------------------
+
+2. Locate how P1 PO production orders are included in the same queue.
+
+Return:
+- Query used
+- Selected fields
+- Joins
+- Any conditional logic for PO types
+
+------------------------------------------------------------
+STEP 3 — COMPARE DATA SHAPE
+------------------------------------------------------------
+
+3. For one sales order queue item, show the API response object.
+
+4. For one P1 PO queue item, show the API response object.
+
+We need the raw JSON returned to frontend.
+
+------------------------------------------------------------
+STEP 4 — TRACE MODEL RESOLUTION
+------------------------------------------------------------
+
+5. Identify exactly where:
+   - material
+   - model
+   - action
+are resolved for sales orders.
+
+6. Identify why PO orders fall back to:
+   - "Standard"
+   - "Unknown Action"
+
+Is it:
+- Missing join?
+- Null model_id?
+- Missing mapping?
+- Hardcoded default?
+
+------------------------------------------------------------
+FINAL OUTPUT
+------------------------------------------------------------
+
+Provide:
+
+1. Side-by-side comparison:
+   Sales Order Queue Object
+   vs
+   PO Queue Object
+
+2. Exact field missing in PO path.
+
+3. Exact location in backend where fallback occurs.
+
+DO NOT write new logic yet.
+We need diagnosis first.

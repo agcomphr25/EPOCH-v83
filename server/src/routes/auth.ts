@@ -251,9 +251,13 @@ async function hydrateAndValidateSession(
       return { valid: false, error: 'Session expired' };
     }
 
-    // Hydrate user from database using user_id
+    // Hydrate user from database using user_id, with employee name fallback
     const userResult = await pool.query(
-      `SELECT id, username, first_name, last_name, role, employee_id, is_active FROM users WHERE id = $1`,
+      `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id, u.is_active,
+              e.name as employee_name
+       FROM users u
+       LEFT JOIN employees e ON u.employee_id = e.id
+       WHERE u.id = $1`,
       [userId]
     );
 
@@ -267,13 +271,25 @@ async function hydrateAndValidateSession(
       return { valid: false, error: 'User account is inactive' };
     }
 
+    let firstName = user.first_name;
+    let lastName = user.last_name;
+    if (!firstName && !lastName && user.employee_name) {
+      const parts = user.employee_name.split(' ');
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+    if (!firstName && !lastName) {
+      firstName = user.username;
+      lastName = '';
+    }
+
     return {
       valid: true,
       user: {
         id: user.id,
         username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        firstName,
+        lastName,
         role: user.role,
         employeeId: user.employee_id,
       },
@@ -779,7 +795,11 @@ router.get('/session', async (req, res) => {
     // FIXED: Use user_id as source of truth instead of username
     // This eliminates username casing, rename, and drift issues
     const dbUserResult = await pool.query(
-      `SELECT id, username, first_name, last_name, role, employee_id FROM users WHERE id = $1 AND is_active = true`,
+      `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id,
+              e.name as employee_name
+       FROM users u
+       LEFT JOIN employees e ON u.employee_id = e.id
+       WHERE u.id = $1 AND u.is_active = true`,
       [session.user_id]
     );
 
@@ -802,11 +822,23 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    let firstName = user.first_name;
+    let lastName = user.last_name;
+    if (!firstName && !lastName && user.employee_name) {
+      const parts = user.employee_name.split(' ');
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+    if (!firstName && !lastName) {
+      firstName = user.username;
+      lastName = '';
+    }
+
     res.json({
       id: user.id,
       username: user.username,
-      firstName: user.first_name,
-      lastName: user.last_name,
+      firstName,
+      lastName,
       role: user.role,
       employeeId: user.employee_id,
     });

@@ -12,6 +12,21 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Scan,
   User,
   Package,
@@ -22,14 +37,22 @@ import {
   ArrowRight,
   AlertCircle,
   Clipboard,
+  ClipboardCheck,
   QrCode,
   FileText,
   Loader2,
   Camera,
+  BookOpen,
+  Lightbulb,
+  ExternalLink,
+  Flame,
+  Loader2,
+  Thermometer,
+  Timer,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
-import { useLocation } from 'wouter';
+import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'GENERATING_TRAVELER' | 'TASK_ACTIVE';
 
@@ -69,6 +92,18 @@ interface QCStandard {
   requirement: string;
 }
 
+interface OvenCuringStep {
+  temperature: string;
+  time: string;
+}
+
+interface InstructionPack {
+  workInstructionRefs?: Array<{ documentId: string; title?: string; pageRange?: string; anchor?: string }>;
+  aiSnippets?: Array<{ title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }>;
+  specialNotes?: string;
+  media?: Array<{ type: 'image' | 'pdf'; documentId: string; caption?: string }>;
+}
+
 interface DepartmentConfig {
   materials?: MaterialRequirement[];
   customDataFields?: Array<{
@@ -78,6 +113,8 @@ interface DepartmentConfig {
   }>;
   qcStandards?: QCStandard[];
   allowMultipleTasks?: boolean;
+  instructionPack?: InstructionPack;
+  ovenCuringSteps?: OvenCuringStep[];
 }
 
 interface VerificationData {
@@ -123,9 +160,29 @@ export default function P2TravelerPage() {
     value: string;
   }>>([]);
   const [customData, setCustomData] = useState<Record<string, string>>({});
+  const [qcResults, setQcResults] = useState<Array<{
+    standard: string;
+    tolerance: string;
+    requirement: string;
+    measuredValue: string;
+    passed: boolean | null;
+  }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
+  const [showTimerModal, setShowTimerModal] = useState(false);
+  const [showOvenModal, setShowOvenModal] = useState(false);
+  const [ovenData, setOvenData] = useState({
+    ovenId: '',
+    cycleNumber: '',
+    targetTemperature: '',
+    actualTemperature: '',
+    targetDuration: '',
+    actualDuration: '',
+    rampUpTime: '',
+    result: 'PENDING' as 'PENDING' | 'PASS' | 'FAIL',
+    notes: '',
+  });
 
   // Get active tasks for current employee
   const { data: activeTasks } = useQuery<ActiveTask[]>({
@@ -143,9 +200,55 @@ export default function P2TravelerPage() {
     setActiveTask(null);
     setTraceabilityData([]);
     setCustomData({});
+    setQcResults([]);
     setNotes('');
     setTraceabilityMode('scan');
+    setShowOvenModal(false);
+    setOvenData({
+      ovenId: '', cycleNumber: '', targetTemperature: '', actualTemperature: '',
+      targetDuration: '', actualDuration: '', rampUpTime: '', result: 'PENDING', notes: '',
+    });
   };
+
+  // Oven cure log mutation
+  const ovenCureMutation = useMutation({
+    mutationFn: async () => {
+      if (!verificationData) throw new Error('No verification data');
+      const item = verificationData.serializedItem;
+      return await apiRequest('/api/p2-traveler-viewer/oven-cure-log', {
+        method: 'POST',
+        body: JSON.stringify({
+          serializedItemId: item.id,
+          barcode: item.barcode,
+          partNumber: item.partNumber,
+          department: verificationData.nextDepartment,
+          ovenId: ovenData.ovenId || null,
+          cycleNumber: ovenData.cycleNumber || null,
+          targetTemperature: ovenData.targetTemperature ? parseFloat(ovenData.targetTemperature) : null,
+          actualTemperature: ovenData.actualTemperature ? parseFloat(ovenData.actualTemperature) : null,
+          targetDuration: ovenData.targetDuration ? parseInt(ovenData.targetDuration) : null,
+          actualDuration: ovenData.actualDuration ? parseInt(ovenData.actualDuration) : null,
+          rampUpTime: ovenData.rampUpTime ? parseInt(ovenData.rampUpTime) : null,
+          startTime: new Date().toISOString(),
+          result: ovenData.result,
+          operatorId: employee?.id || null,
+          operatorName: employee?.name || null,
+          notes: ovenData.notes || null,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Oven Cure Logged', description: 'Oven cure record saved successfully.' });
+      setShowOvenModal(false);
+      setOvenData({
+        ovenId: '', cycleNumber: '', targetTemperature: '', actualTemperature: '',
+        targetDuration: '', actualDuration: '', rampUpTime: '', result: 'PENDING', notes: '',
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Failed to Log Oven Cure', description: error.message, variant: 'destructive' });
+    },
+  });
 
   // Handle badge scan
   const handleBadgeScan = async (e: React.FormEvent) => {
@@ -251,6 +354,16 @@ export default function P2TravelerPage() {
         setCustomData(initialCustomData);
       }
 
+      if (data.departmentConfig.qcStandards && data.departmentConfig.qcStandards.length > 0) {
+        setQcResults(data.departmentConfig.qcStandards.map((qc: QCStandard) => ({
+          standard: qc.standard,
+          tolerance: qc.tolerance,
+          requirement: qc.requirement,
+          measuredValue: '',
+          passed: null,
+        })));
+      }
+
       setScanState('PART_SCANNED');
 
       if (data.isCertified && data.routing?.id) {
@@ -321,6 +434,14 @@ export default function P2TravelerPage() {
         }
       }
 
+      // Validate QC results - all must have a measured value and pass/fail
+      if (qcResults.length > 0) {
+        const incompleteQc = qcResults.filter(r => !r.measuredValue.trim() || r.passed === null);
+        if (incompleteQc.length > 0) {
+          throw new Error(`Please enter measured values and mark pass/fail for all QC standards`);
+        }
+      }
+
       const item = verificationData.serializedItem;
       if (!item) throw new Error('No part data available. Please scan the part again.');
 
@@ -337,6 +458,7 @@ export default function P2TravelerPage() {
           partName: item.partName || item.partNumber || 'Unknown',
           traceabilityData,
           customData: Object.keys(customData).length > 0 ? customData : null,
+          qcResults: qcResults.length > 0 ? qcResults : null,
           notes,
         }),
       }) as any;
@@ -351,6 +473,7 @@ export default function P2TravelerPage() {
         title: 'Task Started',
         description: `Working on ${workTask.partName} in ${workTask.department}`,
       });
+      setShowTimerModal(true);
     },
     onError: (error: any) => {
       toast({
@@ -586,6 +709,114 @@ export default function P2TravelerPage() {
 
               {verificationData.isCertified && (
                 <>
+                  {/* Work Instructions - Prominently displayed */}
+                  {verificationData.departmentConfig.instructionPack && (
+                    (() => {
+                      const pack = verificationData.departmentConfig.instructionPack;
+                      const hasContent = pack.specialNotes || 
+                        (pack.workInstructionRefs && pack.workInstructionRefs.length > 0) || 
+                        (pack.aiSnippets && pack.aiSnippets.length > 0) ||
+                        (pack.media && pack.media.length > 0);
+                      if (!hasContent) return null;
+                      return (
+                        <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4">
+                          <div className="flex items-center gap-2 pb-1 border-b border-blue-200">
+                            <BookOpen className="h-4 w-4 text-blue-600" />
+                            <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Work Instructions</p>
+                          </div>
+
+                          {pack.specialNotes && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-sm text-amber-900 whitespace-pre-wrap">{pack.specialNotes}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {pack.workInstructionRefs && pack.workInstructionRefs.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-blue-700 uppercase">Reference Documents</p>
+                              {pack.workInstructionRefs.map((ref, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-white rounded-md border border-blue-100 p-2">
+                                  <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{ref.title || ref.documentId}</p>
+                                    {ref.pageRange && <p className="text-xs text-muted-foreground">Pages: {ref.pageRange}</p>}
+                                  </div>
+                                  <a 
+                                    href={`/api/routing-documents/${ref.documentId}/file`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {pack.aiSnippets && pack.aiSnippets.length > 0 && (
+                            <div className="space-y-2">
+                              {pack.aiSnippets.map((snippet, idx) => (
+                                <div key={idx} className="bg-white rounded-md border border-blue-100 p-3">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
+                                    <p className="text-xs font-semibold text-blue-700">{snippet.title}</p>
+                                  </div>
+                                  <ul className="space-y-1 ml-5">
+                                    {snippet.bullets.map((bullet, bIdx) => (
+                                      <li key={bIdx} className="text-sm list-disc text-gray-700">{bullet}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()
+                  )}
+
+                  {/* Oven Curing Steps */}
+                  {verificationData.departmentConfig.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold flex items-center gap-2">
+                        <Flame className="h-4 w-4 text-orange-500" />
+                        Oven Curing Requirements
+                      </Label>
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-orange-50">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium">Step</th>
+                              <th className="text-left px-3 py-2 font-medium">Temperature</th>
+                              <th className="text-left px-3 py-2 font-medium">Duration</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {verificationData.departmentConfig.ovenCuringSteps.map((step, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
+                                <td className="px-3 py-2 font-medium">{index + 1}</td>
+                                <td className="px-3 py-2 font-mono">{step.temperature}</td>
+                                <td className="px-3 py-2 font-mono">{step.time}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full border-orange-300 text-orange-700 hover:bg-orange-100"
+                        onClick={() => setShowOvenModal(true)}
+                      >
+                        <Thermometer className="h-4 w-4 mr-2" />
+                        Log Oven Cure
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Material Traceability Section */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -686,29 +917,68 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* QC Standards / Tolerance Requirements */}
-                  {verificationData.departmentConfig.qcStandards && verificationData.departmentConfig.qcStandards.length > 0 && (
+                  {/* QC Standards / Tolerance Requirements - with result entry */}
+                  {qcResults.length > 0 && (
                     <div className="space-y-3">
-                      <Label className="text-base font-semibold">QC Standards & Tolerances</Label>
-                      <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium">Standard</th>
-                              <th className="text-left px-3 py-2 font-medium">Tolerance</th>
-                              <th className="text-left px-3 py-2 font-medium">Requirement</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {verificationData.departmentConfig.qcStandards.map((qc, index) => (
-                              <tr key={index} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                                <td className="px-3 py-2 font-mono font-medium">{qc.standard}</td>
-                                <td className="px-3 py-2 font-mono">{qc.tolerance}</td>
-                                <td className="px-3 py-2">{qc.requirement}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <Label className="text-base font-semibold flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        QC Standards & Tolerances — Enter Results
+                      </Label>
+                      <div className="space-y-3">
+                        {qcResults.map((qc, index) => (
+                          <div key={index} className={`border rounded-lg p-3 space-y-2 ${qc.passed === true ? 'border-green-300 bg-green-50' : qc.passed === false ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{qc.standard}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Tolerance: <span className="font-mono">{qc.tolerance}</span> · {qc.requirement}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={qc.passed === true ? 'default' : 'outline'}
+                                  className={`h-8 px-3 ${qc.passed === true ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                  onClick={() => {
+                                    const updated = [...qcResults];
+                                    updated[index].passed = true;
+                                    setQcResults(updated);
+                                  }}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  Pass
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={qc.passed === false ? 'default' : 'outline'}
+                                  className={`h-8 px-3 ${qc.passed === false ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                                  onClick={() => {
+                                    const updated = [...qcResults];
+                                    updated[index].passed = false;
+                                    setQcResults(updated);
+                                  }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                                  Fail
+                                </Button>
+                              </div>
+                            </div>
+                            <Input
+                              type="text"
+                              value={qc.measuredValue}
+                              onChange={(e) => {
+                                const updated = [...qcResults];
+                                updated[index].measuredValue = e.target.value;
+                                setQcResults(updated);
+                              }}
+                              placeholder="Enter measured value..."
+                              className="h-9"
+                              data-testid={`input-qc-result-${index}`}
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -764,6 +1034,27 @@ export default function P2TravelerPage() {
                   </div>
                 </AlertDescription>
               </Alert>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-100"
+                  onClick={() => setShowTimerModal(true)}
+                >
+                  <Timer className="h-4 w-4 mr-2" />
+                  Production Timer
+                </Button>
+                {verificationData?.departmentConfig.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-100"
+                    onClick={() => setShowOvenModal(true)}
+                  >
+                    <Thermometer className="h-4 w-4 mr-2" />
+                    Log Oven Cure
+                  </Button>
+                )}
+              </div>
 
               <Alert variant="default">
                 <AlertCircle className="h-4 w-4" />
@@ -858,6 +1149,175 @@ export default function P2TravelerPage() {
           setCameraTarget(null);
         }}
       />
+
+      <StartProductionTimerModal
+        open={showTimerModal}
+        onOpenChange={setShowTimerModal}
+        defaultSerialNumber={verificationData?.serializedItem?.serialNumber || activeTask?.barcode || ''}
+        navigateToStation={false}
+        badgeId={badgeInput || undefined}
+        onTimerStarted={() => {
+          toast({
+            title: 'Timer Started',
+            description: 'Production timer is now running.',
+          });
+        }}
+      />
+
+      {/* Oven Cure Log Modal */}
+      <Dialog open={showOvenModal} onOpenChange={setShowOvenModal}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-500" />
+              Log Oven Cure
+            </DialogTitle>
+            <DialogDescription>
+              Record oven cure parameters for {verificationData?.serializedItem?.partName || 'this part'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {verificationData?.departmentConfig.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-md p-3 space-y-1">
+              <p className="text-xs font-semibold text-orange-700 uppercase">Required Cure Parameters</p>
+              {verificationData.departmentConfig.ovenCuringSteps.map((step, idx) => (
+                <div key={idx} className="text-sm flex gap-4">
+                  <span className="font-medium">Step {idx + 1}:</span>
+                  <span>{step.temperature}</span>
+                  <span>{step.time}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="oven-id" className="text-sm">Oven ID</Label>
+                <Input
+                  id="oven-id"
+                  value={ovenData.ovenId}
+                  onChange={(e) => setOvenData(d => ({ ...d, ovenId: e.target.value }))}
+                  placeholder="e.g. Oven 1"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cycle-number" className="text-sm">Cycle Number</Label>
+                <Input
+                  id="cycle-number"
+                  value={ovenData.cycleNumber}
+                  onChange={(e) => setOvenData(d => ({ ...d, cycleNumber: e.target.value }))}
+                  placeholder="e.g. 001"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="target-temp" className="text-sm">Target Temp (°F)</Label>
+                <Input
+                  id="target-temp"
+                  type="number"
+                  value={ovenData.targetTemperature}
+                  onChange={(e) => setOvenData(d => ({ ...d, targetTemperature: e.target.value }))}
+                  placeholder="e.g. 350"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="actual-temp" className="text-sm">Actual Temp (°F)</Label>
+                <Input
+                  id="actual-temp"
+                  type="number"
+                  value={ovenData.actualTemperature}
+                  onChange={(e) => setOvenData(d => ({ ...d, actualTemperature: e.target.value }))}
+                  placeholder="e.g. 348"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="target-dur" className="text-sm">Target (min)</Label>
+                <Input
+                  id="target-dur"
+                  type="number"
+                  value={ovenData.targetDuration}
+                  onChange={(e) => setOvenData(d => ({ ...d, targetDuration: e.target.value }))}
+                  placeholder="120"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="actual-dur" className="text-sm">Actual (min)</Label>
+                <Input
+                  id="actual-dur"
+                  type="number"
+                  value={ovenData.actualDuration}
+                  onChange={(e) => setOvenData(d => ({ ...d, actualDuration: e.target.value }))}
+                  placeholder="122"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ramp-up" className="text-sm">Ramp Up (min)</Label>
+                <Input
+                  id="ramp-up"
+                  type="number"
+                  value={ovenData.rampUpTime}
+                  onChange={(e) => setOvenData(d => ({ ...d, rampUpTime: e.target.value }))}
+                  placeholder="15"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm">Result</Label>
+              <Select value={ovenData.result} onValueChange={(v) => setOvenData(d => ({ ...d, result: v as any }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="PASS">Pass</SelectItem>
+                  <SelectItem value="FAIL">Fail</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="oven-notes" className="text-sm">Notes</Label>
+              <Textarea
+                id="oven-notes"
+                value={ovenData.notes}
+                onChange={(e) => setOvenData(d => ({ ...d, notes: e.target.value }))}
+                placeholder="Any observations or notes..."
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOvenModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => ovenCureMutation.mutate()}
+              disabled={ovenCureMutation.isPending}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {ovenCureMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Flame className="h-4 w-4 mr-2" />
+                  Save Oven Cure Log
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

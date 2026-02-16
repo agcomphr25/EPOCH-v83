@@ -366,6 +366,20 @@ async function initializeBackgroundServices() {
         // Column may already exist
       }
 
+      // Ensure p2_final_inspection_results has tolerance deviation columns
+      try {
+        const { sql: sqlTol } = await import('drizzle-orm');
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_deviation_required BOOLEAN DEFAULT false`);
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_authorizer_id INTEGER`);
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_authorizer_name TEXT`);
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_authorizer_signature TEXT`);
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_authorization_date TIMESTAMP`);
+        await db.execute(sqlTol`ALTER TABLE p2_final_inspection_results ADD COLUMN IF NOT EXISTS tolerance_deviation_reason TEXT`);
+        console.log('✅ Ensured p2_final_inspection_results has tolerance deviation columns');
+      } catch (colError: any) {
+        // Columns may already exist
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

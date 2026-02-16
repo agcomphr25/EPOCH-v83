@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
@@ -1040,16 +1041,35 @@ router.post('/finalized', async (req: Request, res: Response) => {
 
 // Create PENDING_PAYMENT order for card-before-save flow
 // This creates a minimal order record that can receive payment before full finalization
+// Uses lenient validation — only orderId and customerId are required
 router.post('/pending-payment', async (req: Request, res: Response) => {
   try {
-    const orderData = insertAllOrderSchema.parse(req.body);
+    const pendingOrderSchema = z.object({
+      orderId: z.string().min(1, 'Order ID is required'),
+      customerId: z.string().min(1, 'Customer must be selected'),
+    }).passthrough();
 
-    console.log(`💳 Creating PENDING_PAYMENT order ${orderData.orderId} for card-before-save flow`);
-    
-    const order = await storage.createFinalizedOrder({
-      ...orderData,
-      status: 'PENDING_PAYMENT'
-    }, req.body.createdBy);
+    const parsed = pendingOrderSchema.parse(req.body);
+
+    console.log(`💳 Creating PENDING_PAYMENT order ${parsed.orderId} for card-before-save flow`);
+
+    const orderData = {
+      ...parsed,
+      status: 'PENDING_PAYMENT',
+      isPaid: false,
+      orderDate: parsed.orderDate || new Date().toISOString(),
+      dueDate: parsed.dueDate || new Date().toISOString(),
+      isCustomOrder: parsed.isCustomOrder || 'no',
+      modelId: parsed.modelId || '',
+      features: parsed.features || {},
+      notes: parsed.notes || '',
+      shipping: parsed.shipping ?? 0,
+    };
+
+    const order = await storage.createFinalizedOrder(
+      orderData as any,
+      req.body.createdBy
+    );
     
     res.status(201).json({
       ...order,
@@ -1057,6 +1077,13 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Create PENDING_PAYMENT order error:', error);
+    if (error instanceof z.ZodError) {
+      const missingCustomer = error.errors.some(e => e.path.includes('customerId'));
+      if (missingCustomer) {
+        return res.status(400).json({ error: 'Customer must be selected before processing credit card.', code: 'MISSING_CUSTOMER' });
+      }
+      return res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }

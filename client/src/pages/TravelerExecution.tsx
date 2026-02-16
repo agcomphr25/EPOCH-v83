@@ -1571,7 +1571,6 @@ export default function TravelerExecution() {
                 placeholder="Any additional notes..."
                 rows={2}
                 data-testid="input-sign-notes"
-                rows={2}
               />
             </div>
           </div>

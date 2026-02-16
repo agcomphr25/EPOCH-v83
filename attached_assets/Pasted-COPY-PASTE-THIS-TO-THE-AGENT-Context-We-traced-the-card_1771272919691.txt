@@ -1,0 +1,150 @@
+COPY-PASTE THIS TO THE AGENT
+
+Context
+
+We traced the card-before-save flow.
+
+The plumbing already exists:
+
+PaymentManager calls onSaveForPayment() when !isOrderSaved
+
+That hits POST /api/orders/pending-payment
+
+That endpoint creates a PENDING_PAYMENT order
+
+Then the live payment modal opens
+
+The failure occurs because:
+
+insertAllOrderSchema.parse(req.body) is too strict
+
+Missing non-essential fields cause validation failure
+
+This triggers “Order must be saved before processing credit card”
+
+We are NOT redesigning the payment system.
+We are making PENDING_PAYMENT creation intentionally minimal and non-fragile.
+
+🎯 GOAL
+
+Ensure POST /api/orders/pending-payment:
+
+Only requires:
+
+orderId
+
+customerId
+
+Accepts partial / incomplete order data
+
+Does NOT enforce full insertAllOrderSchema validation
+
+Never fails due to optional fields missing
+
+🔧 IMPLEMENTATION TASKS
+1️⃣ Modify Pending Payment Route Validation
+
+File:
+server/src/routes/orders.ts
+
+Locate:
+POST /api/orders/pending-payment
+
+Replace:
+
+insertAllOrderSchema.parse(req.body)
+
+
+With:
+
+const pendingOrderSchema = z.object({
+  orderId: z.string().min(1),
+  customerId: z.string().min(1)
+}).passthrough();
+
+const parsed = pendingOrderSchema.parse(req.body);
+
+
+Use .passthrough() so extra fields do not cause rejection.
+
+2️⃣ Ensure Required Defaults Are Set
+
+When inserting into allOrders, explicitly set:
+
+status: 'PENDING_PAYMENT',
+isPaid: false,
+
+
+Any other required DB columns should use safe defaults.
+
+Do NOT rely on full order schema.
+
+3️⃣ Fix Double Serialization
+
+File:
+client/src/components/OrderEntry.tsx
+
+Locate:
+handleSaveForPayment()
+
+If request is:
+
+body: JSON.stringify(orderData)
+
+
+and apiRequest() already stringifies,
+
+change to:
+
+body: orderData
+
+
+Ensure Content-Type header remains correct.
+
+4️⃣ Improve Failure Messaging
+
+In PaymentManager.tsx:
+
+Replace generic:
+
+"Order must be saved before processing credit card"
+
+With:
+
+"Customer must be selected before processing credit card"
+
+Only show this error if customerId is missing.
+
+🚫 DO NOT
+
+Do NOT modify Accept.Blue integration
+
+Do NOT remove order existence checks in /api/payments/credit-card
+
+Do NOT alter other payment types
+
+Do NOT refactor order finalization logic
+
+✅ SUCCESS CRITERIA
+
+On a brand-new unsaved order:
+
+User selects Live payment
+
+Draft order is silently created
+
+Live payment modal opens
+
+Credit card processes successfully
+
+Order finalizes normally
+
+No requirement to click “Create Order” manually.
+
+Output:
+
+Exact files modified
+
+Line numbers changed
+
+Confirmation that pending route no longer rejects partial data

@@ -432,6 +432,40 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ employment_periods migration:', empPeriodError.message);
       }
 
+      // Fix: Remove "table temp" field from Mold Prep department config (belongs on Layup only)
+      try {
+        const { sql: sqlRoutingFix } = await import('drizzle-orm');
+        const routingResult = await db.execute(sqlRoutingFix`
+          SELECT id, department_config FROM part_routings 
+          WHERE id = '1673c623-60bd-4787-b2b9-aa4bfe327d06'
+        `);
+        if (routingResult.rows.length > 0) {
+          const row = routingResult.rows[0] as any;
+          let deptConfig = typeof row.department_config === 'string' 
+            ? JSON.parse(row.department_config) 
+            : row.department_config;
+          if (deptConfig?.['Mold Prep']?.customDataFields) {
+            const originalLen = deptConfig['Mold Prep'].customDataFields.length;
+            deptConfig['Mold Prep'].customDataFields = deptConfig['Mold Prep'].customDataFields.filter(
+              (f: any) => !f.fieldName?.toLowerCase().includes('temp of the table')
+            );
+            if (deptConfig['Mold Prep'].customDataFields.length < originalLen) {
+              await db.execute(sqlRoutingFix`
+                UPDATE part_routings 
+                SET department_config = ${JSON.stringify(deptConfig)}::jsonb,
+                    updated_at = NOW()
+                WHERE id = '1673c623-60bd-4787-b2b9-aa4bfe327d06'
+              `);
+              console.log('✅ Fixed: Removed table temp field from Mold Prep department config (belongs on Layup only)');
+            } else {
+              console.log('✅ Mold Prep department config already correct (no table temp field)');
+            }
+          }
+        }
+      } catch (routingFixErr: any) {
+        console.warn('⚠️ Routing config fix skipped:', routingFixErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

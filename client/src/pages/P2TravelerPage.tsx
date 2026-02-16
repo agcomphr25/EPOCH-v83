@@ -267,24 +267,27 @@ export default function P2TravelerPage() {
         }
       }
 
+      const item = verificationData.serializedItem;
+      if (!item) throw new Error('No part data available. Please scan the part again.');
+
       const response = await apiRequest('/api/p2-traveler/start-task', {
         method: 'POST',
         body: JSON.stringify({
           employeeId: verificationData.employee.id,
           employeeCode: verificationData.employee.employeeCode,
           employeeName: verificationData.employee.name,
-          barcode: verificationData.serializedItem.barcode,
-          serializedItemId: verificationData.serializedItem.id,
+          barcode: item.barcode,
+          serializedItemId: item.id,
           department: verificationData.nextDepartment,
-          partNumber: verificationData.serializedItem.partNumber,
-          partName: verificationData.serializedItem.partName,
+          partNumber: item.partNumber,
+          partName: item.partName || item.partNumber || 'Unknown',
           traceabilityData,
           customData: Object.keys(customData).length > 0 ? customData : null,
           notes,
         }),
-      }) as { workTask: ActiveTask };
+      }) as any;
 
-      return response.workTask;
+      return response.workTask || response;
     },
     onSuccess: (workTask) => {
       setActiveTask(workTask);

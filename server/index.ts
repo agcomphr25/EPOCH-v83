@@ -286,10 +286,80 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ RMA cleanup skipped:', cleanupErr.message);
       }
 
+      // Ensure traveler_signatures has task-specific columns for role-based signing
+      try {
+        const { sql: sqlSig } = await import('drizzle-orm');
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS traveler_task_id VARCHAR(255)`);
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS signature_role VARCHAR(50)`);
+        console.log('✅ Ensured traveler_signatures has task_id and signature_role columns');
+      } catch (sigErr: any) {
+        console.warn('⚠️ Traveler signatures migration skipped:', sigErr.message);
+      }
+
+      // Ensure instruction_pack column exists on traveler_tasks
+      try {
+        const { sql: sqlInst } = await import('drizzle-orm');
+        await db.execute(sqlInst`ALTER TABLE traveler_tasks ADD COLUMN IF NOT EXISTS instruction_pack JSONB`);
+        console.log('✅ Ensured traveler_tasks has instruction_pack column');
+      } catch (instErr: any) {
+        console.warn('⚠️ Traveler tasks instruction_pack migration skipped:', instErr.message);
+      }
+
+      // Ensure p2_customers has serial_sequences column and update old-format serial numbers
+      try {
+        const { sql: sqlSerial } = await import('drizzle-orm');
+        await db.execute(sqlSerial`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS serial_sequences JSONB DEFAULT '{}'::jsonb`);
+        
+        const oldFormatItems = await db.execute(sqlSerial`
+          SELECT COUNT(*) as cnt FROM p2_serialized_items 
+          WHERE serial_number LIKE '% %'
+        `);
+        const oldCount = (oldFormatItems.rows[0] as any)?.cnt;
+        if (oldCount && parseInt(oldCount) > 0) {
+          const customers = await db.execute(sqlSerial`
+            SELECT DISTINCT si.customer_id, c.rfq_prefix, c.customer_name
+            FROM p2_serialized_items si
+            LEFT JOIN p2_customers c ON c.customer_id = si.customer_id
+            WHERE si.serial_number LIKE '% %'
+          `);
+          for (const cust of (customers.rows || []) as any[]) {
+            const prefix = cust.rfq_prefix || (cust.customer_name || 'UNK').substring(0, 3).toUpperCase();
+            const yearSuffix = new Date().getFullYear().toString().slice(-2);
+            await db.execute(sqlSerial`
+              UPDATE p2_serialized_items
+              SET serial_number = ${prefix + yearSuffix} || LPAD(sequence_number::text, 5, '0'),
+                  barcode = ${prefix + yearSuffix} || LPAD(sequence_number::text, 5, '0')
+              WHERE customer_id = ${cust.customer_id}
+                AND serial_number LIKE '% %'
+            `);
+            const maxSeq = await db.execute(sqlSerial`
+              SELECT MAX(sequence_number) as max_seq FROM p2_serialized_items WHERE customer_id = ${cust.customer_id}
+            `);
+            const maxSeqNum = (maxSeq.rows[0] as any)?.max_seq || 0;
+            await db.execute(sqlSerial`
+              UPDATE p2_customers
+              SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) || jsonb_build_object(${new Date().getFullYear().toString()}::text, ${maxSeqNum}::int)
+              WHERE customer_id = ${cust.customer_id}
+            `);
+          }
+          console.log(`✅ Updated ${oldCount} serialized items to new serial number format (PREFIX+YY+NNNNN)`);
+        }
+      } catch (serialErr: any) {
+        console.warn('⚠️ Serial number migration skipped:', serialErr.message);
+      }
+
       // Ensure routing_documents has extracted_text column
       try {
         const { sql: sqlTag } = await import('drizzle-orm');
         await db.execute(sqlTag`ALTER TABLE routing_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT`);
+      } catch (colError: any) {
+        // Column may already exist
+      }
+
+      // Ensure customer_satisfaction_responses has scanned_pdf_path column
+      try {
+        const { sql: sqlPdf } = await import('drizzle-orm');
+        await db.execute(sqlPdf`ALTER TABLE customer_satisfaction_responses ADD COLUMN IF NOT EXISTS scanned_pdf_path TEXT`);
       } catch (colError: any) {
         // Column may already exist
       }

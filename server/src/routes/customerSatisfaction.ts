@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, desc, and, gte, lte } from 'drizzle-orm';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 import { db } from '../../db';
 import {
@@ -12,6 +15,29 @@ import {
 } from '../../schema';
 
 const router = Router();
+
+const surveyUploadDir = 'uploads/customer-satisfaction';
+if (!fs.existsSync(surveyUploadDir)) {
+  fs.mkdirSync(surveyUploadDir, { recursive: true });
+}
+
+const pdfUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, surveyUploadDir),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, `survey-${uniqueSuffix}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+});
 
 // Get all customer satisfaction surveys
 router.get('/surveys', async (req, res) => {
@@ -173,6 +199,7 @@ router.get('/surveys/:id/responses', async (req, res) => {
         csrName: customerSatisfactionResponses.csrName,
         surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
+        scannedPdfPath: customerSatisfactionResponses.scannedPdfPath,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
         updatedAt: customerSatisfactionResponses.updatedAt,
@@ -212,6 +239,7 @@ router.get('/responses', async (req, res) => {
         csrName: customerSatisfactionResponses.csrName,
         surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
+        scannedPdfPath: customerSatisfactionResponses.scannedPdfPath,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
         updatedAt: customerSatisfactionResponses.updatedAt,
@@ -720,6 +748,75 @@ router.post('/surveys/create-default', async (req, res) => {
   } catch (error) {
     console.error('Error creating default survey:', error);
     res.status(500).json({ error: 'Failed to create default survey' });
+  }
+});
+
+router.post('/responses/:id/upload-pdf', pdfUpload.single('pdf'), async (req, res) => {
+  try {
+    const responseId = parseInt(req.params.id);
+    if (isNaN(responseId)) {
+      return res.status(400).json({ error: 'Invalid response ID' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PDF file provided' });
+    }
+
+    const pdfPath = `/${req.file.path.replace(/\\/g, '/')}`;
+
+    const updated = await db
+      .update(customerSatisfactionResponses)
+      .set({ scannedPdfPath: pdfPath, updatedAt: new Date() })
+      .where(eq(customerSatisfactionResponses.id, responseId))
+      .returning();
+
+    if (updated.length === 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Response not found' });
+    }
+
+    res.json({ success: true, scannedPdfPath: pdfPath });
+  } catch (error) {
+    console.error('Error uploading PDF:', error);
+    res.status(500).json({ error: 'Failed to upload PDF' });
+  }
+});
+
+router.delete('/responses/:id/remove-pdf', async (req, res) => {
+  try {
+    const responseId = parseInt(req.params.id);
+    if (isNaN(responseId)) {
+      return res.status(400).json({ error: 'Invalid response ID' });
+    }
+
+    const existing = await db
+      .select({ scannedPdfPath: customerSatisfactionResponses.scannedPdfPath })
+      .from(customerSatisfactionResponses)
+      .where(eq(customerSatisfactionResponses.id, responseId))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Response not found' });
+    }
+
+    if (existing[0].scannedPdfPath) {
+      const filePath = existing[0].scannedPdfPath.startsWith('/')
+        ? existing[0].scannedPdfPath.slice(1)
+        : existing[0].scannedPdfPath;
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    await db
+      .update(customerSatisfactionResponses)
+      .set({ scannedPdfPath: null, updatedAt: new Date() })
+      .where(eq(customerSatisfactionResponses.id, responseId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing PDF:', error);
+    res.status(500).json({ error: 'Failed to remove PDF' });
   }
 });
 

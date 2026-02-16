@@ -106,6 +106,7 @@ interface MaterialRequirement {
   partName: string;
   requiredFields: string[]; // Which traceability fields are required for this material
   entryMethod: 'manual' | 'barcode'; // How the material will be entered/tracked
+  traceabilityPhase?: 'START' | 'WORK' | 'FINISH'; // Which phase to capture traceability (default: START)
 }
 
 interface QCStandard {
@@ -206,6 +207,7 @@ interface DepartmentConfiguration {
   startCustomDataFields?: CustomDataField[];
   finishCustomDataFields?: CustomDataField[];
   startQcStandards?: QCStandard[];
+  finishQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
@@ -310,10 +312,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [materialSearchTerm, setMaterialSearchTerm] = useState('');
   const [selectedDeptForConfig, setSelectedDeptForConfig] = useState<string>('');
   
-  // UI state for QC standards input
+  // UI state for QC standards input (per-department to prevent cross-department clearing)
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
+  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string }>>({});
   
   const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
   const [showDocPicker, setShowDocPicker] = useState(false);
@@ -1340,17 +1343,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addStartQcStandard = (dept: string) => {
-    if (!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim()) return;
+  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+    const s = standard || qcStandardInput;
+    const t = tolerance || qcToleranceInput;
+    const r = requirement || qcRequirementInput;
+    if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: qcStandardInput.trim(), tolerance: qcToleranceInput.trim(), requirement: qcRequirementInput.trim() };
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, startQcStandards: [...(config.startQcStandards || []), newStandard] },
     });
-    setQcStandardInput('');
-    setQcToleranceInput('');
-    setQcRequirementInput('');
     toast({ title: 'QC Standard Added', description: `Added to START phase of ${dept}` });
   };
 
@@ -1359,6 +1362,28 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, startQcStandards: (config.startQcStandards || []).filter((_, i) => i !== index) },
+    });
+  };
+
+  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+    const s = standard || qcStandardInput;
+    const t = tolerance || qcToleranceInput;
+    const r = requirement || qcRequirementInput;
+    if (!s.trim() || !t.trim() || !r.trim()) return;
+    const config = getOrCreateDeptConfig(dept);
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, finishQcStandards: [...(config.finishQcStandards || []), newStandard] },
+    });
+    toast({ title: 'QC Standard Added', description: `Added to FINISH phase of ${dept}` });
+  };
+
+  const removeFinishQcStandard = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, finishQcStandards: (config.finishQcStandards || []).filter((_, i) => i !== index) },
     });
   };
 
@@ -1817,7 +1842,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {selectedDepartments.map((dept) => {
+                  {selectedDepartments.map((dept, deptIdx) => {
                     const config = getOrCreateDeptConfig(dept);
                     const sigConfig = config.signatureConfig || { startRequiresSignature: false, finishRequiresSignature: true, requiredSignatures: ['operator'] };
                     const currentPhase = activePhaseTab[dept] || 'START';
@@ -1826,11 +1851,29 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                       (item.name?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase())
                     );
 
+                    const deptColors = [
+                      { border: 'border-l-blue-500', bg: 'bg-blue-50/30 dark:bg-blue-950/20', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', dot: 'bg-blue-500' },
+                      { border: 'border-l-emerald-500', bg: 'bg-emerald-50/30 dark:bg-emerald-950/20', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', dot: 'bg-emerald-500' },
+                      { border: 'border-l-violet-500', bg: 'bg-violet-50/30 dark:bg-violet-950/20', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200', dot: 'bg-violet-500' },
+                      { border: 'border-l-orange-500', bg: 'bg-orange-50/30 dark:bg-orange-950/20', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200', dot: 'bg-orange-500' },
+                      { border: 'border-l-rose-500', bg: 'bg-rose-50/30 dark:bg-rose-950/20', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200', dot: 'bg-rose-500' },
+                      { border: 'border-l-cyan-500', bg: 'bg-cyan-50/30 dark:bg-cyan-950/20', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200', dot: 'bg-cyan-500' },
+                      { border: 'border-l-amber-500', bg: 'bg-amber-50/30 dark:bg-amber-950/20', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', dot: 'bg-amber-500' },
+                      { border: 'border-l-indigo-500', bg: 'bg-indigo-50/30 dark:bg-indigo-950/20', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200', dot: 'bg-indigo-500' },
+                      { border: 'border-l-teal-500', bg: 'bg-teal-50/30 dark:bg-teal-950/20', badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200', dot: 'bg-teal-500' },
+                      { border: 'border-l-pink-500', bg: 'bg-pink-50/30 dark:bg-pink-950/20', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200', dot: 'bg-pink-500' },
+                    ];
+                    const dc = deptColors[deptIdx % deptColors.length];
+
                     return (
-                      <Card key={dept}>
+                      <Card key={dept} className={`border-l-4 ${dc.border} ${dc.bg}`}>
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">{dept}</CardTitle>
+                            <div className="flex items-center gap-2">
+                              <div className={`h-3 w-3 rounded-full ${dc.dot}`} />
+                              <CardTitle className="text-base">{dept}</CardTitle>
+                              <Badge className={`text-[10px] px-1.5 py-0 ${dc.badge}`}>Step {deptIdx + 1}</Badge>
+                            </div>
                             <div className="flex items-center gap-2">
                               <UserCheck className="h-4 w-4 text-muted-foreground" />
                               {(() => {
@@ -1863,7 +1906,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.startCustomDataFields?.length || 0) + (config.startQcStandards?.length || 0) },
                               { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
-                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (config.finishCustomDataFields?.length || 0) + (sigConfig.requiredSignatures.length) },
+                              { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (config.finishCustomDataFields?.length || 0) + (config.finishQcStandards?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
                                 key={phase.key}
@@ -2069,12 +2112,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   </div>
                                 )}
                                 <div className="space-y-1">
-                                  <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                  <Input placeholder="QC Standard" value={qcInputDept[`start_${dept}`]?.standard || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), standard: e.target.value } }))} className="text-sm" />
                                   <div className="flex gap-2">
-                                    <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                    <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Input placeholder="Tolerance" value={qcInputDept[`start_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
+                                    <Input placeholder="Requirement" value={qcInputDept[`start_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
-                                  <Button size="sm" onClick={() => addStartQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
+                                  <Button size="sm" onClick={() => {
+                                    const vals = qcInputDept[`start_${dept}`];
+                                    if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
+                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
+                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                  }} disabled={!qcInputDept[`start_${dept}`]?.standard?.trim() || !qcInputDept[`start_${dept}`]?.tolerance?.trim() || !qcInputDept[`start_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
                                 </div>
@@ -2747,6 +2795,47 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
                               <Separator />
 
+                              {/* FINISH Phase QC Standards */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <CheckSquare className="h-4 w-4 text-green-600" />
+                                  Finish Phase QC ({config.finishQcStandards?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Final quality checks and ratings completed after work is done (e.g., layup rating, surface finish).</p>
+                                {config.finishQcStandards && config.finishQcStandards.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.finishQcStandards.map((qc, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{qc.standard}</p>
+                                          <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFinishQcStandard(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-1">
+                                  <Input placeholder="QC Standard (e.g., Layup Rating)" value={qcInputDept[`finish_${dept}`]?.standard || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), standard: e.target.value } }))} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Tolerance" value={qcInputDept[`finish_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
+                                    <Input placeholder="Requirement" value={qcInputDept[`finish_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
+                                  </div>
+                                  <Button size="sm" onClick={() => {
+                                    const vals = qcInputDept[`finish_${dept}`];
+                                    if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
+                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
+                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                  }} disabled={!qcInputDept[`finish_${dept}`]?.standard?.trim() || !qcInputDept[`finish_${dept}`]?.tolerance?.trim() || !qcInputDept[`finish_${dept}`]?.requirement?.trim()}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add QC Standard
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <Separator />
+
                               {/* Step-Level (Department) Signature Configuration */}
                               <div>
                                 <h4 className="font-semibold mb-1 text-sm flex items-center gap-2">
@@ -2814,15 +2903,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             </div>
                           )}
 
-                          {/* ==================== ALWAYS-VISIBLE: Material Traceability, Custom Data, QC Standards ==================== */}
+                          {/* ==================== ALWAYS-VISIBLE: Material Traceability ==================== */}
                           <Separator className="my-3" />
                           <div className="space-y-4">
-                            <div className="p-3 bg-slate-50/50 dark:bg-slate-950/30 rounded-lg border border-slate-200 dark:border-slate-800">
-                              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                                Department-level configuration for material tracking, data collection, and quality standards.
-                              </p>
-                            </div>
-
                             {/* Material Traceability */}
                             <div>
                               <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
@@ -2839,6 +2922,27 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <p className="text-xs text-muted-foreground">{material.partName}</p>
                                         </div>
                                         <div className="flex items-center gap-1">
+                                          <Select
+                                            value={material.traceabilityPhase || 'START'}
+                                            onValueChange={(val: string) => {
+                                              const updatedMaterials = config.materials.map(m =>
+                                                m.partId === material.partId ? { ...m, traceabilityPhase: val as 'START' | 'WORK' | 'FINISH' } : m
+                                              );
+                                              setDepartmentConfig(prev => ({
+                                                ...prev,
+                                                [dept]: { ...config, materials: updatedMaterials },
+                                              }));
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-6 w-[80px] text-[10px]">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="START">Start</SelectItem>
+                                              <SelectItem value="WORK">Work</SelectItem>
+                                              <SelectItem value="FINISH">Finish</SelectItem>
+                                            </SelectContent>
+                                          </Select>
                                           <Button size="sm" variant={material.entryMethod === 'manual' ? 'default' : 'outline'} className="h-6 text-[10px]" onClick={() => toggleMaterialEntryMethod(dept, material.partId)}>
                                             {material.entryMethod === 'manual' ? 'Manual' : 'Barcode'}
                                           </Button>
@@ -2892,91 +2996,6 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                               </div>
                             </div>
 
-                            <Separator />
-
-                            {/* Custom Data Entry */}
-                            <div>
-                              <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
-                                <PenLine className="h-4 w-4 text-amber-600" />
-                                Custom Data Entry ({config.customDataFields?.length || 0})
-                              </h4>
-                              {config.customDataFields && config.customDataFields.length > 0 && (
-                                <div className="space-y-2 mb-3">
-                                  {config.customDataFields.map((field, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium">{field.fieldName}</p>
-                                        <div className="flex gap-1 mt-0.5">
-                                          <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
-                                          {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
-                                        </div>
-                                      </div>
-                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeCustomDataField(dept, idx)}>
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="space-y-2">
-                                <div className="flex gap-2">
-                                  <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                  <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
-                                    <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="text">Text</SelectItem>
-                                      <SelectItem value="number">Number</SelectItem>
-                                      <SelectItem value="date">Date</SelectItem>
-                                      <SelectItem value="textarea">Text Area</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox id={`custom-field-required-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
-                                    <Label htmlFor={`custom-field-required-${dept}`} className="text-xs cursor-pointer">Required</Label>
-                                  </div>
-                                  <Button size="sm" onClick={() => addCustomDataField(dept)} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
-                                    <Plus className="h-4 w-4 mr-1" /> Add Field
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-
-                            <Separator />
-
-                            {/* QC Standards */}
-                            <div>
-                              <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
-                                <CheckSquare className="h-4 w-4 text-green-600" />
-                                QC Standards ({config.qcStandards.length})
-                              </h4>
-                              {config.qcStandards.length > 0 && (
-                                <div className="space-y-2 mb-3">
-                                  {config.qcStandards.map((qcStandard, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium">{qcStandard.standard}</p>
-                                        <p className="text-[10px] text-muted-foreground">Tol: {qcStandard.tolerance} | Req: {qcStandard.requirement}</p>
-                                      </div>
-                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeQcStandard(dept, idx)}>
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="space-y-1">
-                                <Input placeholder="QC Standard" value={selectedDeptForConfig === dept ? qcStandardInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcStandardInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                <div className="flex gap-2">
-                                  <Input placeholder="Tolerance" value={selectedDeptForConfig === dept ? qcToleranceInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcToleranceInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                  <Input placeholder="Requirement" value={selectedDeptForConfig === dept ? qcRequirementInput : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setQcRequirementInput(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
-                                </div>
-                                <Button size="sm" onClick={() => addQcStandard(dept)} disabled={!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim() || selectedDeptForConfig !== dept}>
-                                  <Plus className="h-4 w-4 mr-1" /> Add QC Standard
-                                </Button>
-                              </div>
-                            </div>
                           </div>
 
                           {/* Training & Quiz Generation Section */}

@@ -6904,6 +6904,7 @@ export const customerSatisfactionResponses = pgTable(
     surveyDate: timestamp('survey_date'), // Date selected by user in the survey form
     // Status tracking
     isComplete: boolean('is_complete').default(false),
+    scannedPdfPath: text('scanned_pdf_path'),
     submittedAt: timestamp('submitted_at'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),

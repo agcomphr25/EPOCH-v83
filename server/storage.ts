@@ -13577,6 +13577,7 @@ export class DatabaseStorage implements IStorage {
       const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
       const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
       const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
+      const hasFinishQcStandards = (deptConfig.finishQcStandards || []).length > 0;
       const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
       const routingInstPack = deptConfig.instructionPack || null;
       const hasInstructionPackContent = routingInstPack && (
@@ -13591,7 +13592,7 @@ export class DatabaseStorage implements IStorage {
 
       const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
         hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
-        hasQcStandards || hasStartQcStandards || hasOvenCuring || hasInstructionPackContent ||
+        hasQcStandards || hasStartQcStandards || hasFinishQcStandards || hasOvenCuring || hasInstructionPackContent ||
         hasTimerConfig || hasStdProcesses || hasSpecialProcess;
 
       if (!hasAnyContent) {
@@ -13704,9 +13705,15 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Material Lot Entry (TRACEABILITY tasks from materials config)
+      // Group materials by their traceabilityPhase (default START for backward compat)
       const traceFields = traceabilityConfig[deptName] || [];
       const materials = deptConfig.materials || [];
-      if (traceFields.length > 0 || materials.length > 0) {
+      const startMaterials = materials.filter((m: any) => !m.traceabilityPhase || m.traceabilityPhase === 'START');
+      const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
+      const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
+
+      // START phase traceability (default — includes legacy traceFields)
+      if (traceFields.length > 0 || startMaterials.length > 0) {
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
@@ -13721,11 +13728,22 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
+        const traceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
+
         for (const fieldKey of traceFields) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
             fieldKey,
-            fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l) => l.toUpperCase()).trim(),
             fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
             required: true,
           });
@@ -13800,7 +13818,70 @@ export class DatabaseStorage implements IStorage {
         (routingInstructionPack.media?.length > 0)
       );
 
-      // PROCESS tasks from customDataFields
+      // WORK phase material traceability
+      if (workMaterials.length > 0) {
+        const workTraceTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'TRACEABILITY',
+          taskPhase: 'WORK',
+          title: 'In-Process Material Traceability',
+          instructions: `Record traceability for: ${workMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: hasInstructionPack ? routingInstructionPack : null,
+          status: 'NOT_STARTED',
+        });
+
+        const workTraceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
+        const workTraceFieldKeys = new Set<string>();
+        for (const mat of workMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            if (!workTraceFieldKeys.has(fieldKey)) {
+              workTraceFieldKeys.add(fieldKey);
+              await this.createTravelerTaskField({
+                travelerTaskId: workTraceTask.id,
+                fieldKey,
+                fieldLabel: workTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
+            }
+          }
+        }
+      }
+
+      // Work Instructions task — always create when instruction pack has content
+      if (hasInstructionPack) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'WORK',
+          title: 'Work Instructions',
+          instructions: routingInstructionPack?.specialNotes || 'Review instruction pack before proceeding',
+          required: false,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: routingInstructionPack,
+          status: 'NOT_STARTED',
+        });
+      }
+
+      // PROCESS tasks from customDataFields (department-level WORK phase)
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
         const customTask = await this.createTravelerTask({
@@ -13860,25 +13941,262 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // If instruction pack exists but no WORK tasks were created, add a standalone task for it
-      if (hasInstructionPack && customFields.length === 0 && ovenCuringSteps.length === 0) {
-        await this.createTravelerTask({
+      // Standard Processes — extract custom data fields and QC standards from each process config
+      const standardProcesses = deptConfig.standardProcesses || [];
+      for (const proc of standardProcesses) {
+        const procConfig = proc.config;
+        if (!procConfig) continue;
+
+        // Standard process custom data fields → WORK phase
+        if (procConfig.customDataFields && procConfig.customDataFields.length > 0) {
+          const procDataTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'PROCESS',
+            taskPhase: 'WORK',
+            title: `${proc.name || procConfig.processName || 'Standard Process'} — Data Entry`,
+            instructions: procConfig.notes || `Enter data for ${proc.name || procConfig.processName || 'standard process'}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          for (const field of procConfig.customDataFields) {
+            await this.createTravelerTaskField({
+              travelerTaskId: procDataTask.id,
+              fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+              fieldLabel: field.fieldName || 'Custom Field',
+              fieldType: field.fieldType || 'text',
+              required: field.isRequired || false,
+            });
+          }
+        }
+
+        // Standard process QC standards → WORK phase QC task
+        if (procConfig.qcStandards && procConfig.qcStandards.length > 0) {
+          const procQcTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'QC',
+            taskPhase: 'WORK',
+            title: `${proc.name || procConfig.processName || 'Standard Process'} — QC Checks`,
+            instructions: `Complete quality checks for ${proc.name || procConfig.processName || 'standard process'}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: true,
+            signatureRole: 'QC',
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          for (const qc of procConfig.qcStandards) {
+            await this.createTravelerTaskField({
+              travelerTaskId: procQcTask.id,
+              fieldKey: `stdproc_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+              fieldLabel: qc.standard || 'QC Check',
+              fieldType: 'yes_no',
+              required: true,
+              validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+            });
+          }
+        }
+
+        // Standard process materials → WORK phase traceability
+        if (procConfig.materials && procConfig.materials.length > 0) {
+          const procTraceTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'TRACEABILITY',
+            taskPhase: 'WORK',
+            title: `${proc.name || procConfig.processName || 'Standard Process'} — Material Traceability`,
+            instructions: `Record traceability for: ${procConfig.materials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          const procTraceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
+          const procTraceFieldKeys = new Set<string>();
+          for (const mat of procConfig.materials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fieldKey of reqFields) {
+              if (!procTraceFieldKeys.has(fieldKey)) {
+                procTraceFieldKeys.add(fieldKey);
+                await this.createTravelerTaskField({
+                  travelerTaskId: procTraceTask.id,
+                  fieldKey,
+                  fieldLabel: procTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                  fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                  required: true,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Special Process — extract custom data fields and QC standards
+      const specialProcessConfig = deptConfig.specialProcessConfig;
+      if (specialProcessConfig?.processName) {
+        // Special process custom data fields → WORK phase
+        if (specialProcessConfig.customDataFields && specialProcessConfig.customDataFields.length > 0) {
+          const spDataTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'PROCESS',
+            taskPhase: 'WORK',
+            title: `${specialProcessConfig.processName} — Data Entry`,
+            instructions: specialProcessConfig.notes || `Enter data for ${specialProcessConfig.processName}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          for (const field of specialProcessConfig.customDataFields) {
+            await this.createTravelerTaskField({
+              travelerTaskId: spDataTask.id,
+              fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+              fieldLabel: field.fieldName || 'Custom Field',
+              fieldType: field.fieldType || 'text',
+              required: field.isRequired || false,
+            });
+          }
+        }
+
+        // Special process QC standards → WORK phase QC task
+        if (specialProcessConfig.qcStandards && specialProcessConfig.qcStandards.length > 0) {
+          const spQcTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'QC',
+            taskPhase: 'WORK',
+            title: `${specialProcessConfig.processName} — QC Checks`,
+            instructions: `Complete quality checks for ${specialProcessConfig.processName}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: true,
+            signatureRole: 'QC',
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          for (const qc of specialProcessConfig.qcStandards) {
+            await this.createTravelerTaskField({
+              travelerTaskId: spQcTask.id,
+              fieldKey: `sp_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+              fieldLabel: qc.standard || 'QC Check',
+              fieldType: 'yes_no',
+              required: true,
+              validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+            });
+          }
+        }
+
+        // Special process materials → WORK phase traceability
+        if (specialProcessConfig.materials && specialProcessConfig.materials.length > 0) {
+          const spTraceTask = await this.createTravelerTask({
+            travelerStepId: step.id,
+            taskType: 'TRACEABILITY',
+            taskPhase: 'WORK',
+            title: `${specialProcessConfig.processName} — Material Traceability`,
+            instructions: `Record traceability for: ${specialProcessConfig.materials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          });
+
+          const spTraceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
+          const spTraceFieldKeys = new Set<string>();
+          for (const mat of specialProcessConfig.materials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fieldKey of reqFields) {
+              if (!spTraceFieldKeys.has(fieldKey)) {
+                spTraceFieldKeys.add(fieldKey);
+                await this.createTravelerTaskField({
+                  travelerTaskId: spTraceTask.id,
+                  fieldKey,
+                  fieldLabel: spTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                  fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                  required: true,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // ===== FINISH PHASE =====
+      // FINISH phase material traceability
+      if (finishMaterials.length > 0) {
+        const finishTraceTask = await this.createTravelerTask({
           travelerStepId: step.id,
-          taskType: 'PROCESS',
-          taskPhase: 'WORK',
-          title: 'Work Instructions',
-          instructions: routingInstructionPack?.specialNotes || 'Review instruction pack before proceeding',
-          required: false,
+          taskType: 'TRACEABILITY',
+          taskPhase: 'FINISH',
+          title: 'Final Material Traceability',
+          instructions: `Record traceability for: ${finishMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
+          required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
           requiresSignature: false,
           requiresCertification: false,
-          instructionPack: routingInstructionPack,
           status: 'NOT_STARTED',
         });
+
+        const finishTraceFieldLabelMap: Record<string, string> = {
+          internalControlNumber: 'Internal Control Number',
+          supplier: 'Supplier',
+          inventoryPartNumber: 'Inventory Part Number',
+          batchLotNumber: 'Batch/Lot #',
+          manufacturer: 'Manufacturer',
+          rollNumber: 'Roll Number',
+          expirationDate: 'Expiration Date',
+          receivedDate: 'Received Date',
+        };
+        const finishTraceFieldKeys = new Set<string>();
+        for (const mat of finishMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            if (!finishTraceFieldKeys.has(fieldKey)) {
+              finishTraceFieldKeys.add(fieldKey);
+              await this.createTravelerTaskField({
+                travelerTaskId: finishTraceTask.id,
+                fieldKey,
+                fieldLabel: finishTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
+            }
+          }
+        }
       }
 
-      // ===== FINISH PHASE =====
       // Explicit FINISH checks from routing template
       for (const check of finishChecks) {
         await this.createTravelerTask({
@@ -13925,9 +14243,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // QC verification tasks
+      // QC verification tasks (general qcStandards + finishQcStandards combined)
       const qcStandards = deptConfig.qcStandards || [];
-      if (qcStandards.length > 0) {
+      const finishQcStandards = deptConfig.finishQcStandards || [];
+      const allFinishQc = [...qcStandards, ...finishQcStandards];
+      if (allFinishQc.length > 0) {
         const qcTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'QC',
@@ -13943,7 +14263,7 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        for (const qc of qcStandards) {
+        for (const qc of allFinishQc) {
           await this.createTravelerTaskField({
             travelerTaskId: qcTask.id,
             fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,

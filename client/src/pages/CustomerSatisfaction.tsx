@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, Component, ErrorInfo, ReactNode } from 'react';
+import { useState, useRef, lazy, Suspense, Component, ErrorInfo, ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +35,9 @@ import {
   Download,
   Filter,
   FileText,
+  Upload,
+  Eye,
+  X,
   AlertCircle as AlertCircleIcon,
 } from 'lucide-react';
 
@@ -98,6 +101,7 @@ interface SurveyResponse {
   customerId: number;
   customerName: string;
   customerEmail?: string;
+  scannedPdfPath?: string | null;
   orderId?: string;
   responses: Record<string, any>;
   overallSatisfaction?: number;
@@ -225,6 +229,54 @@ export default function CustomerSatisfaction() {
       });
     },
   });
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingResponseId, setUploadingResponseId] = useState<number | null>(null);
+
+  const uploadPdf = useMutation({
+    mutationFn: async ({ responseId, file }: { responseId: number; file: File }) => {
+      const formData = new FormData();
+      formData.append('pdf', file);
+      const res = await fetch(`/api/customer-satisfaction/responses/${responseId}/upload-pdf`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Upload failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'PDF Uploaded', description: 'Hand-filled survey PDF has been attached.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+      setUploadingResponseId(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Upload Failed', description: error.message || 'Failed to upload PDF', variant: 'destructive' });
+      setUploadingResponseId(null);
+    },
+  });
+
+  const removePdf = useMutation({
+    mutationFn: (responseId: number) =>
+      apiRequest(`/api/customer-satisfaction/responses/${responseId}/remove-pdf`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast({ title: 'PDF Removed', description: 'Uploaded PDF has been removed.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Remove Failed', description: error.message || 'Failed to remove PDF', variant: 'destructive' });
+    },
+  });
+
+  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && uploadingResponseId) {
+      uploadPdf.mutate({ responseId: uploadingResponseId, file });
+    }
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -459,7 +511,47 @@ export default function CustomerSatisfaction() {
                             : formatDate(response.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-2 flex-wrap gap-1">
+                          {response.scannedPdfPath ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(response.scannedPdfPath!, '_blank')}
+                                className="text-purple-600 hover:text-purple-900"
+                                title="View Uploaded PDF"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (window.confirm('Remove the uploaded PDF from this response?')) {
+                                    removePdf.mutate(response.id);
+                                  }
+                                }}
+                                className="text-orange-600 hover:text-orange-900"
+                                title="Remove Uploaded PDF"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setUploadingResponseId(response.id);
+                                pdfInputRef.current?.click();
+                              }}
+                              className="text-purple-600 hover:text-purple-900"
+                              title="Upload Hand-Filled PDF"
+                              disabled={uploadPdf.isPending}
+                            >
+                              <Upload className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -718,6 +810,14 @@ export default function CustomerSatisfaction() {
         <TabsContent value="responses">{renderResponses()}</TabsContent>
         <TabsContent value="analytics">{renderAnalytics()}</TabsContent>
       </Tabs>
+
+      <input
+        type="file"
+        ref={pdfInputRef}
+        accept="application/pdf"
+        className="hidden"
+        onChange={handlePdfFileChange}
+      />
 
       {/* Take Survey Dialog */}
       <Dialog open={isTakeSurveyOpen} onOpenChange={setIsTakeSurveyOpen}>

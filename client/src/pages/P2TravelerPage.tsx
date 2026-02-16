@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
+import { useLocation } from 'wouter';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
 
@@ -102,6 +103,7 @@ interface ActiveTask {
 
 export default function P2TravelerPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [scanState, setScanState] = useState<ScanState>('READY');
   const [badgeInput, setBadgeInput] = useState('');
   const [partInput, setPartInput] = useState('');
@@ -193,55 +195,12 @@ export default function P2TravelerPage() {
         return;
       }
 
-      // Initialize traceability fields based on requirements
-      const initialTraceability: any[] = [];
-      const materialFieldTypes = new Set<string>();
-      
-      // Add material requirements
-      if (data.departmentConfig.materials) {
-        data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
-          material.requiredFields.forEach((fieldType: string) => {
-            materialFieldTypes.add(fieldType);
-            initialTraceability.push({
-              inventoryPartId: material.partId,
-              inventoryPartNumber: material.partNumber,
-              type: fieldType,
-              label: `${material.partName} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
-              value: '',
-            });
-          });
-        });
-      }
-
-      // Add general traceability requirements (skip any already covered by materials)
-      if (data.traceabilityRequirements) {
-        data.traceabilityRequirements.forEach((req: any) => {
-          if (typeof req === 'string' && !materialFieldTypes.has(req)) {
-            initialTraceability.push({
-              type: req,
-              label: req.replace(/_/g, ' ').toUpperCase(),
-              value: '',
-            });
-          }
-        });
-      }
-
-      setTraceabilityData(initialTraceability);
-
-      // Initialize custom data fields
-      if (data.departmentConfig.customDataFields) {
-        const initialCustomData: Record<string, string> = {};
-        data.departmentConfig.customDataFields.forEach((field: { fieldName: string; fieldType: string; isRequired: boolean }) => {
-          initialCustomData[field.fieldName] = '';
-        });
-        setCustomData(initialCustomData);
-      }
-
-      setScanState('PART_SCANNED');
       toast({
         title: 'Part Verified',
-        description: `Ready to start task in ${data.nextDepartment}`,
+        description: `Opening full traveler for ${data.serializedItem.partName}`,
       });
+
+      setLocation(`/p2-traveler-viewer?barcode=${encodeURIComponent(partInput.trim())}`);
     } catch (error: any) {
       toast({
         title: 'Verification Failed',

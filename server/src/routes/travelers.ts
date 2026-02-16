@@ -525,7 +525,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
 router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { signedBy, signedByName, badgeScan, meaning, notes, signatureRole, taskId, signatureData } = req.body;
+    const { signedBy, signedByName, badgeScan, meaning, notes, signatureRole, taskId, signatureData: sigData } = req.body;
 
     if (!signedBy || !meaning) {
       return res.status(400).json({ error: 'signedBy and meaning are required' });
@@ -654,7 +654,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       badgeScan: badgeScan || null,
       meaning,
       notes: notes || null,
-      signatureData: signatureData || null,
+      signatureData: sigData || null,
     });
 
     // Complete the matched gate task, or all pending gates if no specific match

@@ -244,7 +244,9 @@ export default function TravelerExecution() {
     badgeScan: '',
     meaning: 'COMPLETED',
     notes: '',
+    signatureData: '' as string,
   });
+  const sigPadRef = useRef<SignatureCanvas>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
@@ -438,7 +440,9 @@ export default function TravelerExecution() {
         badgeScan: '',
         meaning: 'COMPLETED',
         notes: '',
+        signatureData: '',
       });
+      if (sigPadRef.current) sigPadRef.current.clear();
       refetch();
     },
     onError: (error: any) => {
@@ -1433,10 +1437,18 @@ export default function TravelerExecution() {
                     {currentStep.signatures.length > 0 && (
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
                         <p className="text-sm text-muted-foreground mb-2">Signed by:</p>
-                        {currentStep.signatures.map((sig) => (
-                          <div key={sig.id} className="text-sm space-y-2 mb-3 last:mb-0">
-                            <div className="flex items-center gap-2">
-                              <div>
+                        {currentStep.signatures.map((sig: TravelerSignature) => (
+                          <div key={sig.id} className="text-sm border-b last:border-b-0 py-2">
+                            <div className="flex items-start gap-3">
+                              {sig.signatureData && (
+                                <img
+                                  src={sig.signatureData}
+                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  className="h-10 w-24 object-contain border rounded bg-white"
+                                />
+                              )}
+                              <div className="flex-1">
+
                                 <p className="font-medium">
                                   {sig.signedByName || sig.signedBy}
                                   {sig.signatureRole && (
@@ -1471,12 +1483,9 @@ export default function TravelerExecution() {
 
       <Dialog open={showSignDialog} onOpenChange={(open) => {
         setShowSignDialog(open);
-        if (!open) {
-          setSignatureEmpty(true);
-          if (signatureCanvasRef.current) signatureCanvasRef.current.clear();
-        }
+        if (!open && sigPadRef.current) sigPadRef.current.clear();
       }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {signingRole ? `${signingRole} Signoff` : 'Sign Step Completion'}
@@ -1490,8 +1499,8 @@ export default function TravelerExecution() {
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-sm">Employee ID / Badge *</Label>
+              <div className="space-y-2">
+                <Label>Employee ID / Badge *</Label>
                 <Input
                   value={signatureData.signedBy}
                   onChange={(e) =>
@@ -1501,8 +1510,8 @@ export default function TravelerExecution() {
                   data-testid="input-sign-badge"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-sm">Full Name *</Label>
+              <div className="space-y-2">
+                <Label>Full Name</Label>
                 <Input
                   value={signatureData.signedByName}
                   onChange={(e) =>
@@ -1515,49 +1524,45 @@ export default function TravelerExecution() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">Signature *</Label>
-              <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white">
+              <Label>Signature *</Label>
+              <div className={`border-2 rounded-lg overflow-hidden ${signatureData.signatureData ? 'border-green-500' : 'border-dashed border-muted-foreground/30'}`}>
                 <SignatureCanvas
-                  ref={signatureCanvasRef}
-                  penColor="black"
+                  ref={sigPadRef}
                   canvasProps={{
-                    className: 'w-full cursor-crosshair',
-                    style: { width: '100%', height: '160px' },
+                    className: 'w-full h-[150px] bg-white cursor-crosshair',
+                    style: { width: '100%', height: '150px' },
                   }}
-                  onEnd={() => setSignatureEmpty(signatureCanvasRef.current?.isEmpty() ?? true)}
-                  data-testid="canvas-signature"
+                  penColor="black"
+                  onEnd={() => {
+                    if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
+                      setSignatureData(prev => ({
+                        ...prev,
+                        signatureData: sigPadRef.current!.toDataURL('image/png'),
+                      }));
+                    }
+                  }}
                 />
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {signatureData.signatureData ? 'Signature captured' : 'Draw your signature above'}
+                </p>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    signatureCanvasRef.current?.clear();
-                    setSignatureEmpty(true);
+                    if (sigPadRef.current) sigPadRef.current.clear();
+                    setSignatureData(prev => ({ ...prev, signatureData: '' }));
                   }}
-                  className="text-muted-foreground"
-                  data-testid="button-clear-signature"
                 >
-                  <RotateCcw className="h-4 w-4 mr-1" />
                   Clear
                 </Button>
-                {signatureEmpty ? (
-                  <span className="text-sm text-amber-600 flex items-center gap-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    Draw your signature above
-                  </span>
-                ) : (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Signature captured
-                  </span>
-                )}
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-sm">Notes (optional)</Label>
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
               <Textarea
                 value={signatureData.notes}
                 onChange={(e) =>
@@ -1566,6 +1571,7 @@ export default function TravelerExecution() {
                 placeholder="Any additional notes..."
                 rows={2}
                 data-testid="input-sign-notes"
+                rows={2}
               />
             </div>
           </div>
@@ -1576,7 +1582,7 @@ export default function TravelerExecution() {
             </Button>
             <Button
               onClick={() => currentStep && signStepMutation.mutate({ stepId: currentStep.id, taskId: signingTaskId, role: signingRole })}
-              disabled={signStepMutation.isPending || !signatureData.signedBy || signatureEmpty}
+              disabled={signStepMutation.isPending || !signatureData.signedBy || !signatureData.signatureData}
               data-testid="button-confirm-sign"
             >
               {signStepMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

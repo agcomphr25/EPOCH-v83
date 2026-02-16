@@ -44,7 +44,7 @@ router.get(
       res.json({
         id: employee.id,
         employeeCode: employee.employeeCode,
-        name: `${employee.firstName} ${employee.lastName}`,
+        name: employee.name,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message || 'Badge lookup failed' });
@@ -637,6 +637,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
     }
 
     // Update department completion timestamp
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _completionField = `${currentDepartment.toLowerCase().replace(/[^a-z]/g, '')}CompletedAt`;
     const updates: any = {
       updatedAt: new Date(),
@@ -777,7 +778,7 @@ router.get('/admin/stuck-tasks', async (_req: Request, res: Response) => {
       orderBy: [desc(p2WorkTasks.startedAt)],
     });
     return res.json(stuckTasks);
-  } catch (_error: any) {
+  } catch {
     return res.status(500).json({ error: 'Failed to get stuck tasks' });
   }
 });

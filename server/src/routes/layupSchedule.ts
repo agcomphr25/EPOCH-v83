@@ -3,12 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 import { db, pool, rawSql } from '../../db';
-import {
-  molds,
-  allOrders,
-  poProducts,
-  stockModels,
-} from '../../schema';
+import { molds, allOrders, poProducts, stockModels } from '../../schema';
 
 const router = Router();
 
@@ -131,7 +126,7 @@ router.patch('/molds/:id', async (req: Request, res: Response) => {
     `;
 
     const result = await pool.query(updateQuery, params);
-    const rows = result?.rows || result || [];
+    const rows = (result as any)?.rows || result || [];
 
     if (!Array.isArray(rows) || rows.length === 0) {
       console.log(`❌ Mold id=${id} not found or update failed`);
@@ -286,15 +281,8 @@ router.post(
       const modelToStockModels: Record<string, string[]> = {};
 
       for (const sm of stockModelsList) {
-        const key = sm.key; // e.g., "mesa_universal"
+        const key = sm.id; // e.g., "mesa_universal"
         const displayName = sm.displayName || ''; // e.g., "Mesa Universal"
-
-        // Normalize display name to lowercase with underscores for matching
-        const _normalizedDisplay = displayName
-          .toLowerCase()
-          .replace(/\s+/g, '_')
-          .replace(/-/g, '_');
-        const _normalizedKey = key.toLowerCase();
 
         // Add to mapping - match by display name
         if (displayName) {
@@ -323,7 +311,7 @@ router.post(
         count: number;
       }[] = [];
 
-      for (const [modelName, moldList] of moldsByModel) {
+      for (const [modelName, moldList] of Array.from(moldsByModel)) {
         // Try to find matching stock models
         const matchingStockModels = modelToStockModels[modelName] || [];
 
@@ -335,7 +323,7 @@ router.post(
             .replace(/-/g, '_');
 
           for (const sm of stockModelsList) {
-            const smKey = sm.key.toLowerCase();
+            const smKey = sm.id.toLowerCase();
             const smDisplay = (sm.displayName || '')
               .toLowerCase()
               .replace(/\s+/g, '_')
@@ -347,8 +335,8 @@ router.post(
               smDisplay.includes(normalizedModelName) ||
               normalizedModelName.includes(smDisplay)
             ) {
-              if (!matchingStockModels.includes(sm.key)) {
-                matchingStockModels.push(sm.key);
+              if (!matchingStockModels.includes(sm.id)) {
+                matchingStockModels.push(sm.id);
               }
             }
           }
@@ -999,7 +987,7 @@ router.post('/save', async (req: Request, res: Response) => {
       if (existingPOCounts.size > 0) {
         const poItemEntries = Array.from(existingPOCounts.entries());
         for (const [key, count] of poItemEntries) {
-          const [_poNumber, itemId] = key.split('-');
+          const [, itemId] = key.split('-');
           await client.query(
             `
             UPDATE purchase_order_items
@@ -1211,7 +1199,7 @@ router.post('/save', async (req: Request, res: Response) => {
           );
 
           // Track the production order number for progression
-          productionOrderNumbers.add(poNumber);
+          productionOrderNumbers.add(_poNumber);
         }
       }
 
@@ -1412,7 +1400,7 @@ router.post('/', async (req: Request, res: Response) => {
       orderId,
       scheduledDate,
       moldId,
-      instanceNumber: _instanceNumber,
+      instanceNumber: _instanceNumber, // eslint-disable-line @typescript-eslint/no-unused-vars
       employeeAssignments,
       isOverride,
       overriddenBy,

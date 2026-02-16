@@ -2,9 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
 import { storage } from '../../storage';
-import {
-  insertTravelerSchema,
-} from '../../schema';
+import { insertTravelerSchema } from '../../schema';
 
 const router = Router();
 

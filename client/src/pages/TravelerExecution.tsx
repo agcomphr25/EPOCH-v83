@@ -288,6 +288,7 @@ export default function TravelerExecution() {
   >({});
 
   const { toast } = useToast();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _queryClient = useQueryClient();
 
   const normalizeInstructionPack = (rawPack: any) => {
@@ -352,7 +353,7 @@ export default function TravelerExecution() {
     enabled: !!travelerId,
   });
 
-  const { traveler, steps = [], events: _events = [] } = travelerData || {};
+  const { traveler, steps = [] } = travelerData || {};
 
   interface PartRoutingData {
     id: string;

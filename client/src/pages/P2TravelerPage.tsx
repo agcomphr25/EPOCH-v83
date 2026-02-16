@@ -192,11 +192,13 @@ export default function P2TravelerPage() {
 
       // Initialize traceability fields based on requirements
       const initialTraceability: any[] = [];
+      const materialFieldTypes = new Set<string>();
       
       // Add material requirements
       if (data.departmentConfig.materials) {
         data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
           material.requiredFields.forEach((fieldType: string) => {
+            materialFieldTypes.add(fieldType);
             initialTraceability.push({
               inventoryPartId: material.partId,
               inventoryPartNumber: material.partNumber,
@@ -208,10 +210,10 @@ export default function P2TravelerPage() {
         });
       }
 
-      // Add general traceability requirements
+      // Add general traceability requirements (skip any already covered by materials)
       if (data.traceabilityRequirements) {
         data.traceabilityRequirements.forEach((req: any) => {
-          if (typeof req === 'string') {
+          if (typeof req === 'string' && !materialFieldTypes.has(req)) {
             initialTraceability.push({
               type: req,
               label: req.replace(/_/g, ' ').toUpperCase(),

@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
+import StartProductionTimerModal from '@/components/StartProductionTimerModal';
+import { Timer } from 'lucide-react';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
 
@@ -129,6 +131,7 @@ export default function P2TravelerPage() {
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
+  const [showTimerModal, setShowTimerModal] = useState(false);
 
   // Get active tasks for current employee
   const { data: activeTasks } = useQuery<ActiveTask[]>({
@@ -339,6 +342,7 @@ export default function P2TravelerPage() {
         title: 'Task Started',
         description: `Working on ${workTask.partName} in ${workTask.department}`,
       });
+      setShowTimerModal(true);
     },
     onError: (error: any) => {
       toast({
@@ -779,6 +783,15 @@ export default function P2TravelerPage() {
                 </AlertDescription>
               </Alert>
 
+              <Button
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+                onClick={() => setShowTimerModal(true)}
+              >
+                <Timer className="h-4 w-4 mr-2" />
+                Start Production Timer
+              </Button>
+
               <Alert variant="default">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -870,6 +883,20 @@ export default function P2TravelerPage() {
             setPartInput(barcode);
           }
           setCameraTarget(null);
+        }}
+      />
+
+      <StartProductionTimerModal
+        open={showTimerModal}
+        onOpenChange={setShowTimerModal}
+        defaultSerialNumber={verificationData?.serializedItem?.serialNumber || activeTask?.barcode || ''}
+        navigateToStation={false}
+        badgeId={badgeInput || undefined}
+        onTimerStarted={() => {
+          toast({
+            title: 'Timer Started',
+            description: 'Production timer is now running.',
+          });
         }}
       />
     </div>

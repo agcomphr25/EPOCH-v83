@@ -383,7 +383,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
     const [workTask] = await db.insert(p2WorkTasks).values(validatedData).returning();
 
     // Save traceability data
-    if (traceabilityData && Array.isArray(traceabilityData)) {
+    if (traceabilityData && Array.isArray(traceabilityData) && traceabilityData.length > 0) {
       const traceabilityRecords = traceabilityData.map((item: any) => ({
         serializedItemId,
         department,

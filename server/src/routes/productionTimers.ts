@@ -6,6 +6,7 @@ import {
   productionProgramRuns, 
   productionProgramRunEvents,
   insertProductionProgramRunSchema,
+  users,
 } from '../../schema';
 import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -39,7 +40,25 @@ const startRunSchema = z.object({
 
 router.post('/runs/start', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id || req.body?.badgeId;
+    let userId = (req as any).user?.id;
+    
+    if (!userId && req.body?.badgeId) {
+      const badgeVal = req.body.badgeId;
+      const parsedId = parseInt(badgeVal, 10);
+      if (!isNaN(parsedId)) {
+        userId = parsedId;
+      } else {
+        const [userByBadge] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.username, badgeVal))
+          .limit(1);
+        if (userByBadge) {
+          userId = userByBadge.id;
+        }
+      }
+    }
+    
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
@@ -92,9 +111,9 @@ router.post('/runs/start', async (req: Request, res: Response) => {
     console.log(`[ProductionTimer] Run started: ${run.id} for program ${program.name}`);
 
     return res.status(201).json(run);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[ProductionTimer] Error starting run:', error);
-    return res.status(500).json({ error: 'Failed to start run' });
+    return res.status(500).json({ error: 'Failed to start run', detail: error?.message || 'Unknown error' });
   }
 });
 

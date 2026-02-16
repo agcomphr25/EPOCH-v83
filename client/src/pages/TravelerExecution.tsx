@@ -161,6 +161,7 @@ interface Traveler {
   internalControlNumber: string | null;
   quantity: number;
   status: string;
+  partRoutingId: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -323,11 +324,11 @@ export default function TravelerExecution() {
 
   const { data: partRoutings = [] } = useQuery<PartRoutingData[]>({
     queryKey: ['/api/part-routings'],
-    enabled: !!traveler?.partNumber,
+    enabled: !!traveler?.partNumber || !!traveler?.partRoutingId,
   });
 
   const currentPartRouting = partRoutings.find(
-    (r) => r.partNumber === traveler?.partNumber
+    (r) => (traveler?.partRoutingId && r.id === traveler.partRoutingId) || r.partNumber === traveler?.partNumber
   );
 
   const getDeptConfig = (departmentName: string) => {
@@ -338,6 +339,12 @@ export default function TravelerExecution() {
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
+    const step = steps.find(s => s.departmentName === departmentName);
+    if (step) {
+      const timerTask = step.tasks.find(t => t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig);
+      const timerPack = timerTask?.instructionPack as any;
+      if (timerPack?.timerConfig) return timerPack.timerConfig;
+    }
     return null;
   };
 

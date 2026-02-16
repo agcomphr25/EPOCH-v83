@@ -3150,8 +3150,8 @@ export class DatabaseStorage implements IStorage {
       const mappedFeatures: any = {};
       if (parsedSpecs) {
         // Map camelCase to snake_case for feature fields
-        if (parsedSpecs.actionLength) mappedFeatures.action_length = parsedSpecs.actionLength;
-        if (parsedSpecs.actionInlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet;
+        if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
+        if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
         if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
         if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
         if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
@@ -3179,7 +3179,7 @@ export class DatabaseStorage implements IStorage {
         fbOrderNumber: null,
         agrOrderDetails: null,
         isCustomOrder: null,
-        modelId: po.itemId,
+        modelId: parsedSpecs?.stockModel || po.itemId,
         itemId: po.itemId,
         itemName: resolvedItemName,
         handedness: parsedSpecs?.handedness ?? null,

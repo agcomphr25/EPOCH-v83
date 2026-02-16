@@ -25,8 +25,11 @@ import {
   QrCode,
   FileText,
   Loader2,
+  Camera,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CameraScanner } from '@/components/CameraScanner';
+import { useLocation } from 'wouter';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'GENERATING_TRAVELER' | 'TASK_ACTIVE';
 
@@ -103,6 +106,7 @@ interface ActiveTask {
 export default function P2TravelerPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
   const [scanState, setScanState] = useState<ScanState>('READY');
   const [badgeInput, setBadgeInput] = useState('');
   const [partInput, setPartInput] = useState('');
@@ -121,6 +125,7 @@ export default function P2TravelerPage() {
   const [customData, setCustomData] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
+  const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
 
   // Get active tasks for current employee
   const { data: activeTasks } = useQuery<ActiveTask[]>({
@@ -155,12 +160,21 @@ export default function P2TravelerPage() {
       return;
     }
 
-    setEmployee({ id: 0, employeeCode: badgeInput, name: '' });
-    setScanState('BADGE_SCANNED');
-    toast({
-      title: 'Badge Scanned',
-      description: 'Now scan the part barcode',
-    });
+    try {
+      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${badgeInput.trim()}`) as Employee;
+      setEmployee(data);
+      setScanState('BADGE_SCANNED');
+      toast({
+        title: 'Badge Scanned',
+        description: `Welcome, ${data.name}. Now scan the part barcode.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Badge Not Found',
+        description: error.message || 'No employee found with that badge code',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Handle part scan
@@ -195,11 +209,13 @@ export default function P2TravelerPage() {
 
       // Initialize traceability fields based on requirements
       const initialTraceability: any[] = [];
+      const materialFieldTypes = new Set<string>();
       
       // Add material requirements
       if (data.departmentConfig.materials) {
         data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
           material.requiredFields.forEach((fieldType: string) => {
+            materialFieldTypes.add(fieldType);
             initialTraceability.push({
               inventoryPartId: material.partId,
               inventoryPartNumber: material.partNumber,
@@ -211,10 +227,10 @@ export default function P2TravelerPage() {
         });
       }
 
-      // Add general traceability requirements
+      // Add general traceability requirements (skip any already covered by materials)
       if (data.traceabilityRequirements) {
         data.traceabilityRequirements.forEach((req: any) => {
-          if (typeof req === 'string') {
+          if (typeof req === 'string' && !materialFieldTypes.has(req)) {
             initialTraceability.push({
               type: req,
               label: req.replace(/_/g, ' ').toUpperCase(),
@@ -442,15 +458,27 @@ export default function P2TravelerPage() {
                   <Scan className="h-4 w-4" />
                   Scan Employee Badge
                 </Label>
-                <Input
-                  id="badge-input"
-                  type="text"
-                  value={badgeInput}
-                  onChange={(e) => setBadgeInput(e.target.value)}
-                  placeholder="Scan or enter badge code..."
-                  autoFocus
-                  data-testid="input-badge-code"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="badge-input"
+                    type="text"
+                    value={badgeInput}
+                    onChange={(e) => setBadgeInput(e.target.value)}
+                    placeholder="Scan or enter badge code..."
+                    autoFocus
+                    className="flex-1"
+                    data-testid="input-badge-code"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCameraTarget('badge')}
+                    title="Use camera to scan"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <Button type="submit" className="w-full" data-testid="button-submit-badge">
                 <Scan className="h-4 w-4 mr-2" />
@@ -465,7 +493,8 @@ export default function P2TravelerPage() {
               <Alert>
                 <User className="h-4 w-4" />
                 <AlertDescription>
-                  Employee Badge Scanned: <strong>{badgeInput}</strong>
+                  Employee: <strong>{employee?.name || badgeInput}</strong>
+                  {employee?.name && <span className="text-muted-foreground ml-2">({badgeInput})</span>}
                 </AlertDescription>
               </Alert>
 
@@ -475,15 +504,27 @@ export default function P2TravelerPage() {
                     <Scan className="h-4 w-4" />
                     Scan Part Barcode
                   </Label>
-                  <Input
-                    id="part-input"
-                    type="text"
-                    value={partInput}
-                    onChange={(e) => setPartInput(e.target.value)}
-                    placeholder="Scan or enter part barcode..."
-                    autoFocus
-                    data-testid="input-part-barcode"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="part-input"
+                      type="text"
+                      value={partInput}
+                      onChange={(e) => setPartInput(e.target.value)}
+                      placeholder="Scan or enter part barcode..."
+                      autoFocus
+                      className="flex-1"
+                      data-testid="input-part-barcode"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCameraTarget('part')}
+                      title="Use camera to scan"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={resetScanner} className="flex-1" data-testid="button-cancel">
@@ -804,6 +845,19 @@ export default function P2TravelerPage() {
           )}
         </CardContent>
       </Card>
+
+      <CameraScanner
+        isOpen={cameraTarget !== null}
+        onClose={() => setCameraTarget(null)}
+        onBarcodeDetected={(barcode) => {
+          if (cameraTarget === 'badge') {
+            setBadgeInput(barcode);
+          } else if (cameraTarget === 'part') {
+            setPartInput(barcode);
+          }
+          setCameraTarget(null);
+        }}
+      />
     </div>
   );
 }

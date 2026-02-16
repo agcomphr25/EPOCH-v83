@@ -65,6 +65,8 @@ import {
   ExternalLink,
   AlertCircle,
   SkipForward,
+  RotateCcw,
+  CheckCircle2,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -163,6 +165,7 @@ interface Traveler {
   internalControlNumber: string | null;
   quantity: number;
   status: string;
+  partRoutingId: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -233,6 +236,8 @@ export default function TravelerExecution() {
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
+  const signatureCanvasRef = useRef<SignatureCanvas>(null);
+  const [signatureEmpty, setSignatureEmpty] = useState(true);
   const [signatureData, setSignatureData] = useState({
     signedBy: '',
     signedByName: '',
@@ -327,11 +332,11 @@ export default function TravelerExecution() {
 
   const { data: partRoutings = [] } = useQuery<PartRoutingData[]>({
     queryKey: ['/api/part-routings'],
-    enabled: !!traveler?.partNumber,
+    enabled: !!traveler?.partNumber || !!traveler?.partRoutingId,
   });
 
   const currentPartRouting = partRoutings.find(
-    (r) => r.partNumber === traveler?.partNumber
+    (r) => (traveler?.partRoutingId && r.id === traveler.partRoutingId) || r.partNumber === traveler?.partNumber
   );
 
   const getDeptConfig = (departmentName: string) => {
@@ -342,6 +347,12 @@ export default function TravelerExecution() {
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
+    const step = steps.find(s => s.departmentName === departmentName);
+    if (step) {
+      const timerTask = step.tasks.find(t => t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig);
+      const timerPack = timerTask?.instructionPack as any;
+      if (timerPack?.timerConfig) return timerPack.timerConfig;
+    }
     return null;
   };
 
@@ -376,7 +387,7 @@ export default function TravelerExecution() {
     onSuccess: (_data, variables) => {
       setActiveBadge(variables.badge);
       setActiveTechName(variables.techName);
-      toast({ title: 'Step Started', description: 'Work on this step has begun' });
+      toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
       refetch();
     },
     onError: (error: any) => {
@@ -401,21 +412,28 @@ export default function TravelerExecution() {
   });
 
   const signStepMutation = useMutation({
-    mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) =>
-      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
+    mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) => {
+      const drawnSignature = signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()
+        ? signatureCanvasRef.current.toDataURL('image/png')
+        : null;
+      return apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
         body: JSON.stringify({
           ...signatureData,
+          signatureData: drawnSignature,
           taskId: taskId || undefined,
           signatureRole: role || undefined,
         }),
         headers: { 'Content-Type': 'application/json' },
-      }),
+      });
+    },
     onSuccess: () => {
       toast({ title: 'Signed', description: 'Signature recorded successfully' });
       setShowSignDialog(false);
       setSigningTaskId(null);
       setSigningRole(null);
+      setSignatureEmpty(true);
+      if (signatureCanvasRef.current) signatureCanvasRef.current.clear();
       setSignatureData({
         signedBy: '',
         signedByName: '',
@@ -1430,6 +1448,7 @@ export default function TravelerExecution() {
                                 />
                               )}
                               <div className="flex-1">
+
                                 <p className="font-medium">
                                   {sig.signedByName || sig.signedBy}
                                   {sig.signatureRole && (
@@ -1441,6 +1460,15 @@ export default function TravelerExecution() {
                                 </p>
                               </div>
                             </div>
+                            {sig.signatureData && (
+                              <div className="border rounded bg-white p-1">
+                                <img
+                                  src={sig.signatureData}
+                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  className="h-12 object-contain mx-auto"
+                                />
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1541,6 +1569,7 @@ export default function TravelerExecution() {
                   setSignatureData({ ...signatureData, notes: e.target.value })
                 }
                 placeholder="Any additional notes..."
+                rows={2}
                 data-testid="input-sign-notes"
                 rows={2}
               />
@@ -1557,6 +1586,7 @@ export default function TravelerExecution() {
               data-testid="button-confirm-sign"
             >
               {signStepMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <PenTool className="h-4 w-4 mr-2" />
               Sign & Complete
             </Button>
           </DialogFooter>

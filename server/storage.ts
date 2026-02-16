@@ -3150,8 +3150,8 @@ export class DatabaseStorage implements IStorage {
       const mappedFeatures: any = {};
       if (parsedSpecs) {
         // Map camelCase to snake_case for feature fields
-        if (parsedSpecs.actionLength) mappedFeatures.action_length = parsedSpecs.actionLength;
-        if (parsedSpecs.actionInlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet;
+        if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
+        if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
         if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
         if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
         if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
@@ -3176,10 +3176,11 @@ export class DatabaseStorage implements IStorage {
         dueDate: po.dueDate,
         customerId: po.customerId,
         customerPO: po.poNumber,
+        poItemId: po.poItemId,
         fbOrderNumber: null,
         agrOrderDetails: null,
         isCustomOrder: null,
-        modelId: po.itemId,
+        modelId: parsedSpecs?.stockModel || po.itemId,
         itemId: po.itemId,
         itemName: resolvedItemName,
         handedness: parsedSpecs?.handedness ?? null,
@@ -13712,14 +13713,17 @@ export class DatabaseStorage implements IStorage {
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
-      // START phase traceability (default — includes legacy traceFields)
+      // START phase traceability (default — includes legacy traceFields + per-material fields)
       if (traceFields.length > 0 || startMaterials.length > 0) {
+        const startMaterialNames = startMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'START',
           title: 'Material Lot Entry',
-          instructions: 'Record traceability data for materials used',
+          instructions: startMaterialNames.length > 0
+            ? `Record traceability for: ${startMaterialNames.join(', ')}`
+            : 'Record traceability data for materials used',
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -13739,11 +13743,24 @@ export class DatabaseStorage implements IStorage {
           receivedDate: 'Received Date',
         };
 
+        const allStartFieldKeys = new Set<string>();
+
         for (const fieldKey of traceFields) {
+          allStartFieldKeys.add(fieldKey);
+        }
+
+        for (const mat of startMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            allStartFieldKeys.add(fieldKey);
+          }
+        }
+
+        for (const fieldKey of allStartFieldKeys) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
             fieldKey,
-            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l) => l.toUpperCase()).trim(),
+            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
             fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
             required: true,
           });
@@ -13861,6 +13878,26 @@ export class DatabaseStorage implements IStorage {
             }
           }
         }
+      }
+
+      // Production Timer task — when timer is configured for this department
+      if (hasTimerConfig) {
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'PROCESS',
+          taskPhase: 'WORK',
+          title: 'Production Timer',
+          instructions: deptConfig.timerConfig.defaultProgramName
+            ? `Start timer program: ${deptConfig.timerConfig.defaultProgramName}`
+            : 'Start a production timer for this operation',
+          required: false,
+          sortOrder: sortOrder++,
+          timePolicy: 'MANUAL_ENTRY',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: { timerConfig: deptConfig.timerConfig },
+          status: 'NOT_STARTED',
+        });
       }
 
       // Work Instructions task — always create when instruction pack has content

@@ -368,6 +368,39 @@ router.post('/:id/unblock', async (req: Request, res: Response) => {
   }
 });
 
+// Cancel traveler
+router.post('/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { canceledBy, reason } = req.body;
+
+    const traveler = await storage.getTraveler(id);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    if (traveler.status === 'COMPLETED' || traveler.status === 'CANCELED') {
+      return res.status(400).json({
+        error: 'Cannot cancel a completed or already canceled traveler',
+      });
+    }
+
+    const updatedTraveler = await storage.updateTraveler(id, { status: 'CANCELED' });
+
+    await storage.createTravelerEvent({
+      travelerId: id,
+      actor: canceledBy || 'system',
+      action: 'STATUS_CHANGED',
+      details: { from: traveler.status, to: 'CANCELED', reason },
+    });
+
+    res.json(updatedTraveler);
+  } catch (error: any) {
+    console.error('Error canceling traveler:', error);
+    res.status(500).json({ error: 'Failed to cancel traveler', message: error.message });
+  }
+});
+
 // ============================================================================
 // STEP ENDPOINTS
 // ============================================================================
@@ -446,6 +479,28 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
+    const autoCompletedGateChecks: string[] = [];
+    if (badgeScan) {
+      const badgeGatePattern = /badge/i;
+      const gateCheckTasks = tasks.filter(
+        (t) =>
+          t.taskPhase === 'START' &&
+          (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
+          t.status === 'NOT_STARTED' &&
+          !t.requiresSignature &&
+          !t.requiresCertification &&
+          badgeGatePattern.test(t.title)
+      );
+      for (const gateTask of gateCheckTasks) {
+        await storage.updateTravelerTask(gateTask.id, {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          completedBy: startedBy || 'unknown',
+        });
+        autoCompletedGateChecks.push(gateTask.title);
+      }
+    }
+
     await storage.createTravelerEvent({
       travelerId,
       actor: startedBy || 'unknown',
@@ -455,6 +510,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         stepNumber: step.stepNumber,
         departmentName: step.departmentName,
         badgeScan,
+        autoCompletedGateChecks,
       },
     });
 
@@ -473,6 +529,10 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
 
     if (!signedBy || !meaning) {
       return res.status(400).json({ error: 'signedBy and meaning are required' });
+    }
+
+    if (!signatureData) {
+      return res.status(400).json({ error: 'A drawn signature is required' });
     }
 
     const traveler = await storage.getTraveler(travelerId);

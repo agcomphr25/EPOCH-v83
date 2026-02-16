@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -28,6 +29,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -49,6 +57,12 @@ import {
   Clipboard,
   Filter,
   Loader2,
+  MoreHorizontal,
+  Pencil,
+  Ban,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -101,8 +115,22 @@ export default function TravelerManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showBlockDialog, setShowBlockDialog] = useState(false);
+  const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [blockReason, setBlockReason] = useState('');
   const [createFormData, setCreateFormData] = useState({
+    workOrderId: '',
+    salesOrderId: '',
+    lotNumber: '',
+    serialNumber: '',
+    internalControlNumber: '',
+    quantity: 1,
+  });
+  const [editFormData, setEditFormData] = useState({
     workOrderId: '',
     salesOrderId: '',
     lotNumber: '',
@@ -158,6 +186,34 @@ export default function TravelerManagement() {
     },
   });
 
+  const editMutation = useMutation({
+    mutationFn: (data: { id: string; formData: typeof editFormData }) =>
+      apiRequest(`/api/travelers/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...data.formData,
+          updatedBy: 'system',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Updated',
+        description: 'Traveler details have been saved',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowEditDialog(false);
+      setSelectedTraveler(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const startMutation = useMutation({
     mutationFn: (id: string) =>
       apiRequest(`/api/travelers/${id}/start`, {
@@ -176,6 +232,104 @@ export default function TravelerManagement() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to start traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/travelers/${id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ completedBy: 'system' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Completed',
+        description: 'Traveler has been marked as completed',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to complete traveler. Ensure all steps are completed and signed.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (data: { id: string; reason: string }) =>
+      apiRequest(`/api/travelers/${data.id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ canceledBy: 'system', reason: data.reason }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Canceled',
+        description: 'Traveler has been canceled',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowCancelDialog(false);
+      setSelectedTraveler(null);
+      setCancelReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to cancel traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const blockMutation = useMutation({
+    mutationFn: (data: { id: string; reason: string }) =>
+      apiRequest(`/api/travelers/${data.id}/block`, {
+        method: 'POST',
+        body: JSON.stringify({ blockedBy: 'system', reason: data.reason }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Blocked',
+        description: 'Traveler has been blocked',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowBlockDialog(false);
+      setSelectedTraveler(null);
+      setBlockReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to block traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/travelers/${id}/unblock`, {
+        method: 'POST',
+        body: JSON.stringify({ unblockedBy: 'system' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Unblocked',
+        description: 'Traveler is back in progress',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to unblock traveler',
         variant: 'destructive',
       });
     },
@@ -215,8 +369,67 @@ export default function TravelerManagement() {
     });
   };
 
+  const handleEdit = (traveler: Traveler) => {
+    setSelectedTraveler(traveler);
+    setEditFormData({
+      workOrderId: traveler.workOrderId || '',
+      salesOrderId: traveler.salesOrderId || '',
+      lotNumber: traveler.lotNumber || '',
+      serialNumber: traveler.serialNumber || '',
+      internalControlNumber: traveler.internalControlNumber || '',
+      quantity: traveler.quantity,
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedTraveler) return;
+    editMutation.mutate({
+      id: selectedTraveler.id,
+      formData: editFormData,
+    });
+  };
+
   const handleStart = (id: string) => {
     startMutation.mutate(id);
+  };
+
+  const handleComplete = (id: string) => {
+    if (confirm('Complete this traveler? All steps must be completed and signed.')) {
+      completeMutation.mutate(id);
+    }
+  };
+
+  const handleCancelClick = (traveler: Traveler) => {
+    setSelectedTraveler(traveler);
+    setCancelReason('');
+    setShowCancelDialog(true);
+  };
+
+  const handleConfirmCancel = () => {
+    if (!selectedTraveler) return;
+    cancelMutation.mutate({
+      id: selectedTraveler.id,
+      reason: cancelReason,
+    });
+  };
+
+  const handleBlockClick = (traveler: Traveler) => {
+    setSelectedTraveler(traveler);
+    setBlockReason('');
+    setShowBlockDialog(true);
+  };
+
+  const handleConfirmBlock = () => {
+    if (!selectedTraveler) return;
+    blockMutation.mutate({
+      id: selectedTraveler.id,
+      reason: blockReason,
+    });
+  };
+
+  const handleUnblock = (id: string) => {
+    unblockMutation.mutate(id);
   };
 
   const handleDelete = (id: string) => {
@@ -229,7 +442,9 @@ export default function TravelerManagement() {
     const matchesSearch =
       (t.travelerNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (t.partNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (t.workOrderId?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      (t.workOrderId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (t.lotNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (t.serialNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
 
@@ -376,6 +591,7 @@ export default function TravelerManagement() {
               ) : (
                 filteredTravelers.map((traveler) => {
                   const StatusIcon = STATUS_ICONS[traveler.status] || FileText;
+                  const isTerminal = traveler.status === 'COMPLETED' || traveler.status === 'CANCELED';
                   return (
                     <TableRow key={traveler.id} data-testid={`row-traveler-${traveler.id}`}>
                       <TableCell className="font-mono font-medium">
@@ -403,35 +619,12 @@ export default function TravelerManagement() {
                         {new Date(traveler.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Link href={`/travelers/${traveler.id}`}>
                             <Button variant="ghost" size="sm" data-testid={`button-view-${traveler.id}`}>
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
-                          {traveler.status === 'DRAFT' && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleStart(traveler.id)}
-                                disabled={startMutation.isPending}
-                                data-testid={`button-start-${traveler.id}`}
-                              >
-                                <Play className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(traveler.id)}
-                                className="text-red-500 hover:text-red-700"
-                                disabled={deleteMutation.isPending}
-                                data-testid={`button-delete-${traveler.id}`}
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
                           {traveler.status === 'IN_PROGRESS' && (
                             <Link href={`/travelers/${traveler.id}/execute`}>
                               <Button variant="outline" size="sm" data-testid={`button-execute-${traveler.id}`}>
@@ -440,6 +633,66 @@ export default function TravelerManagement() {
                               </Button>
                             </Link>
                           )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" data-testid={`button-actions-${traveler.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {!isTerminal && (
+                                <DropdownMenuItem onClick={() => handleEdit(traveler)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {traveler.status === 'DRAFT' && (
+                                <DropdownMenuItem onClick={() => handleStart(traveler.id)}>
+                                  <Play className="h-4 w-4 mr-2" />
+                                  Start Traveler
+                                </DropdownMenuItem>
+                              )}
+                              {traveler.status === 'IN_PROGRESS' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => handleComplete(traveler.id)}>
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    Complete Traveler
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleBlockClick(traveler)}>
+                                    <ShieldAlert className="h-4 w-4 mr-2" />
+                                    Block Traveler
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {traveler.status === 'BLOCKED' && (
+                                <DropdownMenuItem onClick={() => handleUnblock(traveler.id)}>
+                                  <ShieldCheck className="h-4 w-4 mr-2" />
+                                  Unblock Traveler
+                                </DropdownMenuItem>
+                              )}
+                              {!isTerminal && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleCancelClick(traveler)}
+                                    className="text-orange-600"
+                                  >
+                                    <Ban className="h-4 w-4 mr-2" />
+                                    Cancel Traveler
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {traveler.status === 'DRAFT' && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(traveler.id)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Traveler
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -451,6 +704,7 @@ export default function TravelerManagement() {
         </CardContent>
       </Card>
 
+      {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -582,6 +836,190 @@ export default function TravelerManagement() {
             >
               {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Traveler
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Traveler</DialogTitle>
+            <DialogDescription>
+              Update details for traveler {selectedTraveler?.travelerNumber}
+              {selectedTraveler?.partNumber && ` - ${selectedTraveler.partNumber}`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-workOrderId">Work Order ID</Label>
+                <Input
+                  id="edit-workOrderId"
+                  value={editFormData.workOrderId}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, workOrderId: e.target.value })
+                  }
+                  placeholder="WO-12345"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-salesOrderId">Sales Order ID</Label>
+                <Input
+                  id="edit-salesOrderId"
+                  value={editFormData.salesOrderId}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, salesOrderId: e.target.value })
+                  }
+                  placeholder="SO-12345"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-lotNumber">Lot Number</Label>
+                <Input
+                  id="edit-lotNumber"
+                  value={editFormData.lotNumber}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, lotNumber: e.target.value })
+                  }
+                  placeholder="LOT-2024-001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-serialNumber">Serial Number</Label>
+                <Input
+                  id="edit-serialNumber"
+                  value={editFormData.serialNumber}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, serialNumber: e.target.value })
+                  }
+                  placeholder="SN-001"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-icn">Internal Control Number</Label>
+                <Input
+                  id="edit-icn"
+                  value={editFormData.internalControlNumber}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      internalControlNumber: e.target.value,
+                    })
+                  }
+                  placeholder="ICN-001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-quantity">Quantity</Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  min="1"
+                  value={editFormData.quantity}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      quantity: parseInt(e.target.value) || 1,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={editMutation.isPending}
+            >
+              {editMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Traveler</DialogTitle>
+            <DialogDescription>
+              Cancel traveler {selectedTraveler?.travelerNumber}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="cancel-reason">Reason for Cancellation *</Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Enter reason for canceling this traveler..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Go Back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancel}
+              disabled={cancelMutation.isPending || !cancelReason.trim()}
+            >
+              {cancelMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Cancel Traveler
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block Dialog */}
+      <Dialog open={showBlockDialog} onOpenChange={setShowBlockDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Block Traveler</DialogTitle>
+            <DialogDescription>
+              Block traveler {selectedTraveler?.travelerNumber}? This will pause all work on this traveler.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="block-reason">Reason for Blocking *</Label>
+            <Textarea
+              id="block-reason"
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+              placeholder="Enter reason for blocking this traveler..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBlockDialog(false)}>
+              Go Back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmBlock}
+              disabled={blockMutation.isPending || !blockReason.trim()}
+            >
+              {blockMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Block Traveler
             </Button>
           </DialogFooter>
         </DialogContent>

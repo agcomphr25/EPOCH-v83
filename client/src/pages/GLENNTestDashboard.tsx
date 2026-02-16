@@ -573,6 +573,7 @@ function LightModeDashboard({
         </div>
       </div>
 
+
       {/* Main Navigation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {renderSectionCard('Order Management', orderManagementItems, 'bg-green-100', 'text-green-600', Plus)}

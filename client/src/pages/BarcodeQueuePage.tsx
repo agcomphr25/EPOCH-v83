@@ -287,12 +287,22 @@ export default function BarcodeQueuePage() {
       const stockModel = (stockModels as any[]).find(
         (m: any) => m.id === modelId
       );
-      // For P1 PO orders, use itemName or product field which contains the actual stock model name
-      // P1 PO orders have numeric modelId that won't match stock model IDs
-      const isPOOrder = order.orderId?.startsWith('PO-') || order.orderId?.startsWith('P1-');
-      const categoryKey = isPOOrder 
-        ? (order.itemName || order.product || modelId)
-        : (stockModel?.displayName || stockModel?.name || modelId);
+
+      const baseName =
+        stockModel?.displayName ||
+        stockModel?.name ||
+        modelId;
+
+      const actionSuffix =
+        order.features?.action_length
+          ? ` - ${order.features.action_length === 'short'
+              ? 'Short Action'
+              : order.features.action_length === 'long'
+              ? 'Long Action'
+              : order.features.action_length}`
+          : '';
+
+      const categoryKey = `${baseName}${actionSuffix}`;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -1217,6 +1227,17 @@ export default function BarcodeQueuePage() {
                                         </Badge>
                                       )}
                                     </div>
+
+                                    {isPOOrder && (
+                                      <div className="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
+                                        {order.customerPO && (
+                                          <div>PO: {order.customerPO}</div>
+                                        )}
+                                        {order.poItemId && (
+                                          <div>Line Item: {order.poItemId}</div>
+                                        )}
+                                      </div>
+                                    )}
 
                                     <div className="space-y-2 text-sm">
                                       <div className="flex items-center gap-2">

@@ -5721,6 +5721,7 @@ export const insertTravelerSignatureSchema = createInsertSchema(travelerSignatur
     signedAt: z.coerce.date().optional(),
     meaning: z.enum(['PERFORMED', 'INSPECTED', 'VERIFIED', 'RELEASED', 'COMPLETED']),
     signatureHash: z.string().optional().nullable(),
+    signatureData: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
   });
 

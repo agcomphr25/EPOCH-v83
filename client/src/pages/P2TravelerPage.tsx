@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
+import { useLocation } from 'wouter';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
 
@@ -102,6 +103,7 @@ interface ActiveTask {
 
 export default function P2TravelerPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [scanState, setScanState] = useState<ScanState>('READY');
   const [badgeInput, setBadgeInput] = useState('');
   const [partInput, setPartInput] = useState('');
@@ -249,8 +251,10 @@ export default function P2TravelerPage() {
       setScanState('PART_SCANNED');
       toast({
         title: 'Part Verified',
-        description: `Ready to start task in ${data.nextDepartment}`,
+        description: `Opening full traveler for ${data.serializedItem.partName}`,
       });
+
+      setLocation(`/p2-traveler-viewer?barcode=${encodeURIComponent(partInput.trim())}`);
     } catch (error: any) {
       toast({
         title: 'Verification Failed',

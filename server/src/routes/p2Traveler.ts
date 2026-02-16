@@ -28,6 +28,29 @@ function getDepartmentVariants(department: string): string[] {
   return DEPARTMENT_ALIASES[department] || [department];
 }
 
+// GET /api/p2-traveler/badge-lookup/:employeeCode
+// Look up employee by badge code and return name
+router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) => {
+  try {
+    const { employeeCode } = req.params;
+    const employee = await db.query.employees.findFirst({
+      where: eq(employees.employeeCode, employeeCode),
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json({
+      id: employee.id,
+      employeeCode: employee.employeeCode,
+      name: `${employee.firstName} ${employee.lastName}`,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Badge lookup failed' });
+  }
+});
+
 // GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
 // Verify employee certification for part's next department
 router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {

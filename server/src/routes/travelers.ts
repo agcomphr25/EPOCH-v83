@@ -368,6 +368,39 @@ router.post('/:id/unblock', async (req: Request, res: Response) => {
   }
 });
 
+// Cancel traveler
+router.post('/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { canceledBy, reason } = req.body;
+
+    const traveler = await storage.getTraveler(id);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    if (traveler.status === 'COMPLETED' || traveler.status === 'CANCELED') {
+      return res.status(400).json({
+        error: 'Cannot cancel a completed or already canceled traveler',
+      });
+    }
+
+    const updatedTraveler = await storage.updateTraveler(id, { status: 'CANCELED' });
+
+    await storage.createTravelerEvent({
+      travelerId: id,
+      actor: canceledBy || 'system',
+      action: 'STATUS_CHANGED',
+      details: { from: traveler.status, to: 'CANCELED', reason },
+    });
+
+    res.json(updatedTraveler);
+  } catch (error: any) {
+    console.error('Error canceling traveler:', error);
+    res.status(500).json({ error: 'Failed to cancel traveler', message: error.message });
+  }
+});
+
 // ============================================================================
 // STEP ENDPOINTS
 // ============================================================================

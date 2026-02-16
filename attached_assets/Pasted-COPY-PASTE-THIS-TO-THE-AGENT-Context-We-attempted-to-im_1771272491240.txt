@@ -1,0 +1,103 @@
+COPY-PASTE THIS TO THE AGENT
+
+Context
+We attempted to implement “card-before-save” using a draft / pending order approach.
+
+However, the system still requires clicking the “Create Order” button before live credit card processing is allowed.
+
+That is NOT the intended flow.
+
+The intended flow is:
+
+User fills out order form (unsaved state in frontend only)
+
+User clicks “Process Live Credit Card”
+
+System auto-creates a draft order in the background (if needed)
+
+System processes Accept.Blue transaction
+
+On success → order finalizes and saves
+
+We need to understand EXACTLY where the dependency still exists.
+
+🔍 PHASE 1 — FRONTEND FLOW TRACE
+
+Identify what condition disables or blocks the “Process Live Credit Card” button.
+
+Is it checking for:
+
+existing orderId?
+
+isSaved flag?
+
+route param?
+
+form mode (create vs edit)?
+
+Show exact file + line numbers.
+
+Identify where orderId is coming from in the CreditCardPayment component.
+
+Is it required as a prop?
+
+Is it derived from URL?
+
+Is it derived from order state?
+
+Determine whether the “Create Order” button:
+
+Calls an API that returns orderId
+
+Sets local state that payment relies on
+
+Changes route to /orders/:id
+
+🔍 PHASE 2 — BACKEND DEPENDENCY CHECK
+
+Does /api/payments/credit-card still:
+
+Require orderId in Zod schema?
+
+Verify order existence before processing?
+
+If so:
+
+Show exact lines where validation fails without existing order.
+
+🔍 PHASE 3 — CURRENT STATE SUMMARY
+
+Provide a short structured summary:
+
+Why clicking “Create Order” is still required
+
+What exact condition must be removed or refactored
+
+Whether:
+A) Frontend is blocking
+B) Backend is blocking
+C) Both
+
+🔍 PHASE 4 — MINIMAL CHANGE PLAN
+
+Without implementing, describe the smallest possible modification that would allow:
+
+Clicking “Process Live Credit Card” on an unsaved order
+
+System auto-creating draft order in the background
+
+Proceeding with payment
+
+Do NOT refactor entire flow.
+Do NOT change other payment types.
+Do NOT change Accept.Blue logic.
+
+Just isolate the remaining dependency.
+
+Output format:
+
+Bullet points
+
+File names + line numbers
+
+No speculation

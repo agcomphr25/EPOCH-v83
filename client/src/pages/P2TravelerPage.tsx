@@ -23,8 +23,10 @@ import {
   Clipboard,
   QrCode,
   FileText,
+  Camera,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CameraScanner } from '@/components/CameraScanner';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
 
@@ -118,6 +120,7 @@ export default function P2TravelerPage() {
   const [customData, setCustomData] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
+  const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
 
   // Get active tasks for current employee
   const { data: activeTasks } = useQuery<ActiveTask[]>({
@@ -406,15 +409,27 @@ export default function P2TravelerPage() {
                   <Scan className="h-4 w-4" />
                   Scan Employee Badge
                 </Label>
-                <Input
-                  id="badge-input"
-                  type="text"
-                  value={badgeInput}
-                  onChange={(e) => setBadgeInput(e.target.value)}
-                  placeholder="Scan or enter badge code..."
-                  autoFocus
-                  data-testid="input-badge-code"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="badge-input"
+                    type="text"
+                    value={badgeInput}
+                    onChange={(e) => setBadgeInput(e.target.value)}
+                    placeholder="Scan or enter badge code..."
+                    autoFocus
+                    className="flex-1"
+                    data-testid="input-badge-code"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCameraTarget('badge')}
+                    title="Use camera to scan"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <Button type="submit" className="w-full" data-testid="button-submit-badge">
                 <Scan className="h-4 w-4 mr-2" />
@@ -439,15 +454,27 @@ export default function P2TravelerPage() {
                     <Scan className="h-4 w-4" />
                     Scan Part Barcode
                   </Label>
-                  <Input
-                    id="part-input"
-                    type="text"
-                    value={partInput}
-                    onChange={(e) => setPartInput(e.target.value)}
-                    placeholder="Scan or enter part barcode..."
-                    autoFocus
-                    data-testid="input-part-barcode"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="part-input"
+                      type="text"
+                      value={partInput}
+                      onChange={(e) => setPartInput(e.target.value)}
+                      placeholder="Scan or enter part barcode..."
+                      autoFocus
+                      className="flex-1"
+                      data-testid="input-part-barcode"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCameraTarget('part')}
+                      title="Use camera to scan"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={resetScanner} className="flex-1" data-testid="button-cancel">
@@ -755,6 +782,19 @@ export default function P2TravelerPage() {
           )}
         </CardContent>
       </Card>
+
+      <CameraScanner
+        isOpen={cameraTarget !== null}
+        onClose={() => setCameraTarget(null)}
+        onBarcodeDetected={(barcode) => {
+          if (cameraTarget === 'badge') {
+            setBadgeInput(barcode);
+          } else if (cameraTarget === 'part') {
+            setPartInput(barcode);
+          }
+          setCameraTarget(null);
+        }}
+      />
     </div>
   );
 }

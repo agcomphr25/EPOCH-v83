@@ -288,6 +288,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       partName,
       traceabilityData,
       customData,
+      qcResults,
       notes,
     } = req.body;
 
@@ -428,6 +429,28 @@ router.post('/start-task', async (req: Request, res: Response) => {
         department,
         customData,
         recordedBy: employeeCode,
+      });
+    }
+
+    // Save QC results
+    if (qcResults && Array.isArray(qcResults) && qcResults.length > 0) {
+      await db.insert(p2SerializedItemCustomData).values({
+        serializedItemId,
+        department,
+        customData: { qcResults },
+        recordedBy: employeeCode,
+      });
+
+      // Log QC results event with pass/fail summary
+      const passCount = qcResults.filter((r: any) => r.passed === true).length;
+      const failCount = qcResults.filter((r: any) => r.passed === false).length;
+      await db.insert(p2SerializedItemEvents).values({
+        serializedItemId,
+        barcode,
+        eventType: 'NOTE',
+        performedBy: employeeCode,
+        notes: `QC results recorded in ${department}: ${passCount} passed, ${failCount} failed`,
+        metadata: { taskId: workTask.id, action: 'qc_results', qcResults },
       });
     }
 

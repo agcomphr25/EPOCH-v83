@@ -21,6 +21,7 @@ import {
   ArrowRight,
   AlertCircle,
   Clipboard,
+  ClipboardCheck,
   QrCode,
   FileText,
   Camera,
@@ -118,6 +119,13 @@ export default function P2TravelerPage() {
     value: string;
   }>>([]);
   const [customData, setCustomData] = useState<Record<string, string>>({});
+  const [qcResults, setQcResults] = useState<Array<{
+    standard: string;
+    tolerance: string;
+    requirement: string;
+    measuredValue: string;
+    passed: boolean | null;
+  }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
@@ -138,6 +146,7 @@ export default function P2TravelerPage() {
     setActiveTask(null);
     setTraceabilityData([]);
     setCustomData({});
+    setQcResults([]);
     setNotes('');
     setTraceabilityMode('scan');
   };
@@ -246,6 +255,16 @@ export default function P2TravelerPage() {
         setCustomData(initialCustomData);
       }
 
+      if (data.departmentConfig.qcStandards && data.departmentConfig.qcStandards.length > 0) {
+        setQcResults(data.departmentConfig.qcStandards.map((qc: QCStandard) => ({
+          standard: qc.standard,
+          tolerance: qc.tolerance,
+          requirement: qc.requirement,
+          measuredValue: '',
+          passed: null,
+        })));
+      }
+
       setScanState('PART_SCANNED');
       toast({
         title: 'Part Verified',
@@ -281,6 +300,14 @@ export default function P2TravelerPage() {
         }
       }
 
+      // Validate QC results - all must have a measured value and pass/fail
+      if (qcResults.length > 0) {
+        const incompleteQc = qcResults.filter(r => !r.measuredValue.trim() || r.passed === null);
+        if (incompleteQc.length > 0) {
+          throw new Error(`Please enter measured values and mark pass/fail for all QC standards`);
+        }
+      }
+
       const item = verificationData.serializedItem;
       if (!item) throw new Error('No part data available. Please scan the part again.');
 
@@ -297,6 +324,7 @@ export default function P2TravelerPage() {
           partName: item.partName || item.partNumber || 'Unknown',
           traceabilityData,
           customData: Object.keys(customData).length > 0 ? customData : null,
+          qcResults: qcResults.length > 0 ? qcResults : null,
           notes,
         }),
       }) as any;
@@ -633,29 +661,68 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* QC Standards / Tolerance Requirements */}
-                  {verificationData.departmentConfig.qcStandards && verificationData.departmentConfig.qcStandards.length > 0 && (
+                  {/* QC Standards / Tolerance Requirements - with result entry */}
+                  {qcResults.length > 0 && (
                     <div className="space-y-3">
-                      <Label className="text-base font-semibold">QC Standards & Tolerances</Label>
-                      <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium">Standard</th>
-                              <th className="text-left px-3 py-2 font-medium">Tolerance</th>
-                              <th className="text-left px-3 py-2 font-medium">Requirement</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {verificationData.departmentConfig.qcStandards.map((qc, index) => (
-                              <tr key={index} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                                <td className="px-3 py-2 font-mono font-medium">{qc.standard}</td>
-                                <td className="px-3 py-2 font-mono">{qc.tolerance}</td>
-                                <td className="px-3 py-2">{qc.requirement}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <Label className="text-base font-semibold flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        QC Standards & Tolerances — Enter Results
+                      </Label>
+                      <div className="space-y-3">
+                        {qcResults.map((qc, index) => (
+                          <div key={index} className={`border rounded-lg p-3 space-y-2 ${qc.passed === true ? 'border-green-300 bg-green-50' : qc.passed === false ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{qc.standard}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Tolerance: <span className="font-mono">{qc.tolerance}</span> · {qc.requirement}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={qc.passed === true ? 'default' : 'outline'}
+                                  className={`h-8 px-3 ${qc.passed === true ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                  onClick={() => {
+                                    const updated = [...qcResults];
+                                    updated[index].passed = true;
+                                    setQcResults(updated);
+                                  }}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  Pass
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={qc.passed === false ? 'default' : 'outline'}
+                                  className={`h-8 px-3 ${qc.passed === false ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                                  onClick={() => {
+                                    const updated = [...qcResults];
+                                    updated[index].passed = false;
+                                    setQcResults(updated);
+                                  }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                                  Fail
+                                </Button>
+                              </div>
+                            </div>
+                            <Input
+                              type="text"
+                              value={qc.measuredValue}
+                              onChange={(e) => {
+                                const updated = [...qcResults];
+                                updated[index].measuredValue = e.target.value;
+                                setQcResults(updated);
+                              }}
+                              placeholder="Enter measured value..."
+                              className="h-9"
+                              data-testid={`input-qc-result-${index}`}
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

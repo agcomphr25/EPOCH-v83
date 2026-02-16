@@ -152,12 +152,21 @@ export default function P2TravelerPage() {
       return;
     }
 
-    setEmployee({ id: 0, employeeCode: badgeInput, name: '' });
-    setScanState('BADGE_SCANNED');
-    toast({
-      title: 'Badge Scanned',
-      description: 'Now scan the part barcode',
-    });
+    try {
+      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${badgeInput.trim()}`) as Employee;
+      setEmployee(data);
+      setScanState('BADGE_SCANNED');
+      toast({
+        title: 'Badge Scanned',
+        description: `Welcome, ${data.name}. Now scan the part barcode.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Badge Not Found',
+        description: error.message || 'No employee found with that badge code',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Handle part scan
@@ -427,7 +436,8 @@ export default function P2TravelerPage() {
               <Alert>
                 <User className="h-4 w-4" />
                 <AlertDescription>
-                  Employee Badge Scanned: <strong>{badgeInput}</strong>
+                  Employee: <strong>{employee?.name || badgeInput}</strong>
+                  {employee?.name && <span className="text-muted-foreground ml-2">({badgeInput})</span>}
                 </AlertDescription>
               </Alert>
 

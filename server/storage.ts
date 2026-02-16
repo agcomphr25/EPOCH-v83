@@ -13712,14 +13712,17 @@ export class DatabaseStorage implements IStorage {
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
-      // START phase traceability (default — includes legacy traceFields)
+      // START phase traceability (default — includes legacy traceFields + per-material fields)
       if (traceFields.length > 0 || startMaterials.length > 0) {
+        const startMaterialNames = startMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'START',
           title: 'Material Lot Entry',
-          instructions: 'Record traceability data for materials used',
+          instructions: startMaterialNames.length > 0
+            ? `Record traceability for: ${startMaterialNames.join(', ')}`
+            : 'Record traceability data for materials used',
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -13739,11 +13742,24 @@ export class DatabaseStorage implements IStorage {
           receivedDate: 'Received Date',
         };
 
+        const allStartFieldKeys = new Set<string>();
+
         for (const fieldKey of traceFields) {
+          allStartFieldKeys.add(fieldKey);
+        }
+
+        for (const mat of startMaterials) {
+          const reqFields = (mat as any).requiredFields || [];
+          for (const fieldKey of reqFields) {
+            allStartFieldKeys.add(fieldKey);
+          }
+        }
+
+        for (const fieldKey of allStartFieldKeys) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
             fieldKey,
-            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l) => l.toUpperCase()).trim(),
+            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
             fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
             required: true,
           });

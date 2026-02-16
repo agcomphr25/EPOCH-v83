@@ -1176,9 +1176,12 @@ export default function TravelerExecution() {
                                                           </div>
                                                         )}
                                                         {task.taskType === 'QC' && (
-                                                          <div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-xs font-medium text-muted-foreground">
+                                                              Measured Result {field.required && <span className="text-red-500">*</span>}
+                                                            </Label>
                                                             <Input
-                                                              placeholder="Enter measured result..."
+                                                              placeholder={field.validation?.tolerance ? `Enter result (Tolerance: ${field.validation.tolerance})` : 'Enter measured result...'}
                                                               value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
                                                               onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
                                                               disabled={isComplete}

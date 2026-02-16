@@ -479,6 +479,28 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
+    const autoCompletedGateChecks: string[] = [];
+    if (badgeScan) {
+      const badgeGatePattern = /badge/i;
+      const gateCheckTasks = tasks.filter(
+        (t) =>
+          t.taskPhase === 'START' &&
+          (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
+          t.status === 'NOT_STARTED' &&
+          !t.requiresSignature &&
+          !t.requiresCertification &&
+          badgeGatePattern.test(t.title)
+      );
+      for (const gateTask of gateCheckTasks) {
+        await storage.updateTravelerTask(gateTask.id, {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          completedBy: startedBy || 'unknown',
+        });
+        autoCompletedGateChecks.push(gateTask.title);
+      }
+    }
+
     await storage.createTravelerEvent({
       travelerId,
       actor: startedBy || 'unknown',
@@ -488,6 +510,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         stepNumber: step.stepNumber,
         departmentName: step.departmentName,
         badgeScan,
+        autoCompletedGateChecks,
       },
     });
 

@@ -379,7 +379,7 @@ export default function TravelerExecution() {
     onSuccess: (_data, variables) => {
       setActiveBadge(variables.badge);
       setActiveTechName(variables.techName);
-      toast({ title: 'Step Started', description: 'Work on this step has begun' });
+      toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
       refetch();
     },
     onError: (error: any) => {

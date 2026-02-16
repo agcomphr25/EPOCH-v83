@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,13 +24,14 @@ import {
   Clipboard,
   QrCode,
   FileText,
+  Loader2,
   Camera,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
 import { useLocation } from 'wouter';
 
-type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
+type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'GENERATING_TRAVELER' | 'TASK_ACTIVE';
 
 interface Employee {
   id: number;
@@ -103,6 +105,7 @@ interface ActiveTask {
 
 export default function P2TravelerPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [, setLocation] = useLocation();
   const [scanState, setScanState] = useState<ScanState>('READY');
   const [badgeInput, setBadgeInput] = useState('');
@@ -249,12 +252,45 @@ export default function P2TravelerPage() {
       }
 
       setScanState('PART_SCANNED');
-      toast({
-        title: 'Part Verified',
-        description: `Opening full traveler for ${data.serializedItem.partName}`,
-      });
 
-      setLocation(`/p2-traveler-viewer?barcode=${encodeURIComponent(partInput.trim())}`);
+      if (data.isCertified && data.routing?.id) {
+        setScanState('GENERATING_TRAVELER');
+        toast({
+          title: 'Part Verified',
+          description: 'Generating full traveler from routing...',
+        });
+
+        try {
+          const travelerResult = await apiRequest('/api/p2-traveler/generate-traveler', {
+            method: 'POST',
+            body: JSON.stringify({
+              serializedItemId: data.serializedItem.id,
+              employeeCode: badgeInput,
+            }),
+          }) as { travelerId: string; travelerNumber: string; created: boolean };
+
+          toast({
+            title: travelerResult.created ? 'Traveler Generated' : 'Traveler Found',
+            description: `Opening traveler ${travelerResult.travelerNumber}`,
+          });
+
+          navigate(`/travelers/${travelerResult.travelerId}/execute`);
+          return;
+        } catch (genError: any) {
+          console.warn('Could not generate traveler from routing, falling back to simple mode:', genError);
+          setScanState('PART_SCANNED');
+          toast({
+            title: 'Traveler Generation Failed',
+            description: 'Falling back to simple task mode. ' + (genError?.message || ''),
+            variant: 'destructive',
+          });
+        }
+      } else {
+        toast({
+          title: 'Part Verified',
+          description: `Ready to start task in ${data.nextDepartment}`,
+        });
+      }
     } catch (error: any) {
       toast({
         title: 'Verification Failed',
@@ -500,6 +536,19 @@ export default function P2TravelerPage() {
                   </Button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* Generating Traveler State */}
+          {scanState === 'GENERATING_TRAVELER' && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold">Generating Traveler from Routing...</p>
+                <p className="text-sm text-muted-foreground">
+                  Creating full production traveler with all routing steps, checks, and requirements
+                </p>
+              </div>
             </div>
           )}
 

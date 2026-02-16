@@ -44,7 +44,7 @@ router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) =>
     res.json({
       id: employee.id,
       employeeCode: employee.employeeCode,
-      name: `${employee.firstName} ${employee.lastName}`,
+      name: employee.name || employee.employeeCode,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Badge lookup failed' });

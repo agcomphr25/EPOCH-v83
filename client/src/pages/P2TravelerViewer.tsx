@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,8 +57,17 @@ interface TravelerData {
 
 export default function P2TravelerViewer() {
   const { toast } = useToast();
-  const [searchBarcode, setSearchBarcode] = useState('');
-  const [searchedBarcode, setSearchedBarcode] = useState<string | null>(null);
+  const [location] = useLocation();
+
+  const urlBarcode = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('barcode') || '';
+    } catch { return ''; }
+  })();
+
+  const [searchBarcode, setSearchBarcode] = useState(urlBarcode);
+  const [searchedBarcode, setSearchedBarcode] = useState<string | null>(urlBarcode || null);
   const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [showLotDialog, setShowLotDialog] = useState(false);
   const [newLotData, setNewLotData] = useState({
@@ -67,6 +77,13 @@ export default function P2TravelerViewer() {
     partName: '',
     createdBy: 'system',
   });
+
+  useEffect(() => {
+    if (urlBarcode && urlBarcode !== searchedBarcode) {
+      setSearchBarcode(urlBarcode);
+      setSearchedBarcode(urlBarcode);
+    }
+  }, [urlBarcode]);
 
   const { data: travelerData, isLoading, error } = useQuery<TravelerData>({
     queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`],

@@ -3150,8 +3150,8 @@ export class DatabaseStorage implements IStorage {
       const mappedFeatures: any = {};
       if (parsedSpecs) {
         // Map camelCase to snake_case for feature fields
-        if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
-        if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
+        if (parsedSpecs.actionLength) mappedFeatures.action_length = parsedSpecs.actionLength;
+        if (parsedSpecs.actionInlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet;
         if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
         if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
         if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
@@ -3179,7 +3179,7 @@ export class DatabaseStorage implements IStorage {
         fbOrderNumber: null,
         agrOrderDetails: null,
         isCustomOrder: null,
-        modelId: parsedSpecs?.stockModel || po.itemId,
+        modelId: po.itemId,
         itemId: po.itemId,
         itemName: resolvedItemName,
         handedness: parsedSpecs?.handedness ?? null,
@@ -13712,17 +13712,14 @@ export class DatabaseStorage implements IStorage {
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
-      // START phase traceability (default — includes legacy traceFields + per-material fields)
+      // START phase traceability (default — includes legacy traceFields)
       if (traceFields.length > 0 || startMaterials.length > 0) {
-        const startMaterialNames = startMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'START',
           title: 'Material Lot Entry',
-          instructions: startMaterialNames.length > 0
-            ? `Record traceability for: ${startMaterialNames.join(', ')}`
-            : 'Record traceability data for materials used',
+          instructions: 'Record traceability data for materials used',
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -13742,24 +13739,11 @@ export class DatabaseStorage implements IStorage {
           receivedDate: 'Received Date',
         };
 
-        const allStartFieldKeys = new Set<string>();
-
         for (const fieldKey of traceFields) {
-          allStartFieldKeys.add(fieldKey);
-        }
-
-        for (const mat of startMaterials) {
-          const reqFields = (mat as any).requiredFields || [];
-          for (const fieldKey of reqFields) {
-            allStartFieldKeys.add(fieldKey);
-          }
-        }
-
-        for (const fieldKey of allStartFieldKeys) {
           await this.createTravelerTaskField({
             travelerTaskId: traceTask.id,
             fieldKey,
-            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l) => l.toUpperCase()).trim(),
             fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
             required: true,
           });

@@ -1,26 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import {
-  Scan,
-  ArrowLeft,
-  ArrowRight,
-  QrCode,
-  Calendar,
-  Target,
-  Printer,
-  X,
-  CheckCircle,
-  FileText,
-  TrendingDown,
-  Edit,
-  Zap,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, isAfter } from 'date-fns';
-import { useLocation, Link } from 'wouter';
-
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -28,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -46,6 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -55,9 +37,30 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Scan,
+  ArrowLeft,
+  ArrowRight,
+  QrCode,
+  ArrowUp,
+  Calendar,
+  Target,
+  Printer,
+  X,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  Eye,
+  TrendingDown,
+  Edit,
+  Zap,
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation, Link } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
@@ -110,7 +113,7 @@ export default function BarcodeQueuePage() {
       reportedBy: 'Production Floor',
     },
   });
-  const [, _setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Get all orders from production pipeline
@@ -125,14 +128,14 @@ export default function BarcodeQueuePage() {
   });
 
   // Helper function to check if an order has kickbacks
-  const _hasKickbacks = (orderId: string) => {
+  const hasKickbacks = (orderId: string) => {
     return (allKickbacks as any[]).some(
       (kickback: any) => kickback.orderId === orderId
     );
   };
 
   // Helper function to get the most severe kickback status for an order
-  const _getKickbackStatus = (orderId: string) => {
+  const getKickbackStatus = (orderId: string) => {
     const orderKickbacks = (allKickbacks as any[]).filter(
       (kickback: any) => kickback.orderId === orderId
     );
@@ -196,9 +199,7 @@ export default function BarcodeQueuePage() {
       // Check for failures in move response
       if (moveResponse.failed && moveResponse.failed.length > 0) {
         const failure = moveResponse.failed[0];
-        throw new Error(
-          `Failed to move order: ${failure.reason || 'Unknown error'}`
-        );
+        throw new Error(`Failed to move order: ${failure.reason || 'Unknown error'}`);
       }
 
       return { kickback: await kickbackResponse.json(), move: moveResponse };
@@ -247,10 +248,7 @@ export default function BarcodeQueuePage() {
     );
   }, [allOrders]);
 
-  const orderIdsForTickets = useMemo(
-    () => barcodeOrders.map((o: any) => o.orderId),
-    [barcodeOrders]
-  );
+  const orderIdsForTickets = useMemo(() => barcodeOrders.map((o: any) => o.orderId), [barcodeOrders]);
   const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
   // Count orders in previous department (Layup/Plugging)
@@ -274,7 +272,7 @@ export default function BarcodeQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
-  const _getModelDisplayName = (modelId: string) => {
+  const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
@@ -289,20 +287,12 @@ export default function BarcodeQueuePage() {
       const stockModel = (stockModels as any[]).find(
         (m: any) => m.id === modelId
       );
-
-      const baseName = stockModel?.displayName || stockModel?.name || modelId;
-
-      const actionSuffix = order.features?.action_length
-        ? ` - ${
-            order.features.action_length === 'short'
-              ? 'Short Action'
-              : order.features.action_length === 'long'
-                ? 'Long Action'
-                : order.features.action_length
-          }`
-        : '';
-
-      const categoryKey = `${baseName}${actionSuffix}`;
+      // For P1 PO orders, use itemName or product field which contains the actual stock model name
+      // P1 PO orders have numeric modelId that won't match stock model IDs
+      const isPOOrder = order.orderId?.startsWith('PO-') || order.orderId?.startsWith('P1-');
+      const categoryKey = isPOOrder 
+        ? (order.itemName || order.product || modelId)
+        : (stockModel?.displayName || stockModel?.name || modelId);
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -370,7 +360,7 @@ export default function BarcodeQueuePage() {
           if (errorData.details) {
             errorMessage += `: ${errorData.details}`;
           }
-        } catch (_e) {
+        } catch (e) {
           // If response is not JSON, use status text
           errorMessage = `Failed to create labels (${response.status}: ${response.statusText})`;
         }
@@ -414,9 +404,7 @@ export default function BarcodeQueuePage() {
       console.error('Label creation error:', error);
       toast({
         title: 'Error creating labels',
-        description:
-          error.message ||
-          'Failed to create barcode labels. Please try again or contact support if the issue persists.',
+        description: error.message || 'Failed to create barcode labels. Please try again or contact support if the issue persists.',
         variant: 'destructive',
       });
     },
@@ -430,18 +418,16 @@ export default function BarcodeQueuePage() {
       const poFlatTopOrderIds: string[] = [];
       const flatTopOrderIds: string[] = [];
       const cncOrderIds: string[] = [];
-
+      
       for (const orderId of orderIds) {
         const order = barcodeOrders.find((o: any) => o.orderId === orderId);
         if (order) {
           // Check if this is a PO item (production order format: PO-P18261-18-1)
           const isPOItem = orderId.startsWith('PO-');
-
+          
           if (isPOItem) {
             // Check if PO item has flattop option
-            const isFlattop =
-              order.features?.flattop === true ||
-              order.features?.flattop === 'true';
+            const isFlattop = order.features?.flattop === true || order.features?.flattop === 'true';
             if (isFlattop) {
               poFlatTopOrderIds.push(orderId);
             } else {
@@ -458,19 +444,19 @@ export default function BarcodeQueuePage() {
           }
         }
       }
-
+      
       console.log('🔀 Smart Routing:', {
         poItems: poOrderIds.length,
         poFlattops: poFlatTopOrderIds.length,
         flatTops: flatTopOrderIds.length,
         cnc: cncOrderIds.length,
-        totalOrders: orderIds.length,
+        totalOrders: orderIds.length
       });
-
+      
       let poToShippingQC = 0;
       let poToCNC = 0;
-      const failedOrders: Array<{ orderId: string; reason?: string }> = [];
-
+      const failedOrders: Array<{orderId: string, reason?: string}> = [];
+      
       // Smart progression for PO items (routes based on stock model)
       if (poOrderIds.length > 0) {
         const poResult = await apiRequest('/api/po-orders/smart-progress', {
@@ -479,187 +465,135 @@ export default function BarcodeQueuePage() {
         });
         poToShippingQC = poResult.toShippingQC?.length || 0;
         poToCNC = poResult.toCNC?.length || 0;
-
+        
         // Check for failures in PO smart-progress
         if (poResult.failed && poResult.failed.length > 0) {
-          failedOrders.push(
-            ...poResult.failed.map((f: any) => ({
-              orderId: f.orderId ?? f,
-              reason: f.reason || 'Unknown error',
-            }))
-          );
+          failedOrders.push(...poResult.failed.map((f: any) => ({
+            orderId: f.orderId ?? f,
+            reason: f.reason || 'Unknown error'
+          })));
           console.error('❌ Failed to progress PO items:', poResult.failed);
         }
       }
-
+      
       // Progress PO flattops directly to Finish department
       let poFlatTopSuccessCount = 0;
       if (poFlatTopOrderIds.length > 0) {
         try {
-          const poFlatTopResult = await apiRequest(
-            '/api/po-orders/progress-to-department',
-            {
-              method: 'POST',
-              body: {
-                orderIds: poFlatTopOrderIds,
-                toDepartment: 'Finish',
-              },
-            }
-          );
+          const poFlatTopResult = await apiRequest('/api/po-orders/progress-to-department', {
+            method: 'POST',
+            body: {
+              orderIds: poFlatTopOrderIds,
+              toDepartment: 'Finish',
+            },
+          });
           poFlatTopSuccessCount = poFlatTopResult.success?.length || 0;
-
+          
           // Check for failures in PO flattop progression
           if (poFlatTopResult.failed && poFlatTopResult.failed.length > 0) {
-            failedOrders.push(
-              ...poFlatTopResult.failed.map((f: any) => ({
-                orderId: f.orderId ?? f,
-                reason: f.reason || 'Unknown error',
-              }))
-            );
-            console.error(
-              '❌ Failed to progress PO flattops:',
-              poFlatTopResult.failed
-            );
+            failedOrders.push(...poFlatTopResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress PO flattops:', poFlatTopResult.failed);
           }
         } catch (error) {
           console.error('❌ Failed to progress PO flattops:', error);
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
-          failedOrders.push(
-            ...poFlatTopOrderIds.map((id) => ({
-              orderId: id,
-              reason: errorMsg,
-            }))
-          );
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...poFlatTopOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
-
+      
       // Progress flat tops to Finish department
       let flatTopSuccessCount = 0;
       if (flatTopOrderIds.length > 0) {
         try {
-          const flatTopResult = await apiRequest(
-            '/api/orders/progress-department',
-            {
-              method: 'POST',
-              body: {
-                orderIds: flatTopOrderIds,
-                toDepartment: 'Finish',
-                fromDepartment: 'Barcode',
-              },
-            }
-          );
+          const flatTopResult = await apiRequest('/api/orders/progress-department', {
+            method: 'POST',
+            body: {
+              orderIds: flatTopOrderIds,
+              toDepartment: 'Finish',
+              fromDepartment: 'Barcode',
+            },
+          });
           flatTopSuccessCount = flatTopResult.success?.length || 0;
-
+          
           // Check for failures in flat top progression
           if (flatTopResult.failed && flatTopResult.failed.length > 0) {
-            failedOrders.push(
-              ...flatTopResult.failed.map((f: any) => ({
-                orderId: f.orderId ?? f,
-                reason: f.reason || 'Unknown error',
-              }))
-            );
-            console.error(
-              '❌ Failed to progress flat tops:',
-              flatTopResult.failed
-            );
+            failedOrders.push(...flatTopResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress flat tops:', flatTopResult.failed);
           }
         } catch (error) {
           console.error('❌ Failed to progress flat tops:', error);
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
-          failedOrders.push(
-            ...flatTopOrderIds.map((id) => ({ orderId: id, reason: errorMsg }))
-          );
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...flatTopOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
-
+      
       // Progress others to CNC department
       let cncSuccessCount = 0;
       if (cncOrderIds.length > 0) {
         try {
-          const cncResult = await apiRequest(
-            '/api/orders/progress-department',
-            {
-              method: 'POST',
-              body: {
-                orderIds: cncOrderIds,
-                toDepartment: 'CNC',
-                fromDepartment: 'Barcode',
-              },
-            }
-          );
+          const cncResult = await apiRequest('/api/orders/progress-department', {
+            method: 'POST',
+            body: {
+              orderIds: cncOrderIds,
+              toDepartment: 'CNC',
+              fromDepartment: 'Barcode',
+            },
+          });
           cncSuccessCount = cncResult.success?.length || 0;
-
+          
           // Check for failures in CNC progression
           if (cncResult.failed && cncResult.failed.length > 0) {
-            failedOrders.push(
-              ...cncResult.failed.map((f: any) => ({
-                orderId: f.orderId ?? f,
-                reason: f.reason || 'Unknown error',
-              }))
-            );
-            console.error(
-              '❌ Failed to progress CNC orders:',
-              cncResult.failed
-            );
+            failedOrders.push(...cncResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress CNC orders:', cncResult.failed);
           }
         } catch (error) {
           console.error('❌ Failed to progress CNC orders:', error);
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
-          failedOrders.push(
-            ...cncOrderIds.map((id) => ({ orderId: id, reason: errorMsg }))
-          );
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...cncOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
-
+      
       // If any orders failed, throw an error to trigger onError handler
       if (failedOrders.length > 0) {
-        const failureDetails = failedOrders
-          .map((f) => `${f.orderId} (${f.reason})`)
-          .join(', ');
-        throw new Error(
-          `Failed to progress ${failedOrders.length} order(s): ${failureDetails}`
-        );
+        const failureDetails = failedOrders.map(f => `${f.orderId} (${f.reason})`).join(', ');
+        throw new Error(`Failed to progress ${failedOrders.length} order(s): ${failureDetails}`);
       }
-
-      return {
+      
+      return { 
         flatTopCount: flatTopSuccessCount,
         poFlatTopCount: poFlatTopSuccessCount,
         cncCount: cncSuccessCount,
         poToShippingQC,
-        poToCNC,
+        poToCNC
       };
     },
     onSuccess: (data) => {
       const messages = [];
       if (data.poToShippingQC > 0) {
-        messages.push(
-          `${data.poToShippingQC} PO item${data.poToShippingQC > 1 ? 's' : ''} → Shipping QC (no stock)`
-        );
+        messages.push(`${data.poToShippingQC} PO item${data.poToShippingQC > 1 ? 's' : ''} → Shipping QC (no stock)`);
       }
       if (data.poToCNC > 0) {
-        messages.push(
-          `${data.poToCNC} PO item${data.poToCNC > 1 ? 's' : ''} → CNC`
-        );
+        messages.push(`${data.poToCNC} PO item${data.poToCNC > 1 ? 's' : ''} → CNC`);
       }
       if (data.poFlatTopCount > 0) {
-        messages.push(
-          `${data.poFlatTopCount} PO Flattop${data.poFlatTopCount > 1 ? 's' : ''} → Finish`
-        );
+        messages.push(`${data.poFlatTopCount} PO Flattop${data.poFlatTopCount > 1 ? 's' : ''} → Finish`);
       }
       if (data.flatTopCount > 0) {
-        messages.push(
-          `${data.flatTopCount} Flat Top${data.flatTopCount > 1 ? 's' : ''} → Finish`
-        );
+        messages.push(`${data.flatTopCount} Flat Top${data.flatTopCount > 1 ? 's' : ''} → Finish`);
       }
       if (data.cncCount > 0) {
-        messages.push(
-          `${data.cncCount} order${data.cncCount > 1 ? 's' : ''} → CNC`
-        );
+        messages.push(`${data.cncCount} order${data.cncCount > 1 ? 's' : ''} → CNC`);
       }
-
+      
       toast({
         title: 'Orders progressed',
         description: messages.join(', '),
@@ -910,10 +844,7 @@ export default function BarcodeQueuePage() {
                         new Date(order.dueDate)
                       );
                       const actionLength =
-                        order.features?.action_length ||
-                        order.features?.actionLength ||
-                        order.actionLength ||
-                        'unknown';
+                        order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_')
                         ? 'Carbon Fiber'
@@ -957,18 +888,13 @@ export default function BarcodeQueuePage() {
                                   <span className="font-semibold text-lg">
                                     {getDisplayOrderId(order)}
                                   </span>
-                                  <TicketBadge
-                                    orderId={order.orderId}
-                                    ticketMap={ticketMap}
-                                  />
-                                  {(order.urgency === 'high' ||
-                                    order.urgency === 'critical') &&
-                                    order.isManualUrgency && (
-                                      <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
-                                        <Zap className="w-3 h-3" />
-                                        URGENT!!!
-                                      </Badge>
-                                    )}
+                                  <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
+                                  {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                    <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
+                                      <Zap className="w-3 h-3" />
+                                      URGENT!!!
+                                    </Badge>
+                                  )}
                                   {isOverdue && (
                                     <Badge
                                       variant="destructive"
@@ -1037,15 +963,8 @@ export default function BarcodeQueuePage() {
                                   </div>
 
                                   {/* Collapsible Details */}
-                                  <Accordion
-                                    type="single"
-                                    collapsible
-                                    className="w-full"
-                                  >
-                                    <AccordionItem
-                                      value="details"
-                                      className="border-none"
-                                    >
+                                  <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="details" className="border-none">
                                       <AccordionTrigger className="py-1 text-xs text-gray-500 hover:no-underline">
                                         Details
                                       </AccordionTrigger>
@@ -1054,46 +973,29 @@ export default function BarcodeQueuePage() {
                                           {/* Bottom Metal and LOP/Fill Badges */}
                                           <div className="flex gap-2 flex-wrap">
                                             {(() => {
-                                              const bottomMetal =
-                                                order.features?.bottom_metal;
+                                              const bottomMetal = order.features?.bottom_metal;
                                               const showBottomMetal =
                                                 bottomMetal &&
-                                                typeof bottomMetal ===
-                                                  'string' &&
-                                                bottomMetal
-                                                  .toLowerCase()
-                                                  .includes('adl');
+                                                typeof bottomMetal === 'string' &&
+                                                bottomMetal.toLowerCase().includes('adl');
                                               if (showBottomMetal) {
                                                 return (
                                                   <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold text-xs">
-                                                    {bottomMetal
-                                                      .replace(/_/g, ' ')
-                                                      .toUpperCase()}
+                                                    {bottomMetal.replace(/_/g, ' ').toUpperCase()}
                                                   </Badge>
                                                 );
                                               }
                                               return null;
                                             })()}
                                             {(() => {
-                                              const lop =
-                                                order.features?.length_of_pull;
-                                              const hasLopAdjustment =
-                                                lop &&
-                                                lop !== 'no_lop_change' &&
-                                                lop.includes('lop_adj_');
-                                              const lopMatch = hasLopAdjustment
-                                                ? lop.match(/lop_adj_([\d.]+)/)
-                                                : null;
-                                              const lopValue = lopMatch
-                                                ? lopMatch[1]
-                                                : null;
-
+                                              const lop = order.features?.length_of_pull;
+                                              const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
+                                              const lopMatch = hasLopAdjustment ? lop.match(/lop_adj_([\d.]+)/) : null;
+                                              const lopValue = lopMatch ? lopMatch[1] : null;
+                                              
                                               const fill = order.features?.fill;
-                                              const hasFill =
-                                                fill &&
-                                                fill !== 'no_fill' &&
-                                                fill !== 'none';
-
+                                              const hasFill = fill && fill !== 'no_fill' && fill !== 'none';
+                                              
                                               if (hasLopAdjustment || hasFill) {
                                                 return (
                                                   <div className="flex gap-1">
@@ -1147,9 +1049,7 @@ export default function BarcodeQueuePage() {
                                               title="View Sales Order"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleSalesOrderView(
-                                                  order.orderId
-                                                );
+                                                handleSalesOrderView(order.orderId);
                                               }}
                                             >
                                               <FileText className="w-3 h-3" />
@@ -1159,9 +1059,7 @@ export default function BarcodeQueuePage() {
                                               size="sm"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleKickbackClick(
-                                                  order.orderId
-                                                );
+                                                handleKickbackClick(order.orderId);
                                               }}
                                               title="Report Kickback"
                                               className="h-6 w-6 p-0 ml-1"
@@ -1270,10 +1168,7 @@ export default function BarcodeQueuePage() {
                               new Date(order.dueDate)
                             );
                             const actionLength =
-                              order.features?.action_length ||
-                              order.features?.actionLength ||
-                              order.actionLength ||
-                              'unknown';
+                              order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
                             // Determine material type from stock model ID
                             const materialType = order.modelId?.startsWith(
                               'cf_'
@@ -1299,12 +1194,11 @@ export default function BarcodeQueuePage() {
                                   isPOOrder
                                     ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                     : isOverdue
-                                      ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                                      : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10 cursor-pointer'
+                                    ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                                    : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10 cursor-pointer'
                                 }`}
                                 onClick={() =>
-                                  !isPOOrder &&
-                                  handlePrintLabels([order.orderId])
+                                  !isPOOrder && handlePrintLabels([order.orderId])
                                 }
                               >
                                 <CardContent className="p-3">
@@ -1313,10 +1207,7 @@ export default function BarcodeQueuePage() {
                                       <span className="font-semibold text-lg">
                                         {getDisplayOrderId(order)}
                                       </span>
-                                      <TicketBadge
-                                        orderId={order.orderId}
-                                        ticketMap={ticketMap}
-                                      />
+                                      <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
                                       {isOverdue && (
                                         <Badge
                                           variant="destructive"
@@ -1383,17 +1274,14 @@ export default function BarcodeQueuePage() {
                                           Action
                                         </Badge>
                                         {/* Flattop badge for P1 PO orders */}
-                                        {isPOOrder &&
-                                          (order.features?.flattop === true ||
-                                            order.features?.flattop ===
-                                              'true') && (
-                                            <Badge
-                                              variant="outline"
-                                              className="text-xs border-teal-600 text-teal-700 bg-teal-50"
-                                            >
-                                              FLATTOP
-                                            </Badge>
-                                          )}
+                                        {isPOOrder && (order.features?.flattop === true || order.features?.flattop === 'true') && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs border-teal-600 text-teal-700 bg-teal-50"
+                                          >
+                                            FLATTOP
+                                          </Badge>
+                                        )}
                                         <Link
                                           href={`/order-entry?draft=${order.orderId}`}
                                         >
@@ -1520,8 +1408,7 @@ export default function BarcodeQueuePage() {
                 <Button
                   onClick={handleProgressToNextDepartment}
                   disabled={
-                    selectedOrders.size === 0 ||
-                    progressToNextDepartment.isPending
+                    selectedOrders.size === 0 || progressToNextDepartment.isPending
                   }
                   className="bg-orange-600 hover:bg-orange-700 text-white"
                 >

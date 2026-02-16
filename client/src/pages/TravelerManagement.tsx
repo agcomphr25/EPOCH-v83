@@ -1,26 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  FileText,
-  Plus,
-  Play,
-  CheckCircle,
-  XCircle,
-  Search,
-  Eye,
-  AlertTriangle,
-  Clipboard,
-  Filter,
-  Loader2,
-  MoreHorizontal,
-  Pencil,
-  Ban,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
-import { Link } from 'wouter';
-
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -33,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -51,13 +29,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -65,6 +36,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  FileText,
+  Plus,
+  Play,
+  CheckCircle,
+  XCircle,
+  Search,
+  Eye,
+  AlertTriangle,
+  Clock,
+  Clipboard,
+  Filter,
+  Loader2,
+} from 'lucide-react';
+import { Link } from 'wouter';
 
 interface Traveler {
   id: string;
@@ -115,24 +101,8 @@ export default function TravelerManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showBlockDialog, setShowBlockDialog] = useState(false);
-  const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(
-    null
-  );
   const [selectedRouting, setSelectedRouting] = useState<string>('');
-  const [cancelReason, setCancelReason] = useState('');
-  const [blockReason, setBlockReason] = useState('');
   const [createFormData, setCreateFormData] = useState({
-    workOrderId: '',
-    salesOrderId: '',
-    lotNumber: '',
-    serialNumber: '',
-    internalControlNumber: '',
-    quantity: 1,
-  });
-  const [editFormData, setEditFormData] = useState({
     workOrderId: '',
     salesOrderId: '',
     lotNumber: '',
@@ -153,10 +123,7 @@ export default function TravelerManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: {
-      partRoutingId: string;
-      formData: typeof createFormData;
-    }) =>
+    mutationFn: (data: { partRoutingId: string; formData: typeof createFormData }) =>
       apiRequest(`/api/travelers/from-routing/${data.partRoutingId}`, {
         method: 'POST',
         body: JSON.stringify({
@@ -168,8 +135,7 @@ export default function TravelerManagement() {
     onSuccess: () => {
       toast({
         title: 'Traveler Created',
-        description:
-          'New traveler has been generated from the routing template',
+        description: 'New traveler has been generated from the routing template',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
       setShowCreateDialog(false);
@@ -187,34 +153,6 @@ export default function TravelerManagement() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to create traveler',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const editMutation = useMutation({
-    mutationFn: (data: { id: string; formData: typeof editFormData }) =>
-      apiRequest(`/api/travelers/${data.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          ...data.formData,
-          updatedBy: 'system',
-        }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Traveler Updated',
-        description: 'Traveler details have been saved',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-      setShowEditDialog(false);
-      setSelectedTraveler(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update traveler',
         variant: 'destructive',
       });
     },
@@ -238,106 +176,6 @@ export default function TravelerManagement() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to start traveler',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const completeMutation = useMutation({
-    mutationFn: (id: string) =>
-      apiRequest(`/api/travelers/${id}/complete`, {
-        method: 'POST',
-        body: JSON.stringify({ completedBy: 'system' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Traveler Completed',
-        description: 'Traveler has been marked as completed',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description:
-          error.message ||
-          'Failed to complete traveler. Ensure all steps are completed and signed.',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (data: { id: string; reason: string }) =>
-      apiRequest(`/api/travelers/${data.id}/cancel`, {
-        method: 'POST',
-        body: JSON.stringify({ canceledBy: 'system', reason: data.reason }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Traveler Canceled',
-        description: 'Traveler has been canceled',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-      setShowCancelDialog(false);
-      setSelectedTraveler(null);
-      setCancelReason('');
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to cancel traveler',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const blockMutation = useMutation({
-    mutationFn: (data: { id: string; reason: string }) =>
-      apiRequest(`/api/travelers/${data.id}/block`, {
-        method: 'POST',
-        body: JSON.stringify({ blockedBy: 'system', reason: data.reason }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Traveler Blocked',
-        description: 'Traveler has been blocked',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-      setShowBlockDialog(false);
-      setSelectedTraveler(null);
-      setBlockReason('');
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to block traveler',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const unblockMutation = useMutation({
-    mutationFn: (id: string) =>
-      apiRequest(`/api/travelers/${id}/unblock`, {
-        method: 'POST',
-        body: JSON.stringify({ unblockedBy: 'system' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Traveler Unblocked',
-        description: 'Traveler is back in progress',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to unblock traveler',
         variant: 'destructive',
       });
     },
@@ -377,69 +215,8 @@ export default function TravelerManagement() {
     });
   };
 
-  const handleEdit = (traveler: Traveler) => {
-    setSelectedTraveler(traveler);
-    setEditFormData({
-      workOrderId: traveler.workOrderId || '',
-      salesOrderId: traveler.salesOrderId || '',
-      lotNumber: traveler.lotNumber || '',
-      serialNumber: traveler.serialNumber || '',
-      internalControlNumber: traveler.internalControlNumber || '',
-      quantity: traveler.quantity,
-    });
-    setShowEditDialog(true);
-  };
-
-  const handleSaveEdit = () => {
-    if (!selectedTraveler) return;
-    editMutation.mutate({
-      id: selectedTraveler.id,
-      formData: editFormData,
-    });
-  };
-
   const handleStart = (id: string) => {
     startMutation.mutate(id);
-  };
-
-  const handleComplete = (id: string) => {
-    if (
-      confirm('Complete this traveler? All steps must be completed and signed.')
-    ) {
-      completeMutation.mutate(id);
-    }
-  };
-
-  const handleCancelClick = (traveler: Traveler) => {
-    setSelectedTraveler(traveler);
-    setCancelReason('');
-    setShowCancelDialog(true);
-  };
-
-  const handleConfirmCancel = () => {
-    if (!selectedTraveler) return;
-    cancelMutation.mutate({
-      id: selectedTraveler.id,
-      reason: cancelReason,
-    });
-  };
-
-  const handleBlockClick = (traveler: Traveler) => {
-    setSelectedTraveler(traveler);
-    setBlockReason('');
-    setShowBlockDialog(true);
-  };
-
-  const handleConfirmBlock = () => {
-    if (!selectedTraveler) return;
-    blockMutation.mutate({
-      id: selectedTraveler.id,
-      reason: blockReason,
-    });
-  };
-
-  const handleUnblock = (id: string) => {
-    unblockMutation.mutate(id);
   };
 
   const handleDelete = (id: string) => {
@@ -450,13 +227,9 @@ export default function TravelerManagement() {
 
   const filteredTravelers = travelers.filter((t) => {
     const matchesSearch =
-      (t.travelerNumber?.toLowerCase() || '').includes(
-        searchTerm.toLowerCase()
-      ) ||
+      (t.travelerNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (t.partNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (t.workOrderId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (t.lotNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (t.serialNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      (t.workOrderId?.toLowerCase() || '').includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
 
@@ -485,17 +258,12 @@ export default function TravelerManagement() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold" data-testid="page-title">
-            Traveler Management
-          </h1>
+          <h1 className="text-3xl font-bold" data-testid="page-title">Traveler Management</h1>
           <p className="text-muted-foreground">
             AS9100-compliant production travelers for manufacturing execution
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreateDialog(true)}
-          data-testid="button-create-traveler"
-        >
+        <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
           <Plus className="h-4 w-4 mr-2" />
           Create Traveler
         </Button>
@@ -504,74 +272,42 @@ export default function TravelerManagement() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p className="text-2xl font-bold" data-testid="stat-total">
-              {stats.total}
-            </p>
+            <p className="text-2xl font-bold" data-testid="stat-total">{stats.total}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Draft
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Draft</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p
-              className="text-2xl font-bold text-gray-600"
-              data-testid="stat-draft"
-            >
-              {stats.draft}
-            </p>
+            <p className="text-2xl font-bold text-gray-600" data-testid="stat-draft">{stats.draft}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium text-blue-500">
-              In Progress
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-blue-500">In Progress</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p
-              className="text-2xl font-bold text-blue-600"
-              data-testid="stat-in-progress"
-            >
-              {stats.inProgress}
-            </p>
+            <p className="text-2xl font-bold text-blue-600" data-testid="stat-in-progress">{stats.inProgress}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium text-green-500">
-              Completed
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-green-500">Completed</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p
-              className="text-2xl font-bold text-green-600"
-              data-testid="stat-completed"
-            >
-              {stats.completed}
-            </p>
+            <p className="text-2xl font-bold text-green-600" data-testid="stat-completed">{stats.completed}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium text-red-500">
-              Blocked
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-red-500">Blocked</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p
-              className="text-2xl font-bold text-red-600"
-              data-testid="stat-blocked"
-            >
-              {stats.blocked}
-            </p>
+            <p className="text-2xl font-bold text-red-600" data-testid="stat-blocked">{stats.blocked}</p>
           </CardContent>
         </Card>
       </div>
@@ -597,10 +333,7 @@ export default function TravelerManagement() {
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger
-                  className="w-40"
-                  data-testid="select-status-filter"
-                >
+                <SelectTrigger className="w-40" data-testid="select-status-filter">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Filter status" />
                 </SelectTrigger>
@@ -634,10 +367,7 @@ export default function TravelerManagement() {
             <TableBody>
               {filteredTravelers.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className="text-center py-8 text-muted-foreground"
-                  >
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     {searchTerm || statusFilter !== 'all'
                       ? 'No travelers match your search criteria'
                       : 'No travelers yet. Create one from a part routing.'}
@@ -646,14 +376,8 @@ export default function TravelerManagement() {
               ) : (
                 filteredTravelers.map((traveler) => {
                   const StatusIcon = STATUS_ICONS[traveler.status] || FileText;
-                  const isTerminal =
-                    traveler.status === 'COMPLETED' ||
-                    traveler.status === 'CANCELED';
                   return (
-                    <TableRow
-                      key={traveler.id}
-                      data-testid={`row-traveler-${traveler.id}`}
-                    >
+                    <TableRow key={traveler.id} data-testid={`row-traveler-${traveler.id}`}>
                       <TableCell className="font-mono font-medium">
                         {traveler.travelerNumber}
                         {traveler.travelerRevision > 1 && (
@@ -670,11 +394,7 @@ export default function TravelerManagement() {
                       </TableCell>
                       <TableCell>{traveler.quantity}</TableCell>
                       <TableCell>
-                        <Badge
-                          className={
-                            STATUS_COLORS[traveler.status] || 'bg-gray-100'
-                          }
-                        >
+                        <Badge className={STATUS_COLORS[traveler.status] || 'bg-gray-100'}>
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {traveler.status}
                         </Badge>
@@ -683,102 +403,43 @@ export default function TravelerManagement() {
                         {new Date(traveler.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-2">
                           <Link href={`/travelers/${traveler.id}`}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              data-testid={`button-view-${traveler.id}`}
-                            >
+                            <Button variant="ghost" size="sm" data-testid={`button-view-${traveler.id}`}>
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {traveler.status === 'DRAFT' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleStart(traveler.id)}
+                                disabled={startMutation.isPending}
+                                data-testid={`button-start-${traveler.id}`}
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(traveler.id)}
+                                className="text-red-500 hover:text-red-700"
+                                disabled={deleteMutation.isPending}
+                                data-testid={`button-delete-${traveler.id}`}
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                           {traveler.status === 'IN_PROGRESS' && (
                             <Link href={`/travelers/${traveler.id}/execute`}>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid={`button-execute-${traveler.id}`}
-                              >
+                              <Button variant="outline" size="sm" data-testid={`button-execute-${traveler.id}`}>
                                 <Clipboard className="h-4 w-4 mr-1" />
                                 Execute
                               </Button>
                             </Link>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                data-testid={`button-actions-${traveler.id}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {!isTerminal && (
-                                <DropdownMenuItem
-                                  onClick={() => handleEdit(traveler)}
-                                >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit Details
-                                </DropdownMenuItem>
-                              )}
-                              {traveler.status === 'DRAFT' && (
-                                <DropdownMenuItem
-                                  onClick={() => handleStart(traveler.id)}
-                                >
-                                  <Play className="h-4 w-4 mr-2" />
-                                  Start Traveler
-                                </DropdownMenuItem>
-                              )}
-                              {traveler.status === 'IN_PROGRESS' && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => handleComplete(traveler.id)}
-                                  >
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Complete Traveler
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleBlockClick(traveler)}
-                                  >
-                                    <ShieldAlert className="h-4 w-4 mr-2" />
-                                    Block Traveler
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {traveler.status === 'BLOCKED' && (
-                                <DropdownMenuItem
-                                  onClick={() => handleUnblock(traveler.id)}
-                                >
-                                  <ShieldCheck className="h-4 w-4 mr-2" />
-                                  Unblock Traveler
-                                </DropdownMenuItem>
-                              )}
-                              {!isTerminal && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleCancelClick(traveler)}
-                                    className="text-orange-600"
-                                  >
-                                    <Ban className="h-4 w-4 mr-2" />
-                                    Cancel Traveler
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {traveler.status === 'DRAFT' && (
-                                <DropdownMenuItem
-                                  onClick={() => handleDelete(traveler.id)}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete Traveler
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -790,7 +451,6 @@ export default function TravelerManagement() {
         </CardContent>
       </Card>
 
-      {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -803,10 +463,7 @@ export default function TravelerManagement() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="routing">Part Routing *</Label>
-              <Select
-                value={selectedRouting}
-                onValueChange={setSelectedRouting}
-              >
+              <Select value={selectedRouting} onValueChange={setSelectedRouting}>
                 <SelectTrigger data-testid="select-routing">
                   <SelectValue placeholder="Select a part routing..." />
                 </SelectTrigger>
@@ -832,10 +489,7 @@ export default function TravelerManagement() {
                   id="workOrderId"
                   value={createFormData.workOrderId}
                   onChange={(e) =>
-                    setCreateFormData({
-                      ...createFormData,
-                      workOrderId: e.target.value,
-                    })
+                    setCreateFormData({ ...createFormData, workOrderId: e.target.value })
                   }
                   placeholder="WO-12345"
                   data-testid="input-work-order"
@@ -847,10 +501,7 @@ export default function TravelerManagement() {
                   id="salesOrderId"
                   value={createFormData.salesOrderId}
                   onChange={(e) =>
-                    setCreateFormData({
-                      ...createFormData,
-                      salesOrderId: e.target.value,
-                    })
+                    setCreateFormData({ ...createFormData, salesOrderId: e.target.value })
                   }
                   placeholder="SO-12345"
                   data-testid="input-sales-order"
@@ -865,10 +516,7 @@ export default function TravelerManagement() {
                   id="lotNumber"
                   value={createFormData.lotNumber}
                   onChange={(e) =>
-                    setCreateFormData({
-                      ...createFormData,
-                      lotNumber: e.target.value,
-                    })
+                    setCreateFormData({ ...createFormData, lotNumber: e.target.value })
                   }
                   placeholder="LOT-2024-001"
                   data-testid="input-lot"
@@ -880,10 +528,7 @@ export default function TravelerManagement() {
                   id="serialNumber"
                   value={createFormData.serialNumber}
                   onChange={(e) =>
-                    setCreateFormData({
-                      ...createFormData,
-                      serialNumber: e.target.value,
-                    })
+                    setCreateFormData({ ...createFormData, serialNumber: e.target.value })
                   }
                   placeholder="SN-001"
                   data-testid="input-serial"
@@ -927,10 +572,7 @@ export default function TravelerManagement() {
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateDialog(false)}
-            >
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>
             <Button
@@ -938,215 +580,8 @@ export default function TravelerManagement() {
               disabled={createMutation.isPending || !selectedRouting}
               data-testid="button-confirm-create"
             >
-              {createMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
+              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Traveler
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Traveler</DialogTitle>
-            <DialogDescription>
-              Update details for traveler {selectedTraveler?.travelerNumber}
-              {selectedTraveler?.partNumber &&
-                ` - ${selectedTraveler.partNumber}`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-workOrderId">Work Order ID</Label>
-                <Input
-                  id="edit-workOrderId"
-                  value={editFormData.workOrderId}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      workOrderId: e.target.value,
-                    })
-                  }
-                  placeholder="WO-12345"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-salesOrderId">Sales Order ID</Label>
-                <Input
-                  id="edit-salesOrderId"
-                  value={editFormData.salesOrderId}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      salesOrderId: e.target.value,
-                    })
-                  }
-                  placeholder="SO-12345"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-lotNumber">Lot Number</Label>
-                <Input
-                  id="edit-lotNumber"
-                  value={editFormData.lotNumber}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      lotNumber: e.target.value,
-                    })
-                  }
-                  placeholder="LOT-2024-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-serialNumber">Serial Number</Label>
-                <Input
-                  id="edit-serialNumber"
-                  value={editFormData.serialNumber}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      serialNumber: e.target.value,
-                    })
-                  }
-                  placeholder="SN-001"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-icn">Internal Control Number</Label>
-                <Input
-                  id="edit-icn"
-                  value={editFormData.internalControlNumber}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      internalControlNumber: e.target.value,
-                    })
-                  }
-                  placeholder="ICN-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-quantity">Quantity</Label>
-                <Input
-                  id="edit-quantity"
-                  type="number"
-                  min="1"
-                  value={editFormData.quantity}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      quantity: parseInt(e.target.value) || 1,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveEdit} disabled={editMutation.isPending}>
-              {editMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cancel Dialog */}
-      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Cancel Traveler</DialogTitle>
-            <DialogDescription>
-              Cancel traveler {selectedTraveler?.travelerNumber}? This action
-              cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <Label htmlFor="cancel-reason">Reason for Cancellation *</Label>
-            <Textarea
-              id="cancel-reason"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Enter reason for canceling this traveler..."
-              rows={3}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCancelDialog(false)}
-            >
-              Go Back
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmCancel}
-              disabled={cancelMutation.isPending || !cancelReason.trim()}
-            >
-              {cancelMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Cancel Traveler
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Block Dialog */}
-      <Dialog open={showBlockDialog} onOpenChange={setShowBlockDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Block Traveler</DialogTitle>
-            <DialogDescription>
-              Block traveler {selectedTraveler?.travelerNumber}? This will pause
-              all work on this traveler.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <Label htmlFor="block-reason">Reason for Blocking *</Label>
-            <Textarea
-              id="block-reason"
-              value={blockReason}
-              onChange={(e) => setBlockReason(e.target.value)}
-              placeholder="Enter reason for blocking this traveler..."
-              rows={3}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBlockDialog(false)}>
-              Go Back
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmBlock}
-              disabled={blockMutation.isPending || !blockReason.trim()}
-            >
-              {blockMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Block Traveler
             </Button>
           </DialogFooter>
         </DialogContent>

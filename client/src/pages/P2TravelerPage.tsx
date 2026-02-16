@@ -157,12 +157,21 @@ export default function P2TravelerPage() {
       return;
     }
 
-    setEmployee({ id: 0, employeeCode: badgeInput, name: '' });
-    setScanState('BADGE_SCANNED');
-    toast({
-      title: 'Badge Scanned',
-      description: 'Now scan the part barcode',
-    });
+    try {
+      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${badgeInput.trim()}`) as Employee;
+      setEmployee(data);
+      setScanState('BADGE_SCANNED');
+      toast({
+        title: 'Badge Scanned',
+        description: `Welcome, ${data.name}. Now scan the part barcode.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Badge Not Found',
+        description: error.message || 'No employee found with that badge code',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Handle part scan
@@ -195,6 +204,51 @@ export default function P2TravelerPage() {
         return;
       }
 
+      // Initialize traceability fields based on requirements
+      const initialTraceability: any[] = [];
+      const materialFieldTypes = new Set<string>();
+      
+      // Add material requirements
+      if (data.departmentConfig.materials) {
+        data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
+          material.requiredFields.forEach((fieldType: string) => {
+            materialFieldTypes.add(fieldType);
+            initialTraceability.push({
+              inventoryPartId: material.partId,
+              inventoryPartNumber: material.partNumber,
+              type: fieldType,
+              label: `${material.partName} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
+              value: '',
+            });
+          });
+        });
+      }
+
+      // Add general traceability requirements (skip any already covered by materials)
+      if (data.traceabilityRequirements) {
+        data.traceabilityRequirements.forEach((req: any) => {
+          if (typeof req === 'string' && !materialFieldTypes.has(req)) {
+            initialTraceability.push({
+              type: req,
+              label: req.replace(/_/g, ' ').toUpperCase(),
+              value: '',
+            });
+          }
+        });
+      }
+
+      setTraceabilityData(initialTraceability);
+
+      // Initialize custom data fields
+      if (data.departmentConfig.customDataFields) {
+        const initialCustomData: Record<string, string> = {};
+        data.departmentConfig.customDataFields.forEach((field: { fieldName: string; fieldType: string; isRequired: boolean }) => {
+          initialCustomData[field.fieldName] = '';
+        });
+        setCustomData(initialCustomData);
+      }
+
+      setScanState('PART_SCANNED');
       toast({
         title: 'Part Verified',
         description: `Opening full traveler for ${data.serializedItem.partName}`,
@@ -403,7 +457,8 @@ export default function P2TravelerPage() {
               <Alert>
                 <User className="h-4 w-4" />
                 <AlertDescription>
-                  Employee Badge Scanned: <strong>{badgeInput}</strong>
+                  Employee: <strong>{employee?.name || badgeInput}</strong>
+                  {employee?.name && <span className="text-muted-foreground ml-2">({badgeInput})</span>}
                 </AlertDescription>
               </Alert>
 

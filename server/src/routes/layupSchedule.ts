@@ -896,12 +896,11 @@ router.post('/save', async (req: Request, res: Response) => {
                   poi.item_type,
                   po.id as po_id,
                   po.po_number,
-                  po.vendor_id,
-                  po.due_date,
-                  v.name as vendor_name
+                  po.customer_id,
+                  po.expected_delivery as due_date,
+                  po.customer_name
                 FROM purchase_order_items poi
                 JOIN purchase_orders po ON poi.po_id = po.id
-                LEFT JOIN vendors v ON po.vendor_id = v.id
                 WHERE poi.id = $1
               `, [parseInt(itemId)]);
               
@@ -927,8 +926,8 @@ router.post('/save', async (req: Request, res: Response) => {
                   orderId,
                   poItem.po_id,
                   parseInt(itemId),
-                  poItem.vendor_id || 'unknown',
-                  poItem.vendor_name || 'OEM Vendor',
+                  poItem.customer_id || 'unknown',
+                  poItem.customer_name || 'Unknown Customer',
                   poItem.po_number,
                   poItem.item_type || 'stock_model',
                   stockModelForPO,

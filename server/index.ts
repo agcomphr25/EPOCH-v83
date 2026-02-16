@@ -291,7 +291,9 @@ async function initializeBackgroundServices() {
         const { sql: sqlSig } = await import('drizzle-orm');
         await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS traveler_task_id VARCHAR(255)`);
         await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS signature_role VARCHAR(50)`);
-        console.log('✅ Ensured traveler_signatures has task_id and signature_role columns');
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS signature_data TEXT`);
+        await db.execute(sqlSig`ALTER TABLE traveler_signatures ADD COLUMN IF NOT EXISTS signature_hash TEXT`);
+        console.log('✅ Ensured traveler_signatures has task_id, signature_role, signature_data, and signature_hash columns');
       } catch (sigErr: any) {
         console.warn('⚠️ Traveler signatures migration skipped:', sigErr.message);
       }

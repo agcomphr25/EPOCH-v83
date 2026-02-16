@@ -9,12 +9,16 @@ import {
   p2SerializedItemTraceability,
   p2SerializedItemCustomData,
   employees,
+  travelers,
+  travelerSteps,
+  travelerTasks,
   insertP2WorkTaskSchema,
   insertP2SerializedItemEventSchema,
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
 } from '../../schema';
-import { eq, and, desc, or, ilike, inArray } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, asc } from 'drizzle-orm';
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -273,6 +277,165 @@ router.get('/active-tasks/:employeeId', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/p2-traveler/generate-traveler
+// Generate (or retrieve existing) traveler from routing for a P2 serialized item
+router.post('/generate-traveler', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId, employeeCode } = req.body;
+
+    if (!serializedItemId) {
+      return res.status(400).json({ error: 'serializedItemId is required' });
+    }
+
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, serializedItemId),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    // Check if a traveler already exists for this serialized item's serial number and part
+    const existingTraveler = await db.query.travelers.findFirst({
+      where: and(
+        eq(travelers.serialNumber, serializedItem.serialNumber),
+        eq(travelers.partNumber, serializedItem.partNumber)
+      ),
+    });
+
+    if (existingTraveler) {
+      return res.json({
+        travelerId: existingTraveler.id,
+        travelerNumber: existingTraveler.travelerNumber,
+        created: false,
+      });
+    }
+
+    // Find the active routing for this part
+    let routing = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, serializedItem.partNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+
+    if (!routing) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          ilike(partRoutings.partNumber, serializedItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    if (!routing) {
+      const basePartMatch = serializedItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
+      if (basePartMatch) {
+        const basePartNumber = basePartMatch[1].trim();
+        const allRoutings = await db
+          .select()
+          .from(partRoutings)
+          .where(and(
+            ilike(partRoutings.partNumber, `${basePartNumber} Rev%`),
+            eq(partRoutings.isActive, true)
+          ));
+        if (allRoutings.length > 0) {
+          routing = allRoutings[0];
+        }
+      }
+    }
+
+    if (!routing) {
+      return res.status(404).json({ error: 'No active routing found for this part number' });
+    }
+
+    // Generate a traveler from the routing
+    const traveler = await storage.generateTravelerFromRouting(routing.id, {
+      serialNumber: serializedItem.serialNumber,
+      lotNumber: serializedItem.poNumber || undefined,
+      createdBy: employeeCode || 'p2-system',
+    });
+
+    // Set status to IN_PROGRESS since P2 items are actively being worked
+    await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
+
+    // Advance traveler steps to match the P2 serialized item's current stage
+    const currentStageIndex = serializedItem.currentStageIndex || 0;
+    if (currentStageIndex > 0) {
+      const steps = await db
+        .select()
+        .from(travelerSteps)
+        .where(eq(travelerSteps.travelerId, traveler.id))
+        .orderBy(asc(travelerSteps.stepNumber));
+
+      const now = new Date();
+      const completedBy = employeeCode || 'p2-system';
+
+      for (let i = 0; i < steps.length && i < currentStageIndex; i++) {
+        await db
+          .update(travelerSteps)
+          .set({
+            status: 'COMPLETED',
+            completedAt: now,
+            completedBy,
+          })
+          .where(eq(travelerSteps.id, steps[i].id));
+
+        await db
+          .update(travelerTasks)
+          .set({
+            status: 'COMPLETED',
+            completedAt: now,
+            completedBy,
+          })
+          .where(eq(travelerTasks.travelerStepId, steps[i].id));
+      }
+
+      if (steps[currentStageIndex]) {
+        await db
+          .update(travelerSteps)
+          .set({
+            status: 'IN_PROGRESS',
+            startedAt: new Date(),
+            startedBy: employeeCode || 'p2-system',
+          })
+          .where(eq(travelerSteps.id, steps[currentStageIndex].id));
+      }
+
+      console.log(`[P2Traveler] Advanced traveler to step ${currentStageIndex + 1} of ${steps.length} (matching P2 item stage)`);
+    } else {
+      // First step - mark as IN_PROGRESS
+      const steps = await db
+        .select()
+        .from(travelerSteps)
+        .where(eq(travelerSteps.travelerId, traveler.id))
+        .orderBy(asc(travelerSteps.stepNumber));
+
+      if (steps.length > 0) {
+        await db
+          .update(travelerSteps)
+          .set({
+            status: 'IN_PROGRESS',
+            startedAt: new Date(),
+            startedBy: employeeCode || 'p2-system',
+          })
+          .where(eq(travelerSteps.id, steps[0].id));
+      }
+    }
+
+    console.log(`[P2Traveler] Generated traveler ${traveler.travelerNumber} for serialized item ${serializedItem.serialNumber}`);
+
+    return res.json({
+      travelerId: traveler.id,
+      travelerNumber: traveler.travelerNumber,
+      created: true,
+    });
+  } catch (error: any) {
+    console.error('[P2Traveler] Error generating traveler:', error);
+    return res.status(500).json({ error: 'Failed to generate traveler', detail: error?.message });
+  }
+});
+
 // POST /api/p2-traveler/start-task
 // Start a task (create work task, log event)
 router.post('/start-task', async (req: Request, res: Response) => {
@@ -407,7 +570,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
     const [workTask] = await db.insert(p2WorkTasks).values(validatedData).returning();
 
     // Save traceability data
-    if (traceabilityData && Array.isArray(traceabilityData)) {
+    if (traceabilityData && Array.isArray(traceabilityData) && traceabilityData.length > 0) {
       const traceabilityRecords = traceabilityData.map((item: any) => ({
         serializedItemId,
         department,

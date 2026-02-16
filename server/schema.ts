@@ -4595,6 +4595,7 @@ export const travelerSignatures = pgTable('traveler_signatures', {
   meaning: varchar('meaning', { length: 100 }).notNull(),
   notes: text('notes'),
   signatureHash: text('signature_hash'),
+  signatureData: text('signature_data'),
 }, (table) => ({
   stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
   taskIdIdx: index('traveler_signatures_task_id_idx').on(table.travelerTaskId),

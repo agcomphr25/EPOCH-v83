@@ -1,0 +1,105 @@
+index-BnHva2WX.js:1462  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-BnHva2WX.js:1462
+o @ index-BnHva2WX.js:51
+p @ index-BnHva2WX.js:51
+start @ index-BnHva2WX.js:51
+fetch @ index-BnHva2WX.js:51
+Y7 @ index-BnHva2WX.js:51
+onSubscribe @ index-BnHva2WX.js:51
+subscribe @ index-BnHva2WX.js:51
+(anonymous) @ index-BnHva2WX.js:51
+oVe @ index-BnHva2WX.js:38
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+LVe @ index-BnHva2WX.js:40
+j @ index-BnHva2WX.js:25
+E @ index-BnHva2WX.js:25
+index-BnHva2WX.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-BnHva2WX.js:235
+o @ index-BnHva2WX.js:51
+p @ index-BnHva2WX.js:51
+start @ index-BnHva2WX.js:51
+fetch @ index-BnHva2WX.js:51
+Y7 @ index-BnHva2WX.js:51
+onSubscribe @ index-BnHva2WX.js:51
+subscribe @ index-BnHva2WX.js:51
+(anonymous) @ index-BnHva2WX.js:51
+oVe @ index-BnHva2WX.js:38
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+LVe @ index-BnHva2WX.js:40
+j @ index-BnHva2WX.js:25
+E @ index-BnHva2WX.js:25
+index-BnHva2WX.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-BnHva2WX.js:235
+o @ index-BnHva2WX.js:51
+p @ index-BnHva2WX.js:51
+(anonymous) @ index-BnHva2WX.js:51
+Promise.then
+(anonymous) @ index-BnHva2WX.js:51
+Promise.catch
+p @ index-BnHva2WX.js:51
+start @ index-BnHva2WX.js:51
+fetch @ index-BnHva2WX.js:51
+Y7 @ index-BnHva2WX.js:51
+onSubscribe @ index-BnHva2WX.js:51
+subscribe @ index-BnHva2WX.js:51
+(anonymous) @ index-BnHva2WX.js:51
+oVe @ index-BnHva2WX.js:38
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+LVe @ index-BnHva2WX.js:40
+j @ index-BnHva2WX.js:25
+E @ index-BnHva2WX.js:25
+index-BnHva2WX.js:4412  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-BnHva2WX.js:4412
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+(anonymous) @ index-BnHva2WX.js:40
+index-BnHva2WX.js:4415 Failed to fetch session for redirect: Error: Not authenticated
+    at index-BnHva2WX.js:4412:169178
+console.error @ index-BnHva2WX.js:4415
+(anonymous) @ index-BnHva2WX.js:4412
+Promise.catch
+(anonymous) @ index-BnHva2WX.js:4412
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+(anonymous) @ index-BnHva2WX.js:40
+index-BnHva2WX.js:4263  GET https://agcompepoch.xyz/api/travelers/1f8bcd6a-1836-4008-8202-9d0285cff754?details=true 401 (Unauthorized)
+queryFn @ index-BnHva2WX.js:4263
+o @ index-BnHva2WX.js:51
+p @ index-BnHva2WX.js:51
+start @ index-BnHva2WX.js:51
+fetch @ index-BnHva2WX.js:51
+Y7 @ index-BnHva2WX.js:51
+onSubscribe @ index-BnHva2WX.js:51
+subscribe @ index-BnHva2WX.js:51
+(anonymous) @ index-BnHva2WX.js:51
+oVe @ index-BnHva2WX.js:38
+Qre @ index-BnHva2WX.js:40
+vF @ index-BnHva2WX.js:40
+Q2t @ index-BnHva2WX.js:40
+qk @ index-BnHva2WX.js:40
+rEe @ index-BnHva2WX.js:40
+X_ @ index-BnHva2WX.js:38
+(anonymous) @ index-BnHva2WX.js:40

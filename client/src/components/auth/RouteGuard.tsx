@@ -28,6 +28,7 @@ const PUBLIC_ROUTES = [
 const PUBLIC_ROUTE_PREFIXES = [
   '/sign-order',  // Customer signature page - no auth required
   '/p2-traveler', // P2 traveler viewer - public access for customers/vendors
+  '/travelers/',  // Traveler execution - production floor access via barcode scan
   '/employee-portal/', // Employee portal with portalId - public access for employees
   '/app/production/stations', // Timer Station - public access for production floor
   '/app/production/timer-history', // Timer History - public access for production floor

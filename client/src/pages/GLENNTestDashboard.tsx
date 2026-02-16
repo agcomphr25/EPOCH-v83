@@ -382,9 +382,6 @@ export default function GLENNTestDashboard() {
                   Scan
                 </button>
               </Link>
-              <button className="col-span-2 w-full py-3 px-6 rounded-lg font-bold text-white text-lg shadow-lg hover:shadow-xl transition-all duration-200" style={{ backgroundColor: '#ec4899', background: 'linear-gradient(135deg, #ec4899, #f472b6)' }}>
-                SUCCESS
-              </button>
             </div>
           </div>
 
@@ -576,12 +573,6 @@ function LightModeDashboard({
         </div>
       </div>
 
-      {/* SUCCESS Button */}
-      <div>
-        <button className="w-full py-3 px-6 rounded-lg font-bold text-white text-lg shadow-lg hover:shadow-xl transition-all duration-200" style={{ backgroundColor: '#ec4899', background: 'linear-gradient(135deg, #ec4899, #f472b6)' }}>
-          SUCCESS
-        </button>
-      </div>
 
       {/* Main Navigation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

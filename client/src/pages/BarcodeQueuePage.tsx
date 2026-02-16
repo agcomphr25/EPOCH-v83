@@ -1228,6 +1228,17 @@ export default function BarcodeQueuePage() {
                                       )}
                                     </div>
 
+                                    {isPOOrder && (
+                                      <div className="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
+                                        {order.customerPO && (
+                                          <div>PO: {order.customerPO}</div>
+                                        )}
+                                        {order.poItemId && (
+                                          <div>Line Item: {order.poItemId}</div>
+                                        )}
+                                      </div>
+                                    )}
+
                                     <div className="space-y-2 text-sm">
                                       <div className="flex items-center gap-2">
                                         <Calendar className="h-3 w-3 text-gray-500" />

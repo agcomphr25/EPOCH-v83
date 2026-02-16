@@ -402,6 +402,31 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ routing_document_links migration:', linkTableError.message);
       }
 
+      // Ensure employment_periods table exists (for onboarding employment tracking)
+      try {
+        const { sql: sqlTag3 } = await import('drizzle-orm');
+        await db.execute(sqlTag3`
+          CREATE TABLE IF NOT EXISTS employment_periods (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            start_date TIMESTAMP NOT NULL DEFAULT NOW(),
+            end_date TIMESTAMP,
+            employment_type TEXT DEFAULT 'FULL_TIME',
+            department TEXT,
+            job_title TEXT,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            started_via_session_id UUID,
+            ended_via_session_id UUID,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlTag3`CREATE INDEX IF NOT EXISTS idx_employment_periods_employee_id ON employment_periods(employee_id)`);
+        await db.execute(sqlTag3`CREATE INDEX IF NOT EXISTS idx_employment_periods_status ON employment_periods(status)`);
+        console.log('✅ Ensured employment_periods table exists');
+      } catch (empPeriodError: any) {
+        console.warn('⚠️ employment_periods migration:', empPeriodError.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

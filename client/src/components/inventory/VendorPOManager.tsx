@@ -540,6 +540,7 @@ function VendorPOCard({
   onViewItems,
   onIssuePO,
   onCreateRevision,
+  onViewPDF,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
@@ -547,6 +548,7 @@ function VendorPOCard({
   onViewItems: (vendorPo: VendorPO) => void;
   onIssuePO: (id: number, skipEmail?: boolean) => void;
   onCreateRevision: (vendorPo: VendorPO) => void;
+  onViewPDF: (vendorPo: VendorPO) => void;
 }) {
   // Check if PO is issued (cannot be directly edited)
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
@@ -634,6 +636,15 @@ function VendorPOCard({
               View Items
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewPDF(vendorPo)}
+            data-testid={`button-view-pdf-${vendorPo.id}`}
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            View PO
+          </Button>
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {/* Show Edit button only for Draft POs */}
           {!isIssued && (
@@ -1137,18 +1148,19 @@ export default function VendorPOManager() {
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!selectedVendorPO) return;
+  const handleDownloadPDF = async (poToView?: VendorPO) => {
+    const po = poToView || selectedVendorPO;
+    if (!po) return;
     
     try {
       console.log('Starting PO view generation...');
       
       // Fetch line items for this PO
-      const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
+      const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${po.id}/items`);
       console.log('Fetched items:', items);
       
       // Fetch vendor details to get vendor-specific PO settings
-      const vendor: any = await apiRequest(`/api/vendors/${selectedVendorPO.vendorId}`);
+      const vendor: any = await apiRequest(`/api/vendors/${po.vendorId}`);
       console.log('Fetched vendor:', vendor);
       
       // Fetch global PO settings
@@ -1160,7 +1172,7 @@ export default function VendorPOManager() {
       console.log('Fetched company settings:', companySettings);
       
       // Fetch optional settings attached to this PO
-      const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/optional-settings`);
+      const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${po.id}/optional-settings`);
       console.log('Fetched optional settings:', optionalSettings);
       
       // Combine company info + PO contact info + PO terms
@@ -1194,7 +1206,7 @@ export default function VendorPOManager() {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Purchase Order - ${selectedVendorPO.poNumber}</title>
+            <title>Purchase Order - ${po.poNumber}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
               .print-controls { 
@@ -1283,29 +1295,29 @@ export default function VendorPOManager() {
             
             <div class="header">
               <h1>PURCHASE ORDER</h1>
-              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>
+              <p>PO Number: ${po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>
             </div>
             
             <div class="info-section">
               <div class="info-row">
                 <div class="info-label">Vendor:</div>
-                <div>${selectedVendorPO.vendorName || `ID: ${selectedVendorPO.vendorId}`}</div>
+                <div>${po.vendorName || `ID: ${po.vendorId}`}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Status:</div>
-                <div>${selectedVendorPO.status}</div>
+                <div>${po.status}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Requested Delivery Date:</div>
-                <div>${selectedVendorPO.expectedDeliveryDate || 'N/A'}</div>
+                <div>${po.expectedDeliveryDate || 'N/A'}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Ship Via:</div>
-                <div>${selectedVendorPO.shipVia || 'N/A'}</div>
+                <div>${po.shipVia || 'N/A'}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Barcode:</div>
-                <div>${selectedVendorPO.barcode}</div>
+                <div>${po.barcode}</div>
               </div>
             </div>
             
@@ -1342,10 +1354,10 @@ export default function VendorPOManager() {
               </div>
             </div>
             
-            ${selectedVendorPO.notes ? `
+            ${po.notes ? `
               <div style="margin-top: 30px;">
                 <div style="font-weight: bold;">Notes:</div>
-                <div>${selectedVendorPO.notes}</div>
+                <div>${po.notes}</div>
               </div>
             ` : ''}
             
@@ -1531,7 +1543,7 @@ export default function VendorPOManager() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleDownloadPDF}
+              onClick={() => handleDownloadPDF()}
               data-testid="button-view-po"
             >
               <Eye className="w-4 h-4 mr-2" />
@@ -1746,6 +1758,7 @@ export default function VendorPOManager() {
                   onViewItems={handleViewItems}
                   onIssuePO={handleIssuePO}
                   onCreateRevision={handleCreateRevision}
+                  onViewPDF={handleDownloadPDF}
                 />
               </AccordionContent>
             </AccordionItem>

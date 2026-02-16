@@ -246,7 +246,16 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error getting traveler data:', error);
-    return res.status(500).json({ error: 'Failed to get traveler data' });
+    if (error?.code === '42P01') {
+      return res.status(503).json({ 
+        error: 'Database tables not yet available. Please contact admin.',
+        detail: error.message,
+      });
+    }
+    return res.status(500).json({ 
+      error: 'Failed to get traveler data',
+      detail: error?.message || 'Unknown error',
+    });
   }
 });
 

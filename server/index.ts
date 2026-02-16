@@ -140,6 +140,9 @@ const publicRoutes = [
   '/api/p2-traveler',    // Production floor traveler system (uses badge authentication)
   '/api/p2-traveler-viewer', // P2 traveler viewer - production floor access
   '/api/travelers',      // Traveler execution - production floor access via barcode scan
+  '/api/part-routings',  // Part routing data needed by traveler execution
+  '/api/routing-documents', // Routing documents needed by traveler execution
+  '/api/material-lots',  // Material lot validation needed by traveler execution
   '/api/production/timers', // Production Timer Station - public for floor displays
 ];
 

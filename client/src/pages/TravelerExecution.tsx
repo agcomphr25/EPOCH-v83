@@ -356,12 +356,16 @@ export default function TravelerExecution() {
     return null;
   };
 
+  const isBadgeGateTask = (t: TravelerTask) =>
+    (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
+    /badge/i.test(t.title);
+
   const isStepMinimal = (step: TravelerStep) => {
     const nonGateTasks = step.tasks.filter(
       (t) => t.taskType !== 'SIGNATURE' && t.taskType !== 'END_GATE'
     );
     const meaningfulTasks = nonGateTasks.filter(
-      (t) => !(t.taskType === 'CHECK' && t.title === 'Badge Scan')
+      (t) => !isBadgeGateTask(t)
     );
     return meaningfulTasks.length === 0;
   };
@@ -807,7 +811,7 @@ export default function TravelerExecution() {
                 {currentStep.status === 'IN_PROGRESS' && (() => {
                   const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
                   const allRequiredNonGateComplete = currentStep.tasks
-                    .filter((t) => t.required && !isGateTask(t))
+                    .filter((t) => t.required && !isGateTask(t) && !isBadgeGateTask(t))
                     .every((t) => t.status === 'COMPLETED');
                   const unsignedSigTasks = currentStep.tasks.filter(
                     (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
@@ -893,9 +897,10 @@ export default function TravelerExecution() {
                     })()}
 
                     {PHASE_ORDER.map((phase, phaseIndex) => {
-                      const phaseTasks = currentStep.tasks
+                      const allPhaseTasks = currentStep.tasks
                         .filter((t) => t.taskPhase === phase)
                         .sort((a, b) => a.sortOrder - b.sortOrder);
+                      const phaseTasks = allPhaseTasks.filter((t) => !isBadgeGateTask(t));
                       
                       if (phaseTasks.length === 0) return null;
                       
@@ -906,7 +911,7 @@ export default function TravelerExecution() {
                       const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
                         const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
                         return prevTasks
-                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE')
+                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE' && !isBadgeGateTask(t))
                           .every((t) => t.status === 'COMPLETED');
                       });
                       

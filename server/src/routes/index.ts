@@ -93,6 +93,7 @@ import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import checklistManagementRoutes from './checklistManagement';
+import forecastRoutes from './forecast';
 import healthChecksRoutes from './healthChecks';
 import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
@@ -416,6 +417,9 @@ export function registerRoutes(app: Express): Server {
 
   // Checklist Management routes (admin + employee-facing)
   app.use('/api/checklist-management', checklistManagementRoutes);
+
+  // Production Forecast Engine routes (read-only)
+  app.use('/api/forecast', forecastRoutes);
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);

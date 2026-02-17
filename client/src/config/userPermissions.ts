@@ -97,6 +97,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/fillable-pdf-templates',
   '/po-products',
   '/production-tracking',
+  '/production-forecast',
   '/purchase-orders',
   '/qc',
   '/refund-queue',

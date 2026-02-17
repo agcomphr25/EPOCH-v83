@@ -1026,6 +1026,12 @@ export default function Navigation() {
       description: 'Track production orders from POs',
     },
     {
+      path: '/production-forecast',
+      label: 'Production Forecast',
+      icon: BarChart3,
+      description: 'Estimated department progression and ship dates',
+    },
+    {
       path: '/projects',
       label: 'Projects',
       icon: FolderKanban,

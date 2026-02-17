@@ -12806,3 +12806,28 @@ export type InsertChecklistResponse = z.infer<typeof insertChecklistResponseSche
 export const insertChecklistResponseItemSchema = createInsertSchema(checklistResponseItems).omit({ id: true });
 export type ChecklistResponseItem = typeof checklistResponseItems.$inferSelect;
 export type InsertChecklistResponseItem = z.infer<typeof insertChecklistResponseItemSchema>;
+
+// Production Forecast Engine Tables
+export const departmentForecastDefaults = pgTable('department_forecast_defaults', {
+  id: serial('id').primaryKey(),
+  departmentName: text('department_name').unique().notNull(),
+  avgDays: real('avg_days').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const modelForecastMultiplier = pgTable('model_forecast_multiplier', {
+  id: serial('id').primaryKey(),
+  modelId: text('model_id').references(() => stockModels.id).notNull(),
+  multiplier: real('multiplier').default(1.0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertDepartmentForecastDefaultSchema = createInsertSchema(departmentForecastDefaults).omit({ id: true, createdAt: true, updatedAt: true });
+export type DepartmentForecastDefault = typeof departmentForecastDefaults.$inferSelect;
+export type InsertDepartmentForecastDefault = z.infer<typeof insertDepartmentForecastDefaultSchema>;
+
+export const insertModelForecastMultiplierSchema = createInsertSchema(modelForecastMultiplier).omit({ id: true, createdAt: true, updatedAt: true });
+export type ModelForecastMultiplier = typeof modelForecastMultiplier.$inferSelect;
+export type InsertModelForecastMultiplier = z.infer<typeof insertModelForecastMultiplierSchema>;

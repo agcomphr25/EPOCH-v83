@@ -190,6 +190,7 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
+import ProductionForecastPage from './pages/ProductionForecastPage';
 import AccountingPrepPage from './pages/AccountingPrepPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import CommunicationLogsPage from './pages/CommunicationLogsPage';
@@ -419,6 +420,7 @@ function App() {
                   <Route path="/admin/accounting-prep" component={AccountingPrepPage} />
                   <Route path="/admin/qr-codes" component={QRCodeAdminPage} />
                   <Route path="/admin/checklist-management" component={AdminChecklistManagementPage} />
+                  <Route path="/production-forecast" component={ProductionForecastPage} />
                   <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

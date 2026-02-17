@@ -236,6 +236,51 @@ router.get('/employee-badge-actions/by-employee/:employeeCode', async (req, res)
   }
 });
 
+// Resolve a badge scan code to an employee name and details
+router.get('/resolve-badge/:scanCode', async (req, res) => {
+  try {
+    const { scanCode } = req.params;
+
+    if (!scanCode || scanCode.trim().length === 0) {
+      return res.status(400).json({ error: 'Badge scan code is required' });
+    }
+
+    const employee = await db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        employeeCode: employees.employeeCode,
+        department: employees.department,
+        jobTitle: employees.jobTitle,
+        isActive: employees.isActive,
+      })
+      .from(employees)
+      .where(eq(employees.badgeScanCode, scanCode.trim()))
+      .limit(1);
+
+    if (!employee.length) {
+      return res.status(404).json({ error: 'Badge not recognized' });
+    }
+
+    if (!employee[0].isActive) {
+      return res.status(403).json({ error: 'Employee account is inactive' });
+    }
+
+    const emp = employee[0];
+    res.json({
+      id: emp.id,
+      name: emp.name,
+      fullName: emp.name,
+      employeeCode: emp.employeeCode,
+      department: emp.department,
+      jobTitle: emp.jobTitle,
+    });
+  } catch (error) {
+    console.error('Error resolving badge:', error);
+    res.status(500).json({ error: 'Failed to resolve badge' });
+  }
+});
+
 // Badge-specific execution endpoint with validation, execution, and audit logging
 router.post('/execute-badge-action', async (req, res) => {
   const { employeeId, employeeCode, actionType, actionConfig, targetBarcode: rawTargetBarcode } = req.body;

@@ -432,6 +432,26 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ employment_periods migration:', empPeriodError.message);
       }
 
+      // Ensure employees have badge_scan_code column for secure badge scanning
+      try {
+        const { sql: sqlBadge } = await import('drizzle-orm');
+        await db.execute(sqlBadge`ALTER TABLE employees ADD COLUMN IF NOT EXISTS badge_scan_code TEXT UNIQUE`);
+        // Auto-generate badge scan codes for any employees that don't have one
+        const employeesWithoutBadge = await db.execute(sqlBadge`
+          SELECT id FROM employees WHERE badge_scan_code IS NULL
+        `);
+        if (employeesWithoutBadge.rows.length > 0) {
+          for (const row of employeesWithoutBadge.rows) {
+            await db.execute(sqlBadge`
+              UPDATE employees SET badge_scan_code = gen_random_uuid()::text WHERE id = ${(row as any).id}
+            `);
+          }
+          console.log(`✅ Generated badge scan codes for ${employeesWithoutBadge.rows.length} employees`);
+        }
+      } catch (badgeErr: any) {
+        console.warn('⚠️ Badge scan code migration:', badgeErr.message);
+      }
+
       // Fix: Remove "table temp" field from Mold Prep department config (belongs on Layup only)
       try {
         const { sql: sqlRoutingFix } = await import('drizzle-orm');

@@ -68,6 +68,7 @@ import {
   Database,
   QrCode,
   AlertTriangle,
+  CalendarDays,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -1030,6 +1031,12 @@ export default function Navigation() {
       label: 'Production Forecast',
       icon: BarChart3,
       description: 'Estimated department progression and ship dates',
+    },
+    {
+      path: '/production-forecast/weekly',
+      label: 'Weekly Forecast',
+      icon: CalendarDays,
+      description: 'Weekly production forecast with verification',
     },
     {
       path: '/projects',

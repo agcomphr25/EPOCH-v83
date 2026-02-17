@@ -1,0 +1,198 @@
+COPY-PASTE INTO REPLIT AGENT
+OBJECTIVE
+
+Add a Weekly Production Forecast View with Human Verification Layer.
+
+DO NOT modify:
+
+Layup scheduler
+
+Routing logic
+
+Production progression
+
+all_orders schema
+
+Existing forecast math
+
+All changes must be isolated and additive.
+
+STEP 1 — CREATE VERIFICATION TABLE
+
+Add to schema.ts:
+
+production_forecast_verifications
+
+
+Columns:
+
+id (serial pk)
+
+order_id (integer, not null)
+
+department (text, not null)
+
+week_start_date (date, not null)
+
+verified_by (integer, nullable)
+
+verified_at (timestamp, default now)
+
+notes (text, nullable)
+
+created_at (timestamp, default now)
+
+Add unique constraint on:
+
+(order_id, department, week_start_date)
+
+Generate migration.
+
+STEP 2 — ADD WEEKLY FORECAST ENGINE METHOD
+
+Inside:
+
+server/services/productionForecastEngine.ts
+
+Add:
+
+generateWeeklyForecast(weekStart: Date, weekEnd: Date)
+
+
+Implementation:
+
+Query active orders using canonical WHERE clause:
+
+WHERE is_cancelled = false
+  AND shipping_completed_at IS NULL
+  AND current_department IS NOT NULL
+  AND status NOT IN ('CANCELLED', 'SCRAPPED')
+
+
+For each order:
+
+Run simulateOrderForecast(orderId)
+
+Include order if ANY department timeline overlaps week window:
+
+Overlap condition:
+
+expectedStart BETWEEN weekStart AND weekEnd
+OR
+expectedFinish BETWEEN weekStart AND weekEnd
+OR
+(expectedStart <= weekStart AND expectedFinish >= weekEnd)
+
+
+Return structured array.
+
+DO NOT write to DB.
+
+STEP 3 — ADD WEEKLY API ROUTE
+
+Create:
+
+GET /api/forecast/weekly?weekStart=YYYY-MM-DD
+
+Server should:
+
+Calculate weekEnd = weekStart + 6 days
+
+Call generateWeeklyForecast()
+
+Join verification table on:
+order_id
+department
+week_start_date
+
+Add boolean:
+isVerified
+
+Return JSON only.
+
+STEP 4 — ADD VERIFICATION ENDPOINTS
+
+Add:
+
+POST /api/forecast/verify
+
+Body:
+
+{
+  orderId,
+  department,
+  weekStartDate,
+  notes
+}
+
+
+Behavior:
+
+Insert verification record.
+
+Add:
+
+DELETE /api/forecast/verify
+
+Body:
+
+{
+  orderId,
+  department,
+  weekStartDate
+}
+
+
+Behavior:
+
+Remove verification record.
+
+No production state updates.
+
+STEP 5 — FRONTEND WEEKLY VIEW
+
+Create page:
+
+client/src/pages/WeeklyProductionForecast.tsx
+
+Features:
+
+Date picker (select Monday of week)
+
+Fetch from /api/forecast/weekly
+
+Table:
+
+| Order | Model | Actual Dept | Expected Dept | Est Ship | Verified |
+
+Verified column:
+
+Checkbox
+
+Toggle calls POST/DELETE verify endpoints
+
+Green highlight when verified
+
+Add route:
+
+/production-forecast/weekly
+
+Add navigation link (Admin + Owner only).
+
+CONSTRAINTS
+
+No modifications to layup scheduler
+
+No changes to department queue logic
+
+No writes to all_orders
+
+Forecast logic remains centralized
+
+Verification logic fully isolated
+
+Must compile without TS errors
+
+Must not affect production routes
+
+END PROMPT

@@ -98,6 +98,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/po-products',
   '/production-tracking',
   '/production-forecast',
+  '/production-forecast/weekly',
   '/purchase-orders',
   '/qc',
   '/refund-queue',

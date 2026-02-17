@@ -12831,3 +12831,20 @@ export type InsertDepartmentForecastDefault = z.infer<typeof insertDepartmentFor
 export const insertModelForecastMultiplierSchema = createInsertSchema(modelForecastMultiplier).omit({ id: true, createdAt: true, updatedAt: true });
 export type ModelForecastMultiplier = typeof modelForecastMultiplier.$inferSelect;
 export type InsertModelForecastMultiplier = z.infer<typeof insertModelForecastMultiplierSchema>;
+
+export const productionForecastVerifications = pgTable('production_forecast_verifications', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id').notNull(),
+  department: text('department').notNull(),
+  weekStartDate: timestamp('week_start_date').notNull(),
+  verifiedBy: integer('verified_by'),
+  verifiedAt: timestamp('verified_at').defaultNow(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  uniqueVerification: unique().on(table.orderId, table.department, table.weekStartDate),
+}));
+
+export const insertProductionForecastVerificationSchema = createInsertSchema(productionForecastVerifications).omit({ id: true, verifiedAt: true, createdAt: true });
+export type ProductionForecastVerification = typeof productionForecastVerifications.$inferSelect;
+export type InsertProductionForecastVerification = z.infer<typeof insertProductionForecastVerificationSchema>;

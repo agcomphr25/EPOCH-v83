@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { simulateOrderForecast, getExpectedDepartment, generateDashboardForecast } from '../../services/productionForecastEngine';
+import { simulateOrderForecast, getExpectedDepartment, generateDashboardForecast, generateWeeklyForecast } from '../../services/productionForecastEngine';
 import { authenticateToken } from '../../middleware/auth';
+import { pgPool } from '../../db';
 
 const router = Router();
 
@@ -33,6 +34,110 @@ router.get('/dashboard', async (_req, res) => {
   } catch (error: any) {
     console.error('Forecast dashboard error:', error);
     res.status(500).json({ error: 'Failed to generate dashboard forecast' });
+  }
+});
+
+router.get('/weekly', async (req, res) => {
+  try {
+    const { weekStart } = req.query;
+    if (!weekStart || typeof weekStart !== 'string') {
+      return res.status(400).json({ error: 'weekStart query parameter required (YYYY-MM-DD)' });
+    }
+
+    const startDate = new Date(weekStart + 'T00:00:00Z');
+    if (isNaN(startDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 6);
+
+    const forecastItems = await generateWeeklyForecast(startDate, endDate);
+
+    const verifications = await pgPool.query(
+      `SELECT order_id, department, notes, verified_by, verified_at
+       FROM production_forecast_verifications
+       WHERE week_start_date = $1`,
+      [startDate]
+    );
+
+    const verificationMap = new Map<string, { notes: string | null; verifiedBy: number | null; verifiedAt: string | null }>();
+    for (const v of verifications.rows) {
+      const key = `${v.order_id}::${v.department}`;
+      verificationMap.set(key, {
+        notes: v.notes,
+        verifiedBy: v.verified_by,
+        verifiedAt: v.verified_at,
+      });
+    }
+
+    const results = forecastItems.map(item => {
+      const key = `${item.orderId}::${item.actualDepartment}`;
+      const verification = verificationMap.get(key);
+      return {
+        ...item,
+        isVerified: !!verification,
+        verificationNotes: verification?.notes || null,
+        verifiedBy: verification?.verifiedBy || null,
+        verifiedAt: verification?.verifiedAt || null,
+      };
+    });
+
+    res.json({
+      weekStart: weekStart,
+      weekEnd: endDate.toISOString().split('T')[0],
+      orders: results,
+    });
+  } catch (error: any) {
+    console.error('Weekly forecast error:', error);
+    res.status(500).json({ error: 'Failed to generate weekly forecast' });
+  }
+});
+
+router.post('/verify', async (req, res) => {
+  try {
+    const { orderId, department, weekStartDate, notes } = req.body;
+    if (!orderId || !department || !weekStartDate) {
+      return res.status(400).json({ error: 'orderId, department, and weekStartDate are required' });
+    }
+
+    const userId = (req as any).user?.id || null;
+    const startDate = new Date(weekStartDate + 'T00:00:00Z');
+
+    await pgPool.query(
+      `INSERT INTO production_forecast_verifications (order_id, department, week_start_date, verified_by, notes)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (order_id, department, week_start_date) DO UPDATE
+       SET verified_by = $4, notes = $5, verified_at = NOW()`,
+      [orderId, department, startDate, userId, notes || null]
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Verify forecast error:', error);
+    res.status(500).json({ error: 'Failed to verify forecast entry' });
+  }
+});
+
+router.delete('/verify', async (req, res) => {
+  try {
+    const { orderId, department, weekStartDate } = req.body;
+    if (!orderId || !department || !weekStartDate) {
+      return res.status(400).json({ error: 'orderId, department, and weekStartDate are required' });
+    }
+
+    const startDate = new Date(weekStartDate + 'T00:00:00Z');
+
+    await pgPool.query(
+      `DELETE FROM production_forecast_verifications
+       WHERE order_id = $1 AND department = $2 AND week_start_date = $3`,
+      [orderId, department, startDate]
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Unverify forecast error:', error);
+    res.status(500).json({ error: 'Failed to remove forecast verification' });
   }
 });
 

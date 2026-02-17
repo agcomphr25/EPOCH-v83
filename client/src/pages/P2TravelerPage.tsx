@@ -46,7 +46,6 @@ import {
   Lightbulb,
   ExternalLink,
   Flame,
-  Loader2,
   Thermometer,
   Timer,
 } from 'lucide-react';
@@ -143,7 +142,6 @@ interface ActiveTask {
 export default function P2TravelerPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const [, setLocation] = useLocation();
   const [scanState, setScanState] = useState<ScanState>('READY');
   const [badgeInput, setBadgeInput] = useState('');
   const [partInput, setPartInput] = useState('');

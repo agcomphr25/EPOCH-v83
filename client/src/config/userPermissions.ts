@@ -25,6 +25,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/monitored-links',
   '/admin/communication-logs',
   '/admin/qr-codes',
+  '/admin/checklist-management',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -96,6 +97,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/fillable-pdf-templates',
   '/po-products',
   '/production-tracking',
+  '/production-forecast',
   '/purchase-orders',
   '/qc',
   '/refund-queue',
@@ -514,6 +516,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/signed-documents': ['ADMIN', 'OWNER'],
   '/reference-docs': ['ADMIN', 'OWNER'],
   '/admin/qr-codes': ['ADMIN', 'OWNER'],
+  '/admin/checklist-management': ['ADMIN', 'OWNER'],
 };
 
 /**

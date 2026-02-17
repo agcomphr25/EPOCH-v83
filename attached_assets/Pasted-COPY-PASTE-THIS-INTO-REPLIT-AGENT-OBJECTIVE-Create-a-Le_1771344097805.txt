@@ -1,0 +1,259 @@
+COPY-PASTE THIS INTO REPLIT AGENT
+🔧 OBJECTIVE
+
+Create a Level 1 Production Forecast Engine for EPOCH that:
+
+Simulates expected department progression using:
+
+Department average days
+
+Model multiplier
+
+Current department backlog counts
+
+Does NOT modify:
+
+Existing routing logic
+
+Layup scheduler
+
+Production state
+
+Order progression logic
+
+Is fully read-only and isolated.
+
+Centralizes all forecast logic in:
+
+server/services/productionForecastEngine.ts
+
+
+Exposes a safe API:
+
+GET /api/forecast/order/:orderId
+GET /api/forecast/dashboard
+
+🧱 STEP 1 — DATABASE ADDITIONS (Drizzle Schema)
+
+Add two new tables to server/schema.ts.
+
+Table 1: department_forecast_defaults
+id (serial, primary key)
+department_name (text, unique, not null)
+avg_days (real, not null)
+created_at (timestamp, default now)
+updated_at (timestamp, default now)
+
+Table 2: model_forecast_multiplier
+id (serial, primary key)
+model_id (integer, references stock_models.id, not null)
+multiplier (real, default 1.0)
+created_at (timestamp, default now)
+updated_at (timestamp, default now)
+
+
+Generate Drizzle migration.
+
+Do NOT modify any existing tables.
+
+🧠 STEP 2 — CREATE FORECAST ENGINE
+
+Create file:
+
+server/services/productionForecastEngine.ts
+
+
+Export the following functions:
+
+1️⃣ simulateOrderForecast(orderId: number)
+
+Behavior:
+
+Load order
+
+Load routing sequence for that model
+
+Load department_forecast_defaults
+
+Load model multiplier (default 1.0 if missing)
+
+Count active backlog per department (orders currently assigned there and not completed)
+
+Algorithm:
+
+startDate = today (or order.production_start if exists)
+
+For each department in routing order:
+
+    backlogCount = count active orders in that department
+    avgDays = department.avg_days
+    multiplier = model.multiplier
+
+    backlogDelayDays = backlogCount * avgDays
+    processingDays = avgDays * multiplier
+
+    deptStart = startDate + backlogDelayDays
+    deptFinish = deptStart + processingDays
+
+    store timeline entry
+
+    startDate = deptFinish
+
+
+Return:
+
+{
+  estimatedShipDate,
+  departmentTimeline: [
+    {
+      department,
+      expectedStart,
+      expectedFinish
+    }
+  ]
+}
+
+2️⃣ getExpectedDepartment(orderId: number)
+
+Call simulateOrderForecast
+
+Compare current date to timeline
+
+Return:
+
+{
+  expectedDepartment,
+  expectedStart,
+  expectedFinish,
+  status: "early" | "on_track" | "late"
+}
+
+
+Late status logic:
+
+If actual department does not match expectedDepartment,
+mark as late.
+
+3️⃣ generateDashboardForecast()
+
+Load all active production orders
+
+For each:
+
+Call getExpectedDepartment
+
+Return array:
+
+[
+  {
+    orderId,
+    model,
+    actualDepartment,
+    expectedDepartment,
+    estimatedShipDate,
+    status
+  }
+]
+
+🌐 STEP 3 — CREATE API ROUTES
+
+Create:
+
+server/routes/forecast.ts
+
+
+Add routes:
+
+GET /api/forecast/order/:orderId
+GET /api/forecast/dashboard
+
+
+Return JSON only.
+No writes.
+No side effects.
+
+Register route in server bootstrap.
+
+🖥 STEP 4 — FRONTEND DASHBOARD VIEW
+
+Create new page:
+
+client/src/pages/ProductionForecastPage.tsx
+
+
+Features:
+
+Table view
+
+Columns:
+
+| Order | Model | Actual Dept | Expected Dept | Status | Est Ship |
+
+Status color coding:
+
+Green = On Track
+
+Yellow = Early
+
+Red = Late
+
+Fetch from:
+
+/api/forecast/dashboard
+
+
+Do NOT modify existing production dashboard.
+This is a separate view.
+
+Add route:
+
+/production-forecast
+
+
+Add navigation link (Admin + Owner only).
+
+🔒 CONSTRAINTS
+
+Do NOT modify layup scheduler.
+
+Do NOT alter production state.
+
+Do NOT auto-update orders with forecast dates.
+
+Do NOT embed forecast logic inside route handlers.
+
+All forecast math must live inside productionForecastEngine.ts.
+
+Must be cleanly importable and upgradable to Level 2 later.
+
+🧪 TESTING REQUIREMENTS
+
+After implementation:
+
+Create mock department_forecast_defaults entries.
+
+Create mock model multiplier entries.
+
+Confirm forecast returns estimatedShipDate.
+
+Confirm dashboard loads.
+
+Confirm no existing production flows break.
+
+Confirm no DB writes occur during forecast calls.
+
+🏁 FINAL CHECK
+
+The result must:
+
+Compile without TypeScript errors
+
+Not change behavior of existing systems
+
+Be fully isolated
+
+Be deterministic
+
+Be ready for future Level 2 upgrade (capacity hours model)
+
+END PROMPT

@@ -44,32 +44,39 @@ export default function TimeClockModal({
 
   const checkChecklistCompletion = async () => {
     try {
+      const enforcementRes = await fetch(`/api/checklist-management/enforcement-status?employeeId=${employeeId}`);
+      if (enforcementRes.ok) {
+        const enforcement = await enforcementRes.json();
+        if (!enforcement.canClockOut) {
+          return { complete: false, checklists: enforcement.incompleteChecklists };
+        }
+        return { complete: true, checklists: [] };
+      }
+
       const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(
-        `/api/checklist?employeeId=${employeeId}&date=${today}`
-      );
+      const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
       if (!response.ok) throw new Error('Failed to fetch checklist');
       const checklist = await response.json();
-
       const allRequiredComplete = checklist.every((item: any) =>
         item.required ? Boolean(item.value) : true
       );
-
-      return allRequiredComplete;
+      return { complete: allRequiredComplete, checklists: [] };
     } catch (error) {
       console.error('Error checking checklist:', error);
-      return false;
+      return { complete: true, checklists: [] };
     }
   };
 
   const handleClockOut = async () => {
     try {
-      const checklistComplete = await checkChecklistCompletion();
+      const result = await checkChecklistCompletion();
 
-      if (!checklistComplete) {
+      if (!result.complete) {
+        const names = result.checklists?.map((c: any) => c.name).join(', ');
         toast({
-          title:
-            'Cannot clock out until the Daily Checklist has been completed',
+          title: names
+            ? `Cannot clock out. Incomplete checklists: ${names}`
+            : 'Cannot clock out until the Daily Checklist has been completed',
           variant: 'destructive',
         });
         return;

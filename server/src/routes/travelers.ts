@@ -1,12 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import { storage } from '../../storage';
+import { db } from '../../db';
 import {
   insertTravelerSchema,
   insertTravelerStepSchema,
   insertTravelerTaskSchema,
   insertTravelerTaskFieldSchema,
   insertTravelerSignatureSchema,
+  employees,
 } from '../../schema';
 
 const router = Router();
@@ -423,6 +426,18 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const { travelerId, stepId } = req.params;
     const { startedBy, badgeScan } = req.body;
 
+    // Resolve badge scan code to employee name if badge was scanned
+    let resolvedName = startedBy || 'unknown';
+    if (badgeScan) {
+      const emp = await db.select({ name: employees.name })
+        .from(employees)
+        .where(eq(employees.badgeScanCode, badgeScan))
+        .limit(1);
+      if (emp.length > 0) {
+        resolvedName = emp[0].name;
+      }
+    }
+
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
@@ -466,7 +481,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const updatedStep = await storage.updateTravelerStep(stepId, {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
-      startedBy: startedBy || 'unknown',
+      startedBy: resolvedName,
     });
 
     const tasks = await storage.getTravelerTasks(stepId);
@@ -475,7 +490,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       await storage.updateTravelerTask(startGateTask.id, {
         status: 'COMPLETED',
         completedAt: new Date(),
-        completedBy: startedBy || 'unknown',
+        completedBy: resolvedName,
       });
     }
 
@@ -495,7 +510,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         await storage.updateTravelerTask(gateTask.id, {
           status: 'COMPLETED',
           completedAt: new Date(),
-          completedBy: startedBy || 'unknown',
+          completedBy: resolvedName,
         });
         autoCompletedGateChecks.push(gateTask.title);
       }
@@ -503,7 +518,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
 
     await storage.createTravelerEvent({
       travelerId,
-      actor: startedBy || 'unknown',
+      actor: resolvedName,
       action: 'STEP_STARTED',
       details: {
         stepId,

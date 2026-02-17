@@ -249,6 +249,9 @@ export default function TravelerExecution() {
   const sigPadRef = useRef<SignatureCanvas>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
+  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
+  const [resolvedEmployee, setResolvedEmployee] = useState<{ name: string; employeeCode: string; department: string | null } | null>(null);
+  const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
@@ -261,6 +264,35 @@ export default function TravelerExecution() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const handleBadgeScanInput = (value: string) => {
+    setSignatureData((prev) => ({ ...prev, badgeScan: value }));
+    setResolvedEmployee(null);
+    setBadgeLookupStatus('idle');
+
+    if (badgeLookupTimerRef.current) {
+      clearTimeout(badgeLookupTimerRef.current);
+    }
+
+    if (value.trim().length >= 8) {
+      setBadgeLookupStatus('loading');
+      badgeLookupTimerRef.current = setTimeout(async () => {
+        try {
+          const resp = await fetch(`/api/employee-badges/resolve-badge/${encodeURIComponent(value.trim())}`);
+          if (resp.ok) {
+            const emp = await resp.json();
+            setResolvedEmployee({ name: emp.name, employeeCode: emp.employeeCode, department: emp.department });
+            setSignatureData((prev) => ({ ...prev, signedByName: emp.name }));
+            setBadgeLookupStatus('found');
+          } else {
+            setBadgeLookupStatus('not_found');
+          }
+        } catch {
+          setBadgeLookupStatus('not_found');
+        }
+      }, 300);
+    }
+  };
 
   const normalizeInstructionPack = (rawPack: any) => {
     if (!rawPack) return null;
@@ -356,12 +388,16 @@ export default function TravelerExecution() {
     return null;
   };
 
+  const isBadgeGateTask = (t: TravelerTask) =>
+    (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
+    /badge/i.test(t.title);
+
   const isStepMinimal = (step: TravelerStep) => {
     const nonGateTasks = step.tasks.filter(
       (t) => t.taskType !== 'SIGNATURE' && t.taskType !== 'END_GATE'
     );
     const meaningfulTasks = nonGateTasks.filter(
-      (t) => !(t.taskType === 'CHECK' && t.title === 'Badge Scan')
+      (t) => !isBadgeGateTask(t)
     );
     return meaningfulTasks.length === 0;
   };
@@ -757,40 +793,68 @@ export default function TravelerExecution() {
                         </p>
                       </div>
                     )}
-                    <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <ScanBarcode className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
-                      Badge scan required to start this step
+                      Scan your badge to start this step
                     </p>
                     <div className="max-w-xs mx-auto space-y-3">
                       <div className="space-y-1">
-                        <Label className="text-sm">Badge / Employee ID</Label>
+                        <Label className="text-sm">Scan Badge</Label>
                         <Input
-                          placeholder="Scan badge or enter ID..."
+                          placeholder="Scan badge..."
                           value={signatureData.badgeScan}
-                          onChange={(e) =>
-                            setSignatureData({ ...signatureData, badgeScan: e.target.value })
-                          }
+                          onChange={(e) => handleBadgeScanInput(e.target.value)}
+                          autoFocus
                           data-testid="input-badge-scan"
                         />
+                        {badgeLookupStatus === 'loading' && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Looking up badge...
+                          </div>
+                        )}
+                        {badgeLookupStatus === 'not_found' && (
+                          <div className="mt-1 space-y-2">
+                            <p className="text-xs text-red-500">
+                              Badge not recognized. Enter your name manually to continue.
+                            </p>
+                            <div className="space-y-1">
+                              <Label className="text-sm">Your Name</Label>
+                              <Input
+                                placeholder="Enter your full name..."
+                                value={signatureData.signedByName}
+                                onChange={(e) =>
+                                  setSignatureData({ ...signatureData, signedByName: e.target.value })
+                                }
+                                data-testid="input-tech-name-fallback"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-sm">Technician Name</Label>
-                        <Input
-                          placeholder="Your full name"
-                          value={signatureData.signedByName}
-                          onChange={(e) =>
-                            setSignatureData({ ...signatureData, signedByName: e.target.value })
-                          }
-                          data-testid="input-tech-name"
-                        />
-                      </div>
+
+                      {badgeLookupStatus === 'found' && resolvedEmployee && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <User className="h-5 w-5 text-green-600" />
+                            <div>
+                              <p className="font-medium text-green-800">{resolvedEmployee.name}</p>
+                              {resolvedEmployee.department && (
+                                <p className="text-xs text-green-600">{resolvedEmployee.department}</p>
+                              )}
+                            </div>
+                            <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
+                          </div>
+                        </div>
+                      )}
+
                       <Button
                         onClick={() => startStepMutation.mutate({
                           stepId: currentStep.id,
                           badge: signatureData.badgeScan,
-                          techName: signatureData.signedByName,
+                          techName: resolvedEmployee?.name || signatureData.signedByName,
                         })}
-                        disabled={startStepMutation.isPending || !signatureData.badgeScan}
+                        disabled={startStepMutation.isPending || !signatureData.badgeScan || (badgeLookupStatus === 'not_found' && !signatureData.signedByName)}
                         data-testid="button-start-step"
                       >
                         {startStepMutation.isPending ? (
@@ -807,7 +871,7 @@ export default function TravelerExecution() {
                 {currentStep.status === 'IN_PROGRESS' && (() => {
                   const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
                   const allRequiredNonGateComplete = currentStep.tasks
-                    .filter((t) => t.required && !isGateTask(t))
+                    .filter((t) => t.required && !isGateTask(t) && !isBadgeGateTask(t))
                     .every((t) => t.status === 'COMPLETED');
                   const unsignedSigTasks = currentStep.tasks.filter(
                     (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
@@ -893,9 +957,10 @@ export default function TravelerExecution() {
                     })()}
 
                     {PHASE_ORDER.map((phase, phaseIndex) => {
-                      const phaseTasks = currentStep.tasks
+                      const allPhaseTasks = currentStep.tasks
                         .filter((t) => t.taskPhase === phase)
                         .sort((a, b) => a.sortOrder - b.sortOrder);
+                      const phaseTasks = allPhaseTasks.filter((t) => !isBadgeGateTask(t));
                       
                       if (phaseTasks.length === 0) return null;
                       
@@ -906,7 +971,7 @@ export default function TravelerExecution() {
                       const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
                         const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
                         return prevTasks
-                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE')
+                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE' && !isBadgeGateTask(t))
                           .every((t) => t.status === 'COMPLETED');
                       });
                       

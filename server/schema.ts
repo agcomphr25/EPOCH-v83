@@ -884,6 +884,7 @@ export const employees = pgTable('employees', {
   portalTokenExpiry: timestamp('portal_token_expiry'),
   isFinishTechnician: boolean('is_finish_technician').default(false), // Mark employee as Finish technician for department assignments
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
+  badgeScanCode: text('badge_scan_code').unique(), // Non-guessable UUID encoded in physical badge barcode - not printed visibly
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

@@ -12721,3 +12721,87 @@ export const routingTrainingPackages = pgTable('routing_training_packages', {
 export const insertRoutingTrainingPackageSchema = createInsertSchema(routingTrainingPackages).omit({ id: true, createdAt: true, updatedAt: true, generatedAt: true });
 export type RoutingTrainingPackage = typeof routingTrainingPackages.$inferSelect;
 export type InsertRoutingTrainingPackage = z.infer<typeof insertRoutingTrainingPackageSchema>;
+
+export const checklistTemplates = pgTable('checklist_templates', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  frequency: text('frequency').notNull().default('DAILY'),
+  department: text('department'),
+  isActive: boolean('is_active').notNull().default(true),
+  enforceClockOut: boolean('enforce_clock_out').notNull().default(true),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const checklistTemplateItems = pgTable('checklist_template_items', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  type: text('type').notNull().default('checkbox'),
+  options: jsonb('options').$type<string[]>(),
+  required: boolean('required').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+}, (table) => ({
+  templateIdIdx: index('checklist_template_items_template_id_idx').on(table.templateId),
+}));
+
+export const checklistAssignments = pgTable('checklist_assignments', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id, { onDelete: 'cascade' }),
+  employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  isActive: boolean('is_active').notNull().default(true),
+  startDate: date('start_date'),
+  endDate: date('end_date'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('checklist_assignments_template_id_idx').on(table.templateId),
+  employeeIdIdx: index('checklist_assignments_employee_id_idx').on(table.employeeId),
+  uniqueIdx: unique('checklist_assignments_unique_idx').on(table.templateId, table.employeeId),
+}));
+
+export const checklistResponses = pgTable('checklist_responses', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id),
+  employeeId: integer('employee_id').notNull().references(() => employees.id),
+  periodDate: date('period_date').notNull(),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('checklist_responses_template_id_idx').on(table.templateId),
+  employeeIdIdx: index('checklist_responses_employee_id_idx').on(table.employeeId),
+  periodIdx: index('checklist_responses_period_idx').on(table.periodDate),
+}));
+
+export const checklistResponseItems = pgTable('checklist_response_items', {
+  id: serial('id').primaryKey(),
+  responseId: integer('response_id').notNull().references(() => checklistResponses.id, { onDelete: 'cascade' }),
+  templateItemId: integer('template_item_id').notNull().references(() => checklistTemplateItems.id),
+  value: text('value'),
+  completed: boolean('completed').notNull().default(false),
+}, (table) => ({
+  responseIdIdx: index('checklist_response_items_response_id_idx').on(table.responseId),
+  templateItemIdIdx: index('checklist_response_items_template_item_id_idx').on(table.templateItemId),
+}));
+
+export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
+export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
+
+export const insertChecklistTemplateItemSchema = createInsertSchema(checklistTemplateItems).omit({ id: true });
+export type ChecklistTemplateItem = typeof checklistTemplateItems.$inferSelect;
+export type InsertChecklistTemplateItem = z.infer<typeof insertChecklistTemplateItemSchema>;
+
+export const insertChecklistAssignmentSchema = createInsertSchema(checklistAssignments).omit({ id: true, createdAt: true });
+export type ChecklistAssignment = typeof checklistAssignments.$inferSelect;
+export type InsertChecklistAssignment = z.infer<typeof insertChecklistAssignmentSchema>;
+
+export const insertChecklistResponseSchema = createInsertSchema(checklistResponses).omit({ id: true, createdAt: true, updatedAt: true });
+export type ChecklistResponse = typeof checklistResponses.$inferSelect;
+export type InsertChecklistResponse = z.infer<typeof insertChecklistResponseSchema>;
+
+export const insertChecklistResponseItemSchema = createInsertSchema(checklistResponseItems).omit({ id: true });
+export type ChecklistResponseItem = typeof checklistResponseItems.$inferSelect;
+export type InsertChecklistResponseItem = z.infer<typeof insertChecklistResponseItemSchema>;

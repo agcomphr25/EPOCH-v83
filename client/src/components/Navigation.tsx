@@ -345,6 +345,12 @@ export default function Navigation() {
       icon: QrCode,
       description: 'Create and manage QR codes for orders, equipment, and other items',
     },
+    {
+      path: '/admin/checklist-management',
+      label: 'Checklist Management',
+      icon: ClipboardList,
+      description: 'Create and manage daily, weekly, and monthly checklists for employees',
+    },
 
     // Documentation button disabled per user request - was causing problems
     // {

@@ -236,7 +236,6 @@ export default function TravelerExecution() {
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
-  const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
   const [signatureData, setSignatureData] = useState({
     signedBy: '',
@@ -449,8 +448,8 @@ export default function TravelerExecution() {
 
   const signStepMutation = useMutation({
     mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) => {
-      const drawnSignature = signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()
-        ? signatureCanvasRef.current.toDataURL('image/png')
+      const drawnSignature = sigPadRef.current && !sigPadRef.current.isEmpty()
+        ? sigPadRef.current.toDataURL('image/png')
         : null;
       return apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
@@ -469,7 +468,7 @@ export default function TravelerExecution() {
       setSigningTaskId(null);
       setSigningRole(null);
       setSignatureEmpty(true);
-      if (signatureCanvasRef.current) signatureCanvasRef.current.clear();
+      if (sigPadRef.current) sigPadRef.current.clear();
       setSignatureData({
         signedBy: '',
         signedByName: '',

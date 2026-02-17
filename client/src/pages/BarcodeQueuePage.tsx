@@ -822,7 +822,7 @@ export default function BarcodeQueuePage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
+          {Object.entries(categorizedOrders).sort(([a], [b]) => a.localeCompare(b)).map(([categoryKey, orders]) => {
             // Remove material prefixes from display name
             const modelName = categoryKey
               .replace(/^CF\s+/i, '')

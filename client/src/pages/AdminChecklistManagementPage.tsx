@@ -43,12 +43,9 @@ import {
   History,
   CheckCircle,
   XCircle,
-  Search,
-  Calendar,
-  Shield,
   ChevronDown,
   ChevronRight,
-  Eye,
+  Shield,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -59,6 +56,7 @@ interface TemplateItem {
   type: string;
   options?: string[] | null;
   required: boolean;
+  frequency: string;
   sortOrder: number;
 }
 
@@ -66,7 +64,6 @@ interface Template {
   id: number;
   name: string;
   description: string | null;
-  frequency: string;
   department: string | null;
   isActive: boolean;
   enforceClockOut: boolean;
@@ -91,7 +88,6 @@ interface HistoryRecord {
   periodDate: string;
   completedAt: string | null;
   templateName: string;
-  frequency: string;
   employeeName: string;
   responseItems: Array<{
     id: number;
@@ -101,6 +97,7 @@ interface HistoryRecord {
     label: string;
     type: string;
     required: boolean;
+    frequency: string;
   }> | null;
 }
 
@@ -118,7 +115,6 @@ export default function AdminChecklistManagementPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    frequency: 'DAILY',
     department: '',
     isActive: true,
     enforceClockOut: true,
@@ -237,7 +233,7 @@ export default function AdminChecklistManagementPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', frequency: 'DAILY', department: '', isActive: true, enforceClockOut: true, items: [] });
+    setFormData({ name: '', description: '', department: '', isActive: true, enforceClockOut: true, items: [] });
   };
 
   const openCreateDialog = () => {
@@ -254,11 +250,19 @@ export default function AdminChecklistManagementPage() {
       setFormData({
         name: fullTemplate.name,
         description: fullTemplate.description || '',
-        frequency: fullTemplate.frequency,
         department: fullTemplate.department || '',
-        isActive: fullTemplate.isActive,
-        enforceClockOut: fullTemplate.enforceClockOut,
-        items: fullTemplate.items || [],
+        isActive: fullTemplate.is_active ?? fullTemplate.isActive ?? true,
+        enforceClockOut: fullTemplate.enforce_clock_out ?? fullTemplate.enforceClockOut ?? true,
+        items: (fullTemplate.items || []).map((item: any) => ({
+          id: item.id,
+          templateId: item.template_id,
+          label: item.label,
+          type: item.type,
+          options: item.options,
+          required: item.required,
+          frequency: item.frequency || 'DAILY',
+          sortOrder: item.sort_order ?? item.sortOrder ?? 0,
+        })),
       });
       setTemplateDialogOpen(true);
     } catch {
@@ -281,7 +285,7 @@ export default function AdminChecklistManagementPage() {
   const addNewItem = () => {
     setFormData(prev => ({
       ...prev,
-      items: [...prev.items, { label: '', type: 'checkbox', required: false, sortOrder: prev.items.length }],
+      items: [...prev.items, { label: '', type: 'checkbox', required: false, frequency: 'DAILY', sortOrder: prev.items.length }],
     }));
   };
 
@@ -332,6 +336,11 @@ export default function AdminChecklistManagementPage() {
       case 'MONTHLY': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getTemplateFrequencySummary = (template: Template) => {
+    const count = parseInt(String(template.itemCount || 0));
+    return `${count} item${count !== 1 ? 's' : ''}`;
   };
 
   return (
@@ -390,15 +399,12 @@ export default function AdminChecklistManagementPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <CardTitle className="text-lg">{template.name}</CardTitle>
-                        <Badge className={frequencyColor(template.frequency)}>
-                          {frequencyLabel(template.frequency)}
-                        </Badge>
-                        {template.isActive ? (
+                        {template.isActive || (template as any).is_active ? (
                           <Badge variant="outline" className="border-green-500 text-green-700">Active</Badge>
                         ) : (
                           <Badge variant="outline" className="border-gray-400 text-gray-500">Inactive</Badge>
                         )}
-                        {template.enforceClockOut && (
+                        {(template.enforceClockOut || (template as any).enforce_clock_out) && (
                           <Badge variant="outline" className="border-orange-500 text-orange-700">Clock-out enforced</Badge>
                         )}
                       </div>
@@ -431,10 +437,10 @@ export default function AdminChecklistManagementPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex gap-6 text-sm text-muted-foreground">
-                      <span>{template.itemCount || 0} items</span>
-                      <span>{template.assignmentCount || 0} employees assigned</span>
+                      <span>{getTemplateFrequencySummary(template)}</span>
+                      <span>{template.assignmentCount || (template as any).assignment_count || 0} employees assigned</span>
                       {template.department && <span>Dept: {template.department}</span>}
-                      <span>Created {template.createdAt ? format(new Date(template.createdAt), 'MMM d, yyyy') : ''}</span>
+                      <span>Created {(template.createdAt || (template as any).created_at) ? format(new Date(template.createdAt || (template as any).created_at), 'MMM d, yyyy') : ''}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -543,7 +549,6 @@ export default function AdminChecklistManagementPage() {
                     <TableHead></TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Checklist</TableHead>
-                    <TableHead>Frequency</TableHead>
                     <TableHead>Period Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Completed At</TableHead>
@@ -564,16 +569,11 @@ export default function AdminChecklistManagementPage() {
                             <ChevronRight className="w-4 h-4" />
                           )}
                         </TableCell>
-                        <TableCell className="font-medium">{record.employeeName}</TableCell>
-                        <TableCell>{record.templateName}</TableCell>
+                        <TableCell className="font-medium">{record.employeeName || (record as any).employee_name}</TableCell>
+                        <TableCell>{record.templateName || (record as any).template_name}</TableCell>
+                        <TableCell>{record.periodDate || (record as any).period_date}</TableCell>
                         <TableCell>
-                          <Badge className={frequencyColor(record.frequency)}>
-                            {frequencyLabel(record.frequency)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{record.periodDate}</TableCell>
-                        <TableCell>
-                          {record.completedAt ? (
+                          {(record.completedAt || (record as any).completed_at) ? (
                             <Badge className="bg-green-100 text-green-800">
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Complete
@@ -586,21 +586,24 @@ export default function AdminChecklistManagementPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {record.completedAt ? format(new Date(record.completedAt), 'MMM d, yyyy h:mm a') : '-'}
+                          {(record.completedAt || (record as any).completed_at) ? format(new Date(record.completedAt || (record as any).completed_at), 'MMM d, yyyy h:mm a') : '-'}
                         </TableCell>
                       </TableRow>
-                      {expandedHistory === record.id && record.responseItems && (
+                      {expandedHistory === record.id && (record.responseItems || (record as any).response_items) && (
                         <TableRow key={`${record.id}-detail`}>
-                          <TableCell colSpan={7} className="bg-muted/30 p-4">
+                          <TableCell colSpan={6} className="bg-muted/30 p-4">
                             <div className="space-y-2">
                               <h4 className="font-semibold text-sm">Response Details</h4>
                               <div className="grid gap-2">
-                                {record.responseItems.map((item, idx) => (
+                                {(record.responseItems || (record as any).response_items || []).map((item: any, idx: number) => (
                                   <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border">
                                     <div className="flex items-center gap-2">
                                       {item.required && <span className="text-red-500 text-xs">*</span>}
                                       <span className="text-sm">{item.label}</span>
                                       <Badge variant="outline" className="text-xs">{item.type}</Badge>
+                                      <Badge className={`text-xs ${frequencyColor(item.frequency)}`}>
+                                        {frequencyLabel(item.frequency)}
+                                      </Badge>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       {item.type === 'checkbox' ? (
@@ -630,7 +633,7 @@ export default function AdminChecklistManagementPage() {
       </Tabs>
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate ? 'Edit Template' : 'Create New Template'}
@@ -644,7 +647,7 @@ export default function AdminChecklistManagementPage() {
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Production Floor Daily Tasks"
+                  placeholder="e.g., Production Floor Tasks"
                 />
               </div>
               <div className="col-span-2">
@@ -657,20 +660,6 @@ export default function AdminChecklistManagementPage() {
                 />
               </div>
               <div>
-                <Label>Frequency</Label>
-                <Select
-                  value={formData.frequency}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, frequency: v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DAILY">Daily</SelectItem>
-                    <SelectItem value="WEEKLY">Weekly</SelectItem>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
                 <Label>Department (optional)</Label>
                 <Input
                   value={formData.department}
@@ -678,19 +667,21 @@ export default function AdminChecklistManagementPage() {
                   placeholder="e.g., Production"
                 />
               </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={formData.isActive}
-                  onCheckedChange={(v) => setFormData(prev => ({ ...prev, isActive: v }))}
-                />
-                <Label>Active</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={formData.enforceClockOut}
-                  onCheckedChange={(v) => setFormData(prev => ({ ...prev, enforceClockOut: v }))}
-                />
-                <Label>Enforce on clock-out</Label>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={formData.isActive}
+                    onCheckedChange={(v) => setFormData(prev => ({ ...prev, isActive: v }))}
+                  />
+                  <Label>Active</Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={formData.enforceClockOut}
+                    onCheckedChange={(v) => setFormData(prev => ({ ...prev, enforceClockOut: v }))}
+                  />
+                  <Label>Enforce on clock-out</Label>
+                </div>
               </div>
             </div>
 
@@ -698,7 +689,10 @@ export default function AdminChecklistManagementPage() {
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                <Label className="text-base font-semibold">Checklist Items</Label>
+                <div>
+                  <Label className="text-base font-semibold">Checklist Items</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Each item has its own frequency (daily, weekly, or monthly)</p>
+                </div>
                 <Button size="sm" variant="outline" onClick={addNewItem}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Item
@@ -712,54 +706,71 @@ export default function AdminChecklistManagementPage() {
               ) : (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => (
-                    <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
-                      <div className="flex-1 grid grid-cols-12 gap-2">
-                        <div className="col-span-5">
-                          <Input
-                            value={item.label}
-                            onChange={(e) => updateItem(index, 'label', e.target.value)}
-                            placeholder="Item label"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Select
-                            value={item.type}
-                            onValueChange={(v) => updateItem(index, 'type', v)}
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="checkbox">Checkbox</SelectItem>
-                              <SelectItem value="text">Text</SelectItem>
-                              <SelectItem value="number">Number</SelectItem>
-                              <SelectItem value="select">Dropdown</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {item.type === 'select' && (
-                          <div className="col-span-3">
+                    <div key={index} className="p-3 border rounded-lg space-y-2">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 grid grid-cols-12 gap-2">
+                          <div className="col-span-4">
                             <Input
-                              value={(item.options || []).join(', ')}
-                              onChange={(e) => updateItem(index, 'options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                              placeholder="Options (comma separated)"
+                              value={item.label}
+                              onChange={(e) => updateItem(index, 'label', e.target.value)}
+                              placeholder="Item label"
                             />
                           </div>
-                        )}
-                        <div className={`${item.type === 'select' ? 'col-span-2' : 'col-span-5'} flex items-center gap-2`}>
-                          <Checkbox
-                            checked={item.required}
-                            onCheckedChange={(v) => updateItem(index, 'required', Boolean(v))}
-                          />
-                          <Label className="text-sm">Required</Label>
+                          <div className="col-span-2">
+                            <Select
+                              value={item.type}
+                              onValueChange={(v) => updateItem(index, 'type', v)}
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="checkbox">Checkbox</SelectItem>
+                                <SelectItem value="text">Text</SelectItem>
+                                <SelectItem value="number">Number</SelectItem>
+                                <SelectItem value="select">Dropdown</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2">
+                            <Select
+                              value={item.frequency}
+                              onValueChange={(v) => updateItem(index, 'frequency', v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="DAILY">Daily</SelectItem>
+                                <SelectItem value="WEEKLY">Weekly</SelectItem>
+                                <SelectItem value="MONTHLY">Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {item.type === 'select' && (
+                            <div className="col-span-2">
+                              <Input
+                                value={(item.options || []).join(', ')}
+                                onChange={(e) => updateItem(index, 'options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                                placeholder="Options (comma separated)"
+                              />
+                            </div>
+                          )}
+                          <div className={`${item.type === 'select' ? 'col-span-2' : 'col-span-4'} flex items-center gap-2`}>
+                            <Checkbox
+                              checked={item.required}
+                              onCheckedChange={(v) => updateItem(index, 'required', Boolean(v))}
+                            />
+                            <Label className="text-sm">Required</Label>
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500"
+                          onClick={() => removeItem(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                   ))}
                 </div>
@@ -846,13 +857,6 @@ function AssignmentCard({ template, onAssign, onDeleteAssignment }: {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CardTitle className="text-base">{template.name}</CardTitle>
-            <Badge className={
-              template.frequency === 'DAILY' ? 'bg-blue-100 text-blue-800' :
-              template.frequency === 'WEEKLY' ? 'bg-purple-100 text-purple-800' :
-              'bg-green-100 text-green-800'
-            }>
-              {template.frequency === 'DAILY' ? 'Daily' : template.frequency === 'WEEKLY' ? 'Weekly' : 'Monthly'}
-            </Badge>
           </div>
           <Button size="sm" variant="outline" onClick={onAssign}>
             <Plus className="w-4 h-4 mr-1" />
@@ -869,9 +873,9 @@ function AssignmentCard({ template, onAssign, onDeleteAssignment }: {
           <div className="flex flex-wrap gap-2">
             {assignments.map((a: any) => (
               <Badge key={a.id} variant="secondary" className="flex items-center gap-1 py-1 px-2">
-                {a.employeeName}
-                {a.employeeDepartment && (
-                  <span className="text-xs opacity-70">({a.employeeDepartment})</span>
+                {a.employee_name || a.employeeName}
+                {(a.employee_department || a.employeeDepartment) && (
+                  <span className="text-xs opacity-70">({a.employee_department || a.employeeDepartment})</span>
                 )}
                 <button
                   className="ml-1 text-red-500 hover:text-red-700"

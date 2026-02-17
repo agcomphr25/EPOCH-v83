@@ -12742,6 +12742,7 @@ export const checklistTemplateItems = pgTable('checklist_template_items', {
   type: text('type').notNull().default('checkbox'),
   options: jsonb('options').$type<string[]>(),
   required: boolean('required').notNull().default(false),
+  frequency: text('frequency').notNull().default('DAILY'),
   sortOrder: integer('sort_order').notNull().default(0),
 }, (table) => ({
   templateIdIdx: index('checklist_template_items_template_id_idx').on(table.templateId),

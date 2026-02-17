@@ -49,13 +49,13 @@ router.get('/templates/:id', ...adminOnly, async (req: Request, res: Response) =
 
 router.post('/templates', ...adminOnly, async (req: Request, res: Response) => {
   try {
-    const { name, description, frequency, department, isActive, enforceClockOut, items } = req.body;
+    const { name, description, department, isActive, enforceClockOut, items } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     const result = await pool.query(
-      `INSERT INTO checklist_templates (name, description, frequency, department, is_active, enforce_clock_out)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, description || null, frequency || 'DAILY', department || null, isActive !== false, enforceClockOut !== false]
+      `INSERT INTO checklist_templates (name, description, department, is_active, enforce_clock_out)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [name, description || null, department || null, isActive !== false, enforceClockOut !== false]
     );
     const template = result[0];
 
@@ -63,9 +63,9 @@ router.post('/templates', ...adminOnly, async (req: Request, res: Response) => {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         await pool.query(
-          `INSERT INTO checklist_template_items (template_id, label, type, options, required, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [template.id, item.label, item.type || 'checkbox', item.options ? JSON.stringify(item.options) : null, item.required || false, i]
+          `INSERT INTO checklist_template_items (template_id, label, type, options, required, frequency, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [template.id, item.label, item.type || 'checkbox', item.options ? JSON.stringify(item.options) : null, item.required || false, item.frequency || 'DAILY', i]
         );
       }
     }
@@ -79,19 +79,18 @@ router.post('/templates', ...adminOnly, async (req: Request, res: Response) => {
 router.patch('/templates/:id', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, frequency, department, isActive, enforceClockOut } = req.body;
+    const { name, description, department, isActive, enforceClockOut } = req.body;
 
     const result = await pool.query(
       `UPDATE checklist_templates 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description),
-           frequency = COALESCE($3, frequency),
-           department = COALESCE($4, department),
-           is_active = COALESCE($5, is_active),
-           enforce_clock_out = COALESCE($6, enforce_clock_out),
+           department = COALESCE($3, department),
+           is_active = COALESCE($4, is_active),
+           enforce_clock_out = COALESCE($5, enforce_clock_out),
            updated_at = NOW()
-       WHERE id = $7 RETURNING *`,
-      [name, description, frequency, department, isActive, enforceClockOut, id]
+       WHERE id = $6 RETURNING *`,
+      [name, description, department, isActive, enforceClockOut, id]
     );
     if (!result || result.length === 0) {
       return res.status(404).json({ error: 'Template not found' });
@@ -115,13 +114,13 @@ router.delete('/templates/:id', ...adminOnly, async (req: Request, res: Response
 router.post('/templates/:id/items', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { label, type, options, required, sortOrder } = req.body;
+    const { label, type, options, required, frequency, sortOrder } = req.body;
     if (!label) return res.status(400).json({ error: 'Label is required' });
 
     const result = await pool.query(
-      `INSERT INTO checklist_template_items (template_id, label, type, options, required, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [id, label, type || 'checkbox', options ? JSON.stringify(options) : null, required || false, sortOrder || 0]
+      `INSERT INTO checklist_template_items (template_id, label, type, options, required, frequency, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [id, label, type || 'checkbox', options ? JSON.stringify(options) : null, required || false, frequency || 'DAILY', sortOrder || 0]
     );
     res.status(201).json(result[0]);
   } catch (error: any) {
@@ -132,7 +131,7 @@ router.post('/templates/:id/items', ...adminOnly, async (req: Request, res: Resp
 router.patch('/templates/:templateId/items/:itemId', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { itemId } = req.params;
-    const { label, type, options, required, sortOrder } = req.body;
+    const { label, type, options, required, frequency, sortOrder } = req.body;
 
     const result = await pool.query(
       `UPDATE checklist_template_items
@@ -140,9 +139,10 @@ router.patch('/templates/:templateId/items/:itemId', ...adminOnly, async (req: R
            type = COALESCE($2, type),
            options = COALESCE($3, options),
            required = COALESCE($4, required),
-           sort_order = COALESCE($5, sort_order)
-       WHERE id = $6 RETURNING *`,
-      [label, type, options ? JSON.stringify(options) : null, required, sortOrder, itemId]
+           frequency = COALESCE($5, frequency),
+           sort_order = COALESCE($6, sort_order)
+       WHERE id = $7 RETURNING *`,
+      [label, type, options ? JSON.stringify(options) : null, required, frequency, sortOrder, itemId]
     );
     if (!result || result.length === 0) {
       return res.status(404).json({ error: 'Item not found' });
@@ -239,8 +239,7 @@ router.get('/active', ...authRequired, async (req: Request, res: Response) => {
     const today = new Date().toISOString().split('T')[0];
     
     const templates = await pool.query(
-      `SELECT DISTINCT ct.*, 
-        (SELECT json_agg(cti ORDER BY cti.sort_order) FROM checklist_template_items cti WHERE cti.template_id = ct.id) as items
+      `SELECT DISTINCT ct.*
        FROM checklist_templates ct
        JOIN checklist_assignments ca ON ca.template_id = ct.id
        WHERE ca.employee_id = $1
@@ -254,20 +253,32 @@ router.get('/active', ...authRequired, async (req: Request, res: Response) => {
 
     const result = [];
     for (const template of (templates || [])) {
-      const periodDate = getPeriodDate(template.frequency, today);
-      
+      const allItems = await pool.query(
+        `SELECT * FROM checklist_template_items WHERE template_id = $1 ORDER BY sort_order`,
+        [template.id]
+      );
+
+      const applicableItems = (allItems || []).filter((item: any) => {
+        return isItemDueToday(item.frequency, today);
+      });
+
+      if (applicableItems.length === 0) continue;
+
+      const primaryPeriodDate = getPeriodDate('DAILY', today);
+
       const responses = await pool.query(
         `SELECT cr.*, 
           (SELECT json_agg(json_build_object('id', cri.id, 'templateItemId', cri.template_item_id, 'value', cri.value, 'completed', cri.completed))
            FROM checklist_response_items cri WHERE cri.response_id = cr.id) as response_items
          FROM checklist_responses cr
          WHERE cr.template_id = $1 AND cr.employee_id = $2 AND cr.period_date = $3`,
-        [template.id, employeeId, periodDate]
+        [template.id, employeeId, primaryPeriodDate]
       );
 
       result.push({
         ...template,
-        periodDate,
+        items: applicableItems,
+        periodDate: primaryPeriodDate,
         existingResponse: responses && responses.length > 0 ? responses[0] : null,
       });
     }
@@ -327,9 +338,10 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
     if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
 
     const today = new Date().toISOString().split('T')[0];
+    const dailyPeriodDate = getPeriodDate('DAILY', today);
 
     const enforced = await pool.query(
-      `SELECT ct.id, ct.name, ct.frequency
+      `SELECT ct.id, ct.name
        FROM checklist_templates ct
        JOIN checklist_assignments ca ON ca.template_id = ct.id
        WHERE ca.employee_id = $1
@@ -343,24 +355,23 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
 
     const incomplete = [];
     for (const template of (enforced || [])) {
-      const periodDate = getPeriodDate(template.frequency, today);
-      
       const requiredItems = await pool.query(
-        `SELECT COUNT(*) as count FROM checklist_template_items 
+        `SELECT id, frequency FROM checklist_template_items 
          WHERE template_id = $1 AND required = true`,
         [template.id]
       );
-      const requiredCount = parseInt(requiredItems[0]?.count || '0');
-      if (requiredCount === 0) continue;
+
+      const dueRequiredItems = (requiredItems || []).filter((item: any) => isItemDueToday(item.frequency, today));
+      if (dueRequiredItems.length === 0) continue;
 
       const responses = await pool.query(
         `SELECT cr.id FROM checklist_responses cr
          WHERE cr.template_id = $1 AND cr.employee_id = $2 AND cr.period_date = $3 AND cr.completed_at IS NOT NULL`,
-        [template.id, employeeId, periodDate]
+        [template.id, employeeId, dailyPeriodDate]
       );
 
       if (!responses || responses.length === 0) {
-        incomplete.push({ id: template.id, name: template.name, frequency: template.frequency });
+        incomplete.push({ id: template.id, name: template.name });
       }
     }
 
@@ -378,10 +389,10 @@ router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
     const { employeeId, from, to, templateId } = req.query;
     
     let query = `
-      SELECT cr.*, ct.name as template_name, ct.frequency, e.name as employee_name,
+      SELECT cr.*, ct.name as template_name, e.name as employee_name,
         (SELECT json_agg(json_build_object(
           'id', cri.id, 'templateItemId', cri.template_item_id, 'value', cri.value, 'completed', cri.completed,
-          'label', cti.label, 'type', cti.type, 'required', cti.required
+          'label', cti.label, 'type', cti.type, 'required', cti.required, 'frequency', cti.frequency
         ))
          FROM checklist_response_items cri 
          JOIN checklist_template_items cti ON cti.id = cri.template_item_id
@@ -437,6 +448,19 @@ function getPeriodDate(frequency: string, today: string): string {
     }
     default:
       return today;
+  }
+}
+
+function isItemDueToday(frequency: string, today: string): boolean {
+  switch (frequency) {
+    case 'DAILY':
+      return true;
+    case 'WEEKLY':
+      return true;
+    case 'MONTHLY':
+      return true;
+    default:
+      return true;
   }
 }
 

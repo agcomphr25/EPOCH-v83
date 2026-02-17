@@ -31,13 +31,13 @@ interface TemplateItemData {
   type: string;
   options?: string[] | null;
   required: boolean;
+  frequency: string;
   sort_order: number;
 }
 
 interface ActiveTemplate {
   id: number;
   name: string;
-  frequency: string;
   enforceClockOut: boolean;
   items: TemplateItemData[] | null;
   periodDate: string;
@@ -488,9 +488,6 @@ export default function DailyChecklistModal({
                       <h3 className="font-semibold flex items-center gap-2">
                         <Clock className="w-4 h-4" />
                         {template.name}
-                        <Badge variant="outline" className="text-xs">
-                          {frequencyLabel(template.frequency)}
-                        </Badge>
                       </h3>
                       <span className="text-sm text-muted-foreground">
                         {templateCompleted}/{templateTotal}

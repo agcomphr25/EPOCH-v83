@@ -138,6 +138,11 @@ const publicRoutes = [
   '/api/calendar/webhook', // Google Calendar webhooks
   '/api/integrations/process-runner', // External timer app integration (uses own token auth)
   '/api/p2-traveler',    // Production floor traveler system (uses badge authentication)
+  '/api/p2-traveler-viewer', // P2 traveler viewer - production floor access
+  '/api/travelers',      // Traveler execution - production floor access via barcode scan
+  '/api/part-routings',  // Part routing data needed by traveler execution
+  '/api/routing-documents', // Routing documents needed by traveler execution
+  '/api/material-lots',  // Material lot validation needed by traveler execution
   '/api/production/timers', // Production Timer Station - public for floor displays
 ];
 
@@ -400,6 +405,183 @@ async function initializeBackgroundServices() {
         await db.execute(sqlTag2`CREATE INDEX IF NOT EXISTS routing_document_links_document_idx ON routing_document_links(document_id)`);
       } catch (linkTableError: any) {
         console.warn('⚠️ routing_document_links migration:', linkTableError.message);
+      }
+
+      // Ensure employment_periods table exists (for onboarding employment tracking)
+      try {
+        const { sql: sqlTag3 } = await import('drizzle-orm');
+        await db.execute(sqlTag3`
+          CREATE TABLE IF NOT EXISTS employment_periods (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            start_date TIMESTAMP NOT NULL DEFAULT NOW(),
+            end_date TIMESTAMP,
+            employment_type TEXT DEFAULT 'FULL_TIME',
+            department TEXT,
+            job_title TEXT,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            started_via_session_id UUID,
+            ended_via_session_id UUID,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlTag3`CREATE INDEX IF NOT EXISTS idx_employment_periods_employee_id ON employment_periods(employee_id)`);
+        await db.execute(sqlTag3`CREATE INDEX IF NOT EXISTS idx_employment_periods_status ON employment_periods(status)`);
+        console.log('✅ Ensured employment_periods table exists');
+      } catch (empPeriodError: any) {
+        console.warn('⚠️ employment_periods migration:', empPeriodError.message);
+      }
+
+      // Fix: Remove "table temp" field from Mold Prep department config (belongs on Layup only)
+      try {
+        const { sql: sqlRoutingFix } = await import('drizzle-orm');
+        const routingResult = await db.execute(sqlRoutingFix`
+          SELECT id, department_config FROM part_routings 
+          WHERE id = '1673c623-60bd-4787-b2b9-aa4bfe327d06'
+        `);
+        if (routingResult.rows.length > 0) {
+          const row = routingResult.rows[0] as any;
+          let deptConfig = typeof row.department_config === 'string' 
+            ? JSON.parse(row.department_config) 
+            : row.department_config;
+          if (deptConfig?.['Mold Prep']?.customDataFields) {
+            const originalLen = deptConfig['Mold Prep'].customDataFields.length;
+            deptConfig['Mold Prep'].customDataFields = deptConfig['Mold Prep'].customDataFields.filter(
+              (f: any) => !f.fieldName?.toLowerCase().includes('temp of the table')
+            );
+            if (deptConfig['Mold Prep'].customDataFields.length < originalLen) {
+              await db.execute(sqlRoutingFix`
+                UPDATE part_routings 
+                SET department_config = ${JSON.stringify(deptConfig)}::jsonb,
+                    updated_at = NOW()
+                WHERE id = '1673c623-60bd-4787-b2b9-aa4bfe327d06'
+              `);
+              console.log('✅ Fixed: Removed table temp field from Mold Prep department config (belongs on Layup only)');
+            } else {
+              console.log('✅ Mold Prep department config already correct (no table temp field)');
+            }
+          }
+        }
+      } catch (routingFixErr: any) {
+        console.warn('⚠️ Routing config fix skipped:', routingFixErr.message);
+      }
+
+      // Ensure checklist management tables exist
+      try {
+        const { sql: sqlCL } = await import('drizzle-orm');
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_templates (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            frequency TEXT NOT NULL DEFAULT 'DAILY',
+            department TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            enforce_clock_out BOOLEAN NOT NULL DEFAULT true,
+            created_by INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_template_items (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+            label TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'checkbox',
+            options JSONB,
+            required BOOLEAN NOT NULL DEFAULT false,
+            frequency TEXT NOT NULL DEFAULT 'DAILY',
+            sort_order INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_template_items_template_id_idx ON checklist_template_items(template_id)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_assignments (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            start_date DATE,
+            end_date DATE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(template_id, employee_id)
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_assignments_template_id_idx ON checklist_assignments(template_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_assignments_employee_id_idx ON checklist_assignments(employee_id)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_responses (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id),
+            employee_id INTEGER NOT NULL REFERENCES employees(id),
+            period_date DATE NOT NULL,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_template_id_idx ON checklist_responses(template_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_employee_id_idx ON checklist_responses(employee_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_period_idx ON checklist_responses(period_date)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_response_items (
+            id SERIAL PRIMARY KEY,
+            response_id INTEGER NOT NULL REFERENCES checklist_responses(id) ON DELETE CASCADE,
+            template_item_id INTEGER NOT NULL REFERENCES checklist_template_items(id),
+            value TEXT,
+            completed BOOLEAN NOT NULL DEFAULT false
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_response_items_response_id_idx ON checklist_response_items(response_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_response_items_template_item_id_idx ON checklist_response_items(template_item_id)`);
+        console.log('✅ Ensured checklist management tables exist');
+      } catch (clErr: any) {
+        console.warn('⚠️ Checklist management tables migration:', clErr.message);
+      }
+
+      // Ensure production forecast engine tables exist
+      try {
+        const { sql: sqlFC } = await import('drizzle-orm');
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS department_forecast_defaults (
+            id SERIAL PRIMARY KEY,
+            department_name TEXT UNIQUE NOT NULL,
+            avg_days REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS model_forecast_multiplier (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT REFERENCES stock_models(id),
+            multiplier REAL DEFAULT 1.0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Seed default forecast values if table is empty
+        const forecastCount = await db.execute(sqlFC`SELECT COUNT(*) as cnt FROM department_forecast_defaults`);
+        const cnt = (forecastCount.rows[0] as any)?.cnt;
+        if (!cnt || parseInt(cnt) === 0) {
+          await db.execute(sqlFC`
+            INSERT INTO department_forecast_defaults (department_name, avg_days) VALUES
+            ('P1 Production Queue', 1),
+            ('Layup/Plugging', 3),
+            ('Barcode', 1),
+            ('CNC', 2),
+            ('Gunsmith', 3),
+            ('Finish', 4),
+            ('Finish QC', 1),
+            ('Shipping QC', 1),
+            ('Shipping', 1)
+          `);
+          console.log('✅ Seeded default department forecast values');
+        }
+        console.log('✅ Ensured production forecast engine tables exist');
+      } catch (fcErr: any) {
+        console.warn('⚠️ Production forecast tables migration:', fcErr.message);
       }
 
       // Seed default health check types and config if not present

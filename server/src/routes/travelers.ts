@@ -531,7 +531,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       return res.status(400).json({ error: 'signedBy and meaning are required' });
     }
 
-    if (!signatureData) {
+    if (!sigData) {
       return res.status(400).json({ error: 'A drawn signature is required' });
     }
 

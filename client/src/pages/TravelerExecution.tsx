@@ -597,12 +597,16 @@ export default function TravelerExecution() {
                   <p className="font-medium">{traveler.workOrderId}</p>
                 </div>
               )}
-              {(traveler.lotNumber || traveler.serialNumber) && (
+              {traveler.serialNumber && (
                 <div>
-                  <span className="text-muted-foreground">Lot/Serial:</span>
-                  <p className="font-medium">
-                    {traveler.lotNumber || traveler.serialNumber}
-                  </p>
+                  <span className="text-muted-foreground">Serial Number:</span>
+                  <p className="font-medium font-mono">{traveler.serialNumber}</p>
+                </div>
+              )}
+              {traveler.lotNumber && (
+                <div>
+                  <span className="text-muted-foreground">Lot Number:</span>
+                  <p className="font-medium font-mono">{traveler.lotNumber}</p>
                 </div>
               )}
               <div>

@@ -151,8 +151,7 @@ export default function AdminChecklistManagementPage() {
 
   const createTemplateMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest('/api/checklist-management/templates', { method: 'POST', body: JSON.stringify(data) });
-      return res.json();
+      return await apiRequest('/api/checklist-management/templates', { method: 'POST', body: JSON.stringify(data) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/checklist-management/templates'] });
@@ -165,8 +164,7 @@ export default function AdminChecklistManagementPage() {
 
   const updateTemplateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const res = await apiRequest(`/api/checklist-management/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-      return res.json();
+      return await apiRequest(`/api/checklist-management/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/checklist-management/templates'] });
@@ -191,8 +189,7 @@ export default function AdminChecklistManagementPage() {
 
   const addItemMutation = useMutation({
     mutationFn: async ({ templateId, item }: { templateId: number; item: any }) => {
-      const res = await apiRequest(`/api/checklist-management/templates/${templateId}/items`, { method: 'POST', body: JSON.stringify(item) });
-      return res.json();
+      return await apiRequest(`/api/checklist-management/templates/${templateId}/items`, { method: 'POST', body: JSON.stringify(item) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/checklist-management/templates'] });
@@ -210,8 +207,7 @@ export default function AdminChecklistManagementPage() {
 
   const bulkAssignMutation = useMutation({
     mutationFn: async ({ templateId, employeeIds }: { templateId: number; employeeIds: number[] }) => {
-      const res = await apiRequest('/api/checklist-management/assignments/bulk', { method: 'POST', body: JSON.stringify({ templateId, employeeIds }) });
-      return res.json();
+      return await apiRequest('/api/checklist-management/assignments/bulk', { method: 'POST', body: JSON.stringify({ templateId, employeeIds }) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/checklist-management/templates'] });

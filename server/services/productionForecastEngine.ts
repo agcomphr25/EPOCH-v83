@@ -224,6 +224,66 @@ export async function getExpectedDepartment(orderId: string): Promise<ExpectedDe
   };
 }
 
+export interface WeeklyForecastItem {
+  orderId: string;
+  model: string | null;
+  actualDepartment: string | null;
+  expectedDepartment: string;
+  estimatedShipDate: string;
+  status: 'early' | 'on_track' | 'late';
+  departmentTimeline: DepartmentTimeline[];
+}
+
+export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Promise<WeeklyForecastItem[]> {
+  const activeOrders = await pgPool.query(
+    `SELECT order_id, model_id, current_department, order_date
+     FROM all_orders
+     WHERE is_cancelled = false
+       AND shipping_completed_at IS NULL
+       AND current_department IS NOT NULL
+       AND status NOT IN ('CANCELLED', 'SCRAPPED')
+     ORDER BY created_at ASC`
+  );
+
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+  const results: WeeklyForecastItem[] = [];
+
+  for (const order of activeOrders.rows) {
+    const forecast = await simulateOrderForecast(order.order_id);
+    if (!forecast) continue;
+
+    const timeline = forecast.departmentTimeline;
+
+    const overlaps = timeline.some(entry => {
+      return (
+        (entry.expectedStart >= weekStartStr && entry.expectedStart <= weekEndStr) ||
+        (entry.expectedFinish >= weekStartStr && entry.expectedFinish <= weekEndStr) ||
+        (entry.expectedStart <= weekStartStr && entry.expectedFinish >= weekEndStr)
+      );
+    });
+
+    if (overlaps) {
+      const currentDept = order.current_department || 'P1 Production Queue';
+      const expectedDepartment = findExpectedDepartment(timeline);
+      const status = determineStatus(currentDept, expectedDepartment);
+
+      results.push({
+        orderId: order.order_id,
+        model: order.model_id,
+        actualDepartment: currentDept,
+        expectedDepartment,
+        estimatedShipDate: forecast.estimatedShipDate,
+        status,
+        departmentTimeline: timeline,
+      });
+    }
+  }
+
+  return results;
+}
+
 export async function generateDashboardForecast(): Promise<DashboardForecastItem[]> {
   const activeOrders = await pgPool.query(
     `SELECT order_id, model_id, current_department, order_date

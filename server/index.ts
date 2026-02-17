@@ -579,6 +579,19 @@ async function initializeBackgroundServices() {
           `);
           console.log('✅ Seeded default department forecast values');
         }
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS production_forecast_verifications (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            department TEXT NOT NULL,
+            week_start_date TIMESTAMP NOT NULL,
+            verified_by INTEGER,
+            verified_at TIMESTAMP DEFAULT NOW(),
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(order_id, department, week_start_date)
+          )
+        `);
         console.log('✅ Ensured production forecast engine tables exist');
       } catch (fcErr: any) {
         console.warn('⚠️ Production forecast tables migration:', fcErr.message);

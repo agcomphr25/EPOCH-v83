@@ -1,0 +1,166 @@
+COPY-PASTE THIS INTO REPLIT AGENT
+🔍 OBJECTIVE
+
+Perform a read-only audit to determine the true source of backlog and department state for regular production orders in EPOCH.
+
+Do NOT modify any code.
+Do NOT refactor anything.
+Do NOT add features.
+Do NOT write migrations.
+Only analyze and report.
+
+We are NOT focusing on P1 PO orders right now.
+Focus on regular stock production orders only.
+
+🧠 STEP 1 — Identify Core Order Tables
+
+Search the schema for:
+
+all_orders
+
+production_orders
+
+production routing tables
+
+department assignment fields
+
+current_department
+
+production_start
+
+shipped_at
+
+fulfilled_at
+
+completed_at
+
+cancelled_at
+
+Produce a report listing:
+
+The main table that represents regular production orders
+
+The field that stores current department
+
+The field that determines production start
+
+The field(s) that indicate completion or shipment
+
+Any status enum values related to production lifecycle
+
+Output structured findings.
+
+🧠 STEP 2 — Identify True “Active Production” Definition
+
+Search entire backend for:
+
+status ===
+
+status IN
+
+fulfilled
+
+shipped
+
+completed
+
+cancelled
+
+archived
+
+Find how the system currently determines:
+
+Which orders are active
+
+Which orders appear in department manager views
+
+Which orders are excluded from queues
+
+Report:
+
+The exact filter logic used
+
+File names and functions
+
+SQL queries involved
+
+🧠 STEP 3 — Identify Backlog Calculation Logic
+
+Search for:
+
+COUNT(
+
+backlog
+
+queue length
+
+department counts
+
+GROUP BY department
+
+production dashboard queries
+
+Find:
+
+Where backlog is currently calculated
+
+Which table it queries
+
+Which filters are applied
+
+Whether completed/shipped orders are excluded
+
+Return the exact query or logic block.
+
+🧠 STEP 4 — Verify Separation from P1 PO Orders
+
+Search for:
+
+po_orders
+
+p1_po
+
+purchase order routing
+
+shipping QC routes
+
+Confirm:
+
+Which tables are used exclusively for PO orders
+
+That regular production orders are separate
+
+Where logic diverges
+
+Document this separation clearly.
+
+🧠 STEP 5 — Provide Clear Conclusions
+
+At the end, provide:
+
+The canonical table that represents active regular production orders
+
+The canonical column that represents current department
+
+The canonical column that represents shipment/completion
+
+The correct WHERE clause that defines “Active Production”
+
+The correct WHERE clause that defines “Backlog in Department X”
+
+Do NOT suggest code changes yet.
+Just report.
+
+🔒 CONSTRAINTS
+
+No schema changes
+
+No refactors
+
+No new services
+
+No forecast engine changes
+
+Read-only audit only
+
+END PROMPT

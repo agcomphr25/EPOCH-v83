@@ -466,6 +466,124 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Routing config fix skipped:', routingFixErr.message);
       }
 
+      // Ensure checklist management tables exist
+      try {
+        const { sql: sqlCL } = await import('drizzle-orm');
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_templates (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            frequency TEXT NOT NULL DEFAULT 'DAILY',
+            department TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            enforce_clock_out BOOLEAN NOT NULL DEFAULT true,
+            created_by INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_template_items (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+            label TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'checkbox',
+            options JSONB,
+            required BOOLEAN NOT NULL DEFAULT false,
+            frequency TEXT NOT NULL DEFAULT 'DAILY',
+            sort_order INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_template_items_template_id_idx ON checklist_template_items(template_id)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_assignments (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            start_date DATE,
+            end_date DATE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(template_id, employee_id)
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_assignments_template_id_idx ON checklist_assignments(template_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_assignments_employee_id_idx ON checklist_assignments(employee_id)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_responses (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id),
+            employee_id INTEGER NOT NULL REFERENCES employees(id),
+            period_date DATE NOT NULL,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_template_id_idx ON checklist_responses(template_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_employee_id_idx ON checklist_responses(employee_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_responses_period_idx ON checklist_responses(period_date)`);
+        await db.execute(sqlCL`
+          CREATE TABLE IF NOT EXISTS checklist_response_items (
+            id SERIAL PRIMARY KEY,
+            response_id INTEGER NOT NULL REFERENCES checklist_responses(id) ON DELETE CASCADE,
+            template_item_id INTEGER NOT NULL REFERENCES checklist_template_items(id),
+            value TEXT,
+            completed BOOLEAN NOT NULL DEFAULT false
+          )
+        `);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_response_items_response_id_idx ON checklist_response_items(response_id)`);
+        await db.execute(sqlCL`CREATE INDEX IF NOT EXISTS checklist_response_items_template_item_id_idx ON checklist_response_items(template_item_id)`);
+        console.log('✅ Ensured checklist management tables exist');
+      } catch (clErr: any) {
+        console.warn('⚠️ Checklist management tables migration:', clErr.message);
+      }
+
+      // Ensure production forecast engine tables exist
+      try {
+        const { sql: sqlFC } = await import('drizzle-orm');
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS department_forecast_defaults (
+            id SERIAL PRIMARY KEY,
+            department_name TEXT UNIQUE NOT NULL,
+            avg_days REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS model_forecast_multiplier (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT REFERENCES stock_models(id),
+            multiplier REAL DEFAULT 1.0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Seed default forecast values if table is empty
+        const forecastCount = await db.execute(sqlFC`SELECT COUNT(*) as cnt FROM department_forecast_defaults`);
+        const cnt = (forecastCount.rows[0] as any)?.cnt;
+        if (!cnt || parseInt(cnt) === 0) {
+          await db.execute(sqlFC`
+            INSERT INTO department_forecast_defaults (department_name, avg_days) VALUES
+            ('P1 Production Queue', 1),
+            ('Layup/Plugging', 3),
+            ('Barcode', 1),
+            ('CNC', 2),
+            ('Gunsmith', 3),
+            ('Finish', 4),
+            ('Finish QC', 1),
+            ('Shipping QC', 1),
+            ('Shipping', 1)
+          `);
+          console.log('✅ Seeded default department forecast values');
+        }
+        console.log('✅ Ensured production forecast engine tables exist');
+      } catch (fcErr: any) {
+        console.warn('⚠️ Production forecast tables migration:', fcErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

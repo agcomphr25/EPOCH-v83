@@ -808,15 +808,20 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       }
     }
 
-    if (fieldValues) {
-      const fields = await storage.getTravelerTaskFields(taskId);
+    const fields = await storage.getTravelerTaskFields(taskId);
+    if (fields.length > 0) {
+      const resolvedFieldValues = fieldValues || {};
       for (const field of fields) {
-        if (fieldValues[field.fieldKey] !== undefined) {
+        let value = resolvedFieldValues[field.fieldKey];
+        if (value === undefined && field.fieldKey === 'operator') {
+          value = completedBy || step.startedBy || 'unknown';
+        }
+        if (value !== undefined) {
           const resultKey = `${field.fieldKey}_result`;
-          const measuredResult = fieldValues[resultKey] || null;
+          const measuredResult = resolvedFieldValues[resultKey] || null;
           const valueToStore = measuredResult
-            ? `${fieldValues[field.fieldKey]}|${measuredResult}`
-            : fieldValues[field.fieldKey];
+            ? `${value}|${measuredResult}`
+            : value;
           await storage.updateTravelerTaskField(field.id, {
             value: valueToStore,
             recordedBy: completedBy || 'unknown',

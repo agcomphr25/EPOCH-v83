@@ -434,7 +434,7 @@ export default function TravelerExecution() {
     mutationFn: ({ taskId, fieldVals }: { taskId: string; fieldVals?: Record<string, string> }) =>
       apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: 'operator', fieldValues: fieldVals }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -489,7 +489,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/block`, {
         method: 'POST',
-        body: JSON.stringify({ blockedBy: 'operator', reason: blockReason }),
+        body: JSON.stringify({ blockedBy: activeTechName || activeBadge || 'operator', reason: blockReason }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -507,7 +507,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/unblock`, {
         method: 'POST',
-        body: JSON.stringify({ unblockedBy: 'operator' }),
+        body: JSON.stringify({ unblockedBy: activeTechName || activeBadge || 'operator' }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -523,7 +523,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: 'operator' }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator' }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {

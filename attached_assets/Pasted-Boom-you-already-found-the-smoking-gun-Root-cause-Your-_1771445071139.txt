@@ -1,0 +1,148 @@
+Boom — you already found the smoking gun.
+
+Root cause
+
+Your “Production Timer” task is being created as:
+
+taskType: 'PROCESS'
+
+identifiable only by instructionPack.timerConfig
+
+If your Timer Station UI is looking for something like taskType === 'TIMER' (or PROCESS_TIMER, etc.), it will never find the timer task, so it can’t start it reliably and/or can’t display the correct “model/program”.
+
+That’s exactly the kind of “it’s not working properly” bug that feels random.
+
+The clean fix (recommended): give Timer its own taskType
+✅ Backend copy/paste patch (storage.ts)
+
+Change your timer task creation to use a dedicated taskType.
+
+Replace this block:
+
+taskType: 'PROCESS',          // ← NOT 'TIMER' — it's 'PROCESS'
+
+
+With this:
+
+taskType: 'TIMER',
+
+
+Full patch:
+
+if (hasTimerConfig) {
+  await this._createTaskIfAllowed({
+    travelerStepId: step.id,
+    taskType: 'TIMER', // ✅ dedicated type so the station can find it
+    taskPhase: 'WORK',
+    title: 'Production Timer',
+    instructions: deptConfig.timerConfig.defaultProgramName
+      ? `Start timer program: ${deptConfig.timerConfig.defaultProgramName}`
+      : 'Start a production timer for this operation',
+    required: false,
+    sortOrder: sortOrder++,
+    timePolicy: 'MANUAL_ENTRY',
+    requiresSignature: false,
+    requiresCertification: false,
+    instructionPack: { timerConfig: deptConfig.timerConfig },
+    status: 'NOT_STARTED',
+  }, enabledPhases, createdTaskKeys);
+}
+
+✅ Also update your schema typing (optional but smart)
+
+Your DB allows any string in taskType, so no migration needed.
+But your frontend TASK_TYPE_ICONS map will need to recognize 'TIMER' (next section).
+
+Frontend patch: make the station find timer tasks reliably
+
+You have two safe options:
+
+Option A (best): Station finds taskType === 'TIMER'
+
+Once you change backend to generate taskType: 'TIMER', update UI logic to use that.
+
+Wherever you locate the timer task (likely something like):
+
+const timerTask = tasks.find(t => t.taskType === 'TIMER');
+
+
+If you don’t have that yet, add this helper in the Timer Station UI file:
+
+function findTimerTask(tasks: TravelerTask[]) {
+  return tasks.find(t => t.taskType === 'TIMER') ?? null;
+}
+
+
+And add an icon mapping so it renders nicely:
+
+// wherever TASK_TYPE_ICONS lives
+TASK_TYPE_ICONS['TIMER'] = Timer; // import Timer icon you already use, or lucide-react Timer
+
+Option B (backward-compatible): Station finds either form
+
+If you might have older travelers where timer is 'PROCESS' with timerConfig, make it robust:
+
+function findTimerTask(tasks: TravelerTask[]) {
+  return (
+    tasks.find(t => t.taskType === 'TIMER') ??
+    tasks.find(t => t.taskType === 'PROCESS' && !!t.instructionPack?.timerConfig) ??
+    null
+  );
+}
+
+
+That keeps old travelers working AND makes new ones clean.
+
+Why this also fixes “show the model”
+
+Right now your UI likely does something like:
+
+“when station selected, show the model for the active timer task”
+
+but it can’t find the timer task because it’s typed PROCESS
+
+so it shows nothing / wrong thing / defaults
+
+Once the station can reliably locate the timer task, it can consistently read:
+
+task.instructionPack.timerConfig.defaultProgramName
+
+or timerConfig.modelName (whatever you store)
+
+and display the correct program/model every time.
+
+What I need next (only 2 more pasted blocks) to give you the exact final drop-in patch
+
+You said: “Now let me pull the UI, API routes, and schema:”
+
+Paste just these two things and I’ll give you a complete copy/paste fix end-to-end:
+
+Timer Station UI code (the handler that selects station + starts timer + shows model)
+
+Start timer API route + storage function it calls
+
+Because there’s a second common issue that pairs with this one:
+
+the UI starts a timer by stepId, but backend expects taskId
+
+or the UI starts a timer for the wrong task because it picked “first PROCESS task”
+
+Once I see those two snippets, I’ll hand you:
+
+the exact “findTimerTask” integration
+
+the exact payload fix (travelerTaskId vs travelerStepId)
+
+any refetch/invalidation fix (so UI updates instantly)
+
+If you want to implement the fix immediately
+
+Do these in order:
+
+Change timer taskType to 'TIMER' (backend patch above)
+
+Update UI to find 'TIMER' tasks (Option A) OR dual-find (Option B)
+
+Regenerate a traveler and test the station
+
+If it still misbehaves after that,

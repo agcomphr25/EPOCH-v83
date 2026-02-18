@@ -13675,6 +13675,68 @@ export class DatabaseStorage implements IStorage {
 
       let sortOrder = 0;
 
+      // ===== CONSOLIDATED MATERIAL TRACEABILITY =====
+      // Collect ALL materials from all sources into one array for a single TRACE task per department step
+      const allDeptMaterials: any[] = [
+        ...(deptConfig.materials || []),
+        ...((deptConfig.standardProcesses || []).flatMap((proc: any) => proc.config?.materials || [])),
+        ...((deptConfig.specialProcessConfig?.materials) || []),
+      ];
+      const nonMaterialTraceFieldsConsolidated = new Set(['operator', 'timestamp']);
+      const legacyTraceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !nonMaterialTraceFieldsConsolidated.has(f)
+      );
+      const allTraceFieldKeys = new Set<string>();
+      for (const fieldKey of legacyTraceFields) {
+        allTraceFieldKeys.add(fieldKey);
+      }
+      for (const mat of allDeptMaterials) {
+        const reqFields = (mat as any).requiredFields || [];
+        for (const fieldKey of reqFields) {
+          allTraceFieldKeys.add(fieldKey);
+        }
+      }
+      if (allDeptMaterials.length > 0 || allTraceFieldKeys.size > 0) {
+        const allDeptMaterialNames = allDeptMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
+        const traceTask = await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: 'TRACEABILITY',
+          taskPhase: 'START',
+          title: 'Material Traceability',
+          instructions: allDeptMaterialNames.length > 0
+            ? `Record traceability for: ${[...new Set(allDeptMaterialNames)].join(', ')}`
+            : 'Record traceability data for materials used',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+
+        if (traceTask) {
+          const traceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
+          for (const fieldKey of this._dedupeFieldsByKey([...allTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: traceTask.id,
+              fieldKey,
+              fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+              required: true,
+            });
+          }
+        }
+      }
+
       // Read phase configuration from routing
       const startChecks = deptConfig.startChecks || [];
       const finishChecks = deptConfig.finishChecks || [];
@@ -13778,62 +13840,6 @@ export class DatabaseStorage implements IStorage {
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
-      // START phase traceability (default — includes legacy traceFields + per-material fields)
-      if (traceFields.length > 0 || startMaterials.length > 0) {
-        const startMaterialNames = startMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
-        const traceTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'TRACEABILITY',
-          taskPhase: 'START',
-          title: 'Material Lot Entry',
-          instructions: startMaterialNames.length > 0
-            ? `Record traceability for: ${startMaterialNames.join(', ')}`
-            : 'Record traceability data for materials used',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: false,
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-
-        if (traceTask) {
-          const traceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-
-          const allStartFieldKeys = new Set<string>();
-
-          for (const fieldKey of traceFields) {
-            allStartFieldKeys.add(fieldKey);
-          }
-
-          for (const mat of startMaterials) {
-            const reqFields = (mat as any).requiredFields || [];
-            for (const fieldKey of reqFields) {
-              allStartFieldKeys.add(fieldKey);
-            }
-          }
-
-          for (const fieldKey of this._dedupeFieldsByKey([...allStartFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-            await this.createTravelerTaskField({
-              travelerTaskId: traceTask.id,
-              fieldKey,
-              fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-              required: true,
-            });
-          }
-        }
-      }
-
       // START Phase Custom Data Fields
       const startCustomFields = deptConfig.startCustomDataFields || [];
       if (startCustomFields.length > 0) {
@@ -13916,53 +13922,6 @@ export class DatabaseStorage implements IStorage {
         (routingInstructionPack.specialNotes) ||
         (routingInstructionPack.media?.length > 0)
       );
-
-      // WORK phase material traceability
-      if (workMaterials.length > 0) {
-        const workTraceTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'TRACEABILITY',
-          taskPhase: 'WORK',
-          title: 'In-Process Material Traceability',
-          instructions: `Record traceability for: ${workMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: false,
-          requiresCertification: false,
-          instructionPack: hasInstructionPack ? routingInstructionPack : null,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-
-        if (workTraceTask) {
-          const workTraceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-          const workTraceFieldKeys = new Set<string>();
-          for (const mat of workMaterials) {
-            const reqFields = (mat as any).requiredFields || [];
-            for (const fieldKey of reqFields) {
-              workTraceFieldKeys.add(fieldKey);
-            }
-          }
-          for (const fieldKey of this._dedupeFieldsByKey([...workTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-            await this.createTravelerTaskField({
-              travelerTaskId: workTraceTask.id,
-              fieldKey,
-              fieldLabel: workTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-              required: true,
-            });
-          }
-        }
-      }
 
       // Production Timer task — when timer is configured for this department
       if (hasTimerConfig) {
@@ -14147,51 +14106,6 @@ export class DatabaseStorage implements IStorage {
           }
         }
 
-        // Standard process materials → WORK phase traceability
-        if (procConfig.materials && procConfig.materials.length > 0) {
-          const procTraceTask = await this._createTaskIfAllowed({
-            travelerStepId: step.id,
-            taskType: 'TRACEABILITY',
-            taskPhase: 'WORK',
-            title: `${proc.name || procConfig.processName || 'Standard Process'} — Material Traceability`,
-            instructions: `Record traceability for: ${procConfig.materials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
-            required: true,
-            sortOrder: sortOrder++,
-            timePolicy: 'AUTO_ON_COMPLETE',
-            requiresSignature: false,
-            requiresCertification: false,
-            status: 'NOT_STARTED',
-          }, enabledPhases, createdTaskKeys);
-
-          if (procTraceTask) {
-            const procTraceFieldLabelMap: Record<string, string> = {
-              internalControlNumber: 'Internal Control Number',
-              supplier: 'Supplier',
-              inventoryPartNumber: 'Inventory Part Number',
-              batchLotNumber: 'Batch/Lot #',
-              manufacturer: 'Manufacturer',
-              rollNumber: 'Roll Number',
-              expirationDate: 'Expiration Date',
-              receivedDate: 'Received Date',
-            };
-            const procTraceFieldKeys = new Set<string>();
-            for (const mat of procConfig.materials) {
-              const reqFields = (mat as any).requiredFields || [];
-              for (const fieldKey of reqFields) {
-                procTraceFieldKeys.add(fieldKey);
-              }
-            }
-            for (const fieldKey of this._dedupeFieldsByKey([...procTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-              await this.createTravelerTaskField({
-                travelerTaskId: procTraceTask.id,
-                fieldKey,
-                fieldLabel: procTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                required: true,
-              });
-            }
-          }
-        }
       }
 
       // Special Process — extract custom data fields and QC standards
@@ -14263,100 +14177,9 @@ export class DatabaseStorage implements IStorage {
           }
         }
 
-        // Special process materials → WORK phase traceability
-        if (specialProcessConfig.materials && specialProcessConfig.materials.length > 0) {
-          const spTraceTask = await this._createTaskIfAllowed({
-            travelerStepId: step.id,
-            taskType: 'TRACEABILITY',
-            taskPhase: 'WORK',
-            title: `${specialProcessConfig.processName} — Material Traceability`,
-            instructions: `Record traceability for: ${specialProcessConfig.materials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
-            required: true,
-            sortOrder: sortOrder++,
-            timePolicy: 'AUTO_ON_COMPLETE',
-            requiresSignature: false,
-            requiresCertification: false,
-            status: 'NOT_STARTED',
-          }, enabledPhases, createdTaskKeys);
-
-          if (spTraceTask) {
-            const spTraceFieldLabelMap: Record<string, string> = {
-              internalControlNumber: 'Internal Control Number',
-              supplier: 'Supplier',
-              inventoryPartNumber: 'Inventory Part Number',
-              batchLotNumber: 'Batch/Lot #',
-              manufacturer: 'Manufacturer',
-              rollNumber: 'Roll Number',
-              expirationDate: 'Expiration Date',
-              receivedDate: 'Received Date',
-            };
-            const spTraceFieldKeys = new Set<string>();
-            for (const mat of specialProcessConfig.materials) {
-              const reqFields = (mat as any).requiredFields || [];
-              for (const fieldKey of reqFields) {
-                spTraceFieldKeys.add(fieldKey);
-              }
-            }
-            for (const fieldKey of this._dedupeFieldsByKey([...spTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-              await this.createTravelerTaskField({
-                travelerTaskId: spTraceTask.id,
-                fieldKey,
-                fieldLabel: spTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                required: true,
-              });
-            }
-          }
-        }
       }
 
       // ===== FINISH PHASE =====
-      // FINISH phase material traceability
-      if (finishMaterials.length > 0) {
-        const finishTraceTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'TRACEABILITY',
-          taskPhase: 'FINISH',
-          title: 'Final Material Traceability',
-          instructions: `Record traceability for: ${finishMaterials.map((m: any) => m.partNumber || m.partName).join(', ')}`,
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: false,
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-
-        if (finishTraceTask) {
-          const finishTraceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-          const finishTraceFieldKeys = new Set<string>();
-          for (const mat of finishMaterials) {
-            const reqFields = (mat as any).requiredFields || [];
-            for (const fieldKey of reqFields) {
-              finishTraceFieldKeys.add(fieldKey);
-            }
-          }
-          for (const fieldKey of this._dedupeFieldsByKey([...finishTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-            await this.createTravelerTaskField({
-              travelerTaskId: finishTraceTask.id,
-              fieldKey,
-              fieldLabel: finishTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-              required: true,
-            });
-          }
-        }
-      }
-
       // Explicit FINISH checks from routing template
       for (const check of finishChecks) {
         await this._createTaskIfAllowed({

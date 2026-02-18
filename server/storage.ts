@@ -13520,6 +13520,99 @@ export class DatabaseStorage implements IStorage {
 
   // Generate Traveler from Part Routing
   // ==== TRAVELER GENERATION HELPERS (PHASE GATING + DEDUPE) ====
+  private static TRACE_POLICY: Record<string, {
+    enabled: boolean;
+    phase: 'START' | 'WORK' | 'FINISH';
+    capture: {
+      internalControlNumber?: boolean;
+      expirationDate?: boolean;
+      batchNumber?: boolean;
+      materialType?: boolean;
+      brand?: boolean;
+      freezer?: boolean;
+    };
+  }> = {
+    Cutting: { enabled: true, phase: 'START', capture: { internalControlNumber: true, expirationDate: true, batchNumber: true, materialType: true } },
+    Layup:   { enabled: true, phase: 'START', capture: { internalControlNumber: true, expirationDate: true } },
+    CNC:     { enabled: true, phase: 'WORK',  capture: { internalControlNumber: true } },
+    Finish:  { enabled: false, phase: 'WORK', capture: { internalControlNumber: true } },
+  };
+
+  private _getTracePolicyForDepartment(departmentName: string) {
+    const p = DatabaseStorage.TRACE_POLICY[departmentName];
+    return p ?? { enabled: true, phase: 'START' as const, capture: { internalControlNumber: true } };
+  }
+
+  private _buildTraceFields(capture: Record<string, boolean | undefined>) {
+    const fields: { fieldKey: string; fieldLabel: string; fieldType: string; required: boolean; validation: any }[] = [];
+
+    if (capture.internalControlNumber) {
+      fields.push({
+        fieldKey: 'material_internal_control_number',
+        fieldLabel: 'Material Internal Control Number (Select from Inventory)',
+        fieldType: 'inventory_select',
+        required: true,
+        validation: {
+          source: 'fabric_inventory',
+          valueKey: 'internalControlNumber',
+          picker: { type: 'FABRIC_INVENTORY' },
+        },
+      });
+    }
+
+    if (capture.expirationDate) {
+      fields.push({
+        fieldKey: 'material_expiration_date',
+        fieldLabel: 'Expiration Date (Auto)',
+        fieldType: 'date',
+        required: true,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'expirationDate' },
+      });
+    }
+
+    if (capture.batchNumber) {
+      fields.push({
+        fieldKey: 'material_batch_number',
+        fieldLabel: 'Batch / Lot Number (Auto)',
+        fieldType: 'text',
+        required: false,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'batchNumber' },
+      });
+    }
+
+    if (capture.materialType) {
+      fields.push({
+        fieldKey: 'material_type',
+        fieldLabel: 'Material Type (Auto)',
+        fieldType: 'text',
+        required: false,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'fabricType' },
+      });
+    }
+
+    if (capture.brand) {
+      fields.push({
+        fieldKey: 'material_brand',
+        fieldLabel: 'Brand (Auto)',
+        fieldType: 'text',
+        required: false,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'brand' },
+      });
+    }
+
+    if (capture.freezer) {
+      fields.push({
+        fieldKey: 'material_freezer',
+        fieldLabel: 'Freezer (Auto)',
+        fieldType: 'text',
+        required: false,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'freezerNumber' },
+      });
+    }
+
+    return this._dedupeFieldsByKey(fields);
+  }
+
   private _normalizePhase(p: string): 'START' | 'WORK' | 'FINISH' {
     const up = (p || '').toUpperCase();
     if (up === 'START' || up === 'WORK' || up === 'FINISH') return up;
@@ -13675,64 +13768,36 @@ export class DatabaseStorage implements IStorage {
 
       let sortOrder = 0;
 
-      // ===== CONSOLIDATED MATERIAL TRACEABILITY =====
-      // Collect ALL materials from all sources into one array for a single TRACE task per department step
-      const allDeptMaterials: any[] = [
-        ...(deptConfig.materials || []),
-        ...((deptConfig.standardProcesses || []).flatMap((proc: any) => proc.config?.materials || [])),
-        ...((deptConfig.specialProcessConfig?.materials) || []),
-      ];
-      const nonMaterialTraceFieldsConsolidated = new Set(['operator', 'timestamp']);
-      const legacyTraceFields = (traceabilityConfig[deptName] || []).filter(
-        (f: string) => !nonMaterialTraceFieldsConsolidated.has(f)
-      );
-      const allTraceFieldKeys = new Set<string>();
-      for (const fieldKey of legacyTraceFields) {
-        allTraceFieldKeys.add(fieldKey);
-      }
-      for (const mat of allDeptMaterials) {
-        const reqFields = (mat as any).requiredFields || [];
-        for (const fieldKey of reqFields) {
-          allTraceFieldKeys.add(fieldKey);
-        }
-      }
-      if (allDeptMaterials.length > 0 || allTraceFieldKeys.size > 0) {
-        const allDeptMaterialNames = allDeptMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
-        const traceTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'TRACEABILITY',
-          taskPhase: 'START',
-          title: 'Material Traceability',
-          instructions: allDeptMaterialNames.length > 0
-            ? `Record traceability for: ${[...new Set(allDeptMaterialNames)].join(', ')}`
-            : 'Record traceability data for materials used',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: false,
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
+      // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
+      const tracePolicy = this._getTracePolicyForDepartment(deptName);
+      if (tracePolicy.enabled) {
+        const policyFields = this._buildTraceFields(tracePolicy.capture);
+        if (policyFields.length > 0) {
+          const traceTask = await this._createTaskIfAllowed({
+            travelerStepId: step.id,
+            taskType: 'TRACEABILITY',
+            taskPhase: tracePolicy.phase,
+            title: 'Material Traceability',
+            instructions: 'Select material from Fabric Inventory to record traceability',
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          }, enabledPhases, createdTaskKeys);
 
-        if (traceTask) {
-          const traceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-          for (const fieldKey of this._dedupeFieldsByKey([...allTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
-            await this.createTravelerTaskField({
-              travelerTaskId: traceTask.id,
-              fieldKey,
-              fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-              required: true,
-            });
+          if (traceTask) {
+            for (const field of policyFields) {
+              await this.createTravelerTaskField({
+                travelerTaskId: traceTask.id,
+                fieldKey: field.fieldKey,
+                fieldLabel: field.fieldLabel,
+                fieldType: field.fieldType,
+                required: field.required,
+                validation: field.validation,
+              });
+            }
           }
         }
       }

@@ -1305,35 +1305,42 @@ export default function TravelerExecution() {
                                             travelerStepId={currentStep.id}
                                             allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
-                                              const requiredFieldKeys = new Set(
-                                                task.fields.filter((f) => f.required).map((f) => f.fieldKey)
+                                              const taskFieldKeys = new Set(
+                                                task.fields.map((f) => f.fieldKey)
                                               );
                                               if (result?.entryMethod === 'manual') {
                                                 const today = new Date().toISOString().split('T')[0];
+                                                const icn = result.internalControlNumber || '';
                                                 const allManualVals: Record<string, string> = {
-                                                  internalControlNumber: result.internalControlNumber || '',
-                                                  material_icn: result.internalControlNumber || '',
+                                                  material_internal_control_number: icn,
+                                                  internalControlNumber: icn,
+                                                  material_icn: icn,
+                                                  material_expiration_date: today,
+                                                  expirationDate: today,
+                                                  material_batch_number: 'N/A',
+                                                  batchLotNumber: 'N/A',
+                                                  material_type: 'Manual Entry',
+                                                  material_brand: 'Manual Entry',
+                                                  material_freezer: 'N/A',
                                                   material_lot: '',
                                                   qty_used: '',
                                                   unit_of_measure: '',
                                                   material_part_number: '',
                                                   supplier: 'Manual Entry',
                                                   inventoryPartNumber: 'Manual Entry',
-                                                  supplierBatchLot: 'N/A',
                                                   manufacturer: 'Manual Entry',
                                                   rollNumber: 'N/A',
-                                                  expirationDate: today,
                                                   receivedDate: today,
                                                 };
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
-                                                  if (requiredFieldKeys.has(key) || key === 'material_icn') {
+                                                  if (taskFieldKeys.has(key)) {
                                                     traceFieldVals[key] = val;
                                                   }
                                                 }
                                                 const manualValidation = {
                                                   source: 'manual_entry',
-                                                  internalControlNumber: result.internalControlNumber || '',
+                                                  internalControlNumber: icn,
                                                   readonly: false,
                                                 };
                                                 const manualFieldValidations: Record<string, any> = {};
@@ -1350,11 +1357,18 @@ export default function TravelerExecution() {
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || '';
-                                              const traceFieldVals: Record<string, string> = {
-                                                material_icn: icnValue,
+                                              const allScanVals: Record<string, string> = {
+                                                material_internal_control_number: icnValue,
                                                 internalControlNumber: icnValue,
-                                                material_lot: lot?.supplierLotNumber || '',
+                                                material_icn: icnValue,
+                                                material_expiration_date: lot?.expirationDate || '',
+                                                expirationDate: lot?.expirationDate || '',
+                                                material_batch_number: lot?.supplierLotNumber || '',
                                                 batchLotNumber: lot?.supplierLotNumber || '',
+                                                material_type: lot?.fabricType || lot?.materialType || '',
+                                                material_brand: lot?.brand || lot?.manufacturer || '',
+                                                material_freezer: lot?.freezerNumber || '',
+                                                material_lot: lot?.supplierLotNumber || '',
                                                 qty_used: consumption?.qtyUsed?.toString() || '',
                                                 unit_of_measure: consumption?.unitOfMeasure || lot?.unitOfMeasure || '',
                                                 material_part_number: lot?.materialPartNumber || '',
@@ -1362,9 +1376,14 @@ export default function TravelerExecution() {
                                                 supplier: lot?.supplier || '',
                                                 manufacturer: lot?.manufacturer || '',
                                                 rollNumber: lot?.rollNumber || '',
-                                                expirationDate: lot?.expirationDate || '',
                                                 receivedDate: lot?.receivedDate || '',
                                               };
+                                              const traceFieldVals: Record<string, string> = {};
+                                              for (const [key, val] of Object.entries(allScanVals)) {
+                                                if (taskFieldKeys.has(key)) {
+                                                  traceFieldVals[key] = val;
+                                                }
+                                              }
                                               const inventoryValidation = {
                                                 source: 'fabric_inventory',
                                                 inventoryId: lot?.id || consumption?.materialLotId || '',
@@ -1482,6 +1501,25 @@ export default function TravelerExecution() {
                                                           </Label>
                                                         </div>
                                                       </div>
+                                                    ) : field.fieldType === 'inventory_select' ? (
+                                                      <div className="space-y-1">
+                                                        <Input
+                                                          value={
+                                                            fieldValues[task.id]?.[field.fieldKey] ||
+                                                            field.value ||
+                                                            ''
+                                                          }
+                                                          disabled={true}
+                                                          className="text-sm bg-muted"
+                                                          placeholder="Selected via Material Scanner above"
+                                                        />
+                                                        {field.validation?.source === 'fabric_inventory' && field.value && (
+                                                          <span className="text-xs text-green-600 flex items-center gap-1">
+                                                            <CheckCircle className="h-3 w-3" />
+                                                            Linked to Fabric Inventory
+                                                          </span>
+                                                        )}
+                                                      </div>
                                                     ) : field.fieldType === 'textarea' ? (
                                                       <Textarea
                                                         value={
@@ -1501,7 +1539,7 @@ export default function TravelerExecution() {
                                                       />
                                                     ) : (
                                                       <Input
-                                                        type={field.fieldType === 'number' ? 'number' : 'text'}
+                                                        type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
                                                         value={
                                                           fieldValues[task.id]?.[field.fieldKey] ||
                                                           field.value ||
@@ -1514,8 +1552,9 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete}
-                                                        className="text-sm"
+                                                        disabled={isComplete || (field.validation?.readonly === true && !!field.value)}
+                                                        className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
+                                                        placeholder={field.validation?.readonly ? 'Auto-filled from inventory' : undefined}
                                                       />
                                                     )}
                                                   </div>

@@ -13572,7 +13572,10 @@ export class DatabaseStorage implements IStorage {
       const hasStartChecks = (deptConfig.startChecks || []).length > 0;
       const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
       const hasMaterials = (deptConfig.materials || []).length > 0;
-      const hasTraceFields = (traceabilityConfig[deptName] || []).length > 0;
+      const metadataOnlyFields = new Set(['operator', 'timestamp']);
+      const hasTraceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !metadataOnlyFields.has(f)
+      ).length > 0;
       const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
       const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
       const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
@@ -13707,7 +13710,11 @@ export class DatabaseStorage implements IStorage {
 
       // Material Lot Entry (TRACEABILITY tasks from materials config)
       // Group materials by their traceabilityPhase (default START for backward compat)
-      const traceFields = traceabilityConfig[deptName] || [];
+      // Filter out auto-generated metadata fields (operator, timestamp) that aren't actual material trace data
+      const nonMaterialTraceFields = new Set(['operator', 'timestamp']);
+      const traceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !nonMaterialTraceFields.has(f)
+      );
       const materials = deptConfig.materials || [];
       const startMaterials = materials.filter((m: any) => !m.traceabilityPhase || m.traceabilityPhase === 'START');
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');
@@ -13984,14 +13991,18 @@ export class DatabaseStorage implements IStorage {
         const procConfig = proc.config;
         if (!procConfig) continue;
 
-        // Standard process custom data fields → WORK phase
-        if (procConfig.customDataFields && procConfig.customDataFields.length > 0) {
+        const procHasCustomFields = procConfig.customDataFields && procConfig.customDataFields.length > 0;
+        const procHasNotes = !!procConfig.notes;
+        const procName = proc.name || procConfig.processName || 'Standard Process';
+
+        // Standard process → WORK phase (always create a task so operators see the process on the traveler)
+        {
           const procDataTask = await this.createTravelerTask({
             travelerStepId: step.id,
             taskType: 'PROCESS',
             taskPhase: 'WORK',
-            title: `${proc.name || procConfig.processName || 'Standard Process'} — Data Entry`,
-            instructions: procConfig.notes || `Enter data for ${proc.name || procConfig.processName || 'standard process'}`,
+            title: procHasCustomFields ? `${procName} — Data Entry` : procName,
+            instructions: procConfig.notes || `Follow standard process: ${procName}`,
             required: true,
             sortOrder: sortOrder++,
             timePolicy: 'AUTO_ON_COMPLETE',
@@ -14000,14 +14011,16 @@ export class DatabaseStorage implements IStorage {
             status: 'NOT_STARTED',
           });
 
-          for (const field of procConfig.customDataFields) {
-            await this.createTravelerTaskField({
-              travelerTaskId: procDataTask.id,
-              fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-              fieldLabel: field.fieldName || 'Custom Field',
-              fieldType: field.fieldType || 'text',
-              required: field.isRequired || false,
-            });
+          if (procHasCustomFields) {
+            for (const field of procConfig.customDataFields) {
+              await this.createTravelerTaskField({
+                travelerTaskId: procDataTask.id,
+                fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+                fieldLabel: field.fieldName || 'Custom Field',
+                fieldType: field.fieldType || 'text',
+                required: field.isRequired || false,
+              });
+            }
           }
         }
 

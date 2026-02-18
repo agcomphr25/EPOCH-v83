@@ -349,13 +349,22 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Employee code is required' });
     }
 
-    // Look up employee by employee code
-    const employeeResult = await pool.query(
+    // Look up employee by badge_scan_code first, then fall back to employee_code
+    let employeeResult = await pool.query(
       `SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
       FROM employees
-      WHERE employee_code = $1`,
+      WHERE badge_scan_code = $1`,
       [employeeCode]
     );
+
+    if (!employeeResult || employeeResult.length === 0) {
+      employeeResult = await pool.query(
+        `SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
+        FROM employees
+        WHERE employee_code = $1`,
+        [employeeCode]
+      );
+    }
 
     if (!employeeResult || employeeResult.length === 0) {
       logBadgeLoginAttempt({

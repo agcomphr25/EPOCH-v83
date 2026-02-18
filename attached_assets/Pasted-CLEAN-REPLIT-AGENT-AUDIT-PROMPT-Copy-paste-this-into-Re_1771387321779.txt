@@ -1,0 +1,126 @@
+CLEAN REPLIT AGENT AUDIT PROMPT
+
+Copy-paste this into Replit Agent.
+
+This will gather structured truth without modifying anything.
+
+OBJECTIVE
+
+Perform a read-only audit of the regular production department flow for all_orders.
+
+We are specifically investigating:
+
+Whether "Shipping" or "Shipping Management" is the true final production department
+
+What happens when status becomes FULFILLED
+
+Whether shipping_completed_at is reliably set
+
+Whether current_department changes when status changes
+
+Do NOT modify code.
+Do NOT refactor.
+Do NOT add features.
+This is a diagnostic audit only.
+
+STEP 1 — Identify Canonical Routing
+
+Search for:
+
+Model routing definitions
+
+Department sequence tables
+
+Hardcoded routing arrays
+
+Any code that defines department progression order
+
+Return:
+
+The canonical routing sequence for regular production orders
+
+The final production department in that routing
+
+File locations
+
+STEP 2 — Investigate Fulfillment Transition
+
+Search backend for:
+
+status = 'FULFILLED'
+
+set status to FULFILLED
+
+shipping_completed_at assignment
+
+shipped_date assignment
+
+Identify:
+
+What function marks an order as fulfilled
+
+What fields are updated in that transaction
+
+Whether current_department changes during fulfillment
+
+Return exact code blocks.
+
+STEP 3 — Validate shipping_completed_at Reliability
+
+Run SQL (read-only):
+
+SELECT
+  COUNT(*) FILTER (WHERE status = 'FULFILLED') AS fulfilled_count,
+  COUNT(*) FILTER (WHERE shipping_completed_at IS NOT NULL) AS shipped_timestamp_count,
+  COUNT(*) FILTER (WHERE status = 'FULFILLED' AND shipping_completed_at IS NULL) AS fulfilled_without_timestamp
+FROM all_orders;
+
+
+Also:
+
+SELECT id, current_department, status, shipping_completed_at
+FROM all_orders
+WHERE status = 'FULFILLED'
+ORDER BY id DESC
+LIMIT 20;
+
+
+Return structured findings.
+
+STEP 4 — Determine Production vs Administrative Departments
+
+List distinct current_department values from active + fulfilled orders:
+
+SELECT DISTINCT current_department
+FROM all_orders
+ORDER BY current_department;
+
+
+Categorize each as:
+
+Production department
+
+Administrative / holding
+
+Post-fulfillment
+
+Do NOT assume. Infer based on routing + code.
+
+STEP 5 — Provide Clear Conclusions
+
+Answer clearly:
+
+What is the final true production department?
+
+When does an order move to Shipping Management?
+
+Is Shipping Management a production step?
+
+Should forecast treat Shipping Management as final or exclude it?
+
+Is shipping_completed_at safe as canonical shipped flag?
+
+Do NOT suggest code changes yet.
+Just report.
+
+END PROMPT

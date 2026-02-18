@@ -1,0 +1,219 @@
+COPY-PASTE INTO REPLIT AGENT
+OBJECTIVE
+
+Pivot the Expected Department logic from forward scheduling to backward scheduling from due_date.
+
+Do NOT remove forward simulation.
+Add backward simulation and use it for:
+
+getExpectedDepartment()
+
+Weekly forecast view
+
+Forward simulation will remain for future quoting use.
+
+CRITICAL RULES
+
+Do NOT modify layup scheduler
+
+Do NOT modify routing tables
+
+Do NOT modify department queue logic
+
+Do NOT modify all_orders schema
+
+Do NOT change backlog counting logic
+
+Do NOT affect P1 PO logic
+
+Keep all forecast math centralized in productionForecastEngine.ts
+
+STEP 1 — ADD BACKWARD SIMULATION FUNCTION
+
+Inside:
+
+server/services/productionForecastEngine.ts
+
+
+Add new function:
+
+simulateBackwardFromDueDate(order)
+
+
+Implementation:
+
+If order.due_date is NULL:
+
+Fallback to forward simulation (existing logic)
+
+Return result
+
+Load:
+
+Department forecast defaults
+
+Model multiplier (default = 1.0 if missing)
+
+Get routing sequence for model
+
+Reverse the routing order
+
+Initialize:
+
+endDate = order.due_date
+
+
+For each department in reverse routing order:
+
+avgDays = department.avg_days (default 1 if missing)
+multiplier = model.multiplier (default 1.0)
+
+durationDays = avgDays * multiplier
+
+deptFinish = endDate
+deptStart = subtract durationDays from endDate
+
+Store:
+{
+  department,
+  expectedStart: deptStart,
+  expectedFinish: deptFinish
+}
+
+endDate = deptStart
+
+
+Reverse the timeline array back to normal routing order.
+
+Return:
+
+{
+  estimatedShipDate: order.due_date,
+  departmentTimeline
+}
+
+STEP 2 — UPDATE getExpectedDepartment()
+
+Modify:
+
+getExpectedDepartment(orderId)
+
+
+Instead of calling forward simulation:
+
+Call:
+
+simulateBackwardFromDueDate(order)
+
+
+Then:
+
+Determine expectedDepartment as:
+
+Find department where:
+    today >= expectedStart
+    AND today <= expectedFinish
+
+
+If today is before first department:
+return first department
+
+If today is after last department:
+return last department
+
+Return:
+
+{
+expectedDepartment,
+expectedStart,
+expectedFinish,
+status:
+if current_department !== expectedDepartment → "late"
+else "on_track"
+}
+
+
+Do NOT modify production state.
+
+---
+
+# STEP 3 — UPDATE WEEKLY FORECAST TO USE BACKWARD SIMULATION
+
+In:
+
+
+
+generateWeeklyForecast()
+
+
+Replace forward simulation calls with:
+
+
+
+simulateBackwardFromDueDate(order)
+
+
+Keep weekly overlap logic unchanged.
+
+---
+
+# STEP 4 — ADD SAFETY DEFAULTS
+
+Inside backward simulation:
+
+If department.avg_days is NULL:
+    default to 1
+
+If multiplier missing:
+    default to 1.0
+
+If routing missing:
+    return empty result safely
+
+System must not crash due to missing configuration.
+
+---
+
+# STEP 5 — LOGGING FOR DEBUGGING (DEV ONLY)
+
+Temporarily add debug log:
+
+For one sample order, log:
+
+
+
+orderId
+due_date
+departmentTimeline
+
+
+Only in development environment.
+
+Do NOT log in production.
+
+---
+
+# STEP 6 — DO NOT TOUCH:
+
+- backlog SQL
+- verification table
+- department queue
+- P1 PO routes
+- shipping filters
+
+---
+
+# STEP 7 — TESTING REQUIREMENTS
+
+After implementation:
+
+1. Pick 3 active orders with due_date set.
+2. Confirm expected department changes logically as due_date approaches.
+3. Confirm shipped orders still excluded via canonical filter.
+4. Confirm weekly view changes based on due_date window.
+5. Confirm no TypeScript errors.
+6. Confirm no DB writes occur during simulation.
+
+---
+
+# END PROMPT

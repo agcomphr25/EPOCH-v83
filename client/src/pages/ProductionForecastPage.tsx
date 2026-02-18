@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, TrendingUp, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
 
 interface ForecastItem {
   orderId: string;
@@ -13,7 +15,7 @@ interface ForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'off_track';
 }
 
 export default function ProductionForecastPage() {
@@ -37,36 +39,28 @@ export default function ProductionForecastPage() {
   }, [forecastData, searchTerm, statusFilter]);
 
   const statusCounts = useMemo(() => {
-    if (!forecastData) return { early: 0, on_track: 0, late: 0, total: 0 };
+    if (!forecastData) return { on_track: 0, off_track: 0, total: 0 };
     return {
-      early: forecastData.filter((i) => i.status === 'early').length,
       on_track: forecastData.filter((i) => i.status === 'on_track').length,
-      late: forecastData.filter((i) => i.status === 'late').length,
+      off_track: forecastData.filter((i) => i.status === 'off_track').length,
       total: forecastData.length,
     };
   }, [forecastData]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'early':
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-            <TrendingUp className="w-3 h-3 mr-1" />
-            Early
-          </Badge>
-        );
       case 'on_track':
         return (
           <Badge className="bg-green-100 text-green-800 border-green-300">
             <CheckCircle className="w-3 h-3 mr-1" />
-            On Track
+            ON TRACK
           </Badge>
         );
-      case 'late':
+      case 'off_track':
         return (
           <Badge className="bg-red-100 text-red-800 border-red-300">
             <AlertTriangle className="w-3 h-3 mr-1" />
-            Late
+            OFF TRACK
           </Badge>
         );
       default:
@@ -98,9 +92,15 @@ export default function ProductionForecastPage() {
             Estimated department progression and ship dates for active orders
           </p>
         </div>
+        <Link href="/production-forecast/settings">
+          <Button variant="outline" size="sm">
+            <Settings className="w-4 h-4 mr-1" />
+            Calibration
+          </Button>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Orders</CardTitle>
@@ -119,18 +119,10 @@ export default function ProductionForecastPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-yellow-600">Early</CardTitle>
+            <CardTitle className="text-sm font-medium text-red-600">Off Track</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{statusCounts.early}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-600">Late</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{statusCounts.late}</div>
+            <div className="text-2xl font-bold text-red-600">{statusCounts.off_track}</div>
           </CardContent>
         </Card>
       </div>
@@ -153,8 +145,7 @@ export default function ProductionForecastPage() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="on_track">On Track</SelectItem>
-                  <SelectItem value="early">Early</SelectItem>
-                  <SelectItem value="late">Late</SelectItem>
+                  <SelectItem value="off_track">Off Track</SelectItem>
                 </SelectContent>
               </Select>
             </div>

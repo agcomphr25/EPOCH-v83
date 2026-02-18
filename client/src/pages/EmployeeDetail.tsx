@@ -1724,7 +1724,7 @@ export default function EmployeeDetail() {
                 </CardHeader>
                 <CardContent>
                   <EmployeeBadgeBarcode
-                    employeeCode={employee.employeeCode}
+                    badgeScanCode={employee.badgeScanCode}
                     employeeName={employee.name}
                   />
                 </CardContent>

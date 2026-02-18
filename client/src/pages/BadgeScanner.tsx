@@ -281,7 +281,7 @@ export default function BadgeScanner() {
               ) : (
                 <div className="mt-2">
                   <Input
-                    type="text"
+                    type="password"
                     value={employeeBarcodeInput}
                     onChange={(e) => setEmployeeBarcodeInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -290,9 +290,10 @@ export default function BadgeScanner() {
                         setEmployeeBarcodeInput('');
                       }
                     }}
-                    placeholder="Scan or type employee badge barcode..."
+                    placeholder="Scan badge..."
                     disabled={scanState !== 'READY'}
                     autoFocus
+                    autoComplete="new-password"
                     data-testid="input-employee-barcode"
                   />
                 </div>

@@ -236,7 +236,6 @@ export default function TravelerExecution() {
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
-  const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
   const [signatureData, setSignatureData] = useState({
     signedBy: '',
@@ -435,7 +434,7 @@ export default function TravelerExecution() {
     mutationFn: ({ taskId, fieldVals }: { taskId: string; fieldVals?: Record<string, string> }) =>
       apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: 'operator', fieldValues: fieldVals }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -449,8 +448,8 @@ export default function TravelerExecution() {
 
   const signStepMutation = useMutation({
     mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) => {
-      const drawnSignature = signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()
-        ? signatureCanvasRef.current.toDataURL('image/png')
+      const drawnSignature = sigPadRef.current && !sigPadRef.current.isEmpty()
+        ? sigPadRef.current.toDataURL('image/png')
         : null;
       return apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
@@ -469,7 +468,7 @@ export default function TravelerExecution() {
       setSigningTaskId(null);
       setSigningRole(null);
       setSignatureEmpty(true);
-      if (signatureCanvasRef.current) signatureCanvasRef.current.clear();
+      if (sigPadRef.current) sigPadRef.current.clear();
       setSignatureData({
         signedBy: '',
         signedByName: '',
@@ -490,7 +489,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/block`, {
         method: 'POST',
-        body: JSON.stringify({ blockedBy: 'operator', reason: blockReason }),
+        body: JSON.stringify({ blockedBy: activeTechName || activeBadge || 'operator', reason: blockReason }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -508,7 +507,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/unblock`, {
         method: 'POST',
-        body: JSON.stringify({ unblockedBy: 'operator' }),
+        body: JSON.stringify({ unblockedBy: activeTechName || activeBadge || 'operator' }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -524,7 +523,7 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: 'operator' }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator' }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -801,10 +800,12 @@ export default function TravelerExecution() {
                       <div className="space-y-1">
                         <Label className="text-sm">Scan Badge</Label>
                         <Input
+                          type="password"
                           placeholder="Scan badge..."
                           value={signatureData.badgeScan}
                           onChange={(e) => handleBadgeScanInput(e.target.value)}
                           autoFocus
+                          autoComplete="new-password"
                           data-testid="input-badge-scan"
                         />
                         {badgeLookupStatus === 'loading' && (
@@ -1175,10 +1176,12 @@ export default function TravelerExecution() {
                                             travelerStepId={currentStep.id}
                                             allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
-                                              // Handle manual entry (free text control number)
+                                              const requiredFieldKeys = new Set(
+                                                task.fields.filter((f) => f.required).map((f) => f.fieldKey)
+                                              );
                                               if (result?.entryMethod === 'manual') {
                                                 const today = new Date().toISOString().split('T')[0];
-                                                const traceFieldVals: Record<string, string> = {
+                                                const allManualVals: Record<string, string> = {
                                                   internalControlNumber: result.internalControlNumber || '',
                                                   material_icn: result.internalControlNumber || '',
                                                   material_lot: '',
@@ -1193,13 +1196,18 @@ export default function TravelerExecution() {
                                                   expirationDate: today,
                                                   receivedDate: today,
                                                 };
+                                                const traceFieldVals: Record<string, string> = {};
+                                                for (const [key, val] of Object.entries(allManualVals)) {
+                                                  if (requiredFieldKeys.has(key) || key === 'material_icn') {
+                                                    traceFieldVals[key] = val;
+                                                  }
+                                                }
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 
                                                   fieldVals: traceFieldVals 
                                                 });
                                                 return;
                                               }
-                                              // Handle validated scan entry
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const traceFieldVals: Record<string, string> = {
@@ -1219,7 +1227,13 @@ export default function TravelerExecution() {
                                           <>
                                             {task.fields.length > 0 && (
                                               <div className="space-y-3">
-                                                {task.fields.map((field) => (
+                                                {task.fields.filter((field) => {
+                                                  if (isComplete) return true;
+                                                  if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+                                                    return field.required || (field.value && field.value !== '');
+                                                  }
+                                                  return true;
+                                                }).map((field) => (
                                                   <div key={field.id} className="space-y-1">
                                                     <Label className="text-sm">
                                                       {(() => {
@@ -1288,7 +1302,7 @@ export default function TravelerExecution() {
                                                             checked={
                                                               fieldValues[task.id]?.[field.fieldKey] !== undefined
                                                                 ? fieldValues[task.id][field.fieldKey] === 'yes'
-                                                                : field.value === 'yes'
+                                                                : (field.value === 'yes' || (field.value != null && field.value.startsWith('yes|')))
                                                             }
                                                             onCheckedChange={(checked) =>
                                                               handleFieldChange(
@@ -1571,11 +1585,13 @@ export default function TravelerExecution() {
               <div className="space-y-2">
                 <Label>Employee ID / Badge *</Label>
                 <Input
+                  type="password"
                   value={signatureData.signedBy}
                   onChange={(e) =>
                     setSignatureData({ ...signatureData, signedBy: e.target.value })
                   }
-                  placeholder="Scan badge or enter ID"
+                  placeholder="Scan badge..."
+                  autoComplete="new-password"
                   data-testid="input-sign-badge"
                 />
               </div>

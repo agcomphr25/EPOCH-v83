@@ -5,21 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Printer } from 'lucide-react';
 
 type Props = {
-  employeeCode: string;
+  badgeScanCode: string;
   employeeName: string;
 };
 
-export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Props) {
+export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Props) {
   const barcodeRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    if (barcodeRef.current && employeeCode) {
+    if (barcodeRef.current && badgeScanCode) {
       try {
-        JsBarcode(barcodeRef.current, employeeCode, {
+        JsBarcode(barcodeRef.current, badgeScanCode, {
           format: 'CODE128',
           width: 2,
           height: 60,
-          displayValue: true,
+          displayValue: false,
           fontSize: 14,
           margin: 10,
         });
@@ -27,7 +27,7 @@ export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Pro
         console.error('Error generating barcode:', error);
       }
     }
-  }, [employeeCode]);
+  }, [badgeScanCode]);
 
   const handleDownload = () => {
     if (!barcodeRef.current) return;
@@ -47,7 +47,7 @@ export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Pro
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `badge-${employeeCode}.png`;
+          a.download = `badge-${employeeName.replace(/\s+/g, '_')}.png`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -105,7 +105,7 @@ export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Pro
     }, 250);
   };
 
-  if (!employeeCode) {
+  if (!badgeScanCode) {
     return (
       <Card>
         <CardHeader>
@@ -114,10 +114,10 @@ export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Pro
         <CardContent className="space-y-4">
           <div className="flex flex-col items-center justify-center p-8 bg-yellow-50 rounded border border-yellow-200">
             <p className="text-sm font-medium text-yellow-800 text-center">
-              ⚠️ No Employee Code Assigned
+              No Badge Scan Code Assigned
             </p>
             <p className="text-xs text-yellow-700 mt-2 text-center">
-              Please assign an employee code to this employee in the Details tab to generate a badge barcode.
+              A badge scan code will be automatically generated when the employee record is saved.
             </p>
           </div>
         </CardContent>

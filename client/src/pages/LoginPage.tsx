@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Eye, EyeOff, Scan, Settings, LogIn, Timer, Clock, CreditCard, Construction } from 'lucide-react';
+import { Eye, EyeOff, Scan, Settings, LogIn, Timer, Clock, CreditCard, Construction, ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,16 +18,16 @@ import { queryClient } from '@/lib/queryClient';
 
 type LoginMode = 'regular' | 'p2-traveler' | 'timer-station' | 'badge' | 'time-clock';
 
-const LOGIN_MODES: { key: LoginMode; label: string; icon: typeof LogIn; description: string }[] = [
-  { key: 'regular', label: 'Login', icon: LogIn, description: 'Username & password' },
-  { key: 'p2-traveler', label: 'P2 Traveler', icon: Scan, description: 'Production tracking' },
-  { key: 'timer-station', label: 'Timer Station', icon: Timer, description: 'Production timers' },
-  { key: 'badge', label: 'Badge Login', icon: CreditCard, description: 'Employee badge scan' },
-  { key: 'time-clock', label: 'Time Clock', icon: Clock, description: 'Clock in / out' },
+const LOGIN_MODES: { key: LoginMode; label: string; icon: typeof LogIn; description: string; color: string }[] = [
+  { key: 'regular', label: 'Login', icon: LogIn, description: 'Sign in with your username and password', color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/40 dark:text-blue-400' },
+  { key: 'p2-traveler', label: 'P2 Traveler', icon: Scan, description: 'Production tracking with AS9100 traceability', color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-400' },
+  { key: 'timer-station', label: 'Timer Station', icon: Timer, description: 'Production timers for tracking cycle times', color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/40 dark:text-orange-400' },
+  { key: 'badge', label: 'Badge Login', icon: CreditCard, description: 'Scan your employee badge to log in', color: 'text-green-600 bg-green-100 dark:bg-green-900/40 dark:text-green-400' },
+  { key: 'time-clock', label: 'Time Clock', icon: Clock, description: 'Employee clock in and clock out', color: 'text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400' },
 ];
 
 export default function LoginPage() {
-  const [activeMode, setActiveMode] = useState<LoginMode>('regular');
+  const [activeMode, setActiveMode] = useState<LoginMode | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -192,6 +192,7 @@ export default function LoginPage() {
           disabled={isLoading}
           data-testid="input-username"
           autoComplete="username"
+          autoFocus
         />
       </div>
       <div className="space-y-2">
@@ -225,7 +226,7 @@ export default function LoginPage() {
       </div>
       <Button
         type="submit"
-        className="w-full"
+        className="w-full h-12 text-base"
         disabled={isLoading}
         data-testid="button-login"
       >
@@ -236,12 +237,6 @@ export default function LoginPage() {
 
   const renderP2Traveler = () => (
     <div className="space-y-4">
-      <div className="text-center space-y-2 mb-6">
-        <Scan className="w-12 h-12 mx-auto text-blue-600" />
-        <p className="text-sm text-muted-foreground">
-          Production tracking with AS9100 traceability
-        </p>
-      </div>
       <Button
         type="button"
         className="w-full h-14 text-lg"
@@ -254,7 +249,7 @@ export default function LoginPage() {
       <Button
         type="button"
         variant="secondary"
-        className="w-full"
+        className="w-full h-12"
         onClick={() => setLocation('/p2-control-center')}
         data-testid="button-p2-control-center"
       >
@@ -269,12 +264,6 @@ export default function LoginPage() {
 
   const renderTimerStation = () => (
     <div className="space-y-4">
-      <div className="text-center space-y-2 mb-6">
-        <Timer className="w-12 h-12 mx-auto text-orange-600" />
-        <p className="text-sm text-muted-foreground">
-          Production timer station for tracking cycle times
-        </p>
-      </div>
       <Button
         type="button"
         className="w-full h-14 text-lg"
@@ -287,7 +276,7 @@ export default function LoginPage() {
       <Button
         type="button"
         variant="outline"
-        className="w-full"
+        className="w-full h-12"
         onClick={() => setLocation('/app/production/timer-history')}
       >
         <Clock className="w-4 h-4 mr-2" />
@@ -298,12 +287,6 @@ export default function LoginPage() {
 
   const renderBadgeLogin = () => (
     <div className="space-y-4">
-      <div className="text-center space-y-2 mb-4">
-        <CreditCard className="w-12 h-12 mx-auto text-green-600" />
-        <p className="text-sm text-muted-foreground">
-          Scan your employee badge to log in
-        </p>
-      </div>
       <div className="space-y-2">
         <Label htmlFor="badgeCode" className="flex items-center gap-2">
           <Scan className="w-4 h-4" />
@@ -332,26 +315,24 @@ export default function LoginPage() {
             onClick={() => handleBadgeLogin()}
             disabled={isBadgeLoading || !badgeCode.trim()}
             data-testid="button-badge-login"
+            className="h-10"
           >
             {isBadgeLoading ? 'Loading...' : 'Scan'}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Scan your employee badge or enter your code
+        </p>
       </div>
     </div>
   );
 
   const renderTimeClock = () => (
-    <div className="space-y-4">
-      <div className="text-center space-y-3 py-8">
-        <Clock className="w-16 h-16 mx-auto text-gray-400" />
-        <Construction className="w-8 h-8 mx-auto text-yellow-500" />
-        <h3 className="text-lg font-medium text-gray-600 dark:text-gray-300">
-          Time Clock
-        </h3>
-        <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-          Time clock functionality is coming soon. This station will allow employees to clock in and out directly from the tablet.
-        </p>
-      </div>
+    <div className="text-center space-y-3 py-6">
+      <Construction className="w-10 h-10 mx-auto text-yellow-500" />
+      <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+        Time clock functionality is coming soon. This station will allow employees to clock in and out directly from the tablet.
+      </p>
     </div>
   );
 
@@ -367,49 +348,77 @@ export default function LoginPage() {
         return renderBadgeLogin();
       case 'time-clock':
         return renderTimeClock();
+      default:
+        return null;
     }
   };
 
+  if (activeMode === null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="text-center mb-8">
+          <div className="text-5xl font-bold text-blue-600 mb-2">EPOCH</div>
+          <p className="text-muted-foreground text-lg">Select a station to get started</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl">
+          {LOGIN_MODES.map((mode) => {
+            const Icon = mode.icon;
+            const colorClasses = mode.color.split(' ');
+            const textColor = colorClasses[0];
+            const bgColor = colorClasses.slice(1).join(' ');
+            return (
+              <Card
+                key={mode.key}
+                onClick={() => setActiveMode(mode.key)}
+                className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] border-2 border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                data-testid={`shelf-${mode.key}`}
+              >
+                <CardContent className="flex flex-col items-center text-center gap-3 p-6">
+                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${bgColor}`}>
+                    <Icon className={`w-7 h-7 ${textColor}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{mode.label}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{mode.description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   const activeConfig = LOGIN_MODES.find(m => m.key === activeMode)!;
+  const ActiveIcon = activeConfig.icon;
+  const activeColorClasses = activeConfig.color.split(' ');
+  const activeTextColor = activeColorClasses[0];
+  const activeBgColor = activeColorClasses.slice(1).join(' ');
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="flex items-center justify-center mb-6">
-        <div className="text-4xl font-bold text-blue-600">EPOCH</div>
-      </div>
-
-      <div className="grid grid-cols-5 gap-2 w-full max-w-2xl mb-4">
-        {LOGIN_MODES.map((mode) => {
-          const Icon = mode.icon;
-          const isActive = activeMode === mode.key;
-          return (
-            <Card
-              key={mode.key}
-              onClick={() => setActiveMode(mode.key)}
-              className={`cursor-pointer transition-all hover:shadow-md ${
-                isActive
-                  ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950 shadow-md'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-              }`}
-              data-testid={`shelf-${mode.key}`}
-            >
-              <CardContent className="flex flex-col items-center gap-1.5 p-3">
-                <Icon className={`w-6 h-6 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
-                <span className={`text-xs font-medium text-center leading-tight ${isActive ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'}`}>
-                  {mode.label}
-                </span>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 pb-2">
-          <CardTitle className="text-2xl text-center">{activeConfig.label}</CardTitle>
-          <CardDescription className="text-center">
-            {activeConfig.description}
-          </CardDescription>
+        <CardHeader className="space-y-3 pb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveMode(null)}
+            className="w-fit -ml-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to stations
+          </Button>
+          <div className="flex flex-col items-center gap-3">
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${activeBgColor}`}>
+              <ActiveIcon className={`w-7 h-7 ${activeTextColor}`} />
+            </div>
+            <div className="text-center">
+              <CardTitle className="text-2xl">{activeConfig.label}</CardTitle>
+              <CardDescription className="mt-1">{activeConfig.description}</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
           {renderContent()}

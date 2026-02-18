@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useParams, Link } from 'wouter';
+import FabricInventoryPicker from '@/components/FabricInventoryPicker';
 import {
   Card,
   CardContent,
@@ -67,6 +68,7 @@ import {
   SkipForward,
   RotateCcw,
   CheckCircle2,
+  Search,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -234,6 +236,9 @@ export default function TravelerExecution() {
   const travelerId = params.id;
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [showInventoryPicker, setShowInventoryPicker] = useState(false);
+  const [inventoryPickerTaskId, setInventoryPickerTaskId] = useState<string | null>(null);
+  const [pickerValidations, setPickerValidations] = useState<Record<string, Record<string, any>>>({});
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -1503,17 +1508,33 @@ export default function TravelerExecution() {
                                                       </div>
                                                     ) : field.fieldType === 'inventory_select' ? (
                                                       <div className="space-y-1">
-                                                        <Input
-                                                          value={
-                                                            fieldValues[task.id]?.[field.fieldKey] ||
-                                                            field.value ||
-                                                            ''
-                                                          }
-                                                          disabled={true}
-                                                          className="text-sm bg-muted"
-                                                          placeholder="Selected via Material Scanner above"
-                                                        />
-                                                        {field.validation?.source === 'fabric_inventory' && field.value && (
+                                                        <div className="flex gap-2">
+                                                          <Input
+                                                            value={
+                                                              fieldValues[task.id]?.[field.fieldKey] ||
+                                                              field.value ||
+                                                              ''
+                                                            }
+                                                            disabled={true}
+                                                            className="text-sm bg-muted flex-1"
+                                                            placeholder="Select from Fabric Inventory..."
+                                                          />
+                                                          {!isComplete && (
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => {
+                                                                setInventoryPickerTaskId(task.id);
+                                                                setShowInventoryPicker(true);
+                                                              }}
+                                                              className="shrink-0"
+                                                            >
+                                                              <Search className="h-4 w-4 mr-1" />
+                                                              Select
+                                                            </Button>
+                                                          )}
+                                                        </div>
+                                                        {(fieldValues[task.id]?.[field.fieldKey] || field.value) && (
                                                           <span className="text-xs text-green-600 flex items-center gap-1">
                                                             <CheckCircle className="h-3 w-3" />
                                                             Linked to Fabric Inventory
@@ -2137,6 +2158,73 @@ export default function TravelerExecution() {
           }}
         />
       )}
+
+      <FabricInventoryPicker
+        open={showInventoryPicker}
+        onClose={() => {
+          setShowInventoryPicker(false);
+          setInventoryPickerTaskId(null);
+        }}
+        onSelect={(selectedItem) => {
+          if (!inventoryPickerTaskId || !traveler) return;
+          const step = traveler.steps?.find((s: any) => s.id === currentStepId);
+          if (!step) return;
+          const task = step.tasks?.find((t: any) => t.id === inventoryPickerTaskId);
+          if (!task) return;
+
+          const valueMap: Record<string, string> = {
+            internalControlNumber: selectedItem.internalControlNumber,
+            material_internal_control_number: selectedItem.internalControlNumber,
+            expirationDate: selectedItem.expirationDate,
+            material_expiration_date: selectedItem.expirationDate,
+            batchNumber: selectedItem.batchNumber,
+            material_batch_number: selectedItem.batchNumber,
+            fabricType: selectedItem.fabricType,
+            material_type: selectedItem.fabricType,
+            brand: selectedItem.brand,
+            material_brand: selectedItem.brand,
+            freezerNumber: selectedItem.freezerNumber,
+            material_freezer: selectedItem.freezerNumber,
+            rollNumber: selectedItem.rollNumber,
+            material_roll_number: selectedItem.rollNumber,
+            partNumber: selectedItem.partNumber,
+            material_part_number: selectedItem.partNumber,
+          };
+
+          const inventoryValidation = {
+            source: 'fabric_inventory',
+            inventoryId: selectedItem.id,
+            internalControlNumber: selectedItem.internalControlNumber,
+            batchNumber: selectedItem.batchNumber,
+            expirationDate: selectedItem.expirationDate,
+            readonly: true,
+          };
+
+          const taskValidations: Record<string, any> = {};
+          for (const field of task.fields || []) {
+            const mappedVal = valueMap[field.fieldKey];
+            if (mappedVal !== undefined) {
+              taskValidations[field.fieldKey] = inventoryValidation;
+              handleFieldChange(task.id, field.fieldKey, mappedVal);
+            }
+          }
+          setPickerValidations(prev => ({ ...prev, [task.id]: taskValidations }));
+
+          const expired = selectedItem.expirationDate && new Date(selectedItem.expirationDate) < new Date();
+          if (expired) {
+            toast({
+              title: 'Material Expired',
+              description: `ICN ${selectedItem.internalControlNumber} expired on ${selectedItem.expirationDate}. Override may be required.`,
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Material Selected',
+              description: `ICN ${selectedItem.internalControlNumber} selected — fields auto-filled`,
+            });
+          }
+        }}
+      />
     </div>
   );
 }

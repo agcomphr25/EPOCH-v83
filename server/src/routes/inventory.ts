@@ -2121,4 +2121,77 @@ router.get('/outside-processing/jobs', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/inventory/fabric?search=... - Fabric inventory picker for traveler TRACE tasks
+router.get('/fabric', async (req: Request, res: Response) => {
+  try {
+    const search = ((req.query.search as string) || '').trim().toLowerCase();
+    const allInventory = await storage.getAllCuttingFabricInventory();
+    const activeInventory = allInventory.filter((item: any) => item.status === 'active');
+
+    let results = activeInventory;
+    if (search) {
+      results = activeInventory.filter((item: any) => {
+        const searchFields = [
+          item.internalControlNumber,
+          item.fabric,
+          item.fabricPartNumber,
+          item.source,
+          item.nickname,
+          item.batchNumber,
+          item.lotNumber,
+          item.rollNumber,
+          item.barcode,
+        ].filter(Boolean).map(s => s.toLowerCase());
+        return searchFields.some(f => f.includes(search));
+      });
+    }
+
+    const mapped = results.map((item: any) => ({
+      id: item.id,
+      internalControlNumber: item.internalControlNumber || '',
+      expirationDate: item.expirationDate || '',
+      batchNumber: item.batchNumber || item.lotNumber || '',
+      fabricType: item.fabric || '',
+      brand: item.source || '',
+      freezerNumber: item.freezerNumber != null ? String(item.freezerNumber) : '',
+      partNumber: item.fabricPartNumber || item.supplierPartNumber || '',
+      rollNumber: item.rollNumber || '',
+      quantityInStock: item.quantityInStock || 0,
+      status: item.status || 'active',
+      nickname: item.nickname || '',
+    }));
+
+    res.json(mapped);
+  } catch (error: any) {
+    console.error('Error fetching fabric inventory for picker:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric inventory' });
+  }
+});
+
+// GET /api/inventory/fabric/:id - Get single fabric inventory item for validation
+router.get('/fabric/:id', async (req: Request, res: Response) => {
+  try {
+    const item = await storage.getCuttingFabricInventory(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Fabric inventory item not found' });
+    }
+    res.json({
+      id: item.id,
+      internalControlNumber: (item as any).internalControlNumber || '',
+      expirationDate: (item as any).expirationDate || '',
+      batchNumber: (item as any).batchNumber || (item as any).lotNumber || '',
+      fabricType: (item as any).fabric || '',
+      brand: (item as any).source || '',
+      freezerNumber: (item as any).freezerNumber != null ? String((item as any).freezerNumber) : '',
+      partNumber: (item as any).fabricPartNumber || (item as any).supplierPartNumber || '',
+      rollNumber: (item as any).rollNumber || '',
+      quantityInStock: (item as any).quantityInStock || 0,
+      status: (item as any).status || 'active',
+    });
+  } catch (error: any) {
+    console.error('Error fetching fabric inventory item:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric inventory item' });
+  }
+});
+
 export default router;

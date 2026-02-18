@@ -888,6 +888,33 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       }
     }
 
+    // Server-side validation for TRACE tasks: verify inventory links
+    if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+      const traceWarnings: string[] = [];
+      const updatedFields = await storage.getTravelerTaskFields(taskId);
+      for (const field of updatedFields) {
+        const validation = field.validation as any;
+        if (validation?.source === 'fabric_inventory' && validation?.inventoryId) {
+          const inventoryItem = await storage.getCuttingFabricInventory(validation.inventoryId);
+          if (!inventoryItem) {
+            traceWarnings.push(`Inventory item not found for field "${field.fieldLabel}"`);
+          } else {
+            const itemICN = (inventoryItem as any).internalControlNumber;
+            if (validation.internalControlNumber && itemICN && itemICN !== validation.internalControlNumber) {
+              traceWarnings.push(`ICN mismatch: field says "${validation.internalControlNumber}" but inventory record has "${itemICN}"`);
+            }
+            const expDate = (inventoryItem as any).expirationDate;
+            if (expDate && new Date(expDate) < new Date()) {
+              traceWarnings.push(`Material ICN ${itemICN || validation.inventoryId} is expired (${expDate})`);
+            }
+          }
+        }
+      }
+      if (traceWarnings.length > 0) {
+        console.warn(`[TRACE Validation] Warnings for task ${taskId}:`, traceWarnings);
+      }
+    }
+
     const updatedTask = await storage.updateTravelerTask(taskId, {
       status: 'COMPLETED',
       completedAt: new Date(),

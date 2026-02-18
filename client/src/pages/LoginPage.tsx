@@ -374,43 +374,43 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="flex items-center justify-center mb-6">
+        <div className="text-4xl font-bold text-blue-600">EPOCH</div>
+      </div>
+
+      <div className="grid grid-cols-5 gap-2 w-full max-w-2xl mb-4">
+        {LOGIN_MODES.map((mode) => {
+          const Icon = mode.icon;
+          const isActive = activeMode === mode.key;
+          return (
+            <Card
+              key={mode.key}
+              onClick={() => setActiveMode(mode.key)}
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                isActive
+                  ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950 shadow-md'
+                  : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+              data-testid={`shelf-${mode.key}`}
+            >
+              <CardContent className="flex flex-col items-center gap-1.5 p-3">
+                <Icon className={`w-6 h-6 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
+                <span className={`text-xs font-medium text-center leading-tight ${isActive ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'}`}>
+                  {mode.label}
+                </span>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 pb-2">
-          <div className="flex items-center justify-center mb-2">
-            <div className="text-4xl font-bold text-blue-600">EPOCH</div>
-          </div>
           <CardTitle className="text-2xl text-center">{activeConfig.label}</CardTitle>
           <CardDescription className="text-center">
             {activeConfig.description}
           </CardDescription>
         </CardHeader>
-
-        <div className="px-6 pb-2">
-          <div className="flex rounded-lg bg-gray-100 dark:bg-gray-800 p-1 gap-0.5">
-            {LOGIN_MODES.map((mode) => {
-              const Icon = mode.icon;
-              const isActive = activeMode === mode.key;
-              return (
-                <button
-                  key={mode.key}
-                  onClick={() => setActiveMode(mode.key)}
-                  className={`flex-1 flex flex-col items-center gap-0.5 py-2 px-1 rounded-md text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                  data-testid={`shelf-${mode.key}`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full">
-                    {mode.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <CardContent className="pt-4">
           {renderContent()}
         </CardContent>

@@ -191,6 +191,7 @@ import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
 import ProductionForecastPage from './pages/ProductionForecastPage';
+import ForecastSettings from './pages/ForecastSettings';
 import WeeklyProductionForecast from './pages/WeeklyProductionForecast';
 import AccountingPrepPage from './pages/AccountingPrepPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
@@ -423,6 +424,7 @@ function App() {
                   <Route path="/admin/checklist-management" component={AdminChecklistManagementPage} />
                   <Route path="/production-forecast" component={ProductionForecastPage} />
                   <Route path="/production-forecast/weekly" component={WeeklyProductionForecast} />
+                  <Route path="/production-forecast/settings" component={ForecastSettings} />
                   <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

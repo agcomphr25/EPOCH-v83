@@ -141,4 +141,42 @@ router.delete('/verify', async (req, res) => {
   }
 });
 
+router.get('/settings/departments', async (_req, res) => {
+  try {
+    const result = await pgPool.query(
+      'SELECT department_name, avg_days FROM department_forecast_defaults ORDER BY department_name'
+    );
+    res.json(result.rows.map(r => ({ department: r.department_name, avgDays: r.avg_days })));
+  } catch (error: any) {
+    console.error('Get forecast settings error:', error);
+    res.status(500).json({ error: 'Failed to load forecast settings' });
+  }
+});
+
+router.put('/settings/departments/:department', async (req, res) => {
+  try {
+    const department = decodeURIComponent(req.params.department);
+    const { avgDays } = req.body;
+
+    const validDays = typeof avgDays === 'number' && avgDays >= 0 ? avgDays : 1;
+
+    const result = await pgPool.query(
+      `UPDATE department_forecast_defaults
+       SET avg_days = $1, updated_at = NOW()
+       WHERE department_name = $2
+       RETURNING department_name, avg_days`,
+      [validDays, department]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: `Department "${department}" not found` });
+    }
+
+    res.json({ department: result.rows[0].department_name, avgDays: result.rows[0].avg_days });
+  } catch (error: any) {
+    console.error('Update forecast settings error:', error);
+    res.status(500).json({ error: 'Failed to update forecast settings' });
+  }
+});
+
 export default router;

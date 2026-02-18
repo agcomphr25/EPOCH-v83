@@ -167,10 +167,18 @@ function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
   return timeline[timeline.length - 1].department;
 }
 
-function determineTimeBasedStatus(
+function determineDriftStatus(
+  expectedDepartment: string,
+  actualDepartment: string | null,
   expectedStart: string,
   expectedFinish: string,
 ): 'on_track' | 'off_track' {
+  if (expectedDepartment === 'P1 Production Queue') {
+    return 'on_track';
+  }
+  if (actualDepartment === 'P1 Production Queue') {
+    return 'off_track';
+  }
   const today = new Date().toISOString().split('T')[0];
   if (today >= expectedStart && today <= expectedFinish) return 'on_track';
   return 'off_track';
@@ -318,7 +326,7 @@ export async function getExpectedDepartment(orderId: string): Promise<ExpectedDe
 
   const expStart = entry?.expectedStart || today;
   const expFinish = entry?.expectedFinish || today;
-  const status = determineTimeBasedStatus(expStart, expFinish);
+  const status = determineDriftStatus(expectedDepartment, actualDepartment, expStart, expFinish);
 
   return {
     orderId,
@@ -374,7 +382,9 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
       const expectedDepartment = findExpectedDepartment(timeline);
       const entry = timeline.find(e => e.department === expectedDepartment);
       const today = new Date().toISOString().split('T')[0];
-      const status = determineTimeBasedStatus(
+      const status = determineDriftStatus(
+        expectedDepartment,
+        currentDept,
         entry?.expectedStart || today,
         entry?.expectedFinish || today,
       );
@@ -415,7 +425,9 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
     const expectedDepartment = findExpectedDepartment(forecast.departmentTimeline);
     const entry = forecast.departmentTimeline.find(e => e.department === expectedDepartment);
     const today = new Date().toISOString().split('T')[0];
-    const status = determineTimeBasedStatus(
+    const status = determineDriftStatus(
+      expectedDepartment,
+      currentDept,
       entry?.expectedStart || today,
       entry?.expectedFinish || today,
     );

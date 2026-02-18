@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
 
 interface ForecastItem {
   orderId: string;
@@ -90,6 +92,12 @@ export default function ProductionForecastPage() {
             Estimated department progression and ship dates for active orders
           </p>
         </div>
+        <Link href="/production-forecast/settings">
+          <Button variant="outline" size="sm">
+            <Settings className="w-4 h-4 mr-1" />
+            Calibration
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -1,0 +1,96 @@
+We need to diagnose a batch of PO production orders showing:
+
+Group: "Alpine Hunter - Unknown"
+Material: "Standard"
+Action: "Unknown Action"
+
+This indicates missing or malformed specifications data.
+
+DO NOT MODIFY CODE.
+Diagnosis only.
+
+------------------------------------------------------------
+STEP 1 — PICK ONE ORDER
+------------------------------------------------------------
+
+Use this example from Barcode Queue:
+
+Order ID: PO-P18526-53-1
+
+------------------------------------------------------------
+STEP 2 — INSPECT RAW DB RECORD
+------------------------------------------------------------
+
+Query production_orders table for:
+
+order_id = 'PO-P18526-53-1'
+
+Return:
+
+- id
+- model_id (column value)
+- item_id
+- item_name
+- specifications (full JSON)
+- po_id
+- po_item_id
+- created_at
+
+------------------------------------------------------------
+STEP 3 — CHECK PURCHASE ORDER ITEM
+------------------------------------------------------------
+
+Using po_item_id from that record:
+
+Query purchase_order_items for:
+
+id = {po_item_id}
+
+Return:
+
+- stock_model_id
+- stock_model_name
+- specifications (full JSON)
+- features
+- quantity
+- created_at
+
+------------------------------------------------------------
+STEP 4 — TRACE NORMALIZATION PATH
+------------------------------------------------------------
+
+Open getAllOrders() in server/storage.ts.
+
+For that specific order:
+
+- Show parsedSpecs result
+- Show modelId after normalization
+- Show features object after normalization
+
+------------------------------------------------------------
+STEP 5 — CLASSIFY ISSUE
+------------------------------------------------------------
+
+Determine whether:
+
+A) production_orders.specifications is null
+B) purchase_order_items.specifications is null
+C) specifications exist but do not include stockModel/actionLength
+D) normalization logic is skipping this order type
+
+------------------------------------------------------------
+FINAL OUTPUT
+------------------------------------------------------------
+
+Provide:
+
+1. Raw production_orders row
+2. Raw purchase_order_items row
+3. parsedSpecs result
+4. Final normalized object returned to frontend
+
+We need to determine whether:
+
+- These are legacy orders missing data
+- Or PO ingestion is still failing for certain distributors
+- Or normalization logic is conditional and skipping some rows

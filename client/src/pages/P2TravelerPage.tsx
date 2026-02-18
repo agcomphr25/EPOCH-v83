@@ -328,10 +328,12 @@ export default function P2TravelerPage() {
         });
       }
 
-      // Add general traceability requirements (skip any already covered by materials)
+      // Add general traceability requirements (skip any already covered by materials
+      // and skip auto-generated metadata fields like 'operator' and 'timestamp')
+      const nonMaterialTraceFields = new Set(['operator', 'timestamp']);
       if (data.traceabilityRequirements) {
         data.traceabilityRequirements.forEach((req: any) => {
-          if (typeof req === 'string' && !materialFieldTypes.has(req)) {
+          if (typeof req === 'string' && !materialFieldTypes.has(req) && !nonMaterialTraceFields.has(req)) {
             initialTraceability.push({
               type: req,
               label: req.replace(/_/g, ' ').toUpperCase(),
@@ -416,10 +418,12 @@ export default function P2TravelerPage() {
     mutationFn: async () => {
       if (!verificationData) throw new Error('No verification data');
 
-      // Validate required traceability data
-      const missingFields = traceabilityData.filter(item => !item.value.trim());
-      if (missingFields.length > 0) {
-        throw new Error('Please fill in all traceability fields');
+      // Validate required traceability data (only if there are actual trace fields)
+      if (traceabilityData.length > 0) {
+        const missingFields = traceabilityData.filter(item => !item.value.trim());
+        if (missingFields.length > 0) {
+          throw new Error('Please fill in all traceability fields');
+        }
       }
 
       // Validate required custom data
@@ -815,7 +819,8 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Material Traceability Section */}
+                  {/* Material Traceability Section — only shown when department has trace requirements */}
+                  {traceabilityData.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-semibold">Material Traceability</Label>
@@ -881,6 +886,7 @@ export default function P2TravelerPage() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* Custom Data Fields */}
                   {verificationData.departmentConfig.customDataFields && verificationData.departmentConfig.customDataFields.length > 0 && (

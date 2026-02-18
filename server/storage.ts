@@ -13572,7 +13572,10 @@ export class DatabaseStorage implements IStorage {
       const hasStartChecks = (deptConfig.startChecks || []).length > 0;
       const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
       const hasMaterials = (deptConfig.materials || []).length > 0;
-      const hasTraceFields = (traceabilityConfig[deptName] || []).length > 0;
+      const metadataOnlyFields = new Set(['operator', 'timestamp']);
+      const hasTraceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !metadataOnlyFields.has(f)
+      ).length > 0;
       const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
       const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
       const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
@@ -13707,7 +13710,11 @@ export class DatabaseStorage implements IStorage {
 
       // Material Lot Entry (TRACEABILITY tasks from materials config)
       // Group materials by their traceabilityPhase (default START for backward compat)
-      const traceFields = traceabilityConfig[deptName] || [];
+      // Filter out auto-generated metadata fields (operator, timestamp) that aren't actual material trace data
+      const nonMaterialTraceFields = new Set(['operator', 'timestamp']);
+      const traceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !nonMaterialTraceFields.has(f)
+      );
       const materials = deptConfig.materials || [];
       const startMaterials = materials.filter((m: any) => !m.traceabilityPhase || m.traceabilityPhase === 'START');
       const workMaterials = materials.filter((m: any) => m.traceabilityPhase === 'WORK');

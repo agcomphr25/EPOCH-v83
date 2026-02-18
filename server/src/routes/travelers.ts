@@ -794,16 +794,59 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
             t.taskType !== 'SIGNATURE'
         );
         if (incompletePrevTasks.length > 0) {
-          return res.status(400).json({
-            error: `All required ${prevPhase} phase tasks must be completed before working on ${taskPhase} phase tasks`,
-            blockedPhase: taskPhase,
-            incompletePhase: prevPhase,
-            incompleteTasks: incompletePrevTasks.map((t) => ({
-              id: t.id,
-              title: t.title,
-              taskType: t.taskType,
-            })),
-          });
+          if (prevPhase === 'START') {
+            const badgePattern = /badge|operator|timestamp/i;
+            const autoCompletable = incompletePrevTasks.filter(
+              (t) => (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') && badgePattern.test(t.title)
+            );
+            const nonAutoCompletable = incompletePrevTasks.filter(
+              (t) => !((t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') && badgePattern.test(t.title))
+            );
+            
+            for (const gateTask of autoCompletable) {
+              await storage.updateTravelerTask(gateTask.id, {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                completedBy: completedBy || step.startedBy || 'operator',
+              });
+              const gateFields = await storage.getTravelerTaskFields(gateTask.id);
+              for (const gf of gateFields) {
+                if (!gf.value) {
+                  let autoVal = completedBy || step.startedBy || 'operator';
+                  if (gf.fieldKey === 'timestamp') autoVal = new Date().toISOString();
+                  await storage.updateTravelerTaskField(gf.id, {
+                    value: autoVal,
+                    recordedBy: completedBy || 'system',
+                    recordedAt: new Date(),
+                  });
+                }
+              }
+            }
+
+            if (nonAutoCompletable.length > 0) {
+              return res.status(400).json({
+                error: `All required ${prevPhase} phase tasks must be completed before working on ${taskPhase} phase tasks`,
+                blockedPhase: taskPhase,
+                incompletePhase: prevPhase,
+                incompleteTasks: nonAutoCompletable.map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  taskType: t.taskType,
+                })),
+              });
+            }
+          } else {
+            return res.status(400).json({
+              error: `All required ${prevPhase} phase tasks must be completed before working on ${taskPhase} phase tasks`,
+              blockedPhase: taskPhase,
+              incompletePhase: prevPhase,
+              incompleteTasks: incompletePrevTasks.map((t) => ({
+                id: t.id,
+                title: t.title,
+                taskType: t.taskType,
+              })),
+            });
+          }
         }
       }
     }
@@ -815,6 +858,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
         let value = resolvedFieldValues[field.fieldKey];
         if (value === undefined && field.fieldKey === 'operator') {
           value = completedBy || step.startedBy || 'unknown';
+        }
+        if (value === undefined && field.fieldKey === 'timestamp') {
+          value = new Date().toISOString();
         }
         if (value !== undefined) {
           const resultKey = `${field.fieldKey}_result`;

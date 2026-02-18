@@ -170,18 +170,21 @@ function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
 function determineDriftStatus(
   expectedDepartment: string,
   actualDepartment: string | null,
-  expectedStart: string,
-  expectedFinish: string,
+  _expectedStart: string,
+  _expectedFinish: string,
 ): 'on_track' | 'off_track' {
-  if (expectedDepartment === 'P1 Production Queue') {
-    return 'on_track';
-  }
-  if (actualDepartment === 'P1 Production Queue') {
+  const expectedIdx = DEPARTMENT_SEQUENCE.indexOf(expectedDepartment);
+  const actualIdx = actualDepartment ? DEPARTMENT_SEQUENCE.indexOf(actualDepartment) : -1;
+
+  if (actualIdx < 0 || expectedIdx < 0) {
     return 'off_track';
   }
-  const today = new Date().toISOString().split('T')[0];
-  if (today >= expectedStart && today <= expectedFinish) return 'on_track';
-  return 'off_track';
+
+  if (actualIdx < expectedIdx) {
+    return 'off_track';
+  }
+
+  return 'on_track';
 }
 
 async function getDepartmentDefaults(): Promise<Record<string, number>> {
@@ -380,6 +383,9 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
     if (overlaps) {
       const currentDept = order.current_department || 'P1 Production Queue';
       const expectedDepartment = findExpectedDepartment(timeline);
+
+      if (expectedDepartment === 'P1 Production Queue') continue;
+
       const entry = timeline.find(e => e.department === expectedDepartment);
       const today = new Date().toISOString().split('T')[0];
       const status = determineDriftStatus(
@@ -423,6 +429,9 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
 
     const currentDept = order.current_department || 'P1 Production Queue';
     const expectedDepartment = findExpectedDepartment(forecast.departmentTimeline);
+
+    if (expectedDepartment === 'P1 Production Queue') continue;
+
     const entry = forecast.departmentTimeline.find(e => e.department === expectedDepartment);
     const today = new Date().toISOString().split('T')[0];
     const status = determineDriftStatus(

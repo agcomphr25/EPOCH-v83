@@ -103,7 +103,7 @@ export default function GLENNTestDashboard() {
                 </div>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-medium">Proteus Industrial Toggle</span>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-medium">Alternate Industrial Toggle</span>
                 <div className="theme-toggle-container">
                   <Sun className="w-4 h-4 text-gray-500" />
                   <IndustrialSwitch
@@ -594,7 +594,7 @@ function LightModeDashboard({
               </div>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-amber-500 font-medium">Proteus Industrial Toggle</span>
+              <span className="text-[10px] uppercase tracking-wider text-amber-500 font-medium">Alternate Industrial Toggle</span>
               <div className="flex items-center gap-2">
                 <Sun className="w-4 h-4 text-yellow-500" />
                 <IndustrialSwitch

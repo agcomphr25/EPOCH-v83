@@ -1,0 +1,39 @@
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/p2-traveler/badge-lookup/STR2600070:1  Failed to load resource: the server responded with a status of 404 ()
+index-waBz78it.js:4415 API error raw body: {"error":"Employee not found"}
+console.error @ index-waBz78it.js:4415
+index-waBz78it.js:4415 💥 API Request failed for /api/p2-traveler/badge-lookup/STR2600070: Error: Employee not found
+    at Le (index-waBz78it.js:235:6254)
+    at async G (index-waBz78it.js:2798:108015)
+console.error @ index-waBz78it.js:4415
+/api/p2-traveler/badge-lookup/STR2600070:1  Failed to load resource: the server responded with a status of 404 ()
+index-waBz78it.js:4415 API error raw body: {"error":"Employee not found"}
+console.error @ index-waBz78it.js:4415
+index-waBz78it.js:4415 💥 API Request failed for /api/p2-traveler/badge-lookup/STR2600070: Error: Employee not found
+    at Le (index-waBz78it.js:235:6254)
+    at async G (index-waBz78it.js:2798:108015)
+console.error @ index-waBz78it.js:4415
+/api/travelers/d8cc6da2-b514-4a47-a05e-53317ec634dd/tasks/a2de4da5-0c26-4600-aab8-c09d93c303d3/complete:1  Failed to load resource: the server responded with a status of 400 ()
+index-waBz78it.js:4415 API error raw body: {"error":"Required field \"Timestamp\" is missing","fieldKey":"timestamp"}
+console.error @ index-waBz78it.js:4415
+index-waBz78it.js:4415 💥 API Request failed for /api/travelers/d8cc6da2-b514-4a47-a05e-53317ec634dd/tasks/a2de4da5-0c26-4600-aab8-c09d93c303d3/complete: Error: Required field "Timestamp" is missing
+    at Le (index-waBz78it.js:235:6254)
+console.error @ index-waBz78it.js:4415
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-waBz78it.js:4415 Failed to fetch session for redirect: Error: Not authenticated
+    at index-waBz78it.js:4412:169178
+console.error @ index-waBz78it.js:4415
+/api/travelers/af83377b-89db-4649-90cf-2cf75552467a/tasks/4fd12e52-afa3-4229-81d5-0fbaa44c18cc/complete:1  Failed to load resource: the server responded with a status of 400 ()
+index-waBz78it.js:4415 API error raw body: {"error":"All required START phase tasks must be completed before working on WORK phase tasks","blockedPhase":"WORK","incompletePhase":"START","incompleteTasks":[{"id":"14a2ab5a-4eac-4bc4-884f-4d9ab4767e74","title":"Badge Scan","taskType":"CHECK"},{"id":"1cfc3df5-cc5b-41a8-a428-35a31a8b6365","title":"Badge Verified","taskType":"CHECK"}]}
+console.error @ index-waBz78it.js:4415
+index-waBz78it.js:4415 💥 API Request failed for /api/travelers/af83377b-89db-4649-90cf-2cf75552467a/tasks/4fd12e52-afa3-4229-81d5-0fbaa44c18cc/complete: Error: All required START phase tasks must be completed before working on WORK phase tasks
+    at Le (index-waBz78it.js:235:6254)
+console.error @ index-waBz78it.js:4415
+/api/travelers/af83377b-89db-4649-90cf-2cf75552467a/tasks/4fd12e52-afa3-4229-81d5-0fbaa44c18cc/complete:1  Failed to load resource: the server responded with a status of 400 ()
+index-waBz78it.js:4415 API error raw body: {"error":"All required START phase tasks must be completed before working on WORK phase tasks","blockedPhase":"WORK","incompletePhase":"START","incompleteTasks":[{"id":"14a2ab5a-4eac-4bc4-884f-4d9ab4767e74","title":"Badge Scan","taskType":"CHECK"},{"id":"1cfc3df5-cc5b-41a8-a428-35a31a8b6365","title":"Badge Verified","taskType":"CHECK"}]}
+console.error @ index-waBz78it.js:4415
+index-waBz78it.js:4415 💥 API Request failed for /api/travelers/af83377b-89db-4649-90cf-2cf75552467a/tasks/4fd12e52-afa3-4229-81d5-0fbaa44c18cc/complete: Error: All required START phase tasks must be completed before working on WORK phase tasks
+    at Le (index-waBz78it.js:235:6254)
+console.error @ index-waBz78it.js:4415

@@ -1176,10 +1176,12 @@ export default function TravelerExecution() {
                                             travelerStepId={currentStep.id}
                                             allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
-                                              // Handle manual entry (free text control number)
+                                              const requiredFieldKeys = new Set(
+                                                task.fields.filter((f) => f.required).map((f) => f.fieldKey)
+                                              );
                                               if (result?.entryMethod === 'manual') {
                                                 const today = new Date().toISOString().split('T')[0];
-                                                const traceFieldVals: Record<string, string> = {
+                                                const allManualVals: Record<string, string> = {
                                                   internalControlNumber: result.internalControlNumber || '',
                                                   material_icn: result.internalControlNumber || '',
                                                   material_lot: '',
@@ -1194,13 +1196,18 @@ export default function TravelerExecution() {
                                                   expirationDate: today,
                                                   receivedDate: today,
                                                 };
+                                                const traceFieldVals: Record<string, string> = {};
+                                                for (const [key, val] of Object.entries(allManualVals)) {
+                                                  if (requiredFieldKeys.has(key) || key === 'material_icn') {
+                                                    traceFieldVals[key] = val;
+                                                  }
+                                                }
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 
                                                   fieldVals: traceFieldVals 
                                                 });
                                                 return;
                                               }
-                                              // Handle validated scan entry
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const traceFieldVals: Record<string, string> = {
@@ -1220,7 +1227,13 @@ export default function TravelerExecution() {
                                           <>
                                             {task.fields.length > 0 && (
                                               <div className="space-y-3">
-                                                {task.fields.map((field) => (
+                                                {task.fields.filter((field) => {
+                                                  if (isComplete) return true;
+                                                  if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+                                                    return field.required || (field.value && field.value !== '');
+                                                  }
+                                                  return true;
+                                                }).map((field) => (
                                                   <div key={field.id} className="space-y-1">
                                                     <Label className="text-sm">
                                                       {(() => {

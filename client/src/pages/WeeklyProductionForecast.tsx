@@ -40,7 +40,7 @@ interface WeeklyOrder {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'late';
   isVerified: boolean;
   verificationNotes: string | null;
   verifiedBy: number | null;
@@ -114,9 +114,8 @@ export default function WeeklyProductionForecast() {
   };
 
   const statusCounts = useMemo(() => {
-    if (!data?.orders) return { early: 0, on_track: 0, late: 0, verified: 0, total: 0 };
+    if (!data?.orders) return { on_track: 0, late: 0, verified: 0, total: 0 };
     return {
-      early: data.orders.filter(o => o.status === 'early').length,
       on_track: data.orders.filter(o => o.status === 'on_track').length,
       late: data.orders.filter(o => o.status === 'late').length,
       verified: data.orders.filter(o => o.isVerified).length,
@@ -126,8 +125,6 @@ export default function WeeklyProductionForecast() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'early':
-        return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Early</Badge>;
       case 'on_track':
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">On Track</Badge>;
       case 'late':
@@ -186,7 +183,6 @@ export default function WeeklyProductionForecast() {
                 className="border rounded-md px-3 py-2 text-sm bg-background"
               >
                 <option value="all">All Status</option>
-                <option value="early">Early</option>
                 <option value="on_track">On Track</option>
                 <option value="late">Late</option>
               </select>
@@ -195,7 +191,7 @@ export default function WeeklyProductionForecast() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <CardContent className="pt-4 text-center">
             <div className="text-2xl font-bold">{statusCounts.total}</div>
@@ -206,12 +202,6 @@ export default function WeeklyProductionForecast() {
           <CardContent className="pt-4 text-center">
             <div className="text-2xl font-bold text-green-600">{statusCounts.on_track}</div>
             <div className="text-xs text-muted-foreground">On Track</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">{statusCounts.early}</div>
-            <div className="text-xs text-muted-foreground">Early</div>
           </CardContent>
         </Card>
         <Card>

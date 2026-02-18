@@ -25,13 +25,21 @@ interface OrderForecast {
   departmentTimeline: DepartmentTimeline[];
 }
 
+interface BackwardForecast {
+  orderId: string;
+  model: string | null;
+  estimatedShipDate: string;
+  departmentTimeline: DepartmentTimeline[];
+  simulationType: 'backward' | 'forward_fallback';
+}
+
 interface ExpectedDepartmentResult {
   orderId: string;
   actualDepartment: string | null;
   expectedDepartment: string;
   expectedStart: string;
   expectedFinish: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'late';
 }
 
 interface DashboardForecastItem {
@@ -40,7 +48,7 @@ interface DashboardForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'late';
 }
 
 function addBusinessDays(date: Date, days: number): Date {
@@ -48,6 +56,19 @@ function addBusinessDays(date: Date, days: number): Date {
   let remaining = days;
   while (remaining > 0) {
     result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) {
+      remaining--;
+    }
+  }
+  return result;
+}
+
+function subtractBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let remaining = days;
+  while (remaining > 0) {
+    result.setDate(result.getDate() - 1);
     const dow = result.getDay();
     if (dow !== 0 && dow !== 6) {
       remaining--;
@@ -103,6 +124,34 @@ function buildTimeline(
   return { timeline, estimatedShipDate };
 }
 
+function buildBackwardTimeline(
+  dueDate: Date,
+  multiplier: number,
+  departmentDefaults: Record<string, number>,
+): DepartmentTimeline[] {
+  let endDate = new Date(dueDate);
+  const reversedTimeline: DepartmentTimeline[] = [];
+
+  for (let i = DEPARTMENT_SEQUENCE.length - 1; i >= 0; i--) {
+    const dept = DEPARTMENT_SEQUENCE[i];
+    const avgDays = departmentDefaults[dept] ?? 1;
+    const durationDays = Math.max(1, Math.ceil(avgDays * multiplier));
+
+    const deptFinish = new Date(endDate);
+    const deptStart = subtractBusinessDays(deptFinish, durationDays);
+
+    reversedTimeline.push({
+      department: dept,
+      expectedStart: deptStart.toISOString().split('T')[0],
+      expectedFinish: deptFinish.toISOString().split('T')[0],
+    });
+
+    endDate = deptStart;
+  }
+
+  return reversedTimeline.reverse();
+}
+
 function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
   const today = new Date().toISOString().split('T')[0];
   if (timeline.length === 0) return 'P1 Production Queue';
@@ -118,7 +167,7 @@ function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
   return timeline[timeline.length - 1].department;
 }
 
-function determineStatus(actualDepartment: string, expectedDepartment: string): 'early' | 'on_track' | 'late' {
+function determineForwardStatus(actualDepartment: string, expectedDepartment: string): 'early' | 'on_track' | 'late' {
   const actualIndex = DEPARTMENT_SEQUENCE.indexOf(actualDepartment);
   const expectedIndex = DEPARTMENT_SEQUENCE.indexOf(expectedDepartment);
 
@@ -128,6 +177,11 @@ function determineStatus(actualDepartment: string, expectedDepartment: string): 
     return 'on_track';
   }
   return actualDepartment !== expectedDepartment ? 'late' : 'on_track';
+}
+
+function determineBackwardStatus(actualDepartment: string, expectedDepartment: string): 'on_track' | 'late' {
+  if (actualDepartment === expectedDepartment) return 'on_track';
+  return 'late';
 }
 
 async function getDepartmentDefaults(): Promise<Record<string, number>> {
@@ -195,23 +249,77 @@ export async function simulateOrderForecast(orderId: string): Promise<OrderForec
   };
 }
 
-export async function getExpectedDepartment(orderId: string): Promise<ExpectedDepartmentResult | null> {
-  const forecast = await simulateOrderForecast(orderId);
-  if (!forecast) return null;
+export async function simulateBackwardFromDueDate(order: {
+  order_id: string;
+  model_id: string | null;
+  current_department: string | null;
+  order_date: string | null;
+  due_date: string | null;
+}): Promise<BackwardForecast | null> {
+  if (!order.due_date) {
+    const departmentDefaults = await getDepartmentDefaults();
+    const multiplier = await getModelMultiplier(order.model_id);
+    const backlogs = await getDepartmentBacklogs();
+    const currentDept = order.current_department || 'P1 Production Queue';
+    const { timeline, estimatedShipDate } = buildTimeline(
+      currentDept, order.order_date, multiplier, departmentDefaults, backlogs
+    );
+    return {
+      orderId: order.order_id,
+      model: order.model_id,
+      estimatedShipDate,
+      departmentTimeline: timeline,
+      simulationType: 'forward_fallback',
+    };
+  }
 
+  const departmentDefaults = await getDepartmentDefaults();
+  const multiplier = await getModelMultiplier(order.model_id);
+  const dueDate = new Date(order.due_date);
+
+  const timeline = buildBackwardTimeline(dueDate, multiplier, departmentDefaults);
+
+  if (process.env.NODE_ENV === 'development' && !_backwardDebugLogged) {
+    _backwardDebugLogged = true;
+    console.log('[Backward Sim Debug]', {
+      orderId: order.order_id,
+      due_date: order.due_date,
+      departmentTimeline: timeline,
+    });
+  }
+
+  return {
+    orderId: order.order_id,
+    model: order.model_id,
+    estimatedShipDate: dueDate.toISOString().split('T')[0],
+    departmentTimeline: timeline,
+    simulationType: 'backward',
+  };
+}
+
+let _backwardDebugLogged = false;
+
+export async function getExpectedDepartment(orderId: string): Promise<ExpectedDepartmentResult | null> {
   const orderResult = await pgPool.query(
-    'SELECT current_department FROM all_orders WHERE order_id = $1',
+    `SELECT order_id, model_id, current_department, order_date, due_date
+     FROM all_orders
+     WHERE order_id = $1`,
     [orderId]
   );
-  const actualDepartment = orderResult.rows[0]?.current_department || null;
 
+  if (orderResult.rows.length === 0) return null;
+  const order = orderResult.rows[0];
+
+  const forecast = await simulateBackwardFromDueDate(order);
+  if (!forecast) return null;
+
+  const actualDepartment = order.current_department || null;
   const expectedDepartment = findExpectedDepartment(forecast.departmentTimeline);
-
   const entry = forecast.departmentTimeline.find(e => e.department === expectedDepartment);
   const today = new Date().toISOString().split('T')[0];
 
   const status = actualDepartment
-    ? determineStatus(actualDepartment, expectedDepartment)
+    ? determineBackwardStatus(actualDepartment, expectedDepartment)
     : 'on_track';
 
   return {
@@ -230,13 +338,13 @@ export interface WeeklyForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'late';
   departmentTimeline: DepartmentTimeline[];
 }
 
 export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Promise<WeeklyForecastItem[]> {
   const activeOrders = await pgPool.query(
-    `SELECT order_id, model_id, current_department, order_date
+    `SELECT order_id, model_id, current_department, order_date, due_date
      FROM all_orders
      WHERE is_cancelled = false
        AND shipping_completed_at IS NULL
@@ -251,7 +359,7 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
   const results: WeeklyForecastItem[] = [];
 
   for (const order of activeOrders.rows) {
-    const forecast = await simulateOrderForecast(order.order_id);
+    const forecast = await simulateBackwardFromDueDate(order);
     if (!forecast) continue;
 
     const timeline = forecast.departmentTimeline;
@@ -267,7 +375,7 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
     if (overlaps) {
       const currentDept = order.current_department || 'P1 Production Queue';
       const expectedDepartment = findExpectedDepartment(timeline);
-      const status = determineStatus(currentDept, expectedDepartment);
+      const status = determineBackwardStatus(currentDept, expectedDepartment);
 
       results.push({
         orderId: order.order_id,
@@ -286,7 +394,7 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
 
 export async function generateDashboardForecast(): Promise<DashboardForecastItem[]> {
   const activeOrders = await pgPool.query(
-    `SELECT order_id, model_id, current_department, order_date
+    `SELECT order_id, model_id, current_department, order_date, due_date
      FROM all_orders
      WHERE is_cancelled = false
        AND shipping_completed_at IS NULL
@@ -296,28 +404,22 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
      LIMIT 500`
   );
 
-  const departmentDefaults = await getDepartmentDefaults();
-  const backlogs = await getDepartmentBacklogs();
-
   const results: DashboardForecastItem[] = [];
 
   for (const order of activeOrders.rows) {
-    const multiplier = await getModelMultiplier(order.model_id);
+    const forecast = await simulateBackwardFromDueDate(order);
+    if (!forecast) continue;
+
     const currentDept = order.current_department || 'P1 Production Queue';
-
-    const { timeline, estimatedShipDate } = buildTimeline(
-      currentDept, order.order_date, multiplier, departmentDefaults, backlogs
-    );
-
-    const expectedDepartment = findExpectedDepartment(timeline);
-    const status = determineStatus(currentDept, expectedDepartment);
+    const expectedDepartment = findExpectedDepartment(forecast.departmentTimeline);
+    const status = determineBackwardStatus(currentDept, expectedDepartment);
 
     results.push({
       orderId: order.order_id,
       model: order.model_id,
       actualDepartment: currentDept,
       expectedDepartment,
-      estimatedShipDate,
+      estimatedShipDate: forecast.estimatedShipDate,
       status,
     });
   }

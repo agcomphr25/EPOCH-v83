@@ -13991,14 +13991,18 @@ export class DatabaseStorage implements IStorage {
         const procConfig = proc.config;
         if (!procConfig) continue;
 
-        // Standard process custom data fields → WORK phase
-        if (procConfig.customDataFields && procConfig.customDataFields.length > 0) {
+        const procHasCustomFields = procConfig.customDataFields && procConfig.customDataFields.length > 0;
+        const procHasNotes = !!procConfig.notes;
+        const procName = proc.name || procConfig.processName || 'Standard Process';
+
+        // Standard process → WORK phase (always create a task so operators see the process on the traveler)
+        {
           const procDataTask = await this.createTravelerTask({
             travelerStepId: step.id,
             taskType: 'PROCESS',
             taskPhase: 'WORK',
-            title: `${proc.name || procConfig.processName || 'Standard Process'} — Data Entry`,
-            instructions: procConfig.notes || `Enter data for ${proc.name || procConfig.processName || 'standard process'}`,
+            title: procHasCustomFields ? `${procName} — Data Entry` : procName,
+            instructions: procConfig.notes || `Follow standard process: ${procName}`,
             required: true,
             sortOrder: sortOrder++,
             timePolicy: 'AUTO_ON_COMPLETE',
@@ -14007,14 +14011,16 @@ export class DatabaseStorage implements IStorage {
             status: 'NOT_STARTED',
           });
 
-          for (const field of procConfig.customDataFields) {
-            await this.createTravelerTaskField({
-              travelerTaskId: procDataTask.id,
-              fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-              fieldLabel: field.fieldName || 'Custom Field',
-              fieldType: field.fieldType || 'text',
-              required: field.isRequired || false,
-            });
+          if (procHasCustomFields) {
+            for (const field of procConfig.customDataFields) {
+              await this.createTravelerTaskField({
+                travelerTaskId: procDataTask.id,
+                fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+                fieldLabel: field.fieldName || 'Custom Field',
+                fieldType: field.fieldType || 'text',
+                required: field.isRequired || false,
+              });
+            }
           }
         }
 

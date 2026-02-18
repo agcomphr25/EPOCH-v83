@@ -1,0 +1,102 @@
+✅ Patch 2 — Apply it inside generateTravelerFromRouting() (copy/paste)
+2) In generateTravelerFromRouting() where you loop departments and assemble tasksToCreate
+
+You’ll have something like:
+
+get routing
+
+create traveler row
+
+loop routing.departmentSequence / routing.departments
+
+build an array of tasks
+
+insert travelerSteps
+
+insert travelerTasks
+
+insert travelerTaskFields
+
+Find the department loop and add these two things:
+
+A) Gate task creation by enabled phases
+
+Right after you have the routingDepartment (whatever you call it), add:
+
+const enabledPhases = getEnabledPhases(routingDepartment);
+
+
+Then, every time you are about to push/create a task, do:
+
+const phase = normalizePhase(taskPhaseYouAreAssigning);
+if (!enabledPhases.has(phase)) {
+  // phase disabled for this department → do not generate task at all
+  continue; // or skip this push
+}
+
+
+If your code builds tasks in separate blocks, easiest pattern is to wrap pushes:
+
+function pushTaskIfPhaseEnabled(task: any) {
+  const phase = normalizePhase(task.taskPhase);
+  if (!enabledPhases.has(phase)) return;
+  tasksToCreate.push(task);
+}
+
+
+Copy/paste this helper inside the department loop:
+
+const tasksToCreate: any[] = [];
+
+function pushTaskIfPhaseEnabled(task: any) {
+  const phase = normalizePhase(task.taskPhase);
+  if (!enabledPhases.has(phase)) return;
+  tasksToCreate.push(task);
+}
+
+
+Then replace your tasksToCreate.push({...}) calls with:
+
+pushTaskIfPhaseEnabled({
+  // ...
+});
+
+B) Deduplicate BEFORE inserting + dedupe fields per task
+
+Right before you insert travelerTasks, do:
+
+const dedupedTasksToCreate = dedupeTasks(tasksToCreate);
+
+
+Use dedupedTasksToCreate for the insert.
+
+Then when you build fields for each task, ensure:
+
+const fieldsToCreate = dedupeFieldsByKey(rawFieldsToCreate);
+
+Example of where to paste (pattern)
+
+You’ll likely have something like:
+
+// after creating travelerStepId
+// tasksToCreate already built
+await db.insert(travelerTasks).values(tasksToCreate).returning()
+
+
+Change it to:
+
+const dedupedTasksToCreate = dedupeTasks(tasksToCreate);
+
+const insertedTasks = await db
+  .insert(travelerTasks)
+  .values(dedupedTasksToCreate)
+  .returning();
+
+
+And wherever you insert fields:
+
+const fieldsToInsert = dedupeFieldsByKey(fieldsToInsertRaw);
+
+if (fieldsToInsert.length) {
+  await db.insert(travelerTaskFields).values(fieldsToInsert);
+}

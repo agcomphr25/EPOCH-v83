@@ -13519,6 +13519,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Generate Traveler from Part Routing
+  // ==== TRAVELER GENERATION HELPERS (PHASE GATING + DEDUPE) ====
+  private _normalizePhase(p: string): 'START' | 'WORK' | 'FINISH' {
+    const up = (p || '').toUpperCase();
+    if (up === 'START' || up === 'WORK' || up === 'FINISH') return up;
+    return 'WORK';
+  }
+
+  private _getEnabledPhases(dept: any): Set<'START' | 'WORK' | 'FINISH'> {
+    if (Array.isArray(dept?.enabledPhases) && dept.enabledPhases.length) {
+      return new Set(dept.enabledPhases.map((p: any) => this._normalizePhase(p)));
+    }
+    if (dept?.phasesEnabled && typeof dept.phasesEnabled === 'object') {
+      const out = new Set<'START' | 'WORK' | 'FINISH'>();
+      if (dept.phasesEnabled.start) out.add('START');
+      if (dept.phasesEnabled.work) out.add('WORK');
+      if (dept.phasesEnabled.finish) out.add('FINISH');
+      if (out.size) return out;
+    }
+    const out = new Set<'START' | 'WORK' | 'FINISH'>();
+    if (dept?.startEnabled === true) out.add('START');
+    if (dept?.workEnabled === true) out.add('WORK');
+    if (dept?.finishEnabled === true) out.add('FINISH');
+    if (out.size) return out;
+    return new Set<'START' | 'WORK' | 'FINISH'>(['START', 'WORK', 'FINISH']);
+  }
+
+  private _dedupeFieldsByKey<T extends { fieldKey: string }>(fields: T[]): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const f of fields) {
+      const k = (f.fieldKey || '').trim();
+      if (!k) continue;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(f);
+    }
+    return out;
+  }
+
+  private _taskDedupeKey(phase: string, taskType: string, title: string): string {
+    return `${this._normalizePhase(phase)}|${taskType}|${title}`.toLowerCase();
+  }
+
+  private async _createTaskIfAllowed(
+    taskData: any,
+    enabledPhases: Set<'START' | 'WORK' | 'FINISH'>,
+    createdTaskKeys: Set<string>,
+  ): Promise<any | null> {
+    const phase = this._normalizePhase(taskData.taskPhase);
+    if (!enabledPhases.has(phase)) return null;
+    const dedupeKey = this._taskDedupeKey(phase, taskData.taskType, taskData.title);
+    if (createdTaskKeys.has(dedupeKey)) return null;
+    createdTaskKeys.add(dedupeKey);
+    return await this.createTravelerTask({ ...taskData, taskPhase: phase });
+  }
+
   async generateTravelerFromRouting(
     partRoutingId: string,
     data: {
@@ -13568,6 +13624,8 @@ export class DatabaseStorage implements IStorage {
     for (let i = 0; i < departmentSequence.length; i++) {
       const deptName = departmentSequence[i];
       const deptConfig = departmentConfig[deptName] || {};
+      const enabledPhases = this._getEnabledPhases(deptConfig);
+      const createdTaskKeys = new Set<string>();
 
       const hasStartChecks = (deptConfig.startChecks || []).length > 0;
       const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
@@ -13655,7 +13713,7 @@ export class DatabaseStorage implements IStorage {
 
       // ===== START PHASE =====
       // Badge Scan (always first, auto-timestamps on start)
-      await this.createTravelerTask({
+      await this._createTaskIfAllowed({
         travelerStepId: step.id,
         taskType: 'CHECK',
         taskPhase: 'START',
@@ -13668,7 +13726,7 @@ export class DatabaseStorage implements IStorage {
         signatureRole: signatureConfig.startRequiresSignature ? (primarySignatureRole as any) : null,
         requiresCertification: true,
         status: 'NOT_STARTED',
-      });
+      }, enabledPhases, createdTaskKeys);
 
       // Explicit START gate checks from routing template
       // Enrich "Work Instruction Acknowledged" checks with instruction pack WI refs
@@ -13689,7 +13747,7 @@ export class DatabaseStorage implements IStorage {
           enrichedInstructions = `Review and acknowledge the following work instructions:\n${wiList}`;
         }
 
-        await this.createTravelerTask({
+        await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: check.taskType || 'CHECK',
           taskPhase: 'START',
@@ -13705,7 +13763,7 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: check.requiresCertification || false,
           instructionPack: isWiAck && wiRefsList.length > 0 ? routingInstructionPackForStart : null,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
       }
 
       // Material Lot Entry (TRACEABILITY tasks from materials config)
@@ -13723,7 +13781,7 @@ export class DatabaseStorage implements IStorage {
       // START phase traceability (default — includes legacy traceFields + per-material fields)
       if (traceFields.length > 0 || startMaterials.length > 0) {
         const startMaterialNames = startMaterials.map((m: any) => m.partNumber || m.partName).filter(Boolean);
-        const traceTask = await this.createTravelerTask({
+        const traceTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'START',
@@ -13737,47 +13795,49 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        const traceFieldLabelMap: Record<string, string> = {
-          internalControlNumber: 'Internal Control Number',
-          supplier: 'Supplier',
-          inventoryPartNumber: 'Inventory Part Number',
-          batchLotNumber: 'Batch/Lot #',
-          manufacturer: 'Manufacturer',
-          rollNumber: 'Roll Number',
-          expirationDate: 'Expiration Date',
-          receivedDate: 'Received Date',
-        };
+        if (traceTask) {
+          const traceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
 
-        const allStartFieldKeys = new Set<string>();
+          const allStartFieldKeys = new Set<string>();
 
-        for (const fieldKey of traceFields) {
-          allStartFieldKeys.add(fieldKey);
-        }
-
-        for (const mat of startMaterials) {
-          const reqFields = (mat as any).requiredFields || [];
-          for (const fieldKey of reqFields) {
+          for (const fieldKey of traceFields) {
             allStartFieldKeys.add(fieldKey);
           }
-        }
 
-        for (const fieldKey of allStartFieldKeys) {
-          await this.createTravelerTaskField({
-            travelerTaskId: traceTask.id,
-            fieldKey,
-            fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-            fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-            required: true,
-          });
+          for (const mat of startMaterials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fieldKey of reqFields) {
+              allStartFieldKeys.add(fieldKey);
+            }
+          }
+
+          for (const fieldKey of this._dedupeFieldsByKey([...allStartFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: traceTask.id,
+              fieldKey,
+              fieldLabel: traceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+              required: true,
+            });
+          }
         }
       }
 
       // START Phase Custom Data Fields
       const startCustomFields = deptConfig.startCustomDataFields || [];
       if (startCustomFields.length > 0) {
-        const startDataTask = await this.createTravelerTask({
+        const startDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'START',
@@ -13789,16 +13849,18 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        for (const field of startCustomFields) {
-          await this.createTravelerTaskField({
-            travelerTaskId: startDataTask.id,
-            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-            fieldLabel: field.fieldName || 'Custom Field',
-            fieldType: field.fieldType || 'text',
-            required: field.isRequired || false,
-          });
+        if (startDataTask) {
+          for (const field of this._dedupeFieldsByKey(startCustomFields.map((f: any) => ({ ...f, fieldKey: f.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom' })))) {
+            await this.createTravelerTaskField({
+              travelerTaskId: startDataTask.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: (field as any).fieldName || 'Custom Field',
+              fieldType: (field as any).fieldType || 'text',
+              required: (field as any).isRequired || false,
+            });
+          }
         }
       }
 
@@ -13810,7 +13872,7 @@ export class DatabaseStorage implements IStorage {
         ...(deptConfig.finishQcStandards || []).map((qc: any) => ({ ...qc, _source: 'finish' })),
       ];
       if (allQcStandards.length > 0) {
-        const qcTask = await this.createTravelerTask({
+        const qcTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'QC',
           taskPhase: 'FINISH',
@@ -13823,21 +13885,25 @@ export class DatabaseStorage implements IStorage {
           signatureRole: 'QC',
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        const usedKeys = new Set<string>();
-        for (const qc of allQcStandards) {
-          let baseKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
-          if (usedKeys.has(baseKey)) continue;
-          usedKeys.add(baseKey);
-          await this.createTravelerTaskField({
-            travelerTaskId: qcTask.id,
-            fieldKey: baseKey,
+        if (qcTask) {
+          const qcFields = allQcStandards.map((qc: any) => ({
+            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
             fieldLabel: qc.standard || 'QC Check',
-            fieldType: 'yes_no',
-            required: true,
-            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
-          });
+            tolerance: qc.tolerance,
+            requirement: qc.requirement,
+          }));
+          for (const qcField of this._dedupeFieldsByKey(qcFields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: qcTask.id,
+              fieldKey: qcField.fieldKey,
+              fieldLabel: qcField.fieldLabel,
+              fieldType: 'yes_no',
+              required: true,
+              validation: { tolerance: qcField.tolerance, requirement: qcField.requirement },
+            });
+          }
         }
       }
 
@@ -13853,7 +13919,7 @@ export class DatabaseStorage implements IStorage {
 
       // WORK phase material traceability
       if (workMaterials.length > 0) {
-        const workTraceTask = await this.createTravelerTask({
+        const workTraceTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'WORK',
@@ -13866,39 +13932,41 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           instructionPack: hasInstructionPack ? routingInstructionPack : null,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        const workTraceFieldLabelMap: Record<string, string> = {
-          internalControlNumber: 'Internal Control Number',
-          supplier: 'Supplier',
-          inventoryPartNumber: 'Inventory Part Number',
-          batchLotNumber: 'Batch/Lot #',
-          manufacturer: 'Manufacturer',
-          rollNumber: 'Roll Number',
-          expirationDate: 'Expiration Date',
-          receivedDate: 'Received Date',
-        };
-        const workTraceFieldKeys = new Set<string>();
-        for (const mat of workMaterials) {
-          const reqFields = (mat as any).requiredFields || [];
-          for (const fieldKey of reqFields) {
-            if (!workTraceFieldKeys.has(fieldKey)) {
+        if (workTraceTask) {
+          const workTraceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
+          const workTraceFieldKeys = new Set<string>();
+          for (const mat of workMaterials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fieldKey of reqFields) {
               workTraceFieldKeys.add(fieldKey);
-              await this.createTravelerTaskField({
-                travelerTaskId: workTraceTask.id,
-                fieldKey,
-                fieldLabel: workTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                required: true,
-              });
             }
+          }
+          for (const fieldKey of this._dedupeFieldsByKey([...workTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: workTraceTask.id,
+              fieldKey,
+              fieldLabel: workTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+              required: true,
+            });
           }
         }
       }
 
       // Production Timer task — when timer is configured for this department
       if (hasTimerConfig) {
-        await this.createTravelerTask({
+        await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'WORK',
@@ -13913,12 +13981,12 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           instructionPack: { timerConfig: deptConfig.timerConfig },
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
       }
 
       // Work Instructions task — always create when instruction pack has content
       if (hasInstructionPack) {
-        await this.createTravelerTask({
+        await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'WORK',
@@ -13931,13 +13999,13 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           instructionPack: routingInstructionPack,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
       }
 
       // PROCESS tasks from customDataFields (department-level WORK phase)
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
-        const customTask = await this.createTravelerTask({
+        const customTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'WORK',
@@ -13950,23 +14018,25 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           instructionPack: hasInstructionPack ? routingInstructionPack : null,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        for (const field of customFields) {
-          await this.createTravelerTaskField({
-            travelerTaskId: customTask.id,
-            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-            fieldLabel: field.fieldName || 'Custom Field',
-            fieldType: field.fieldType || 'text',
-            required: field.isRequired || false,
-          });
+        if (customTask) {
+          for (const field of this._dedupeFieldsByKey(customFields.map((f: any) => ({ ...f, fieldKey: f.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom' })))) {
+            await this.createTravelerTaskField({
+              travelerTaskId: customTask.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: (field as any).fieldName || 'Custom Field',
+              fieldType: (field as any).fieldType || 'text',
+              required: (field as any).isRequired || false,
+            });
+          }
         }
       }
 
       // PROCESS task for oven curing (manual time entry for cure data)
       const ovenCuringSteps = deptConfig.ovenCuringSteps || [];
       if (ovenCuringSteps.length > 0) {
-        const ovenTask = await this.createTravelerTask({
+        const ovenTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'WORK',
@@ -13979,18 +14049,25 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           instructionPack: hasInstructionPack ? routingInstructionPack : null,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        for (let j = 0; j < ovenCuringSteps.length; j++) {
-          const cureStep = ovenCuringSteps[j];
-          await this.createTravelerTaskField({
-            travelerTaskId: ovenTask.id,
+        if (ovenTask) {
+          const ovenFields = ovenCuringSteps.map((cureStep: any, j: number) => ({
             fieldKey: `cure_step_${j + 1}_complete`,
             fieldLabel: `Cure Step ${j + 1}: ${cureStep.temperature} for ${cureStep.time}`,
-            fieldType: 'yes_no',
-            required: true,
-            validation: { temperature: cureStep.temperature, time: cureStep.time },
-          });
+            temperature: cureStep.temperature,
+            time: cureStep.time,
+          }));
+          for (const ovenField of this._dedupeFieldsByKey(ovenFields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: ovenTask.id,
+              fieldKey: ovenField.fieldKey,
+              fieldLabel: ovenField.fieldLabel,
+              fieldType: 'yes_no',
+              required: true,
+              validation: { temperature: ovenField.temperature, time: ovenField.time },
+            });
+          }
         }
       }
 
@@ -14006,7 +14083,7 @@ export class DatabaseStorage implements IStorage {
 
         // Standard process → WORK phase (always create a task so operators see the process on the traveler)
         {
-          const procDataTask = await this.createTravelerTask({
+          const procDataTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'PROCESS',
             taskPhase: 'WORK',
@@ -14018,16 +14095,16 @@ export class DatabaseStorage implements IStorage {
             requiresSignature: false,
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          if (procHasCustomFields) {
-            for (const field of procConfig.customDataFields) {
+          if (procDataTask && procHasCustomFields) {
+            for (const field of this._dedupeFieldsByKey(procConfig.customDataFields.map((f: any) => ({ ...f, fieldKey: f.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom' })))) {
               await this.createTravelerTaskField({
                 travelerTaskId: procDataTask.id,
-                fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-                fieldLabel: field.fieldName || 'Custom Field',
-                fieldType: field.fieldType || 'text',
-                required: field.isRequired || false,
+                fieldKey: field.fieldKey,
+                fieldLabel: (field as any).fieldName || 'Custom Field',
+                fieldType: (field as any).fieldType || 'text',
+                required: (field as any).isRequired || false,
               });
             }
           }
@@ -14035,7 +14112,7 @@ export class DatabaseStorage implements IStorage {
 
         // Standard process QC standards → WORK phase QC task
         if (procConfig.qcStandards && procConfig.qcStandards.length > 0) {
-          const procQcTask = await this.createTravelerTask({
+          const procQcTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'QC',
             taskPhase: 'WORK',
@@ -14048,23 +14125,31 @@ export class DatabaseStorage implements IStorage {
             signatureRole: 'QC',
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          for (const qc of procConfig.qcStandards) {
-            await this.createTravelerTaskField({
-              travelerTaskId: procQcTask.id,
+          if (procQcTask) {
+            const procQcFields = procConfig.qcStandards.map((qc: any) => ({
               fieldKey: `stdproc_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
               fieldLabel: qc.standard || 'QC Check',
-              fieldType: 'yes_no',
-              required: true,
-              validation: { tolerance: qc.tolerance, requirement: qc.requirement },
-            });
+              tolerance: qc.tolerance,
+              requirement: qc.requirement,
+            }));
+            for (const qcField of this._dedupeFieldsByKey(procQcFields)) {
+              await this.createTravelerTaskField({
+                travelerTaskId: procQcTask.id,
+                fieldKey: qcField.fieldKey,
+                fieldLabel: qcField.fieldLabel,
+                fieldType: 'yes_no',
+                required: true,
+                validation: { tolerance: qcField.tolerance, requirement: qcField.requirement },
+              });
+            }
           }
         }
 
         // Standard process materials → WORK phase traceability
         if (procConfig.materials && procConfig.materials.length > 0) {
-          const procTraceTask = await this.createTravelerTask({
+          const procTraceTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'TRACEABILITY',
             taskPhase: 'WORK',
@@ -14076,32 +14161,34 @@ export class DatabaseStorage implements IStorage {
             requiresSignature: false,
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          const procTraceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-          const procTraceFieldKeys = new Set<string>();
-          for (const mat of procConfig.materials) {
-            const reqFields = (mat as any).requiredFields || [];
-            for (const fieldKey of reqFields) {
-              if (!procTraceFieldKeys.has(fieldKey)) {
+          if (procTraceTask) {
+            const procTraceFieldLabelMap: Record<string, string> = {
+              internalControlNumber: 'Internal Control Number',
+              supplier: 'Supplier',
+              inventoryPartNumber: 'Inventory Part Number',
+              batchLotNumber: 'Batch/Lot #',
+              manufacturer: 'Manufacturer',
+              rollNumber: 'Roll Number',
+              expirationDate: 'Expiration Date',
+              receivedDate: 'Received Date',
+            };
+            const procTraceFieldKeys = new Set<string>();
+            for (const mat of procConfig.materials) {
+              const reqFields = (mat as any).requiredFields || [];
+              for (const fieldKey of reqFields) {
                 procTraceFieldKeys.add(fieldKey);
-                await this.createTravelerTaskField({
-                  travelerTaskId: procTraceTask.id,
-                  fieldKey,
-                  fieldLabel: procTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                  fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                  required: true,
-                });
               }
+            }
+            for (const fieldKey of this._dedupeFieldsByKey([...procTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+              await this.createTravelerTaskField({
+                travelerTaskId: procTraceTask.id,
+                fieldKey,
+                fieldLabel: procTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
             }
           }
         }
@@ -14112,7 +14199,7 @@ export class DatabaseStorage implements IStorage {
       if (specialProcessConfig?.processName) {
         // Special process custom data fields → WORK phase
         if (specialProcessConfig.customDataFields && specialProcessConfig.customDataFields.length > 0) {
-          const spDataTask = await this.createTravelerTask({
+          const spDataTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'PROCESS',
             taskPhase: 'WORK',
@@ -14124,22 +14211,24 @@ export class DatabaseStorage implements IStorage {
             requiresSignature: false,
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          for (const field of specialProcessConfig.customDataFields) {
-            await this.createTravelerTaskField({
-              travelerTaskId: spDataTask.id,
-              fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-              fieldLabel: field.fieldName || 'Custom Field',
-              fieldType: field.fieldType || 'text',
-              required: field.isRequired || false,
-            });
+          if (spDataTask) {
+            for (const field of this._dedupeFieldsByKey(specialProcessConfig.customDataFields.map((f: any) => ({ ...f, fieldKey: f.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom' })))) {
+              await this.createTravelerTaskField({
+                travelerTaskId: spDataTask.id,
+                fieldKey: field.fieldKey,
+                fieldLabel: (field as any).fieldName || 'Custom Field',
+                fieldType: (field as any).fieldType || 'text',
+                required: (field as any).isRequired || false,
+              });
+            }
           }
         }
 
         // Special process QC standards → WORK phase QC task
         if (specialProcessConfig.qcStandards && specialProcessConfig.qcStandards.length > 0) {
-          const spQcTask = await this.createTravelerTask({
+          const spQcTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'QC',
             taskPhase: 'WORK',
@@ -14152,23 +14241,31 @@ export class DatabaseStorage implements IStorage {
             signatureRole: 'QC',
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          for (const qc of specialProcessConfig.qcStandards) {
-            await this.createTravelerTaskField({
-              travelerTaskId: spQcTask.id,
+          if (spQcTask) {
+            const spQcFields = specialProcessConfig.qcStandards.map((qc: any) => ({
               fieldKey: `sp_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
               fieldLabel: qc.standard || 'QC Check',
-              fieldType: 'yes_no',
-              required: true,
-              validation: { tolerance: qc.tolerance, requirement: qc.requirement },
-            });
+              tolerance: qc.tolerance,
+              requirement: qc.requirement,
+            }));
+            for (const qcField of this._dedupeFieldsByKey(spQcFields)) {
+              await this.createTravelerTaskField({
+                travelerTaskId: spQcTask.id,
+                fieldKey: qcField.fieldKey,
+                fieldLabel: qcField.fieldLabel,
+                fieldType: 'yes_no',
+                required: true,
+                validation: { tolerance: qcField.tolerance, requirement: qcField.requirement },
+              });
+            }
           }
         }
 
         // Special process materials → WORK phase traceability
         if (specialProcessConfig.materials && specialProcessConfig.materials.length > 0) {
-          const spTraceTask = await this.createTravelerTask({
+          const spTraceTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'TRACEABILITY',
             taskPhase: 'WORK',
@@ -14180,32 +14277,34 @@ export class DatabaseStorage implements IStorage {
             requiresSignature: false,
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
 
-          const spTraceFieldLabelMap: Record<string, string> = {
-            internalControlNumber: 'Internal Control Number',
-            supplier: 'Supplier',
-            inventoryPartNumber: 'Inventory Part Number',
-            batchLotNumber: 'Batch/Lot #',
-            manufacturer: 'Manufacturer',
-            rollNumber: 'Roll Number',
-            expirationDate: 'Expiration Date',
-            receivedDate: 'Received Date',
-          };
-          const spTraceFieldKeys = new Set<string>();
-          for (const mat of specialProcessConfig.materials) {
-            const reqFields = (mat as any).requiredFields || [];
-            for (const fieldKey of reqFields) {
-              if (!spTraceFieldKeys.has(fieldKey)) {
+          if (spTraceTask) {
+            const spTraceFieldLabelMap: Record<string, string> = {
+              internalControlNumber: 'Internal Control Number',
+              supplier: 'Supplier',
+              inventoryPartNumber: 'Inventory Part Number',
+              batchLotNumber: 'Batch/Lot #',
+              manufacturer: 'Manufacturer',
+              rollNumber: 'Roll Number',
+              expirationDate: 'Expiration Date',
+              receivedDate: 'Received Date',
+            };
+            const spTraceFieldKeys = new Set<string>();
+            for (const mat of specialProcessConfig.materials) {
+              const reqFields = (mat as any).requiredFields || [];
+              for (const fieldKey of reqFields) {
                 spTraceFieldKeys.add(fieldKey);
-                await this.createTravelerTaskField({
-                  travelerTaskId: spTraceTask.id,
-                  fieldKey,
-                  fieldLabel: spTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                  fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                  required: true,
-                });
               }
+            }
+            for (const fieldKey of this._dedupeFieldsByKey([...spTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+              await this.createTravelerTaskField({
+                travelerTaskId: spTraceTask.id,
+                fieldKey,
+                fieldLabel: spTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+                required: true,
+              });
             }
           }
         }
@@ -14214,7 +14313,7 @@ export class DatabaseStorage implements IStorage {
       // ===== FINISH PHASE =====
       // FINISH phase material traceability
       if (finishMaterials.length > 0) {
-        const finishTraceTask = await this.createTravelerTask({
+        const finishTraceTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'TRACEABILITY',
           taskPhase: 'FINISH',
@@ -14226,39 +14325,41 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        const finishTraceFieldLabelMap: Record<string, string> = {
-          internalControlNumber: 'Internal Control Number',
-          supplier: 'Supplier',
-          inventoryPartNumber: 'Inventory Part Number',
-          batchLotNumber: 'Batch/Lot #',
-          manufacturer: 'Manufacturer',
-          rollNumber: 'Roll Number',
-          expirationDate: 'Expiration Date',
-          receivedDate: 'Received Date',
-        };
-        const finishTraceFieldKeys = new Set<string>();
-        for (const mat of finishMaterials) {
-          const reqFields = (mat as any).requiredFields || [];
-          for (const fieldKey of reqFields) {
-            if (!finishTraceFieldKeys.has(fieldKey)) {
+        if (finishTraceTask) {
+          const finishTraceFieldLabelMap: Record<string, string> = {
+            internalControlNumber: 'Internal Control Number',
+            supplier: 'Supplier',
+            inventoryPartNumber: 'Inventory Part Number',
+            batchLotNumber: 'Batch/Lot #',
+            manufacturer: 'Manufacturer',
+            rollNumber: 'Roll Number',
+            expirationDate: 'Expiration Date',
+            receivedDate: 'Received Date',
+          };
+          const finishTraceFieldKeys = new Set<string>();
+          for (const mat of finishMaterials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fieldKey of reqFields) {
               finishTraceFieldKeys.add(fieldKey);
-              await this.createTravelerTaskField({
-                travelerTaskId: finishTraceTask.id,
-                fieldKey,
-                fieldLabel: finishTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
-                fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
-                required: true,
-              });
             }
+          }
+          for (const fieldKey of this._dedupeFieldsByKey([...finishTraceFieldKeys].map(k => ({ fieldKey: k }))).map(f => f.fieldKey)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: finishTraceTask.id,
+              fieldKey,
+              fieldLabel: finishTraceFieldLabelMap[fieldKey] || fieldKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (l: string) => l.toUpperCase()).trim(),
+              fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+              required: true,
+            });
           }
         }
       }
 
       // Explicit FINISH checks from routing template
       for (const check of finishChecks) {
-        await this.createTravelerTask({
+        await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: check.taskType || 'CHECK',
           taskPhase: 'FINISH',
@@ -14271,13 +14372,13 @@ export class DatabaseStorage implements IStorage {
           signatureRole: check.requiresSignature ? (check.signatureRole || 'QC') : null,
           requiresCertification: check.requiresCertification || false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
       }
 
       // FINISH Phase Custom Data Fields
       const finishCustomFields = deptConfig.finishCustomDataFields || [];
       if (finishCustomFields.length > 0) {
-        const finishDataTask = await this.createTravelerTask({
+        const finishDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',
           taskPhase: 'FINISH',
@@ -14289,16 +14390,18 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
 
-        for (const field of finishCustomFields) {
-          await this.createTravelerTaskField({
-            travelerTaskId: finishDataTask.id,
-            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
-            fieldLabel: field.fieldName || 'Custom Field',
-            fieldType: field.fieldType || 'text',
-            required: field.isRequired || false,
-          });
+        if (finishDataTask) {
+          for (const field of this._dedupeFieldsByKey(finishCustomFields.map((f: any) => ({ ...f, fieldKey: f.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom' })))) {
+            await this.createTravelerTaskField({
+              travelerTaskId: finishDataTask.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: (field as any).fieldName || 'Custom Field',
+              fieldType: (field as any).fieldType || 'text',
+              required: (field as any).isRequired || false,
+            });
+          }
         }
       }
 
@@ -14309,7 +14412,7 @@ export class DatabaseStorage implements IStorage {
         for (const role of signatureConfig.requiredSignatures) {
           const enumRole = mapRoleToEnum(role);
           const roleLabel = mapRoleToLabel(role);
-          await this.createTravelerTask({
+          await this._createTaskIfAllowed({
             travelerStepId: step.id,
             taskType: 'SIGNATURE',
             taskPhase: 'FINISH',
@@ -14324,11 +14427,11 @@ export class DatabaseStorage implements IStorage {
             signatureRole: enumRole as any,
             requiresCertification: false,
             status: 'NOT_STARTED',
-          });
+          }, enabledPhases, createdTaskKeys);
         }
       } else {
         // No signature required — simple completion gate
-        await this.createTravelerTask({
+        await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'SIGNATURE',
           taskPhase: 'FINISH',
@@ -14341,7 +14444,7 @@ export class DatabaseStorage implements IStorage {
           signatureRole: null,
           requiresCertification: false,
           status: 'NOT_STARTED',
-        });
+        }, enabledPhases, createdTaskKeys);
       }
     }
 

@@ -350,8 +350,24 @@ export default function P2DepartmentManager() {
     },
   });
 
+  const departmentHasRoutingSignature = (partNumber: string, department: string): boolean => {
+    if (!partRouting?.departmentConfig?.[department]) return false;
+    const config = partRouting.departmentConfig[department] as any;
+    const hasFinishSigCheck = config.finishChecks?.some(
+      (check: any) => check.taskType === 'SIGNATURE' && check.required
+    );
+    const hasSigConfig = config.signatureConfig?.finishRequiresSignature &&
+      (config.signatureConfig?.requiredSignatures?.length || 0) > 0;
+    return !!(hasFinishSigCheck || hasSigConfig);
+  };
+
   // Show signature dialog before transitioning
+  // If the department already has a required signature in its routing config, skip the extra transfer signature
   const showSignatureBeforeTransition = (item: P2SerializedItem) => {
+    if (item.currentDepartment === 'Final QC' && departmentHasRoutingSignature(item.partNumber, item.currentDepartment)) {
+      transitionMutation.mutate(item.id);
+      return;
+    }
     const nextDept = getNextDepartment(item.currentDepartment);
     setPendingSignatureItem(item);
     setPendingSignatureNextDepartment(nextDept);

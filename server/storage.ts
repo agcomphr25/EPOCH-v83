@@ -13993,7 +13993,7 @@ export class DatabaseStorage implements IStorage {
       if (hasTimerConfig) {
         await this._createTaskIfAllowed({
           travelerStepId: step.id,
-          taskType: 'PROCESS',
+          taskType: 'TIMER',
           taskPhase: 'WORK',
           title: 'Production Timer',
           instructions: deptConfig.timerConfig.defaultProgramName

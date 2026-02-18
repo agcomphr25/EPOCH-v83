@@ -196,6 +196,7 @@ const TASK_TYPE_ICONS: Record<string, any> = {
   END_GATE: CheckCircle,
   GATE_CHECK: Shield,
   TRACE: CreditCard,
+  TIMER: Timer,
   CUSTOM_FIELD: FileText,
   SPECIAL_PROCESS: AlertTriangle,
   NOTES: FileText,

@@ -266,6 +266,19 @@ export default function TravelerExecution() {
   const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
+
+  const { data: activeTimerData, refetch: refetchActiveTimer } = useQuery<{ run: any; program: any }>({
+    queryKey: ['/api/production/timers/runs/active', currentStepId],
+    queryFn: async () => {
+      const res = await fetch(`/api/production/timers/runs/active?travelerStepId=${currentStepId}`);
+      if (!res.ok) return { run: null, program: null };
+      return res.json();
+    },
+    enabled: !!currentStepId,
+    refetchInterval: 10000,
+  });
+  const activeTimerRun = activeTimerData?.run ?? null;
+  const activeTimerProgram = activeTimerData?.program ?? null;
   const [showAdminForceSign, setShowAdminForceSign] = useState(false);
   const [adminForceReason, setAdminForceReason] = useState('');
 
@@ -1645,7 +1658,7 @@ export default function TravelerExecution() {
                             {phase === 'WORK' && (() => {
                               const timerConfig = getTimerConfigForDepartment(currentStep.departmentName);
                               if (!timerConfig) return null;
-                              const stepTimerStarted = timerStartedForStep[currentStep.id];
+                              const stepTimerStarted = !!activeTimerRun || timerStartedForStep[currentStep.id];
                               return (
                                 <div className="mx-4 my-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
                                   <div className="flex items-center justify-between">
@@ -1654,9 +1667,11 @@ export default function TravelerExecution() {
                                       <div>
                                         <p className="font-medium text-amber-800 text-sm">Production Timer</p>
                                         <p className="text-xs text-amber-600">
-                                          {timerConfig.defaultProgramName
-                                            ? `Program: ${timerConfig.defaultProgramName}`
-                                            : 'Start a timer on the timer station'}
+                                          {activeTimerRun && activeTimerProgram
+                                            ? `Running: ${activeTimerProgram.name}${activeTimerRun.serialNumber ? ` / S/N: ${activeTimerRun.serialNumber}` : ''}`
+                                            : timerConfig.defaultProgramName
+                                              ? `Program: ${timerConfig.defaultProgramName}`
+                                              : 'Start a timer on the timer station'}
                                         </p>
                                       </div>
                                     </div>
@@ -2148,11 +2163,21 @@ export default function TravelerExecution() {
           defaultProgramId={getTimerConfigForDepartment(currentStep.departmentName)?.defaultProgramId}
           navigateToStation={false}
           badgeId={activeBadge || undefined}
+          travelerId={traveler.id}
+          travelerStepId={currentStep.id}
+          travelerTaskId={
+            currentStep.tasks?.find((t: any) =>
+              t.taskType === 'TIMER' ||
+              (t.taskType === 'PROCESS' && t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig)
+            )?.id
+          }
+          departmentName={currentStep.departmentName}
           onTimerStarted={() => {
             setTimerStartedForStep((prev) => ({
               ...prev,
               [currentStep.id]: true,
             }));
+            refetchActiveTimer();
             toast({
               title: 'Timer Started',
               description: 'Timer is now running on the timer station. You may continue with traveler tasks.',

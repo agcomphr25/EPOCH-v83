@@ -40,6 +40,10 @@ interface StartProductionTimerModalProps {
   onTimerStarted?: () => void;
   navigateToStation?: boolean;
   badgeId?: string;
+  travelerId?: string;
+  travelerStepId?: string;
+  travelerTaskId?: string;
+  departmentName?: string;
 }
 
 export default function StartProductionTimerModal({
@@ -50,6 +54,10 @@ export default function StartProductionTimerModal({
   onTimerStarted,
   navigateToStation = true,
   badgeId,
+  travelerId,
+  travelerStepId,
+  travelerTaskId,
+  departmentName,
 }: StartProductionTimerModalProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -115,6 +123,10 @@ export default function StartProductionTimerModal({
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
           ...(badgeId ? { badgeId } : {}),
+          ...(travelerId ? { travelerId } : {}),
+          ...(travelerStepId ? { travelerStepId } : {}),
+          ...(travelerTaskId ? { travelerTaskId } : {}),
+          ...(departmentName ? { departmentName } : {}),
         }),
       });
     },

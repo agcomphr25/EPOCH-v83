@@ -13802,15 +13802,20 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // START Phase QC Standards (incoming inspection)
+      // Consolidated QC Standards - merge start, work, and finish QC into a single task
       const startQcStandards = deptConfig.startQcStandards || [];
-      if (startQcStandards.length > 0) {
-        const startQcTask = await this.createTravelerTask({
+      const allQcStandards = [
+        ...startQcStandards.map((qc: any) => ({ ...qc, _source: 'start' })),
+        ...(deptConfig.qcStandards || []).map((qc: any) => ({ ...qc, _source: 'work' })),
+        ...(deptConfig.finishQcStandards || []).map((qc: any) => ({ ...qc, _source: 'finish' })),
+      ];
+      if (allQcStandards.length > 0) {
+        const qcTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'QC',
-          taskPhase: 'START',
-          title: 'Incoming Inspection',
-          instructions: 'Complete incoming quality checks before work begins',
+          taskPhase: 'FINISH',
+          title: 'Quality Control Checks',
+          instructions: 'Complete all quality control verifications',
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -13820,10 +13825,14 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
         });
 
-        for (const qc of startQcStandards) {
+        const usedKeys = new Set<string>();
+        for (const qc of allQcStandards) {
+          let baseKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
+          if (usedKeys.has(baseKey)) continue;
+          usedKeys.add(baseKey);
           await this.createTravelerTaskField({
-            travelerTaskId: startQcTask.id,
-            fieldKey: `start_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            travelerTaskId: qcTask.id,
+            fieldKey: baseKey,
             fieldLabel: qc.standard || 'QC Check',
             fieldType: 'yes_no',
             required: true,
@@ -14289,67 +14298,6 @@ export class DatabaseStorage implements IStorage {
             fieldLabel: field.fieldName || 'Custom Field',
             fieldType: field.fieldType || 'text',
             required: field.isRequired || false,
-          });
-        }
-      }
-
-      // QC verification tasks — general qcStandards go to WORK phase (main QC work),
-      // finishQcStandards go to FINISH phase (final verification only if explicitly configured)
-      const qcStandards = deptConfig.qcStandards || [];
-      if (qcStandards.length > 0) {
-        const qcTask = await this.createTravelerTask({
-          travelerStepId: step.id,
-          taskType: 'QC',
-          taskPhase: 'WORK',
-          title: 'Quality Control Checks',
-          instructions: 'Complete all quality control verifications',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: true,
-          signatureRole: 'QC',
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        });
-
-        for (const qc of qcStandards) {
-          await this.createTravelerTaskField({
-            travelerTaskId: qcTask.id,
-            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
-            fieldLabel: qc.standard || 'QC Check',
-            fieldType: 'yes_no',
-            required: true,
-            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
-          });
-        }
-      }
-
-      // FINISH phase QC — only explicitly configured finishQcStandards
-      const finishQcStandards = deptConfig.finishQcStandards || [];
-      if (finishQcStandards.length > 0) {
-        const finishQcTask = await this.createTravelerTask({
-          travelerStepId: step.id,
-          taskType: 'QC',
-          taskPhase: 'FINISH',
-          title: 'Final Quality Verification',
-          instructions: 'Complete final quality verification checks',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: true,
-          signatureRole: 'QC',
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        });
-
-        for (const qc of finishQcStandards) {
-          await this.createTravelerTaskField({
-            travelerTaskId: finishQcTask.id,
-            fieldKey: `finish_qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
-            fieldLabel: qc.standard || 'QC Check',
-            fieldType: 'yes_no',
-            required: true,
-            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
           });
         }
       }

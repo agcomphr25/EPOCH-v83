@@ -281,9 +281,20 @@ export default function TravelerExecution() {
   const activeTimerProgram = activeTimerData?.program ?? null;
   const [showAdminForceSign, setShowAdminForceSign] = useState(false);
   const [adminForceReason, setAdminForceReason] = useState('');
+  const [showQcApprovalDialog, setShowQcApprovalDialog] = useState(false);
+  const [qcApprovalData, setQcApprovalData] = useState<{
+    taskId: string;
+    failedChecks: Array<{ fieldKey: string; fieldLabel: string; measuredResult?: string }>;
+    fieldVals: Record<string, string>;
+    fieldValidations?: Record<string, any>;
+  } | null>(null);
+  const [qcApproverName, setQcApproverName] = useState('');
+  const [qcApprovalNotes, setQcApprovalNotes] = useState('');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   const handleBadgeScanInput = (value: string) => {
     setSignatureData((prev) => ({ ...prev, badgeScan: value }));
@@ -452,17 +463,39 @@ export default function TravelerExecution() {
   });
 
   const completeTaskMutation = useMutation({
-    mutationFn: ({ taskId, fieldVals, fieldValidations }: { taskId: string; fieldVals?: Record<string, string>; fieldValidations?: Record<string, any> }) =>
+    mutationFn: ({ taskId, fieldVals, fieldValidations, toleranceApproval }: {
+      taskId: string;
+      fieldVals?: Record<string, string>;
+      fieldValidations?: Record<string, any>;
+      toleranceApproval?: { approvedBy: string; notes: string };
+    }) =>
       apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals, fieldValidations }),
+        body: JSON.stringify({
+          completedBy: activeTechName || activeBadge || 'operator',
+          fieldValues: fieldVals,
+          fieldValidations,
+          toleranceApproval,
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
       toast({ title: 'Task Completed', description: 'Task has been marked complete' });
+      setShowQcApprovalDialog(false);
+      setQcApprovalData(null);
+      setQcApproverName('');
+      setQcApprovalNotes('');
       refetch();
     },
     onError: (error: any) => {
+      if (error.message?.startsWith('HARD_QC_STOP:')) {
+        toast({
+          title: 'Hard QC Stop',
+          description: 'Out-of-tolerance results detected. Please use the approval dialog to provide authorization.',
+          variant: 'destructive',
+        });
+        return;
+      }
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
@@ -607,7 +640,7 @@ export default function TravelerExecution() {
     }));
   };
 
-  const handleCompleteTask = (task: TravelerTask) => {
+  const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
     const taskFieldVals = fieldValues[task.id] || {};
     const traceLabelMap: Record<string, string> = {
       internalControlNumber: 'Internal Control Number',
@@ -632,8 +665,37 @@ export default function TravelerExecution() {
       return;
     }
 
+    if (task.taskType === 'QC' && !toleranceApproval) {
+      const failedHardStops = task.fields.filter((f) => {
+        const val = taskFieldVals[f.fieldKey] ?? f.value;
+        const rawVal = typeof val === 'string' && val.includes('|') ? val.split('|')[0] : val;
+        const normalized = String(rawVal ?? '').toLowerCase().trim();
+        return f.validation?.hardQcStop && (normalized === 'no' || normalized === 'fail' || normalized === 'false');
+      });
+
+      if (failedHardStops.length > 0) {
+        setQcApprovalData({
+          taskId: task.id,
+          failedChecks: failedHardStops.map((f) => ({
+            fieldKey: f.fieldKey,
+            fieldLabel: f.fieldLabel,
+            measuredResult: taskFieldVals[`${f.fieldKey}_result`] || undefined,
+          })),
+          fieldVals: taskFieldVals,
+          fieldValidations: pickerValidations[task.id] || undefined,
+        });
+        setShowQcApprovalDialog(true);
+        return;
+      }
+    }
+
     const taskPickerValidations = pickerValidations[task.id] || undefined;
-    completeTaskMutation.mutate({ taskId: task.id, fieldVals: taskFieldVals, fieldValidations: taskPickerValidations });
+    completeTaskMutation.mutate({
+      taskId: task.id,
+      fieldVals: taskFieldVals,
+      fieldValidations: taskPickerValidations,
+      toleranceApproval,
+    });
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);
@@ -799,7 +861,7 @@ export default function TravelerExecution() {
                 Block Traveler
               </Button>
 
-              {(() => {
+              {isAdmin && (() => {
                 const unsignedSteps = steps.filter((s: any) => (!s.signatures || s.signatures.length === 0) && s.status !== 'NOT_STARTED');
                 const stuckTasks = steps.flatMap((s: any) =>
                   (s.tasks || []).filter((t: any) => t.required && t.status !== 'COMPLETED').map((t: any) => ({ ...t, stepDept: s.departmentName, stepId: s.id }))
@@ -1458,8 +1520,14 @@ export default function TravelerExecution() {
                                                     </Label>
                                                     {field.fieldType === 'yes_no' ? (
                                                       <div className="space-y-2">
-                                                        {field.validation && (field.validation.tolerance || field.validation.requirement) && (
+                                                        {field.validation && (field.validation.tolerance || field.validation.requirement || field.validation.hardQcStop) && (
                                                           <div className="flex flex-wrap gap-2 text-xs mb-1">
+                                                            {field.validation.hardQcStop && (
+                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 font-medium">
+                                                                <Flag className="h-3 w-3" />
+                                                                Hard QC Stop
+                                                              </span>
+                                                            )}
                                                             {field.validation.tolerance && (
                                                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                                                                 <Wrench className="h-3 w-3" />
@@ -1956,6 +2024,91 @@ export default function TravelerExecution() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showQcApprovalDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowQcApprovalDialog(false);
+          setQcApprovalData(null);
+          setQcApproverName('');
+          setQcApprovalNotes('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Hard QC Stop - Approval Required
+            </DialogTitle>
+            <DialogDescription>
+              One or more quality checks failed with a Hard QC Stop flag. Authorized approval is required to proceed.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+              <p className="text-sm font-medium text-red-800">Failed Checks:</p>
+              {qcApprovalData?.failedChecks.map((check, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-red-700">
+                  <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium">{check.fieldLabel}</span>
+                    {check.measuredResult && (
+                      <span className="text-red-500 ml-1">(Measured: {check.measuredResult})</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Authorized Approver Name *</Label>
+              <Input
+                value={qcApproverName}
+                onChange={(e) => setQcApproverName(e.target.value)}
+                placeholder="Enter approver's full name..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Approval Notes / Justification *</Label>
+              <Textarea
+                value={qcApprovalNotes}
+                onChange={(e) => setQcApprovalNotes(e.target.value)}
+                placeholder="Explain why this deviation is acceptable..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowQcApprovalDialog(false);
+              setQcApprovalData(null);
+              setQcApproverName('');
+              setQcApprovalNotes('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!qcApprovalData) return;
+                const task = steps.flatMap((s) => s.tasks || []).find((t) => t.id === qcApprovalData.taskId);
+                if (task) {
+                  handleCompleteTask(task, {
+                    approvedBy: qcApproverName,
+                    notes: qcApprovalNotes,
+                  });
+                }
+              }}
+              disabled={!qcApproverName.trim() || !qcApprovalNotes.trim() || completeTaskMutation.isPending}
+            >
+              {completeTaskMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Approve & Complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Instruction Pack Sheet Drawer */}
       <Sheet open={instructionSheetOpen} onOpenChange={setInstructionSheetOpen}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -2194,7 +2347,7 @@ export default function TravelerExecution() {
         }}
         onSelect={(selectedItem) => {
           if (!inventoryPickerTaskId || !traveler) return;
-          const step = traveler.steps?.find((s: any) => s.id === currentStepId);
+          const step = (traveler as any).steps?.find((s: any) => s.id === currentStepId);
           if (!step) return;
           const task = step.tasks?.find((t: any) => t.id === inventoryPickerTaskId);
           if (!task) return;

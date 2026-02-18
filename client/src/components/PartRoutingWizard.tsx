@@ -63,6 +63,7 @@ import {
   Eye,
   CheckSquare,
   Settings,
+  Flag,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -113,6 +114,7 @@ interface QCStandard {
   standard: string; // The QC check description
   tolerance: string; // Acceptable tolerance/variance
   requirement: string; // Specific requirement or specification
+  hardQcStop?: boolean;
 }
 
 interface OvenCuringStep {
@@ -180,6 +182,7 @@ interface PhaseCheck {
   requiresSignature: boolean;
   signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
   requiresCertification: boolean;
+  hardQcStop?: boolean;
   instructionPack?: InstructionPack;
 }
 
@@ -1387,6 +1390,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
+  const updateQcStandardProperty = (dept: string, phase: 'start' | 'finish', index: number, updates: Partial<QCStandard>) => {
+    const config = getOrCreateDeptConfig(dept);
+    const key = phase === 'start' ? 'startQcStandards' : 'finishQcStandards';
+    const standards = [...(config[key] || [])];
+    standards[index] = { ...standards[index], ...updates };
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: { ...config, [key]: standards },
+    });
+  };
+
   const addStartCheck = (dept: string) => {
     if (!startCheckTitle.trim()) return;
     const config = getOrCreateDeptConfig(dept);
@@ -2008,6 +2022,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           >
                                             Cert {check.requiresCertification ? 'Yes' : 'No'}
                                           </Badge>
+                                          <Badge
+                                            variant={check.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${check.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateCheckProperty(dept, 'start', idx, { hardQcStop: !check.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
+                                            {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
                                         </div>
                                       </div>
                                     ))}
@@ -2099,14 +2121,26 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 {config.startQcStandards && config.startQcStandards.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.startQcStandards.map((qc, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium">{qc.standard}</p>
-                                          <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                      <div key={idx} className="p-2 rounded border bg-background space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{qc.standard}</p>
+                                            <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                          </div>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStartQcStandard(dept, idx)}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
                                         </div>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStartQcStandard(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
+                                        <div className="flex flex-wrap gap-1 pl-1">
+                                          <Badge
+                                            variant={qc.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${qc.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateQcStandardProperty(dept, 'start', idx, { hardQcStop: !qc.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${qc.hardQcStop ? 'text-white' : ''}`} />
+                                            {qc.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -2714,6 +2748,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           >
                                             Cert {check.requiresCertification ? 'Yes' : 'No'}
                                           </Badge>
+                                          <Badge
+                                            variant={check.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${check.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateCheckProperty(dept, 'finish', idx, { hardQcStop: !check.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
+                                            {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
                                         </div>
                                       </div>
                                     ))}
@@ -2805,14 +2847,26 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 {config.finishQcStandards && config.finishQcStandards.length > 0 && (
                                   <div className="space-y-2 mb-3">
                                     {config.finishQcStandards.map((qc, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium">{qc.standard}</p>
-                                          <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                      <div key={idx} className="p-2 rounded border bg-background space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{qc.standard}</p>
+                                            <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                          </div>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFinishQcStandard(dept, idx)}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
                                         </div>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFinishQcStandard(dept, idx)}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
+                                        <div className="flex flex-wrap gap-1 pl-1">
+                                          <Badge
+                                            variant={qc.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${qc.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateQcStandardProperty(dept, 'finish', idx, { hardQcStop: !qc.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${qc.hardQcStop ? 'text-white' : ''}`} />
+                                            {qc.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>

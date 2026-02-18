@@ -14004,6 +14004,7 @@ export class DatabaseStorage implements IStorage {
             fieldLabel: qc.standard || 'QC Check',
             tolerance: qc.tolerance,
             requirement: qc.requirement,
+            hardQcStop: qc.hardQcStop || false,
           }));
           for (const qcField of this._dedupeFieldsByKey(qcFields)) {
             await this.createTravelerTaskField({
@@ -14012,7 +14013,11 @@ export class DatabaseStorage implements IStorage {
               fieldLabel: qcField.fieldLabel,
               fieldType: 'yes_no',
               required: true,
-              validation: { tolerance: qcField.tolerance, requirement: qcField.requirement },
+              validation: {
+                tolerance: qcField.tolerance,
+                requirement: qcField.requirement,
+                ...(qcField.hardQcStop ? { hardQcStop: true } : {}),
+              },
             });
           }
         }

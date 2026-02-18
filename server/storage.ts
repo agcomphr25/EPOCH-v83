@@ -13770,34 +13770,73 @@ export class DatabaseStorage implements IStorage {
 
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
+      const routingMaterials = deptConfig.materials || [];
       if (tracePolicy.enabled) {
-        const _fieldsToCreate = this._buildTraceFields(tracePolicy.capture);
-        if (_fieldsToCreate.length > 0) {
-          const traceTask = await this._createTaskIfAllowed({
-            travelerStepId: step.id,
-            taskType: 'TRACE',
-            taskPhase: tracePolicy.phase,
-            title: 'Material Traceability',
-            instructions: 'Select the material used from inventory. Fields will auto-fill.',
-            required: true,
-            sortOrder: sortOrder++,
-            timePolicy: 'AUTO_ON_COMPLETE',
-            requiresSignature: false,
-            requiresCertification: false,
-            signatureRole: null,
-            status: 'NOT_STARTED',
-          }, enabledPhases, createdTaskKeys);
+        if (routingMaterials.length > 1) {
+          for (let matIdx = 0; matIdx < routingMaterials.length; matIdx++) {
+            const mat = routingMaterials[matIdx];
+            const matLabel = mat.partName || mat.partNumber || `Material ${matIdx + 1}`;
+            const matShort = mat.partNumber ? `#${mat.partNumber}` : `Material ${matIdx + 1}`;
+            const perMatFields = this._buildTraceFields(tracePolicy.capture);
+            if (perMatFields.length > 0) {
+              const matTraceTask = await this._createTaskIfAllowed({
+                travelerStepId: step.id,
+                taskType: 'TRACE',
+                taskPhase: tracePolicy.phase,
+                title: `Material Traceability — ${matShort}`,
+                instructions: `Select ${matLabel} from inventory. Fields will auto-fill.`,
+                required: true,
+                sortOrder: sortOrder++,
+                timePolicy: 'AUTO_ON_COMPLETE',
+                requiresSignature: false,
+                requiresCertification: false,
+                signatureRole: null,
+                status: 'NOT_STARTED',
+              }, enabledPhases, createdTaskKeys);
 
-          if (traceTask) {
-            for (const field of _fieldsToCreate) {
-              await this.createTravelerTaskField({
-                travelerTaskId: traceTask.id,
-                fieldKey: field.fieldKey,
-                fieldLabel: field.fieldLabel,
-                fieldType: field.fieldType,
-                required: field.required,
-                validation: field.validation,
-              });
+              if (matTraceTask) {
+                for (const field of perMatFields) {
+                  await this.createTravelerTaskField({
+                    travelerTaskId: matTraceTask.id,
+                    fieldKey: field.fieldKey,
+                    fieldLabel: field.fieldLabel,
+                    fieldType: field.fieldType,
+                    required: field.required,
+                    validation: field.validation,
+                  });
+                }
+              }
+            }
+          }
+        } else {
+          const _fieldsToCreate = this._buildTraceFields(tracePolicy.capture);
+          if (_fieldsToCreate.length > 0) {
+            const traceTask = await this._createTaskIfAllowed({
+              travelerStepId: step.id,
+              taskType: 'TRACE',
+              taskPhase: tracePolicy.phase,
+              title: 'Material Traceability',
+              instructions: 'Select the material used from inventory. Fields will auto-fill.',
+              required: true,
+              sortOrder: sortOrder++,
+              timePolicy: 'AUTO_ON_COMPLETE',
+              requiresSignature: false,
+              requiresCertification: false,
+              signatureRole: null,
+              status: 'NOT_STARTED',
+            }, enabledPhases, createdTaskKeys);
+
+            if (traceTask) {
+              for (const field of _fieldsToCreate) {
+                await this.createTravelerTaskField({
+                  travelerTaskId: traceTask.id,
+                  fieldKey: field.fieldKey,
+                  fieldLabel: field.fieldLabel,
+                  fieldType: field.fieldType,
+                  required: field.required,
+                  validation: field.validation,
+                });
+              }
             }
           }
         }

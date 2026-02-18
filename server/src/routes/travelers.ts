@@ -900,6 +900,148 @@ router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, 
 });
 
 // ============================================================================
+// RE-SYNC TRAVELER FROM UPDATED PART ROUTING
+// ============================================================================
+
+router.post('/:travelerId/resync-from-routing', async (req: Request, res: Response) => {
+  try {
+    const { travelerId } = req.params;
+    const { syncBy } = req.body;
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    if (traveler.status === 'COMPLETED' || traveler.status === 'CANCELED') {
+      return res.status(400).json({ error: 'Cannot re-sync a completed or canceled traveler' });
+    }
+
+    if (!traveler.partRoutingId) {
+      return res.status(400).json({ error: 'Traveler has no linked part routing' });
+    }
+
+    const routing = await storage.getPartRouting(traveler.partRoutingId);
+    if (!routing) {
+      return res.status(404).json({ error: 'Linked part routing not found' });
+    }
+
+    const steps = await storage.getTravelerSteps(travelerId);
+    const changes: string[] = [];
+
+    const departmentSequence = routing.departmentSequence as string[];
+    const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
+    const departmentConfig = ((routing as any).departmentConfig || {}) as Record<string, any>;
+
+    const metadataOnlyFields = new Set(['operator', 'timestamp']);
+
+    for (const step of steps) {
+      if (step.status === 'COMPLETED') continue;
+
+      const deptName = step.departmentName;
+      const deptConf = departmentConfig[deptName] || {};
+      const traceFields = (traceabilityConfig[deptName] || []).filter(
+        (f: string) => !metadataOnlyFields.has(f)
+      );
+
+      const tasks = await storage.getTravelerTasks(step.id);
+
+      for (const task of tasks) {
+        if (task.status === 'COMPLETED') continue;
+
+        if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+          const fields = await storage.getTravelerTaskFields(task.id);
+
+          const materials = deptConf.materials || [];
+          const materialRequiredFields = new Set<string>();
+          for (const mat of materials) {
+            const reqFields = (mat as any).requiredFields || [];
+            for (const fk of reqFields) {
+              materialRequiredFields.add(fk);
+            }
+          }
+
+          const routingRequiredFields = new Set<string>(
+            traceFields.concat(Array.from(materialRequiredFields))
+          );
+
+          const hasDeptConfig = Object.keys(deptConf).length > 0;
+          const hasNoTraceability = routingRequiredFields.size === 0 && materials.length === 0;
+
+          if (hasDeptConfig && hasNoTraceability) {
+            for (const field of fields) {
+              if (field.required && (!field.value || field.value === '')) {
+                await storage.updateTravelerTaskField(field.id, { required: false } as any);
+                changes.push(`${deptName}: "${field.fieldLabel}" made optional (removed from routing)`);
+              }
+            }
+            if (task.required) {
+              await storage.updateTravelerTask(task.id, { required: false } as any);
+              changes.push(`${deptName}: "${task.title}" task made optional (no traceability in routing)`);
+            }
+          } else {
+            for (const field of fields) {
+              const shouldBeRequired = routingRequiredFields.has(field.fieldKey);
+              if (field.required && !shouldBeRequired && (!field.value || field.value === '')) {
+                await storage.updateTravelerTaskField(field.id, { required: false } as any);
+                changes.push(`${deptName}: "${field.fieldLabel}" made optional (not in updated routing)`);
+              }
+            }
+          }
+        }
+      }
+
+      if (!departmentSequence.includes(deptName) && step.status === 'NOT_STARTED') {
+        const stepTasks = await storage.getTravelerTasks(step.id);
+        const allNotStarted = stepTasks.every(t => t.status === 'NOT_STARTED');
+        if (allNotStarted) {
+          for (const t of stepTasks) {
+            await storage.updateTravelerTask(t.id, { required: false } as any);
+          }
+          changes.push(`${deptName}: All tasks made optional (department removed from routing)`);
+        }
+      }
+    }
+
+    await storage.createTravelerEvent({
+      travelerId,
+      actor: syncBy || 'system',
+      action: 'RESYNC_FROM_ROUTING',
+      details: {
+        partRoutingId: traveler.partRoutingId,
+        routingRevision: (routing as any).routingRevision,
+        changes,
+      },
+    });
+
+    const updatedSteps = await storage.getTravelerSteps(travelerId);
+    const stepsWithTasks = await Promise.all(
+      updatedSteps.map(async (s) => ({
+        ...s,
+        tasks: await Promise.all(
+          (await storage.getTravelerTasks(s.id)).map(async (t) => ({
+            ...t,
+            fields: await storage.getTravelerTaskFields(t.id),
+          }))
+        ),
+      }))
+    );
+
+    res.json({
+      traveler,
+      steps: stepsWithTasks,
+      changes,
+      message: changes.length > 0
+        ? `Re-synced traveler with ${changes.length} change(s) from routing`
+        : 'Traveler is already in sync with routing — no changes needed',
+    });
+  } catch (error: any) {
+    console.error('Error re-syncing traveler from routing:', error);
+    res.status(500).json({ error: 'Failed to re-sync traveler', message: error.message });
+  }
+});
+
+// ============================================================================
 // EVENTS ENDPOINT (audit trail)
 // ============================================================================
 

@@ -395,7 +395,6 @@ export default function P2TravelerViewer() {
                         <TableRow>
                           <TableHead>Department</TableHead>
                           <TableHead>Technician</TableHead>
-                          <TableHead>Code</TableHead>
                           <TableHead>Started</TableHead>
                           <TableHead>Completed</TableHead>
                           <TableHead>Duration</TableHead>
@@ -407,7 +406,6 @@ export default function P2TravelerViewer() {
                           <TableRow key={task.id} data-testid={`row-task-${index}`}>
                             <TableCell className="font-medium">{task.department}</TableCell>
                             <TableCell>{task.employeeName}</TableCell>
-                            <TableCell className="font-mono">{task.employeeCode}</TableCell>
                             <TableCell>{format(new Date(task.startedAt), 'MMM d, yyyy h:mm a')}</TableCell>
                             <TableCell>
                               {task.completedAt ? format(new Date(task.completedAt), 'MMM d, yyyy h:mm a') : '-'}

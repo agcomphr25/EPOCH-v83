@@ -293,6 +293,7 @@ export default function BadgeScanner() {
                     placeholder="Scan badge..."
                     disabled={scanState !== 'READY'}
                     autoFocus
+                    autoComplete="new-password"
                     data-testid="input-employee-barcode"
                   />
                 </div>

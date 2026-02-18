@@ -39,6 +39,7 @@ type Employee = {
   id: number;
   name: string;
   employeeCode: string;
+  badgeScanCode: string;
 };
 
 type BadgeAction = {
@@ -73,13 +74,13 @@ export default function EmployeeBadgeConfiguration() {
   const selectedReprintEmployee = employees.find(e => e.id.toString() === reprintEmployeeId);
 
   useEffect(() => {
-    if (barcodeRef.current && selectedReprintEmployee?.employeeCode) {
+    if (barcodeRef.current && selectedReprintEmployee?.badgeScanCode) {
       try {
-        JsBarcode(barcodeRef.current, selectedReprintEmployee.employeeCode, {
+        JsBarcode(barcodeRef.current, selectedReprintEmployee.badgeScanCode, {
           format: 'CODE128',
           width: 2,
           height: 80,
-          displayValue: true,
+          displayValue: false,
           fontSize: 16,
           margin: 10,
         });
@@ -107,7 +108,7 @@ export default function EmployeeBadgeConfiguration() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `badge-${selectedReprintEmployee.employeeCode}.png`;
+          a.download = `badge-${selectedReprintEmployee.name.replace(/\s+/g, '_')}.png`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);

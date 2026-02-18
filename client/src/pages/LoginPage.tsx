@@ -273,7 +273,7 @@ export default function LoginPage() {
                   }}
                   disabled={isBadgeLoading}
                   data-testid="input-badge-code"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   className="flex-1"
                 />
                 <Button

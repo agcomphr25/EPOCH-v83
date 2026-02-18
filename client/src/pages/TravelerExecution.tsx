@@ -805,6 +805,7 @@ export default function TravelerExecution() {
                           value={signatureData.badgeScan}
                           onChange={(e) => handleBadgeScanInput(e.target.value)}
                           autoFocus
+                          autoComplete="new-password"
                           data-testid="input-badge-scan"
                         />
                         {badgeLookupStatus === 'loading' && (
@@ -1577,6 +1578,7 @@ export default function TravelerExecution() {
                     setSignatureData({ ...signatureData, signedBy: e.target.value })
                   }
                   placeholder="Scan badge..."
+                  autoComplete="new-password"
                   data-testid="input-sign-badge"
                 />
               </div>

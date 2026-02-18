@@ -433,10 +433,10 @@ export default function TravelerExecution() {
   });
 
   const completeTaskMutation = useMutation({
-    mutationFn: ({ taskId, fieldVals }: { taskId: string; fieldVals?: Record<string, string> }) =>
+    mutationFn: ({ taskId, fieldVals, fieldValidations }: { taskId: string; fieldVals?: Record<string, string>; fieldValidations?: Record<string, any> }) =>
       apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals, fieldValidations }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -1331,24 +1331,59 @@ export default function TravelerExecution() {
                                                     traceFieldVals[key] = val;
                                                   }
                                                 }
+                                                const manualValidation = {
+                                                  source: 'manual_entry',
+                                                  internalControlNumber: result.internalControlNumber || '',
+                                                  readonly: false,
+                                                };
+                                                const manualFieldValidations: Record<string, any> = {};
+                                                for (const key of Object.keys(traceFieldVals)) {
+                                                  manualFieldValidations[key] = manualValidation;
+                                                }
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 
-                                                  fieldVals: traceFieldVals 
+                                                  fieldVals: traceFieldVals,
+                                                  fieldValidations: manualFieldValidations,
                                                 });
                                                 return;
                                               }
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
+                                              const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || '';
                                               const traceFieldVals: Record<string, string> = {
-                                                material_icn: consumption?.internalControlNumber || lot?.internalControlNumber || '',
+                                                material_icn: icnValue,
+                                                internalControlNumber: icnValue,
                                                 material_lot: lot?.supplierLotNumber || '',
+                                                batchLotNumber: lot?.supplierLotNumber || '',
                                                 qty_used: consumption?.qtyUsed?.toString() || '',
                                                 unit_of_measure: consumption?.unitOfMeasure || lot?.unitOfMeasure || '',
                                                 material_part_number: lot?.materialPartNumber || '',
+                                                inventoryPartNumber: lot?.materialPartNumber || '',
+                                                supplier: lot?.supplier || '',
+                                                manufacturer: lot?.manufacturer || '',
+                                                rollNumber: lot?.rollNumber || '',
+                                                expirationDate: lot?.expirationDate || '',
+                                                receivedDate: lot?.receivedDate || '',
                                               };
+                                              const inventoryValidation = {
+                                                source: 'fabric_inventory',
+                                                inventoryId: lot?.id || consumption?.materialLotId || '',
+                                                internalControlNumber: icnValue,
+                                                batchNumber: lot?.supplierLotNumber || '',
+                                                expirationDate: lot?.expirationDate || '',
+                                                supplier: lot?.supplier || '',
+                                                manufacturer: lot?.manufacturer || '',
+                                                partNumber: lot?.materialPartNumber || '',
+                                                readonly: true,
+                                              };
+                                              const traceFieldValidations: Record<string, any> = {};
+                                              for (const key of Object.keys(traceFieldVals)) {
+                                                traceFieldValidations[key] = inventoryValidation;
+                                              }
                                               completeTaskMutation.mutate({ 
                                                 taskId: task.id, 
-                                                fieldVals: traceFieldVals 
+                                                fieldVals: traceFieldVals,
+                                                fieldValidations: traceFieldValidations,
                                               });
                                             }}
                                           />

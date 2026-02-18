@@ -753,7 +753,7 @@ router.get('/:travelerId/steps/:stepId/tasks', async (req: Request, res: Respons
 router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Response) => {
   try {
     const { travelerId, taskId } = req.params;
-    const { completedBy, fieldValues } = req.body;
+    const { completedBy, fieldValues, fieldValidations } = req.body;
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
@@ -854,6 +854,7 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
     const fields = await storage.getTravelerTaskFields(taskId);
     if (fields.length > 0) {
       const resolvedFieldValues = fieldValues || {};
+      const resolvedFieldValidations = fieldValidations || {};
       for (const field of fields) {
         let value = resolvedFieldValues[field.fieldKey];
         if (value === undefined && field.fieldKey === 'operator') {
@@ -868,11 +869,16 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           const valueToStore = measuredResult
             ? `${value}|${measuredResult}`
             : value;
-          await storage.updateTravelerTaskField(field.id, {
+          const fieldValidation = resolvedFieldValidations[field.fieldKey] || undefined;
+          const updateData: any = {
             value: valueToStore,
             recordedBy: completedBy || 'unknown',
             recordedAt: new Date(),
-          });
+          };
+          if (fieldValidation) {
+            updateData.validation = fieldValidation;
+          }
+          await storage.updateTravelerTaskField(field.id, updateData);
         } else if (field.required) {
           return res.status(400).json({
             error: `Required field "${field.fieldLabel}" is missing`,
@@ -925,18 +931,23 @@ router.get('/:travelerId/tasks/:taskId/fields', async (req: Request, res: Respon
 router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, res: Response) => {
   try {
     const { travelerId, fieldId } = req.params;
-    const { value, recordedBy } = req.body;
+    const { value, recordedBy, validation } = req.body;
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
     }
 
-    const updatedField = await storage.updateTravelerTaskField(fieldId, {
+    const updateData: any = {
       value,
       recordedBy: recordedBy || 'unknown',
       recordedAt: new Date(),
-    });
+    };
+    if (validation !== undefined) {
+      updateData.validation = validation;
+    }
+
+    const updatedField = await storage.updateTravelerTaskField(fieldId, updateData);
 
     res.json(updatedField);
   } catch (error: any) {

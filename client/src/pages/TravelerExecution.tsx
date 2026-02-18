@@ -1289,7 +1289,7 @@ export default function TravelerExecution() {
                                                             checked={
                                                               fieldValues[task.id]?.[field.fieldKey] !== undefined
                                                                 ? fieldValues[task.id][field.fieldKey] === 'yes'
-                                                                : field.value === 'yes'
+                                                                : (field.value === 'yes' || (field.value != null && field.value.startsWith('yes|')))
                                                             }
                                                             onCheckedChange={(checked) =>
                                                               handleFieldChange(

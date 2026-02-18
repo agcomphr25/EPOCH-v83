@@ -1088,6 +1088,129 @@ router.post('/:travelerId/resync-from-routing', async (req: Request, res: Respon
 });
 
 // ============================================================================
+// ADMIN ENDPOINTS - Force operations for stuck travelers
+// ============================================================================
+
+router.post('/:travelerId/admin/force-complete-task', async (req: Request, res: Response) => {
+  try {
+    const { travelerId } = req.params;
+    const { taskId, reason, completedBy } = req.body;
+
+    if (!taskId || !reason || !completedBy) {
+      return res.status(400).json({ error: 'taskId, reason, and completedBy are required' });
+    }
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    const task = await storage.getTravelerTask(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const step = await storage.getTravelerStep(task.travelerStepId);
+    if (!step || step.travelerId !== travelerId) {
+      return res.status(400).json({ error: 'Task does not belong to this traveler' });
+    }
+
+    const updatedTask = await storage.updateTravelerTask(taskId, {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      completedBy,
+    });
+
+    await storage.createTravelerEvent({
+      travelerId,
+      actor: completedBy,
+      action: 'ADMIN_TASK_FORCE_COMPLETED',
+      details: { taskId, taskTitle: task.title, reason },
+    });
+
+    res.json({ success: true, task: updatedTask });
+  } catch (error: any) {
+    console.error('Error force-completing task:', error);
+    res.status(500).json({ error: 'Failed to force-complete task', message: error.message });
+  }
+});
+
+router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Response) => {
+  try {
+    const { travelerId } = req.params;
+    const { stepId, reason, signedBy, signedByName } = req.body;
+
+    if (!stepId || !reason || !signedBy || !signedByName) {
+      return res.status(400).json({ error: 'stepId, reason, signedBy, and signedByName are required' });
+    }
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    const step = await storage.getTravelerStep(stepId);
+    if (!step || step.travelerId !== travelerId) {
+      return res.status(404).json({ error: 'Step not found' });
+    }
+
+    if (step.status !== 'COMPLETED' && step.status !== 'IN_PROGRESS') {
+      await storage.updateTravelerStep(stepId, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: signedBy,
+      });
+    } else if (step.status === 'IN_PROGRESS') {
+      await storage.updateTravelerStep(stepId, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: signedBy,
+      });
+    }
+
+    const incompleteTasks = (await storage.getTravelerTasks(stepId)).filter(
+      (t) => t.status !== 'COMPLETED'
+    );
+    for (const task of incompleteTasks) {
+      await storage.updateTravelerTask(task.id, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: signedBy,
+      });
+    }
+
+    const signature = await storage.createTravelerSignature({
+      travelerStepId: stepId,
+      signedBy,
+      signedByName,
+      badgeScan: 'ADMIN_FORCE_SIGN',
+      signedAt: new Date(),
+      meaning: 'COMPLETED',
+      notes: `Force-signed by admin. Reason: ${reason}`,
+      signatureData: null,
+    });
+
+    await storage.createTravelerEvent({
+      travelerId,
+      actor: signedBy,
+      action: 'ADMIN_STEP_FORCE_SIGNED',
+      details: {
+        stepId,
+        stepNumber: step.stepNumber,
+        departmentName: step.departmentName,
+        reason,
+        tasksForceCompleted: incompleteTasks.length,
+      },
+    });
+
+    res.json({ success: true, signature, tasksCompleted: incompleteTasks.length });
+  } catch (error: any) {
+    console.error('Error force-signing step:', error);
+    res.status(500).json({ error: 'Failed to force-sign step', message: error.message });
+  }
+});
+
+// ============================================================================
 // EVENTS ENDPOINT (audit trail)
 // ============================================================================
 

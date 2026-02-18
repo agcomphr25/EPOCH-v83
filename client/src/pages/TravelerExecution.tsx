@@ -260,6 +260,8 @@ export default function TravelerExecution() {
   const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
+  const [showAdminForceSign, setShowAdminForceSign] = useState(false);
+  const [adminForceReason, setAdminForceReason] = useState('');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -535,6 +537,47 @@ export default function TravelerExecution() {
     },
   });
 
+  const adminForceSignMutation = useMutation({
+    mutationFn: async ({ stepId, reason }: { stepId: string; reason: string }) => {
+      return apiRequest(`/api/travelers/${travelerId}/admin/force-sign-step`, {
+        method: 'POST',
+        body: {
+          stepId,
+          reason,
+          signedBy: activeTechName || activeBadge || 'admin',
+          signedByName: activeTechName || activeBadge || 'Admin',
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Step Force-Signed', description: 'Step has been administratively signed' });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const adminForceCompleteTaskMutation = useMutation({
+    mutationFn: async ({ taskId, reason }: { taskId: string; reason: string }) => {
+      return apiRequest(`/api/travelers/${travelerId}/admin/force-complete-task`, {
+        method: 'POST',
+        body: {
+          taskId,
+          reason,
+          completedBy: activeTechName || activeBadge || 'admin',
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Task Force-Completed', description: 'Task has been administratively completed' });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const handleFieldChange = (taskId: string, fieldKey: string, value: string) => {
     setFieldValues((prev) => ({
       ...prev,
@@ -735,6 +778,92 @@ export default function TravelerExecution() {
                 <Lock className="h-4 w-4 mr-2" />
                 Block Traveler
               </Button>
+
+              {(() => {
+                const unsignedSteps = steps.filter((s: any) => (!s.signatures || s.signatures.length === 0) && s.status !== 'NOT_STARTED');
+                const stuckTasks = steps.flatMap((s: any) =>
+                  (s.tasks || []).filter((t: any) => t.required && t.status !== 'COMPLETED').map((t: any) => ({ ...t, stepDept: s.departmentName, stepId: s.id }))
+                );
+                if (unsignedSteps.length === 0 && stuckTasks.length === 0) return null;
+                return (
+                  <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700">
+                    <CardContent className="pt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-amber-600" />
+                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">Admin: Resolve Stuck Items</p>
+                      </div>
+                      {!showAdminForceSign ? (
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => setShowAdminForceSign(true)}>
+                          Show Admin Options
+                        </Button>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs">Reason for admin action</Label>
+                            <Input
+                              value={adminForceReason}
+                              onChange={(e) => setAdminForceReason(e.target.value)}
+                              placeholder="e.g., Work completed before digital system"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          {unsignedSteps.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Unsigned Steps ({unsignedSteps.length}):</p>
+                              {unsignedSteps.map((s: any) => (
+                                <div key={s.id} className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs">
+                                  <span>Step {s.stepNumber}: {s.departmentName}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                    disabled={!adminForceReason || adminForceSignMutation.isPending}
+                                    onClick={() => adminForceSignMutation.mutate({ stepId: s.id, reason: adminForceReason })}
+                                  >
+                                    {adminForceSignMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Force Sign'}
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="w-full h-7 text-xs mt-1"
+                                disabled={!adminForceReason || adminForceSignMutation.isPending}
+                                onClick={async () => {
+                                  for (const s of unsignedSteps) {
+                                    await adminForceSignMutation.mutateAsync({ stepId: (s as any).id, reason: adminForceReason });
+                                  }
+                                }}
+                              >
+                                Force Sign All Unsigned Steps
+                              </Button>
+                            </div>
+                          )}
+                          {stuckTasks.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Incomplete Tasks ({stuckTasks.length}):</p>
+                              {stuckTasks.map((t: any) => (
+                                <div key={t.id} className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs">
+                                  <span className="truncate mr-2">{t.stepDept}: {t.title}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2 shrink-0"
+                                    disabled={!adminForceReason || adminForceCompleteTaskMutation.isPending}
+                                    onClick={() => adminForceCompleteTaskMutation.mutate({ taskId: t.id, reason: adminForceReason })}
+                                  >
+                                    {adminForceCompleteTaskMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Complete'}
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
             </div>
           )}
 

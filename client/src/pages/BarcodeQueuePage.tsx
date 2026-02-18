@@ -293,16 +293,21 @@ export default function BarcodeQueuePage() {
         stockModel?.name ||
         modelId;
 
-      const actionSuffix =
-        order.features?.action_length
-          ? ` - ${order.features.action_length === 'short'
-              ? 'Short Action'
-              : order.features.action_length === 'long'
-              ? 'Long Action'
-              : order.features.action_length}`
-          : '';
+      let cleanedName = baseName
+        .replace(/^CF\s+/i, '')
+        .replace(/^FG\s+/i, '');
+      cleanedName = cleanedName.replace(/-Tikka$/i, '');
 
-      const categoryKey = `${baseName}${actionSuffix}`;
+      const actionLabel =
+        order.features?.action_length === 'short'
+          ? 'Short Action'
+          : order.features?.action_length === 'long'
+          ? 'Long Action'
+          : order.features?.action_length === 'medium'
+          ? 'Medium Action'
+          : 'Unknown';
+
+      const categoryKey = `${cleanedName} - ${actionLabel}`;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -821,9 +826,8 @@ export default function BarcodeQueuePage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <Accordion type="multiple" className="space-y-3">
           {Object.entries(categorizedOrders).sort(([a], [b]) => a.localeCompare(b)).map(([categoryKey, orders]) => {
-            // Remove material prefixes from display name
             const modelName = categoryKey
               .replace(/^CF\s+/i, '')
               .replace(/^FG\s+/i, '')
@@ -832,20 +836,17 @@ export default function BarcodeQueuePage() {
               .replace(/Tikka\s+/i, '');
 
             return (
-              <Card key={categoryKey} className="overflow-hidden">
-                <CardHeader className="pb-4 bg-slate-50 dark:bg-slate-900/20 border-b-slate-200">
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-slate-600" />
-                      <span className="text-lg font-bold">{modelName}</span>
-                    </div>
-                    <Badge variant="secondary" className="ml-auto">
-                      {orders.length} Orders
+              <AccordionItem key={categoryKey} value={categoryKey} className="border rounded-lg overflow-hidden bg-white dark:bg-slate-950">
+                <AccordionTrigger className="px-4 py-3 bg-slate-50 dark:bg-slate-900/20 hover:no-underline hover:bg-slate-100 dark:hover:bg-slate-800/30">
+                  <div className="flex items-center gap-3 w-full">
+                    <Target className="h-5 w-5 text-slate-600 shrink-0" />
+                    <span className="text-lg font-bold">{modelName}</span>
+                    <Badge variant="secondary" className="ml-auto mr-2">
+                      {orders.length} {orders.length === 1 ? 'Order' : 'Orders'}
                     </Badge>
-                  </CardTitle>
-                </CardHeader>
-
-                <CardContent className="p-6">
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-6">
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {orders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
@@ -1089,11 +1090,11 @@ export default function BarcodeQueuePage() {
                       );
                     })}
                   </div>
-                </CardContent>
-              </Card>
+                </AccordionContent>
+              </AccordionItem>
             );
           })}
-        </div>
+        </Accordion>
       )}
 
       {/* Label Selection Dialog */}

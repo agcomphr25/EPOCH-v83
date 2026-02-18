@@ -618,7 +618,8 @@ export default function TravelerExecution() {
       return;
     }
 
-    completeTaskMutation.mutate({ taskId: task.id, fieldVals: taskFieldVals });
+    const taskPickerValidations = pickerValidations[task.id] || undefined;
+    completeTaskMutation.mutate({ taskId: task.id, fieldVals: taskFieldVals, fieldValidations: taskPickerValidations });
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);

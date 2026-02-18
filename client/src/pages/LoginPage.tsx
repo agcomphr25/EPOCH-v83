@@ -278,7 +278,7 @@ export default function LoginPage() {
       <Button
         type="button"
         className="w-full h-14 text-lg"
-        onClick={() => setLocation('/production-station')}
+        onClick={() => setLocation('/app/production/stations')}
         data-testid="button-timer-station"
       >
         <Timer className="w-5 h-5 mr-2" />
@@ -288,7 +288,7 @@ export default function LoginPage() {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() => setLocation('/production-timer-history')}
+        onClick={() => setLocation('/app/production/timer-history')}
       >
         <Clock className="w-4 h-4 mr-2" />
         Timer History

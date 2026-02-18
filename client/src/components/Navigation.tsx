@@ -69,6 +69,7 @@ import {
   QrCode,
   AlertTriangle,
   CalendarDays,
+  Mic,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -1004,6 +1005,12 @@ export default function Navigation() {
       label: 'Timer Station',
       icon: Clock,
       description: 'Step-based timing programs for production processes',
+    },
+    {
+      path: '/voice-notes',
+      label: 'Voice Notes',
+      icon: Mic,
+      description: 'Voice-activated notes for production issues and tracking',
     },
   ];
 

@@ -29,7 +29,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
 - **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, path-based signature email architecture to prevent URL corruption, and card-before-save flow (PENDING_PAYMENT status) allowing credit card processing before formal order finalization.
 - **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment.
-- **Quality Control**: Nonconformance Record System and Vendor Evaluation System with automated scoring.
+- **Quality Control**: Nonconformance Record System, Vendor Evaluation System with automated scoring, and Hard QC Stop enforcement with authorized deviation approval workflow on travelers.
 - **P2 Serialized Item Tracking**: Complete serialized item tracking for P2 purchase orders with customizable workflows, barcode scanning, traceability gating, Traveler Viewer, and Electronic Signature System.
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue.
 - **PDF Management**: Centralized PDF configuration, flexible Template Library System, and unified `orderPdfService` for intent-based PDF generation using frozen order snapshots. Supports "Resend Signature Email" and "Send Updated Order for Signature" with supersession tracking.

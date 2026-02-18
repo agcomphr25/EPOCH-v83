@@ -753,7 +753,7 @@ router.get('/:travelerId/steps/:stepId/tasks', async (req: Request, res: Respons
 router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Response) => {
   try {
     const { travelerId, taskId } = req.params;
-    const { completedBy, fieldValues, fieldValidations } = req.body;
+    const { completedBy, fieldValues, fieldValidations, toleranceApproval } = req.body;
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
@@ -915,10 +915,61 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       }
     }
 
+    // Hard QC Stop validation: block completion if any hardQcStop fields are out of tolerance
+    if (task.taskType === 'QC') {
+      const qcFields = await storage.getTravelerTaskFields(taskId);
+      const resolvedValues = fieldValues || {};
+      const failedHardStops: Array<{ fieldKey: string; fieldLabel: string; measuredResult?: string }> = [];
+
+      for (const field of qcFields) {
+        const validation = field.validation as any;
+        if (validation?.hardQcStop) {
+          const fieldValue = resolvedValues[field.fieldKey] ?? field.value;
+          const rawValue = typeof fieldValue === 'string' && fieldValue.includes('|')
+            ? fieldValue.split('|')[0]
+            : fieldValue;
+          const normalizedVal = String(rawValue ?? '').toLowerCase().trim();
+          if (normalizedVal === 'no' || normalizedVal === 'fail' || normalizedVal === 'false') {
+            const resultKey = `${field.fieldKey}_result`;
+            const measuredResult = resolvedValues[resultKey] ||
+              (typeof fieldValue === 'string' && fieldValue.includes('|') ? fieldValue.split('|')[1] : undefined);
+            failedHardStops.push({
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              measuredResult,
+            });
+          }
+        }
+      }
+
+      if (failedHardStops.length > 0) {
+        if (!toleranceApproval || !toleranceApproval.approvedBy || !toleranceApproval.notes) {
+          return res.status(400).json({
+            error: 'HARD_QC_STOP: Out-of-tolerance results require authorized approval',
+            code: 'HARD_QC_STOP',
+            taskId,
+            failedChecks: failedHardStops,
+            requiresApproval: true,
+          });
+        }
+      }
+    }
+
+    const existingMetadata = (task as any).metadata || {};
+    const completionMetadata: any = { ...existingMetadata };
+    if (toleranceApproval && task.taskType === 'QC') {
+      completionMetadata.toleranceApproval = {
+        approvedBy: toleranceApproval.approvedBy,
+        notes: toleranceApproval.notes,
+        approvedAt: new Date().toISOString(),
+      };
+    }
+
     const updatedTask = await storage.updateTravelerTask(taskId, {
       status: 'COMPLETED',
       completedAt: new Date(),
       completedBy: completedBy || 'unknown',
+      ...(Object.keys(completionMetadata).length > 0 ? { metadata: completionMetadata } : {}),
     });
 
     await storage.createTravelerEvent({
@@ -932,6 +983,7 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
         stepId: step.id,
         stepNumber: step.stepNumber,
         departmentName: step.departmentName,
+        ...(toleranceApproval ? { toleranceApproval: completionMetadata.toleranceApproval } : {}),
       },
     });
 

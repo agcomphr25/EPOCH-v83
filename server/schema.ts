@@ -13,6 +13,7 @@ import {
   uuid,
   numeric,
   index,
+  uniqueIndex,
   serial,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -4577,6 +4578,7 @@ export const travelerTaskFields = pgTable('traveler_task_fields', {
   recordedAt: timestamp('recorded_at', { withTimezone: true }),
 }, (table) => ({
   taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
+  uniqTaskFieldKey: uniqueIndex('uniq_traveler_task_field_key').on(table.travelerTaskId, table.fieldKey),
 }));
 
 // Traveler Signatures - Digital signature required for step completion

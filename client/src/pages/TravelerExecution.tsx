@@ -800,6 +800,7 @@ export default function TravelerExecution() {
                       <div className="space-y-1">
                         <Label className="text-sm">Scan Badge</Label>
                         <Input
+                          type="password"
                           placeholder="Scan badge..."
                           value={signatureData.badgeScan}
                           onChange={(e) => handleBadgeScanInput(e.target.value)}
@@ -1570,11 +1571,12 @@ export default function TravelerExecution() {
               <div className="space-y-2">
                 <Label>Employee ID / Badge *</Label>
                 <Input
+                  type="password"
                   value={signatureData.signedBy}
                   onChange={(e) =>
                     setSignatureData({ ...signatureData, signedBy: e.target.value })
                   }
-                  placeholder="Scan badge or enter ID"
+                  placeholder="Scan badge..."
                   data-testid="input-sign-badge"
                 />
               </div>

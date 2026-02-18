@@ -262,8 +262,8 @@ export default function LoginPage() {
               <div className="flex gap-2">
                 <Input
                   id="badgeCode"
-                  type="text"
-                  placeholder="Scan or type badge code..."
+                  type="password"
+                  placeholder="Scan badge..."
                   value={badgeCode}
                   onChange={(e) => setBadgeCode(e.target.value)}
                   onKeyDown={(e) => {
@@ -286,7 +286,7 @@ export default function LoginPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Quick login for employees with badge codes (e.g., EMP001)
+                Scan your employee badge to log in
               </p>
             </div>
 

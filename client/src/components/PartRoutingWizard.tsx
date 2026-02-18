@@ -63,6 +63,7 @@ import {
   Eye,
   CheckSquare,
   Settings,
+  Flag,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -180,6 +181,7 @@ interface PhaseCheck {
   requiresSignature: boolean;
   signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
   requiresCertification: boolean;
+  hardQcStop?: boolean;
   instructionPack?: InstructionPack;
 }
 
@@ -2008,6 +2010,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           >
                                             Cert {check.requiresCertification ? 'Yes' : 'No'}
                                           </Badge>
+                                          <Badge
+                                            variant={check.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${check.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateCheckProperty(dept, 'start', idx, { hardQcStop: !check.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
+                                            {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
                                         </div>
                                       </div>
                                     ))}
@@ -2713,6 +2723,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                             onClick={() => updateCheckProperty(dept, 'finish', idx, { requiresCertification: !check.requiresCertification })}
                                           >
                                             Cert {check.requiresCertification ? 'Yes' : 'No'}
+                                          </Badge>
+                                          <Badge
+                                            variant={check.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${check.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => updateCheckProperty(dept, 'finish', idx, { hardQcStop: !check.hardQcStop })}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
+                                            {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
                                           </Badge>
                                         </div>
                                       </div>

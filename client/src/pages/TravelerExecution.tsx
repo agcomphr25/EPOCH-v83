@@ -284,6 +284,8 @@ export default function TravelerExecution() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   const handleBadgeScanInput = (value: string) => {
     setSignatureData((prev) => ({ ...prev, badgeScan: value }));
@@ -799,7 +801,7 @@ export default function TravelerExecution() {
                 Block Traveler
               </Button>
 
-              {(() => {
+              {isAdmin && (() => {
                 const unsignedSteps = steps.filter((s: any) => (!s.signatures || s.signatures.length === 0) && s.status !== 'NOT_STARTED');
                 const stuckTasks = steps.flatMap((s: any) =>
                   (s.tasks || []).filter((t: any) => t.required && t.status !== 'COMPLETED').map((t: any) => ({ ...t, stepDept: s.departmentName, stepId: s.id }))

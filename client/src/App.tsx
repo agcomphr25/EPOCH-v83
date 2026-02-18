@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
 import MessageNotificationPopup from './components/MessageNotificationPopup';
+import { useWebSocketNotifications } from './hooks/useWebSocketNotifications';
 import NotFound from './pages/not-found';
 import AccessDenied from './pages/AccessDenied';
 import RouteGuard from './components/auth/RouteGuard';
@@ -306,6 +307,11 @@ function RootRedirect() {
 
   // If we get here, user is authenticated but has no personalized dashboard - render the generic one
   return <Dashboard />;
+}
+
+function WebSocketNotifications() {
+  useWebSocketNotifications();
+  return null;
 }
 
 function App() {
@@ -965,6 +971,7 @@ function App() {
             </div>
             <Toaster />
             <HotToaster />
+            <WebSocketNotifications />
             <MessageNotificationPopup />
           </Router>
         </DeploymentAuthWrapper>

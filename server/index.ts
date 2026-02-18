@@ -8,6 +8,7 @@ import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
 import { authenticateToken } from './middleware/auth';
+import { notificationManager } from './src/services/notificationManager';
 
 // Build version marker - change this to verify deployment updates
 const BUILD_VERSION = '2026-01-27-v2';
@@ -190,6 +191,8 @@ app.use((req, res, next) => {
 (async () => {
   try {
     const server = await registerRoutes(app);
+
+    notificationManager.initialize(server);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

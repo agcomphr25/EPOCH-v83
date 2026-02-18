@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { pool, db } from '../../db';
 import { eq, sql } from 'drizzle-orm';
 import { auditService } from '../services/auditService';
+import { notificationManager } from '../services/notificationManager';
 
 // In-memory session-based deduplication for TICKET_VIEWED events
 // Key: `${userId}-${ticketId}`, Value: timestamp of last view in this session
@@ -456,6 +457,24 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
         } catch (msgErr) {
           console.error('Failed to send assignment notification:', msgErr);
         }
+
+        notificationManager.sendToUser(assignedUserId, {
+          type: 'ticket_assigned',
+          title: 'Ticket Assigned to You',
+          message: `You've been assigned to ticket "${existingTicket.title}" (${existingTicket.priority} priority)`,
+          data: { ticketId: req.params.id, ticketTitle: existingTicket.title, priority: existingTicket.priority },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (previousAssignee && previousAssignee !== assignedUserId) {
+        notificationManager.sendToUser(previousAssignee, {
+          type: 'ticket_unassigned',
+          title: 'Ticket Reassigned',
+          message: `You've been unassigned from ticket "${existingTicket.title}"`,
+          data: { ticketId: req.params.id, ticketTitle: existingTicket.title },
+          timestamp: new Date().toISOString(),
+        });
       }
       
       // Build activity message with user names and notification status
@@ -483,6 +502,33 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
         newValue: assignedUserId ? String(assignedUserId) : null,
         createdBy: user.id,
       });
+    }
+
+    if (assignedUserIds !== undefined) {
+      const previousIds = new Set(existingTicket.assignedUserIds || []);
+      const newIds = new Set(assignedUserIds);
+      const addedIds = assignedUserIds.filter((id: number) => !previousIds.has(id) && id !== user.id);
+      const removedIds = Array.from(previousIds).filter((id) => !newIds.has(id));
+
+      for (const addedId of addedIds) {
+        notificationManager.sendToUser(addedId, {
+          type: 'ticket_assigned',
+          title: 'Ticket Assigned to You',
+          message: `You've been assigned to ticket "${existingTicket.title}" (${existingTicket.priority} priority)`,
+          data: { ticketId: req.params.id, ticketTitle: existingTicket.title, priority: existingTicket.priority },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      for (const removedId of removedIds) {
+        notificationManager.sendToUser(removedId, {
+          type: 'ticket_unassigned',
+          title: 'Ticket Reassigned',
+          message: `You've been unassigned from ticket "${existingTicket.title}"`,
+          data: { ticketId: req.params.id, ticketTitle: existingTicket.title },
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     const ticket = await storage.updateTicket(req.params.id, validatedData);

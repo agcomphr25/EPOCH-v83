@@ -39,7 +39,7 @@ interface ExpectedDepartmentResult {
   expectedDepartment: string;
   expectedStart: string;
   expectedFinish: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'off_track';
 }
 
 interface DashboardForecastItem {
@@ -48,7 +48,7 @@ interface DashboardForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'off_track';
 }
 
 function addBusinessDays(date: Date, days: number): Date {
@@ -170,11 +170,10 @@ function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
 function determineTimeBasedStatus(
   expectedStart: string,
   expectedFinish: string,
-): 'early' | 'on_track' | 'late' {
+): 'on_track' | 'off_track' {
   const today = new Date().toISOString().split('T')[0];
-  if (today < expectedStart) return 'early';
-  if (today > expectedFinish) return 'late';
-  return 'on_track';
+  if (today >= expectedStart && today <= expectedFinish) return 'on_track';
+  return 'off_track';
 }
 
 async function getDepartmentDefaults(): Promise<Record<string, number>> {
@@ -337,7 +336,7 @@ export interface WeeklyForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'early' | 'on_track' | 'late';
+  status: 'on_track' | 'off_track';
   departmentTimeline: DepartmentTimeline[];
 }
 

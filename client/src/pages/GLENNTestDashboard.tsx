@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Switch } from '@/components/ui/switch';
+import IndustrialSwitch from '@/components/proteus/controls/IndustrialSwitch';
 import { useScrollDepth } from '@/hooks/useScrollDepth';
 import '../styles/premiumDashboard.css';
 import {
@@ -88,14 +89,32 @@ export default function GLENNTestDashboard() {
               <div className="status-indicator online"></div>
               <span>System Online</span>
             </div>
-            <div className="theme-toggle-container">
-              <Sun className="w-4 h-4 text-gray-500" />
-              <Switch
-                checked={isPremiumMode}
-                onCheckedChange={setIsPremiumMode}
-                data-testid="switch-premium-mode"
-              />
-              <Moon className="w-4 h-4 text-blue-400" />
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Current Toggle</span>
+                <div className="theme-toggle-container">
+                  <Sun className="w-4 h-4 text-gray-500" />
+                  <Switch
+                    checked={isPremiumMode}
+                    onCheckedChange={setIsPremiumMode}
+                    data-testid="switch-premium-mode"
+                  />
+                  <Moon className="w-4 h-4 text-blue-400" />
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-medium">Proteus Industrial Toggle</span>
+                <div className="theme-toggle-container">
+                  <Sun className="w-4 h-4 text-gray-500" />
+                  <IndustrialSwitch
+                    checked={isPremiumMode}
+                    onCheckedChange={setIsPremiumMode}
+                    size={1.1}
+                    data-testid="switch-premium-mode-industrial"
+                  />
+                  <Moon className="w-4 h-4 text-blue-400" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -561,14 +580,32 @@ function LightModeDashboard({
           <div className="text-sm text-gray-500">
             EPOCH v8 Manufacturing ERP
           </div>
-          <div className="flex items-center gap-2">
-            <Sun className="w-4 h-4 text-yellow-500" />
-            <Switch
-              checked={false}
-              onCheckedChange={onToggleMode}
-              data-testid="switch-premium-mode"
-            />
-            <Moon className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Current Toggle</span>
+              <div className="flex items-center gap-2">
+                <Sun className="w-4 h-4 text-yellow-500" />
+                <Switch
+                  checked={false}
+                  onCheckedChange={onToggleMode}
+                  data-testid="switch-premium-mode"
+                />
+                <Moon className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-amber-500 font-medium">Proteus Industrial Toggle</span>
+              <div className="flex items-center gap-2">
+                <Sun className="w-4 h-4 text-yellow-500" />
+                <IndustrialSwitch
+                  checked={false}
+                  onCheckedChange={onToggleMode}
+                  size={1.1}
+                  data-testid="switch-premium-mode-industrial"
+                />
+                <Moon className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -293,16 +293,21 @@ export default function BarcodeQueuePage() {
         stockModel?.name ||
         modelId;
 
-      const actionSuffix =
-        order.features?.action_length
-          ? ` - ${order.features.action_length === 'short'
-              ? 'Short Action'
-              : order.features.action_length === 'long'
-              ? 'Long Action'
-              : order.features.action_length}`
-          : '';
+      let cleanedName = baseName
+        .replace(/^CF\s+/i, '')
+        .replace(/^FG\s+/i, '');
+      cleanedName = cleanedName.replace(/-Tikka$/i, '');
 
-      const categoryKey = `${baseName}${actionSuffix}`;
+      const actionLabel =
+        order.features?.action_length === 'short'
+          ? 'Short Action'
+          : order.features?.action_length === 'long'
+          ? 'Long Action'
+          : order.features?.action_length === 'medium'
+          ? 'Medium Action'
+          : 'Unknown';
+
+      const categoryKey = `${cleanedName} - ${actionLabel}`;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];

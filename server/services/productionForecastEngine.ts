@@ -39,7 +39,7 @@ interface ExpectedDepartmentResult {
   expectedDepartment: string;
   expectedStart: string;
   expectedFinish: string;
-  status: 'on_track' | 'late';
+  status: 'early' | 'on_track' | 'late';
 }
 
 interface DashboardForecastItem {
@@ -48,7 +48,7 @@ interface DashboardForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'on_track' | 'late';
+  status: 'early' | 'on_track' | 'late';
 }
 
 function addBusinessDays(date: Date, days: number): Date {
@@ -167,21 +167,14 @@ function findExpectedDepartment(timeline: DepartmentTimeline[]): string {
   return timeline[timeline.length - 1].department;
 }
 
-function determineForwardStatus(actualDepartment: string, expectedDepartment: string): 'early' | 'on_track' | 'late' {
-  const actualIndex = DEPARTMENT_SEQUENCE.indexOf(actualDepartment);
-  const expectedIndex = DEPARTMENT_SEQUENCE.indexOf(expectedDepartment);
-
-  if (actualIndex >= 0 && expectedIndex >= 0) {
-    if (actualIndex > expectedIndex) return 'early';
-    if (actualIndex < expectedIndex) return 'late';
-    return 'on_track';
-  }
-  return actualDepartment !== expectedDepartment ? 'late' : 'on_track';
-}
-
-function determineBackwardStatus(actualDepartment: string, expectedDepartment: string): 'on_track' | 'late' {
-  if (actualDepartment === expectedDepartment) return 'on_track';
-  return 'late';
+function determineTimeBasedStatus(
+  expectedStart: string,
+  expectedFinish: string,
+): 'early' | 'on_track' | 'late' {
+  const today = new Date().toISOString().split('T')[0];
+  if (today < expectedStart) return 'early';
+  if (today > expectedFinish) return 'late';
+  return 'on_track';
 }
 
 async function getDepartmentDefaults(): Promise<Record<string, number>> {
@@ -205,18 +198,24 @@ async function getModelMultiplier(modelId: string | null): Promise<number> {
   return 1.0;
 }
 
+const POST_PRODUCTION_DEPARTMENTS = [
+  'Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed',
+  'Sales', 'Awaiting Customer Signature',
+];
+
 async function getDepartmentBacklogs(): Promise<Record<string, number>> {
   const result = await pgPool.query(
     `SELECT current_department, COUNT(*) as cnt
      FROM all_orders
-     WHERE is_cancelled = false
-       AND shipping_completed_at IS NULL
+     WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
        AND current_department IS NOT NULL
      GROUP BY current_department`
   );
   const backlogs: Record<string, number> = {};
   for (const row of result.rows) {
-    backlogs[row.current_department] = parseInt(row.cnt, 10);
+    if (!POST_PRODUCTION_DEPARTMENTS.includes(row.current_department)) {
+      backlogs[row.current_department] = parseInt(row.cnt, 10);
+    }
   }
   return backlogs;
 }
@@ -318,16 +317,16 @@ export async function getExpectedDepartment(orderId: string): Promise<ExpectedDe
   const entry = forecast.departmentTimeline.find(e => e.department === expectedDepartment);
   const today = new Date().toISOString().split('T')[0];
 
-  const status = actualDepartment
-    ? determineBackwardStatus(actualDepartment, expectedDepartment)
-    : 'on_track';
+  const expStart = entry?.expectedStart || today;
+  const expFinish = entry?.expectedFinish || today;
+  const status = determineTimeBasedStatus(expStart, expFinish);
 
   return {
     orderId,
     actualDepartment,
     expectedDepartment,
-    expectedStart: entry?.expectedStart || today,
-    expectedFinish: entry?.expectedFinish || today,
+    expectedStart: expStart,
+    expectedFinish: expFinish,
     status,
   };
 }
@@ -338,7 +337,7 @@ export interface WeeklyForecastItem {
   actualDepartment: string | null;
   expectedDepartment: string;
   estimatedShipDate: string;
-  status: 'on_track' | 'late';
+  status: 'early' | 'on_track' | 'late';
   departmentTimeline: DepartmentTimeline[];
 }
 
@@ -346,10 +345,9 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
   const activeOrders = await pgPool.query(
     `SELECT order_id, model_id, current_department, order_date, due_date
      FROM all_orders
-     WHERE is_cancelled = false
-       AND shipping_completed_at IS NULL
+     WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
        AND current_department IS NOT NULL
-       AND status NOT IN ('CANCELLED', 'SCRAPPED')
+       AND current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
      ORDER BY created_at ASC`
   );
 
@@ -375,7 +373,12 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
     if (overlaps) {
       const currentDept = order.current_department || 'P1 Production Queue';
       const expectedDepartment = findExpectedDepartment(timeline);
-      const status = determineBackwardStatus(currentDept, expectedDepartment);
+      const entry = timeline.find(e => e.department === expectedDepartment);
+      const today = new Date().toISOString().split('T')[0];
+      const status = determineTimeBasedStatus(
+        entry?.expectedStart || today,
+        entry?.expectedFinish || today,
+      );
 
       results.push({
         orderId: order.order_id,
@@ -396,10 +399,9 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
   const activeOrders = await pgPool.query(
     `SELECT order_id, model_id, current_department, order_date, due_date
      FROM all_orders
-     WHERE is_cancelled = false
-       AND shipping_completed_at IS NULL
+     WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
        AND current_department IS NOT NULL
-       AND current_department NOT IN ('Fulfilled', 'Shipped', 'Completed')
+       AND current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
      ORDER BY created_at ASC
      LIMIT 500`
   );
@@ -412,7 +414,12 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
 
     const currentDept = order.current_department || 'P1 Production Queue';
     const expectedDepartment = findExpectedDepartment(forecast.departmentTimeline);
-    const status = determineBackwardStatus(currentDept, expectedDepartment);
+    const entry = forecast.departmentTimeline.find(e => e.department === expectedDepartment);
+    const today = new Date().toISOString().split('T')[0];
+    const status = determineTimeBasedStatus(
+      entry?.expectedStart || today,
+      entry?.expectedFinish || today,
+    );
 
     results.push({
       orderId: order.order_id,

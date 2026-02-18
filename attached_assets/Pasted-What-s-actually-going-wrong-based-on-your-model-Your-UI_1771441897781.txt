@@ -1,0 +1,88 @@
+What’s actually going wrong (based on your model)
+
+Your UI does not duplicate anything by itself: it renders whatever is in currentStep.tasks, filtered by taskPhase. Your key={task.id} is correct.
+
+Because taskPhase is just a column on each traveler_tasks row, any “field repeating in more than one phase” must be happening in backend generation (or via accidental duplicate inserts).
+
+So the fix is: make traveler generation phase-aware and make field creation idempotent/deduped.
+
+Below are two copy/paste patches you can drop in.
+
+✅ Patch 1 — Phase gating + dedupe helpers (copy/paste)
+1) Paste this near the top of server/storage.ts (above generateTravelerFromRouting, or inside it near the top)
+// ==== TRAVELER GENERATION HELPERS (PHASE GATING + DEDUPE) ====
+
+type PhaseKey = 'START' | 'WORK' | 'FINISH';
+
+function normalizePhase(p: string): PhaseKey {
+  const up = (p || '').toUpperCase();
+  if (up === 'START' || up === 'WORK' || up === 'FINISH') return up;
+  // Default to WORK if something comes in weird
+  return 'WORK';
+}
+
+/**
+ * Supports multiple shapes:
+ * - dept.phasesEnabled: { start: true, work: false, finish: true }
+ * - dept.enabledPhases: ['START','WORK']
+ * - dept.startEnabled / dept.workEnabled / dept.finishEnabled
+ * If none exist, assume all enabled.
+ */
+function getEnabledPhases(dept: any): Set<PhaseKey> {
+  // 1) enabledPhases array
+  if (Array.isArray(dept?.enabledPhases) && dept.enabledPhases.length) {
+    return new Set(dept.enabledPhases.map((p: any) => normalizePhase(p)));
+  }
+
+  // 2) phasesEnabled object with start/work/finish booleans
+  if (dept?.phasesEnabled && typeof dept.phasesEnabled === 'object') {
+    const out = new Set<PhaseKey>();
+    if (dept.phasesEnabled.start) out.add('START');
+    if (dept.phasesEnabled.work) out.add('WORK');
+    if (dept.phasesEnabled.finish) out.add('FINISH');
+    if (out.size) return out;
+  }
+
+  // 3) simple booleans
+  const out = new Set<PhaseKey>();
+  if (dept?.startEnabled === true) out.add('START');
+  if (dept?.workEnabled === true) out.add('WORK');
+  if (dept?.finishEnabled === true) out.add('FINISH');
+  if (out.size) return out;
+
+  // Default: all phases enabled
+  return new Set<PhaseKey>(['START', 'WORK', 'FINISH']);
+}
+
+/**
+ * Dedupe fields within a single task creation batch.
+ * Uses fieldKey as the identity (your DB model implies fieldKey should be unique per task).
+ */
+function dedupeFieldsByKey<T extends { fieldKey: string }>(fields: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const f of fields) {
+    const k = (f.fieldKey || '').trim();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(f);
+  }
+  return out;
+}
+
+/**
+ * Dedupe tasks within a step creation batch (prevents accidental double-push).
+ * Identity: taskPhase + taskType + title
+ */
+function dedupeTasks(tasks: any[]): any[] {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const t of tasks) {
+    const key = `${normalizePhase(t.taskPhase)}|${t.taskType}|${t.title}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}

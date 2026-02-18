@@ -36,6 +36,10 @@ const startRunSchema = z.object({
   ovenNumber: z.number().int().min(1).max(2),
   ovenSlot: z.enum(['A', 'B']),
   badgeId: z.string().optional(),
+  travelerId: z.string().optional(),
+  travelerStepId: z.string().optional(),
+  travelerTaskId: z.string().optional(),
+  departmentName: z.string().optional(),
 });
 
 router.post('/runs/start', async (req: Request, res: Response) => {
@@ -68,7 +72,7 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot } = parseResult.data;
+    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot, travelerId, travelerStepId, travelerTaskId, departmentName } = parseResult.data;
 
     const [program] = await db
       .select()
@@ -94,6 +98,10 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       mandrelNumber,
       ovenNumber,
       ovenSlot,
+      travelerId: travelerId || null,
+      travelerStepId: travelerStepId || null,
+      travelerTaskId: travelerTaskId || null,
+      departmentName: departmentName || null,
       status: 'running',
       currentStepIndex: 0,
       startedAt: new Date(),
@@ -114,6 +122,45 @@ router.post('/runs/start', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[ProductionTimer] Error starting run:', error);
     return res.status(500).json({ error: 'Failed to start run', detail: error?.message || 'Unknown error' });
+  }
+});
+
+router.get('/runs/active', async (req: Request, res: Response) => {
+  try {
+    const travelerStepId = String(req.query.travelerStepId || '');
+    if (!travelerStepId) {
+      return res.status(400).json({ error: 'travelerStepId is required' });
+    }
+
+    const [run] = await db
+      .select()
+      .from(productionProgramRuns)
+      .where(
+        and(
+          eq(productionProgramRuns.travelerStepId, travelerStepId),
+          or(
+            eq(productionProgramRuns.status, 'running'),
+            eq(productionProgramRuns.status, 'paused')
+          )
+        )
+      )
+      .orderBy(desc(productionProgramRuns.startedAt))
+      .limit(1);
+
+    let program = null;
+    if (run) {
+      const [prog] = await db
+        .select({ id: productionPrograms.id, name: productionPrograms.name })
+        .from(productionPrograms)
+        .where(eq(productionPrograms.id, run.programId))
+        .limit(1);
+      program = prog || null;
+    }
+
+    return res.json({ run: run ?? null, program });
+  } catch (error: any) {
+    console.error('[ProductionTimer] Error fetching active run:', error);
+    return res.status(500).json({ error: 'Failed to fetch active run' });
   }
 });
 

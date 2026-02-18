@@ -1,0 +1,100 @@
+3) Copy/paste: Add a “Trace Policy” and generate TRACE everywhere
+A) Add this config object (can live in storage.ts near traveler generation)
+// Which departments require material traceability, and what to capture
+const TRACE_POLICY: Record<string, {
+  enabled: boolean;
+  phase: 'START' | 'WORK' | 'FINISH';
+  capture: {
+    internalControlNumber?: boolean;
+    expirationDate?: boolean;
+    batchNumber?: boolean;
+    materialType?: boolean;
+    brand?: boolean;
+    freezer?: boolean;
+  };
+}> = {
+  Cutting: { enabled: true, phase: 'START', capture: { internalControlNumber: true, expirationDate: true, batchNumber: true, materialType: true } },
+  Layup:   { enabled: true, phase: 'START', capture: { internalControlNumber: true, expirationDate: true } },
+  CNC:     { enabled: true, phase: 'WORK',  capture: { internalControlNumber: true } },
+  Finish:  { enabled: false, phase: 'WORK', capture: { internalControlNumber: true } },
+  // default behavior: enabled true if not listed (see function below)
+};
+
+B) Paste these helper functions (storage.ts)
+function getTracePolicyForDepartment(departmentName: string) {
+  const p = TRACE_POLICY[departmentName];
+  return p ?? { enabled: true, phase: 'START' as const, capture: { internalControlNumber: true } };
+}
+
+function buildTraceFields(capture: Record<string, boolean>) {
+  const fields: any[] = [];
+
+  // Internal Control Number must come from Fabric Inventory selection
+  if (capture.internalControlNumber) {
+    fields.push({
+      fieldKey: 'material_internal_control_number',
+      fieldLabel: 'Material Internal Control Number (Select from Inventory)',
+      fieldType: 'inventory_select', // UI will special-case this
+      required: true,
+      validation: {
+        source: 'fabric_inventory',
+        valueKey: 'internalControlNumber',
+        // UI uses this to open a picker; backend uses it to validate ID
+        picker: { type: 'FABRIC_INVENTORY' },
+      },
+    });
+  }
+
+  // The rest can be auto-filled once inventory is selected
+  if (capture.expirationDate) {
+    fields.push({
+      fieldKey: 'material_expiration_date',
+      fieldLabel: 'Expiration Date (Auto)',
+      fieldType: 'date',
+      required: true,
+      validation: { readonly: true, source: 'fabric_inventory', valueKey: 'expirationDate' },
+    });
+  }
+
+  if (capture.batchNumber) {
+    fields.push({
+      fieldKey: 'material_batch_number',
+      fieldLabel: 'Batch / Lot Number (Auto)',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, source: 'fabric_inventory', valueKey: 'batchNumber' },
+    });
+  }
+
+  if (capture.materialType) {
+    fields.push({
+      fieldKey: 'material_type',
+      fieldLabel: 'Material Type (Auto)',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, source: 'fabric_inventory', valueKey: 'fabricType' },
+    });
+  }
+
+  if (capture.brand) {
+    fields.push({
+      fieldKey: 'material_brand',
+      fieldLabel: 'Brand (Auto)',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, source: 'fabric_inventory', valueKey: 'brand' },
+    });
+  }
+
+  if (capture.freezer) {
+    fields.push({
+      fieldKey: 'material_freezer',
+      fieldLabel: 'Freezer (Auto)',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, source: 'fabric_inventory', valueKey: 'freezerNumber' },
+    });
+  }
+
+  return dedupeFieldsByKey(fields);
+}

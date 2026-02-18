@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useParams, Link } from 'wouter';
+import FabricInventoryPicker from '@/components/FabricInventoryPicker';
 import {
   Card,
   CardContent,
@@ -67,6 +68,7 @@ import {
   SkipForward,
   RotateCcw,
   CheckCircle2,
+  Search,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -194,6 +196,7 @@ const TASK_TYPE_ICONS: Record<string, any> = {
   END_GATE: CheckCircle,
   GATE_CHECK: Shield,
   TRACE: CreditCard,
+  TIMER: Timer,
   CUSTOM_FIELD: FileText,
   SPECIAL_PROCESS: AlertTriangle,
   NOTES: FileText,
@@ -234,6 +237,9 @@ export default function TravelerExecution() {
   const travelerId = params.id;
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [showInventoryPicker, setShowInventoryPicker] = useState(false);
+  const [inventoryPickerTaskId, setInventoryPickerTaskId] = useState<string | null>(null);
+  const [pickerValidations, setPickerValidations] = useState<Record<string, Record<string, any>>>({});
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -260,6 +266,19 @@ export default function TravelerExecution() {
   const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
+
+  const { data: activeTimerData, refetch: refetchActiveTimer } = useQuery<{ run: any; program: any }>({
+    queryKey: ['/api/production/timers/runs/active', currentStepId],
+    queryFn: async () => {
+      const res = await fetch(`/api/production/timers/runs/active?travelerStepId=${currentStepId}`);
+      if (!res.ok) return { run: null, program: null };
+      return res.json();
+    },
+    enabled: !!currentStepId,
+    refetchInterval: 10000,
+  });
+  const activeTimerRun = activeTimerData?.run ?? null;
+  const activeTimerProgram = activeTimerData?.program ?? null;
   const [showAdminForceSign, setShowAdminForceSign] = useState(false);
   const [adminForceReason, setAdminForceReason] = useState('');
 
@@ -433,10 +452,10 @@ export default function TravelerExecution() {
   });
 
   const completeTaskMutation = useMutation({
-    mutationFn: ({ taskId, fieldVals }: { taskId: string; fieldVals?: Record<string, string> }) =>
+    mutationFn: ({ taskId, fieldVals, fieldValidations }: { taskId: string; fieldVals?: Record<string, string>; fieldValidations?: Record<string, any> }) =>
       apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals }),
+        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator', fieldValues: fieldVals, fieldValidations }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -613,7 +632,8 @@ export default function TravelerExecution() {
       return;
     }
 
-    completeTaskMutation.mutate({ taskId: task.id, fieldVals: taskFieldVals });
+    const taskPickerValidations = pickerValidations[task.id] || undefined;
+    completeTaskMutation.mutate({ taskId: task.id, fieldVals: taskFieldVals, fieldValidations: taskPickerValidations });
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);
@@ -1305,50 +1325,104 @@ export default function TravelerExecution() {
                                             travelerStepId={currentStep.id}
                                             allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
-                                              const requiredFieldKeys = new Set(
-                                                task.fields.filter((f) => f.required).map((f) => f.fieldKey)
+                                              const taskFieldKeys = new Set(
+                                                task.fields.map((f) => f.fieldKey)
                                               );
                                               if (result?.entryMethod === 'manual') {
                                                 const today = new Date().toISOString().split('T')[0];
+                                                const icn = result.internalControlNumber || '';
                                                 const allManualVals: Record<string, string> = {
-                                                  internalControlNumber: result.internalControlNumber || '',
-                                                  material_icn: result.internalControlNumber || '',
+                                                  material_internal_control_number: icn,
+                                                  internalControlNumber: icn,
+                                                  material_icn: icn,
+                                                  material_expiration_date: today,
+                                                  expirationDate: today,
+                                                  material_batch_number: 'N/A',
+                                                  batchLotNumber: 'N/A',
+                                                  material_type: 'Manual Entry',
+                                                  material_brand: 'Manual Entry',
+                                                  material_freezer: 'N/A',
                                                   material_lot: '',
                                                   qty_used: '',
                                                   unit_of_measure: '',
                                                   material_part_number: '',
                                                   supplier: 'Manual Entry',
                                                   inventoryPartNumber: 'Manual Entry',
-                                                  supplierBatchLot: 'N/A',
                                                   manufacturer: 'Manual Entry',
                                                   rollNumber: 'N/A',
-                                                  expirationDate: today,
                                                   receivedDate: today,
                                                 };
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
-                                                  if (requiredFieldKeys.has(key) || key === 'material_icn') {
+                                                  if (taskFieldKeys.has(key)) {
                                                     traceFieldVals[key] = val;
                                                   }
                                                 }
+                                                const manualValidation = {
+                                                  source: 'manual_entry',
+                                                  internalControlNumber: icn,
+                                                  readonly: false,
+                                                };
+                                                const manualFieldValidations: Record<string, any> = {};
+                                                for (const key of Object.keys(traceFieldVals)) {
+                                                  manualFieldValidations[key] = manualValidation;
+                                                }
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 
-                                                  fieldVals: traceFieldVals 
+                                                  fieldVals: traceFieldVals,
+                                                  fieldValidations: manualFieldValidations,
                                                 });
                                                 return;
                                               }
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
-                                              const traceFieldVals: Record<string, string> = {
-                                                material_icn: consumption?.internalControlNumber || lot?.internalControlNumber || '',
+                                              const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || '';
+                                              const allScanVals: Record<string, string> = {
+                                                material_internal_control_number: icnValue,
+                                                internalControlNumber: icnValue,
+                                                material_icn: icnValue,
+                                                material_expiration_date: lot?.expirationDate || '',
+                                                expirationDate: lot?.expirationDate || '',
+                                                material_batch_number: lot?.supplierLotNumber || '',
+                                                batchLotNumber: lot?.supplierLotNumber || '',
+                                                material_type: lot?.fabricType || lot?.materialType || '',
+                                                material_brand: lot?.brand || lot?.manufacturer || '',
+                                                material_freezer: lot?.freezerNumber || '',
                                                 material_lot: lot?.supplierLotNumber || '',
                                                 qty_used: consumption?.qtyUsed?.toString() || '',
                                                 unit_of_measure: consumption?.unitOfMeasure || lot?.unitOfMeasure || '',
                                                 material_part_number: lot?.materialPartNumber || '',
+                                                inventoryPartNumber: lot?.materialPartNumber || '',
+                                                supplier: lot?.supplier || '',
+                                                manufacturer: lot?.manufacturer || '',
+                                                rollNumber: lot?.rollNumber || '',
+                                                receivedDate: lot?.receivedDate || '',
                                               };
+                                              const traceFieldVals: Record<string, string> = {};
+                                              for (const [key, val] of Object.entries(allScanVals)) {
+                                                if (taskFieldKeys.has(key)) {
+                                                  traceFieldVals[key] = val;
+                                                }
+                                              }
+                                              const inventoryValidation = {
+                                                source: 'fabric_inventory',
+                                                inventoryId: lot?.id || consumption?.materialLotId || '',
+                                                internalControlNumber: icnValue,
+                                                batchNumber: lot?.supplierLotNumber || '',
+                                                expirationDate: lot?.expirationDate || '',
+                                                supplier: lot?.supplier || '',
+                                                manufacturer: lot?.manufacturer || '',
+                                                partNumber: lot?.materialPartNumber || '',
+                                                readonly: true,
+                                              };
+                                              const traceFieldValidations: Record<string, any> = {};
+                                              for (const key of Object.keys(traceFieldVals)) {
+                                                traceFieldValidations[key] = inventoryValidation;
+                                              }
                                               completeTaskMutation.mutate({ 
                                                 taskId: task.id, 
-                                                fieldVals: traceFieldVals 
+                                                fieldVals: traceFieldVals,
+                                                fieldValidations: traceFieldValidations,
                                               });
                                             }}
                                           />
@@ -1447,6 +1521,41 @@ export default function TravelerExecution() {
                                                           </Label>
                                                         </div>
                                                       </div>
+                                                    ) : field.fieldType === 'inventory_select' ? (
+                                                      <div className="space-y-1">
+                                                        <div className="flex gap-2">
+                                                          <Input
+                                                            value={
+                                                              fieldValues[task.id]?.[field.fieldKey] ||
+                                                              field.value ||
+                                                              ''
+                                                            }
+                                                            disabled={true}
+                                                            className="text-sm bg-muted flex-1"
+                                                            placeholder="Select from Fabric Inventory..."
+                                                          />
+                                                          {!isComplete && (
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => {
+                                                                setInventoryPickerTaskId(task.id);
+                                                                setShowInventoryPicker(true);
+                                                              }}
+                                                              className="shrink-0"
+                                                            >
+                                                              <Search className="h-4 w-4 mr-1" />
+                                                              Select
+                                                            </Button>
+                                                          )}
+                                                        </div>
+                                                        {(fieldValues[task.id]?.[field.fieldKey] || field.value) && (
+                                                          <span className="text-xs text-green-600 flex items-center gap-1">
+                                                            <CheckCircle className="h-3 w-3" />
+                                                            Linked to Fabric Inventory
+                                                          </span>
+                                                        )}
+                                                      </div>
                                                     ) : field.fieldType === 'textarea' ? (
                                                       <Textarea
                                                         value={
@@ -1466,7 +1575,7 @@ export default function TravelerExecution() {
                                                       />
                                                     ) : (
                                                       <Input
-                                                        type={field.fieldType === 'number' ? 'number' : 'text'}
+                                                        type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
                                                         value={
                                                           fieldValues[task.id]?.[field.fieldKey] ||
                                                           field.value ||
@@ -1479,8 +1588,9 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete}
-                                                        className="text-sm"
+                                                        disabled={isComplete || (field.validation?.readonly === true && !!field.value)}
+                                                        className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
+                                                        placeholder={field.validation?.readonly ? 'Auto-filled from inventory' : undefined}
                                                       />
                                                     )}
                                                   </div>
@@ -1548,7 +1658,7 @@ export default function TravelerExecution() {
                             {phase === 'WORK' && (() => {
                               const timerConfig = getTimerConfigForDepartment(currentStep.departmentName);
                               if (!timerConfig) return null;
-                              const stepTimerStarted = timerStartedForStep[currentStep.id];
+                              const stepTimerStarted = !!activeTimerRun || timerStartedForStep[currentStep.id];
                               return (
                                 <div className="mx-4 my-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
                                   <div className="flex items-center justify-between">
@@ -1557,9 +1667,11 @@ export default function TravelerExecution() {
                                       <div>
                                         <p className="font-medium text-amber-800 text-sm">Production Timer</p>
                                         <p className="text-xs text-amber-600">
-                                          {timerConfig.defaultProgramName
-                                            ? `Program: ${timerConfig.defaultProgramName}`
-                                            : 'Start a timer on the timer station'}
+                                          {activeTimerRun && activeTimerProgram
+                                            ? `Running: ${activeTimerProgram.name}${activeTimerRun.serialNumber ? ` / S/N: ${activeTimerRun.serialNumber}` : ''}`
+                                            : timerConfig.defaultProgramName
+                                              ? `Program: ${timerConfig.defaultProgramName}`
+                                              : 'Start a timer on the timer station'}
                                         </p>
                                       </div>
                                     </div>
@@ -2051,11 +2163,21 @@ export default function TravelerExecution() {
           defaultProgramId={getTimerConfigForDepartment(currentStep.departmentName)?.defaultProgramId}
           navigateToStation={false}
           badgeId={activeBadge || undefined}
+          travelerId={traveler.id}
+          travelerStepId={currentStep.id}
+          travelerTaskId={
+            currentStep.tasks?.find((t: any) =>
+              t.taskType === 'TIMER' ||
+              (t.taskType === 'PROCESS' && t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig)
+            )?.id
+          }
+          departmentName={currentStep.departmentName}
           onTimerStarted={() => {
             setTimerStartedForStep((prev) => ({
               ...prev,
               [currentStep.id]: true,
             }));
+            refetchActiveTimer();
             toast({
               title: 'Timer Started',
               description: 'Timer is now running on the timer station. You may continue with traveler tasks.',
@@ -2063,6 +2185,73 @@ export default function TravelerExecution() {
           }}
         />
       )}
+
+      <FabricInventoryPicker
+        open={showInventoryPicker}
+        onClose={() => {
+          setShowInventoryPicker(false);
+          setInventoryPickerTaskId(null);
+        }}
+        onSelect={(selectedItem) => {
+          if (!inventoryPickerTaskId || !traveler) return;
+          const step = traveler.steps?.find((s: any) => s.id === currentStepId);
+          if (!step) return;
+          const task = step.tasks?.find((t: any) => t.id === inventoryPickerTaskId);
+          if (!task) return;
+
+          const valueMap: Record<string, string> = {
+            internalControlNumber: selectedItem.internalControlNumber,
+            material_internal_control_number: selectedItem.internalControlNumber,
+            expirationDate: selectedItem.expirationDate,
+            material_expiration_date: selectedItem.expirationDate,
+            batchNumber: selectedItem.batchNumber,
+            material_batch_number: selectedItem.batchNumber,
+            fabricType: selectedItem.fabricType,
+            material_type: selectedItem.fabricType,
+            brand: selectedItem.brand,
+            material_brand: selectedItem.brand,
+            freezerNumber: selectedItem.freezerNumber,
+            material_freezer: selectedItem.freezerNumber,
+            rollNumber: selectedItem.rollNumber,
+            material_roll_number: selectedItem.rollNumber,
+            partNumber: selectedItem.partNumber,
+            material_part_number: selectedItem.partNumber,
+          };
+
+          const inventoryValidation = {
+            source: 'fabric_inventory',
+            inventoryId: selectedItem.id,
+            internalControlNumber: selectedItem.internalControlNumber,
+            batchNumber: selectedItem.batchNumber,
+            expirationDate: selectedItem.expirationDate,
+            readonly: true,
+          };
+
+          const taskValidations: Record<string, any> = {};
+          for (const field of task.fields || []) {
+            const mappedVal = valueMap[field.fieldKey];
+            if (mappedVal !== undefined) {
+              taskValidations[field.fieldKey] = inventoryValidation;
+              handleFieldChange(task.id, field.fieldKey, mappedVal);
+            }
+          }
+          setPickerValidations(prev => ({ ...prev, [task.id]: taskValidations }));
+
+          const expired = selectedItem.expirationDate && new Date(selectedItem.expirationDate) < new Date();
+          if (expired) {
+            toast({
+              title: 'Material Expired',
+              description: `ICN ${selectedItem.internalControlNumber} expired on ${selectedItem.expirationDate}. Override may be required.`,
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Material Selected',
+              description: `ICN ${selectedItem.internalControlNumber} selected — fields auto-filled`,
+            });
+          }
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,144 @@
+Got it — and this is the key insight:
+
+✅ Your task dedupe is solid (phase|type|title + enabledPhases gate).
+✅ Your field dedupe is solid (fieldKey + DB unique index).
+
+So if the timer station “starts the timer + shows the model” but behaves wrong, the bug is almost certainly not duplication — it’s one of these:
+
+Timer task exists but isn’t being found as “the active timer task” (filtering/lookup mismatch)
+
+Timer start writes to the wrong place (wrong travelerTaskId/stepId/user/station)
+
+UI is displaying the model from a different source than the timer start updates
+
+Race/refresh issue: timer start succeeds, but UI state isn’t refetched or invalidated
+
+Station selection isn’t persisted or isn’t included in the start payload
+
+Since you asked: “what information do i need to get from the agent to fix it” — here’s the exact set of info that will let me fix it in one pass.
+
+Copy/paste request to the agent: Timer Station Debug Pack
+1) The Timer task definition + instructionPack.timerConfig
+
+Paste the code where you create the “Production Timer” task in generateTravelerFromRouting() (the _createTaskIfAllowed call for it), including:
+
+taskType
+
+taskPhase
+
+title
+
+instructionPack (especially timerConfig)
+
+how you identify this task later (any constants)
+
+Why: if the UI expects taskType: TIMER but you create taskType: PROCESS_TIMER (or vice versa), the station won’t find it.
+
+2) The UI code for “Internal Timer Station” selection + start action
+
+From the component that:
+
+renders the station dropdown/list
+
+handles “Select station”
+
+triggers “start timer”
+
+“shows the model” after selection
+
+Paste:
+
+the handler function(s)
+
+the API call(s)
+
+the state updates
+
+any useEffect that runs after station selection
+
+Why: 70% of the time the bug is a stale currentStep / stale query cache / wrong dependency array.
+
+3) The API route(s) involved (start/stop/status)
+
+Paste the server routes and storage calls for:
+
+startTimer (or whatever it’s called)
+
+stopTimer
+
+getActiveTimer / getTimerStatus / getStationState
+
+Also paste the request/response JSON shape.
+
+Why: if your UI sends { stationId } but backend expects { timerStationId }, it “works” but doesn’t bind to the station.
+
+4) The DB schema/table(s) that store timer sessions + station selection
+
+Paste schema for:
+
+timer sessions table (or where you store active timers)
+
+station table (if you have it)
+
+any FK fields linking to:
+
+travelerId / travelerStepId / travelerTaskId
+
+userId / technicianId
+
+stationId
+
+modelId (if model display depends on this)
+
+Why: We need to confirm the source of truth for “current model”.
+
+5) One failing run: network payload + DB row after click
+
+Paste these 3 artifacts from a single click:
+
+A. DevTools → Network
+
+the “start timer” request payload + response
+
+B. Server log
+
+any logs printed by the route/storage around that request
+
+C. DB evidence
+Right after clicking start, run a query and paste results:
+
+the newest timer row (or relevant record)
+
+show: stationId, travelerTaskId, startedAt, endedAt, status
+
+Why: This instantly tells whether it’s:
+
+backend not writing
+
+writing to wrong IDs
+
+UI reading wrong row
+
+The “most common mismatch” in your architecture (so you can spot it fast)
+
+You said: “timer station initiates the timer and show the model”.
+
+That implies two separate pieces of state:
+
+timer state (running / elapsed / active)
+
+model state (which part/stock model should display)
+
+In EPOCH-style apps, the timer often updates a timer session record, while the model is displayed from:
+
+traveler.partNumber/partName, or
+
+currentStep.departmentName, or
+
+task.instructionPack.timerConfig.model, or
+
+a station.activeModelId
+
+If those don’t line up, you get: “timer starts but model doesn’t change” (or the reverse).
+
+So the agent must tell us: where the model is being read from in the UI.

@@ -1,0 +1,276 @@
+You nailed it. This isn’t a “bug” so much as an architectural disconnect:
+
+UI “running” state is local only
+
+Timer runs exist, but are not linked to traveler/step/task/station
+
+UI shows config, not active run state
+
+So the fix is straightforward: persist the linkage, and make UI derive “running” from the DB, not React state.
+
+Below is a copy/paste plan with concrete schema + API + UI patches.
+
+1) Add the missing link: FK from timer runs → traveler step (minimum viable)
+✅ Schema patch (server/schema.ts)
+
+Add these columns to production_program_runs:
+
+travelerId (optional but useful)
+
+travelerStepId (the key one)
+
+travelerTaskId (optional; nice for auditing)
+
+stationId (optional, if your timer station concept exists)
+
+departmentName (optional convenience)
+
+Copy/paste (edit into the table definition):
+
+// In production_program_runs table definition:
+
+travelerId: varchar('traveler_id', { length: 255 })
+  .references(() => travelers.id, { onDelete: 'set null' }),
+
+travelerStepId: varchar('traveler_step_id', { length: 255 })
+  .references(() => travelerSteps.id, { onDelete: 'set null' }),
+
+travelerTaskId: varchar('traveler_task_id', { length: 255 })
+  .references(() => travelerTasks.id, { onDelete: 'set null' }),
+
+stationId: varchar('station_id', { length: 255 }), // FK if you have a stations table
+
+departmentName: varchar('department_name', { length: 255 }),
+
+✅ Add an index (highly recommended)
+import { index } from "drizzle-orm/pg-core";
+
+export const productionProgramRuns = pgTable('production_program_runs', {
+  // ... columns ...
+}, (t) => ({
+  byTravelerStepRunning: index('idx_runs_traveler_step_running')
+    .on(t.travelerStepId, t.status),
+}));
+
+✅ Optional but powerful: enforce “one running timer per traveler step”
+
+If Postgres partial unique index is acceptable in your migration style:
+
+unique where status='running' and traveler_step_id IS NOT NULL
+
+If not, enforce in code (shown below).
+
+2) Update the start route to accept travelerStepId (and optionally travelerTaskId)
+✅ Update StartProductionTimerModal payload (frontend)
+
+In StartProductionTimerModal.tsx mutation body, add:
+
+travelerId
+
+travelerStepId
+
+travelerTaskId (optional but recommended)
+
+Copy/paste change:
+
+body: JSON.stringify({
+  programId,
+  travelerId,        // NEW
+  travelerStepId,    // NEW
+  travelerTaskId,    // NEW (optional)
+  serialNumber: serialNumber.trim(),
+  description: description.trim() || undefined,
+  mandrelNumber: parseInt(mandrelNumber, 10),
+  ovenNumber: parseInt(ovenNumber, 10),
+  ovenSlot,
+  ...(badgeId ? { badgeId } : {}),
+}),
+
+
+And update component props so you can pass these in from TravelerExecution.tsx:
+
+<StartProductionTimerModal
+  ...
+  travelerId={traveler.id}
+  travelerStepId={currentStep.id}
+  travelerTaskId={
+    currentStep.tasks.find(t => t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig)?.id
+  }
+/>
+
+✅ Update API schema validation (backend)
+
+In productionTimers.ts, expand startRunSchema:
+
+const startRunSchema = z.object({
+  programId: z.string(),
+  serialNumber: z.string(),
+  mandrelNumber: z.number(),
+  ovenNumber: z.number(),
+  ovenSlot: z.string(),
+  badgeId: z.string().optional(),
+
+  travelerId: z.string().optional(),
+  travelerStepId: z.string().optional(),
+  travelerTaskId: z.string().optional(),
+  stationId: z.string().optional(),
+  departmentName: z.string().optional(),
+});
+
+✅ Update insert into production_program_runs
+
+When inserting the run row, include the new fields:
+
+const run = await db.insert(productionProgramRuns).values({
+  programId,
+  serialNumber,
+  mandrelNumber,
+  ovenNumber,
+  ovenSlot,
+  status: 'running',
+  currentStepIndex: 0,
+  startedByUserId: user.id,
+
+  travelerId: input.travelerId ?? null,
+  travelerStepId: input.travelerStepId ?? null,
+  travelerTaskId: input.travelerTaskId ?? null,
+  stationId: input.stationId ?? null,
+  departmentName: input.departmentName ?? null,
+}).returning();
+
+3) Add a “status lookup” endpoint so UI can persist on refresh
+✅ New route: “active run for traveler step”
+
+Add to productionTimers.ts:
+
+Copy/paste:
+
+app.get('/api/production/timers/runs/active', async (req, res) => {
+  try {
+    const travelerStepId = String(req.query.travelerStepId || '');
+    if (!travelerStepId) return res.status(400).json({ error: 'travelerStepId is required' });
+
+    const run = await db.query.productionProgramRuns.findFirst({
+      where: (r, { and, eq }) => and(eq(r.travelerStepId, travelerStepId), eq(r.status, 'running')),
+      orderBy: (r, { desc }) => [desc(r.startedAt)],
+    });
+
+    return res.json({ run: run ?? null });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to fetch active run' });
+  }
+});
+
+4) Fix TravelerExecution UI: derive “running” from API, not local state
+
+Right now:
+
+timerStartedForStep[currentStep.id] is local + fragile
+
+Replace it with a query that loads active run state.
+
+✅ Copy/paste UI patch (TravelerExecution.tsx)
+
+Use whatever query library you’re using (it looks like you already use apiRequest, likely react-query).
+
+Example with react-query:
+
+const { data: activeRunData, refetch: refetchActiveRun } = useQuery({
+  queryKey: ['activeTimerRun', currentStep.id],
+  queryFn: async () => {
+    const r = await apiRequest(`/api/production/timers/runs/active?travelerStepId=${currentStep.id}`);
+    return r.json();
+  },
+  enabled: !!currentStep?.id,
+  refetchInterval: 5000, // optional
+});
+
+const activeRun = activeRunData?.run ?? null;
+const stepTimerRunning = !!activeRun;
+
+
+Then in the button rendering:
+
+const stepTimerStarted = stepTimerRunning;
+
+
+And in onTimerStarted:
+
+onTimerStarted={async () => {
+  await refetchActiveRun(); // ✅ persists across refresh now
+}}
+
+
+You can delete timerStartedForStep entirely once this is in.
+
+5) “Timer Station initiates and shows the model”
+
+Now you can show something real:
+
+Program/model from the active run (truth)
+
+Fallback to config if no active run
+
+Display logic
+
+If activeRun exists:
+
+show “Running: {programName} / {serialNumber}”
+
+Else:
+
+show configured default program/model
+
+To show program name, either:
+
+join on production_programs in the /active endpoint, or
+
+call another endpoint to look up program by id
+
+Fastest: include program name in active endpoint:
+
+const run = await db.query.productionProgramRuns.findFirst(...)
+
+let program = null;
+if (run) {
+  program = await db.query.productionPrograms.findFirst({
+    where: (p, { eq }) => eq(p.id, run.programId),
+    columns: { id: true, name: true },
+  });
+}
+
+return res.json({ run: run ?? null, program: program ?? null });
+
+6) Make station selection actually matter (optional but aligns with your “station” concept)
+
+If your “internal timer station” is meant to be a shared display/terminal:
+
+Add stationId to start payload and store it on the run.
+Then add:
+
+GET /api/production/timers/runs/active?stationId=...
+
+So a station can display its current run without knowing travelerStepId.
+
+What to copy/paste back in (deliverables)
+
+Minimum set to make it “work properly”:
+
+Add travelerStepId to production_program_runs
+
+Update start route + modal to send it
+
+Add /active endpoint
+
+Replace local timerStartedForStep with API-driven state
+
+That’s the smallest change set that fixes:
+
+timer “running” disappearing on refresh
+
+station not knowing what is active
+
+model display being only config-based
+
+If you want, paste your current productionTimers.ts start route file (just the handler) and I’ll return an exact edited version that matches your app’s imports + Drizzle style so you can drop it in with minimal friction.

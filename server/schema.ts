@@ -13,6 +13,7 @@ import {
   uuid,
   numeric,
   index,
+  uniqueIndex,
   serial,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -4577,6 +4578,7 @@ export const travelerTaskFields = pgTable('traveler_task_fields', {
   recordedAt: timestamp('recorded_at', { withTimezone: true }),
 }, (table) => ({
   taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
+  uniqTaskFieldKey: uniqueIndex('uniq_traveler_task_field_key').on(table.travelerTaskId, table.fieldKey),
 }));
 
 // Traveler Signatures - Digital signature required for step completion
@@ -12306,12 +12308,17 @@ export const productionProgramRuns = pgTable('production_program_runs', {
   completedAt: timestamp('completed_at'),
   lastPausedAt: timestamp('last_paused_at'),
   totalElapsedSeconds: integer('total_elapsed_seconds').default(0).notNull(),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }),
+  travelerTaskId: varchar('traveler_task_id', { length: 255 }),
+  departmentName: varchar('department_name', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   programIdIdx: index('production_program_runs_program_id_idx').on(table.programId),
   statusIdx: index('production_program_runs_status_idx').on(table.status),
   startedAtIdx: index('production_program_runs_started_at_idx').on(table.startedAt),
+  travelerStepStatusIdx: index('idx_runs_traveler_step_status').on(table.travelerStepId, table.status),
 }));
 
 // Production Program Run Events - audit trail for run lifecycle

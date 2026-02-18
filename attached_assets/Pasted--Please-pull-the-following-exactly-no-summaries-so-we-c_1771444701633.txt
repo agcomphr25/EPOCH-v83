@@ -1,0 +1,118 @@
+“Please pull the following exactly (no summaries), so we can fix the internal timer station not starting / not showing the model correctly.”
+
+1) The UI code for the timer station selector + start action
+
+File path + line range
+
+The component where you choose a “Timer Station”
+
+The click handler that starts the timer (whatever function it calls)
+
+Any code that “shows the model” after selection
+
+Paste:
+
+the full handler function
+
+the API call it triggers
+
+the state updates immediately after
+
+2) The API route(s) that start/stop/read the timer
+
+Find routes like:
+
+/api/timers/*
+
+/api/travelers/*/timer
+
+/api/stations/*
+
+Paste:
+
+the route handler for “start timer”
+
+the route handler for “stop timer” (if exists)
+
+the route handler for “get current timer state” (if exists)
+
+request/response JSON shape (actual code)
+
+3) The backend “timer engine” logic + DB writes
+
+Wherever the route calls into storage/service:
+
+Paste:
+
+the function that creates/updates a timer record
+
+the DB insert/update calls (Drizzle queries)
+
+anything that computes “current model” / “station model” / “active job”
+
+This is where most bugs are:
+
+writing timer to the wrong travelerStep/task
+
+writing startedAt but not status
+
+station selection not persisted
+
+timer is started but UI reads a different row/filter
+
+4) The DB schema for timers/stations and how it links to traveler/task/step
+
+Paste the schema tables involved, usually:
+
+timer_sessions / timers
+
+stations / workstations
+
+any FK columns linking to travelerId, travelerStepId, travelerTaskId, userId
+
+Also paste any “active timer” uniqueness rules (or lack of them).
+
+5) Live evidence: one failing request + console logs
+
+This is the fastest way to solve it.
+
+Provide:
+
+Browser DevTools → Network → click the “start timer” request
+
+Status code
+
+Request payload
+
+Response payload
+
+Browser Console errors/warnings (copy/paste)
+
+Server console logs around the request (copy/paste)
+
+If you can only provide ONE thing, provide this #5.
+
+Bonus: 3 quick checks you can do right now (and paste results)
+A) Does the start request return success?
+
+In DevTools → Network:
+
+If it’s 200/201 but nothing updates → UI state subscription/polling issue
+
+If it’s 400/500 → backend contract/validation issue
+
+B) Does the DB row get created/updated?
+
+After clicking start, run a DB query (whatever table stores timers):
+
+confirm a row appears
+
+confirm it has correct travelerStepId/taskId, stationId, startedAt
+
+C) Are you showing “the model” from the same source you updated?
+
+Common mismatch:
+
+Start timer writes activeModelId on a timer row
+
+UI displays currentStep.model from traveler, never updated → looks broken

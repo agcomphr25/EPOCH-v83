@@ -13771,24 +13771,25 @@ export class DatabaseStorage implements IStorage {
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
       if (tracePolicy.enabled) {
-        const policyFields = this._buildTraceFields(tracePolicy.capture);
-        if (policyFields.length > 0) {
+        const _fieldsToCreate = this._buildTraceFields(tracePolicy.capture);
+        if (_fieldsToCreate.length > 0) {
           const traceTask = await this._createTaskIfAllowed({
             travelerStepId: step.id,
-            taskType: 'TRACEABILITY',
+            taskType: 'TRACE',
             taskPhase: tracePolicy.phase,
             title: 'Material Traceability',
-            instructions: 'Select material from Fabric Inventory to record traceability',
+            instructions: 'Select the material used from inventory. Fields will auto-fill.',
             required: true,
             sortOrder: sortOrder++,
             timePolicy: 'AUTO_ON_COMPLETE',
             requiresSignature: false,
             requiresCertification: false,
+            signatureRole: null,
             status: 'NOT_STARTED',
           }, enabledPhases, createdTaskKeys);
 
           if (traceTask) {
-            for (const field of policyFields) {
+            for (const field of _fieldsToCreate) {
               await this.createTravelerTaskField({
                 travelerTaskId: traceTask.id,
                 fieldKey: field.fieldKey,

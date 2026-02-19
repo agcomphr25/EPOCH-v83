@@ -1,0 +1,164 @@
+tep 2: Layup
+Started by EMP002
+IN PROGRESS
+Start Phase
+Material scans, tooling verification, technician assignment
+
+4/4 complete
+Phase Complete
+
+Material Traceability — #542
+
+TRACE • Required
+Select Carbon Fiber - 250F Resin System - 39.37 Wide x 0.006 Thick - Standard Modulus - Unidirectional from inventory. Fields will auto-fill.
+
+Expiration Date (Auto)*
+02/19/2026
+Material Internal Control Number (Select from Inventory)*
+RWU013
+Linked to Fabric Inventory
+Completed by EMP002 at 2/19/2026, 11:35:59 AM
+
+
+Material Traceability — #301
+
+TRACE • Required
+Select Carbon Fiber - 250F Epoxy - 39.4 Wide x 0.011 Thick - Standard Modulus - 3k 2x2 Twill Weave - (366 gsm OAW) from inventory. Fields will auto-fill.
+
+Material Internal Control Number (Select from Inventory)*
+RWT010
+Linked to Fabric Inventory
+Expiration Date (Auto)*
+02/19/2026
+Completed by EMP002 at 2/19/2026, 11:36:05 AM
+
+
+Work Instruction Acknowledged
+
+CHECK • Required
+Review and acknowledge the current revision of the work instruction for this operation
+
+Completed by EMP002 at 2/19/2026, 11:36:14 AM
+
+
+Start Phase Data Entry
+
+PROCESS • Required
+Enter required data for the START phase
+
+Ambient Temperature*
+74
+Ensure working temp of table is b/t 70-80*
+74
+Completed by EMP002 at 2/19/2026, 11:36:27 AM
+
+Work Phase
+Process data entry, special process parameters
+
+3/3 complete
+Phase Complete
+
+Quality Control Checks
+
+QC • Required
+QC
+Complete WORK phase quality control verifications
+
+Final Layup Rating (1-5)*
+Tolerance: 3-5
+Requirement: See Table 1: Tube Layup Rating
+Measured Result *
+4
+
+Verified / Pass
+Completed by EMP002 at 2/19/2026, 11:36:51 AM
+
+
+Work Instructions
+
+PROCESS
+INSTRUCTIONS
+Review instruction pack before proceeding
+
+Work Instructions
+
+Tips & Guidance
+
+Lay Up Schedule
+
+•
+1 301j 1 shell 0/90 twill inner mold line
+•
+ENSURE poly is removed from ply 1
+•
+2 542f 1 shell 0° uni
+•
+3 542j 1 shell 0° uni
+•
+4 542j 1 shell 0° uni
+•
+5 542j 1 shell 0° uni
+•
+6 542k 2 31" x 37.29" piece 90° uni and 542m 1 36" x 36 7/8" piece 90° uni
+•
+7 542k 2 31" x 37.29" piece 90° uni and 542m 1 36" x 36 7/8" piece 90° uni
+•
+8 301k 1 shell 0/90 twill outer mold line
+Completed by EMP002 at 2/19/2026, 11:36:52 AM
+
+
+Process Data Entry
+
+PROCESS • Required
+INSTRUCTIONS
+Enter required process data
+
+Work Instructions
+
+Tips & Guidance
+
+Lay Up Schedule
+
+•
+1 301j 1 shell 0/90 twill inner mold line
+•
+ENSURE poly is removed from ply 1
+•
+2 542f 1 shell 0° uni
+•
+3 542j 1 shell 0° uni
+•
+4 542j 1 shell 0° uni
+•
+5 542j 1 shell 0° uni
+•
+6 542k 2 31" x 37.29" piece 90° uni and 542m 1 36" x 36 7/8" piece 90° uni
+•
+7 542k 2 31" x 37.29" piece 90° uni and 542m 1 36" x 36 7/8" piece 90° uni
+•
+8 301k 1 shell 0/90 twill outer mold line
+Ambient temp
+Completed by EMP002 at 2/19/2026, 11:36:54 AM
+
+Finish Phase
+QC checks, acceptance criteria, final sign-off
+
+1/2 complete
+
+Finish Phase Data Entry
+
+PROCESS • Required
+Enter required data for the FINISH phase (final measurements, results)
+
+Poly Removed on 1st layer y/n*
+Y
+Completed by EMP002 at 2/19/2026, 11:37:00 AM
+
+
+Department Signoff — Layup
+
+SIGNATURE • Required
+OPERATOR
+Operator signature required to complete Layup
+
+Sign (OPERATOR)

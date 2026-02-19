@@ -144,6 +144,13 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/inventory/enhanced-mrp',
+      '/p2-control-center',
+      '/inventory/consolidated-needs',
+      '/vendors',
+      '/vendor-pos',
+      '/inventory/receiving',
+      '/master-document-register',
     ],
   },
 

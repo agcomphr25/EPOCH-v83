@@ -7774,6 +7774,51 @@ export class DatabaseStorage implements IStorage {
         .where(eq(vendorPOs.id, id))
         .returning();
 
+      // Historical Price Variance Tracking
+      const poItems = await tx
+        .select()
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.vendorPoId, id));
+
+      for (const item of poItems) {
+        if (!item.agPartNumber || item.purchaseUnitPrice == null) continue;
+
+        const historicalPrices = await tx
+          .select({ purchaseUnitPrice: vendorPOItems.purchaseUnitPrice })
+          .from(vendorPOItems)
+          .innerJoin(vendorPOs, eq(vendorPOItems.vendorPoId, vendorPOs.id))
+          .where(
+            and(
+              eq(vendorPOs.vendorId, lockedPO.vendorId),
+              eq(vendorPOItems.agPartNumber, item.agPartNumber),
+              inArray(vendorPOs.status, ['Sent', 'Partially Received', 'Fully Received']),
+              eq(vendorPOs.isCurrentRevision, true),
+              sql`${vendorPOs.id} != ${id}`,
+              sql`${vendorPOItems.purchaseUnitPrice} IS NOT NULL`
+            )
+          )
+          .orderBy(desc(vendorPOs.createdAt))
+          .limit(5);
+
+        if (historicalPrices.length === 0) continue;
+
+        const avgPrice = historicalPrices.reduce((sum, p) => sum + (p.purchaseUnitPrice as number), 0) / historicalPrices.length;
+        const variancePercent = avgPrice !== 0 ? ((item.purchaseUnitPrice - avgPrice) / avgPrice) * 100 : 0;
+        const flagged = Math.abs(variancePercent) > 3;
+
+        await tx
+          .update(vendorPOItems)
+          .set({
+            historicalAvgPrice: Math.round(avgPrice * 100) / 100,
+            priceVariancePercent: Math.round(variancePercent * 100) / 100,
+            varianceFlag: flagged,
+            updatedAt: new Date(),
+          })
+          .where(eq(vendorPOItems.id, item.id));
+
+        console.log(`Variance computed for ${item.agPartNumber}: ${variancePercent >= 0 ? '+' : ''}${variancePercent.toFixed(1)}%`);
+      }
+
       return { vendorPO: updatedPO, poNumber };
     });
   }

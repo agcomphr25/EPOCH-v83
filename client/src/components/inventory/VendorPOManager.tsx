@@ -62,6 +62,7 @@ import {
   FileText,
   Check,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -144,6 +145,9 @@ type VendorPOItem = {
   purchaseUnit?: string;
   vendorUnit?: string;
   conversionFactor?: number;
+  historicalAvgPrice?: number | null;
+  priceVariancePercent?: number | null;
+  varianceFlag?: boolean | null;
 };
 
 type CreateVendorPOData = {
@@ -205,6 +209,17 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                 {item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit && (
                   <div className="text-green-600 text-xs">
                     Ordered: {formatNumber(item.purchaseQty)} {item.purchaseUnit} @ {formatCurrency(item.purchaseUnitPrice, 4)}/{item.purchaseUnit}
+                  </div>
+                )}
+                {item.varianceFlag && item.priceVariancePercent != null && (
+                  <div className="text-orange-600 text-xs font-medium flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Price variance {item.priceVariancePercent > 0 ? '+' : ''}{item.priceVariancePercent.toFixed(1)}% vs historical avg
+                  </div>
+                )}
+                {!item.varianceFlag && item.priceVariancePercent != null && (
+                  <div className="text-gray-400 text-xs">
+                    Variance {item.priceVariancePercent > 0 ? '+' : ''}{item.priceVariancePercent.toFixed(1)}%
                   </div>
                 )}
               </div>

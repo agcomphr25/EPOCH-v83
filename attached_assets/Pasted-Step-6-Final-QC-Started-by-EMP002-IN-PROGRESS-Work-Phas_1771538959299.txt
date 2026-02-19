@@ -1,0 +1,122 @@
+Step 6: Final QC
+Started by EMP002
+IN PROGRESS
+Work Phase
+Process data entry, special process parameters
+
+1/1 complete
+Phase Complete
+
+Quality Control Checks
+
+QC • Required
+QC
+Complete WORK phase quality control verifications
+
+Inner dimensions*
+Requirement: 11.780
+Measured Result *
+GO
+
+Verified / Pass
+Outer dimensions - End #1*
+Requirement: 11.891-11.901
+Measured Result *
+11.900
+
+Verified / Pass
+Serial number visibility*
+Requirement: Serial numbers clearly marked on blue tape
+Measured Result *
+y
+
+Verified / Pass
+Seams marking*
+Requirement: Center of seams marked with orange marker
+Measured Result *
+y
+
+Verified / Pass
+Length*
+Requirement: >/= 96
+Measured Result *
+98.25
+
+Verified / Pass
+Weight recording*
+Requirement: Weight (g) for record only
+Measured Result *
+49.66
+
+Verified / Pass
+Completed by EMP002 at 2/19/2026, 4:08:55 PM
+
+Finish Phase
+QC checks, acceptance criteria, final sign-off
+
+0/4 complete
+
+Final QC Inspection
+
+QC • Required
+QC
+Complete FINISH phase quality control verifications
+
+Go/No Go on Inner Dimension*
+Tolerance: Go/No Go
+Requirement: 11.780
+Measured Result *
+Enter result (Tolerance: Go/No Go)
+
+Verified / Pass
+Zone 1 outer dimension measurement*
+Tolerance: +/- .005
+Requirement: 11.891-11.901
+Measured Result *
+Enter result (Tolerance: +/- .005)
+
+Verified / Pass
+Serial numbers clearly marked on blue tape*
+Tolerance: Y/N
+Requirement: Y/N
+Measured Result *
+Enter result (Tolerance: Y/N)
+
+Verified / Pass
+Tip to tip length*
+Tolerance: Minimum 96"
+Requirement: >/= 96"
+Measured Result *
+Enter result (Tolerance: Minimum 96")
+
+Verified / Pass
+Weight (g)*
+Tolerance: N/A
+Requirement: for record only
+Measured Result *
+Enter result (Tolerance: N/A)
+
+Verified / Pass
+Complete Task
+
+Visual Inspection
+
+QC • Required
+Perform visual inspection for defects, damage, and workmanship per AS9100 standards
+
+Complete Task
+
+Dimensional / Criteria Check
+
+QC • Required
+Verify critical dimensions and acceptance criteria are within tolerance per engineering drawing
+
+Complete Task
+
+Department Signoff — Final QC
+
+SIGNATURE • Required
+OPERATOR
+Operator signature required to complete Final QC
+
+Sign (OPERATOR)

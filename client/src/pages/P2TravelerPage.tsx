@@ -526,17 +526,19 @@ export default function P2TravelerPage() {
         }));
       };
 
-      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
+      const startQcStandards: QCStandard[] = data.departmentConfig.startQcStandards || [];
+      const finishQcStandards: QCStandard[] = data.departmentConfig.finishQcStandards || [];
+      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
+
+      const workQcStandards: QCStandard[] = hasPhaseQcStandards ? [] : (data.departmentConfig.qcStandards || []);
       if (workQcStandards.length > 0) {
         setQcResults(initQcArray(workQcStandards));
       }
 
-      const startQcStandards: QCStandard[] = data.departmentConfig.startQcStandards || [];
       if (startQcStandards.length > 0) {
         setStartQcResults(initQcArray(startQcStandards));
       }
 
-      const finishQcStandards: QCStandard[] = data.departmentConfig.finishQcStandards || [];
       if (finishQcStandards.length > 0) {
         setFinishQcResults(initQcArray(finishQcStandards));
       }

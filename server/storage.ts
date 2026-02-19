@@ -14183,12 +14183,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Phase-separated QC Standards - create separate QC tasks per phase to avoid duplication
+      // Phase-separated QC Standards - create separate QC tasks per phase
       const startQcStandards = deptConfig.startQcStandards || [];
-      const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
-
-      const usedQcCompositeKeys = new Set<string>();
+      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
+      const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
       const dedupeQcStandards = (standards: any[]): any[] => {
         const seenFieldKeys = new Set<string>();
@@ -14197,15 +14196,6 @@ export class DatabaseStorage implements IStorage {
           const fieldKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
           if (seenFieldKeys.has(fieldKey)) continue;
           seenFieldKeys.add(fieldKey);
-
-          const reqNorm = (qc.requirement || '').toString().trim().toLowerCase()
-            .replace(/[^a-z0-9./+-]/g, '');
-          const tolNorm = (qc.tolerance || '').toString().trim().toLowerCase()
-            .replace(/[^a-z0-9./+-]/g, '');
-          const compositeKey = `${reqNorm}||${tolNorm}`;
-          if (reqNorm && usedQcCompositeKeys.has(compositeKey)) continue;
-          if (reqNorm) usedQcCompositeKeys.add(compositeKey);
-
           out.push(qc);
         }
         return out;

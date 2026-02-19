@@ -1,0 +1,116 @@
+
+Final QC
+Step 6
+
+No technician
+START
+1
+WORK
+FINISH
+11
+Post-operation checks, QC verification, and signoff gates. Badge scan + signature required to complete.
+
+End Checks (2)
+Visual Inspection
+
+Perform visual inspection for defects, damage, and workmanship per AS9100 standards
+
+
+QC
+AUTO ON COMPLETE
+No Sig
+Cert No
+No Stop
+Dimensional / Criteria Check
+
+Verify critical dimensions and acceptance criteria are within tolerance per engineering drawing
+
+
+QC
+AUTO ON COMPLETE
+No Sig
+Cert No
+No Stop
+Check title (e.g., Visual Inspection)
+
+Finish Phase Data Fields (0)
+Fields operators fill in during the FINISH phase (e.g., final measurements, results).
+
+Field Name
+
+Text
+
+Required
+Add Field
+Finish Phase QC (8)
+Final quality checks and ratings completed after work is done (e.g., layup rating, surface finish).
+
+Go/No Go on Inner Dimension
+
+Tol: Go/No Go | Req: 11.780
+
+
+No Stop
+Zone 1 outer dimension measurement
+
+Tol: +/- .005 | Req: 11.891-11.901
+
+
+No Stop
+Zone 2 outer dimension measurement
+
+Tol: +/- .005 | Req: 11.891-11.901
+
+
+No Stop
+Zone 3 outer dimension measurement
+
+Tol: +/- .005 | Req: 11.891-11.901
+
+
+No Stop
+Serial numbers clearly marked on blue tape
+
+Tol: Y/N | Req: Y/N
+
+
+No Stop
+Center of seams marked with orange marker (zone 1)
+
+Tol: Y/N | Req: Y/N
+
+
+No Stop
+Tip to tip length
+
+Tol: Minimum 96" | Req: >/= 96"
+
+
+No Stop
+Weight (g)
+
+Tol: N/A | Req: for record only
+
+
+No Stop
+QC Standard (e.g., Layup Rating)
+Tolerance
+Requirement
+Reference link (table/chart URL, optional)
+Add QC Standard
+Department Signoff
+Step-level signatures for department completion. Each selected role generates a separate signoff task.
+
+
+Require signature to complete department
+
+Require signature to start department
+Select who must sign off (one task per role):
+
+Operator
+QC Inspector
+Lead / Supervisor
+Engineering
+Material Traceability (0)
+Search inventory to add material...
+Training & Certification Quiz

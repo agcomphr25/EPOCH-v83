@@ -1,0 +1,89 @@
+COPY-PASTE THIS INTO REPLIT AGENT
+We need to fix production Barcode Department cards showing:
+- Material: "Standard"
+- Action: "Unknown Action"
+for many PO-prefixed orders (e.g. PO-P18526-62-1).
+
+The dev database does not contain these orders and we cannot query production DB here.
+So we must:
+1) make derivation logic robust to missing/alternate spec keys
+2) add safe debug instrumentation to log why each order falls back
+3) avoid relying on modelId prefix as the primary source of truth
+
+-----------------------------------------
+A) IDENTIFY CURRENT DERIVATION PATHS
+-----------------------------------------
+
+1) Locate and return the exact code where Barcode card derives:
+   - material label (currently prefix-based: cf_/fg_/m1a_/apr_ -> else Standard)
+   - action label (currently from order.features.action_length -> else Unknown)
+
+Return those snippets and the order object shape the UI expects.
+
+-----------------------------------------
+B) IMPLEMENT ROBUST DERIVATION HELPERS
+-----------------------------------------
+
+Create a single helper (server-side preferred, client-side acceptable if necessary):
+
+deriveOrderLabels(order):
+  returns:
+    {
+      materialLabel,
+      actionLabel,
+      modelBadgeLabel (e.g., Tikka),
+      debugReasons: string[]
+    }
+
+Material derivation priority:
+  1) order.features.material OR order.features.material_type OR order.material
+  2) parsedSpecs.material / parsedSpecs.materialType / parsedSpecs.stockMaterial
+  3) infer from stockModel/modelId prefix only as LAST resort
+  4) if still unknown -> "Standard" with debugReasons appended
+
+Action derivation priority:
+  1) order.features.action_length OR order.features.actionLength
+  2) parsedSpecs.action_length OR parsedSpecs.actionLength
+  3) infer from stock model metadata mapping (if you have a model -> actionLength map)
+  4) fallback "Unknown Action" with debugReasons
+
+Tikka badge derivation priority:
+  1) parsedSpecs.inlet / parsedSpecs.platform / parsedSpecs.action / parsedSpecs.receiver fields
+  2) any existing model metadata mapping
+  3) infer from itemName/description containing "Tikka" (case-insensitive) as fallback
+  4) if still unknown -> no badge
+
+-----------------------------------------
+C) ADD SAFE DEBUG INSTRUMENTATION
+-----------------------------------------
+
+Add a temporary debug flag (env var or query param):
+  BARCODE_DEBUG_LABELS=true
+
+When enabled:
+- For each order in Barcode queue, log:
+    orderId, displayId, modelId, parsedSpecs keys present,
+    derived labels + debugReasons
+
+This must NOT log sensitive customer info.
+Only log keys and derived labels.
+
+-----------------------------------------
+D) APPLY THE HELPER TO BARCODE UI
+-----------------------------------------
+
+Update BarcodeQueuePage to use deriveOrderLabels(order)
+instead of prefix-only + action_length-only logic.
+
+Ensure existing orders still display correctly.
+
+-----------------------------------------
+E) RETURN
+-----------------------------------------
+
+Return:
+- All diffs
+- The deriveOrderLabels function
+- Exact places updated in BarcodeQueuePage
+- Instructions for how to enable debug logs in production
+  and what to look for in logs to confirm the root cause.

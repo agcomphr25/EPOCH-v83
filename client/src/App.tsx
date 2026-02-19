@@ -92,6 +92,7 @@ import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
 import P2CertificateViewer from './pages/P2CertificateViewer';
 import P2TestReportViewer from './pages/P2TestReportViewer';
 import POProductsPage from './pages/POProductsPage';
+import ProductLabelsPage from './pages/ProductLabelsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
@@ -478,6 +479,7 @@ function App() {
                   <Route path="/p2-purchase-orders">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/p2-department-manager">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/po-products" component={POProductsPage} />
+                  <Route path="/product-labels" component={ProductLabelsPage} />
 
                   {/* Production and BOM Routes */}
                   <Route

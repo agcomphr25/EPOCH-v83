@@ -126,6 +126,7 @@ import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
+import productLabelsRoutes from './productLabels';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -399,6 +400,9 @@ export function registerRoutes(app: Express): Server {
 
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
+
+  // Product Labels routes
+  app.use('/api/product-labels', productLabelsRoutes);
 
   // PO Shipping QC routes
   app.use('/api/po-orders', poShippingQCRoutes);

@@ -14165,26 +14165,6 @@ export class DatabaseStorage implements IStorage {
         (routingInstructionPack.media?.length > 0)
       );
 
-      // Production Timer task — when timer is configured for this department
-      if (hasTimerConfig) {
-        await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'TIMER',
-          taskPhase: 'WORK',
-          title: 'Production Timer',
-          instructions: deptConfig.timerConfig.defaultProgramName
-            ? `Start timer program: ${deptConfig.timerConfig.defaultProgramName}`
-            : 'Start a production timer for this operation',
-          required: false,
-          sortOrder: sortOrder++,
-          timePolicy: 'MANUAL_ENTRY',
-          requiresSignature: false,
-          requiresCertification: false,
-          instructionPack: { timerConfig: deptConfig.timerConfig },
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-      }
-
       // Work Instructions task — always create when instruction pack has content
       if (hasInstructionPack) {
         await this._createTaskIfAllowed({
@@ -14270,6 +14250,26 @@ export class DatabaseStorage implements IStorage {
             });
           }
         }
+      }
+
+      // Production Timer task — placed after data entry so workers record data before starting timer
+      if (hasTimerConfig) {
+        await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: 'TIMER',
+          taskPhase: 'WORK',
+          title: 'Production Timer',
+          instructions: deptConfig.timerConfig.defaultProgramName
+            ? `Start timer program: ${deptConfig.timerConfig.defaultProgramName}`
+            : 'Start a production timer for this operation',
+          required: false,
+          sortOrder: sortOrder++,
+          timePolicy: 'MANUAL_ENTRY',
+          requiresSignature: false,
+          requiresCertification: false,
+          instructionPack: { timerConfig: deptConfig.timerConfig },
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
       }
 
       // Standard Processes — extract custom data fields and QC standards from each process config

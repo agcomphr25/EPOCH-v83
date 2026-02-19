@@ -239,7 +239,12 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: 60000, // 1 minute instead of Infinity for better data freshness
-      retry: 1, // Allow 1 retry instead of false
+      retry: (failureCount: number, error: any) => {
+        if (error?.message?.includes('Not authenticated') || error?.message?.includes('Session expired')) {
+          return false;
+        }
+        return failureCount < 1;
+      },
     },
     mutations: {
       retry: false,

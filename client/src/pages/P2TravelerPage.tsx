@@ -89,6 +89,7 @@ interface QCStandard {
   standard: string;
   tolerance: string;
   requirement: string;
+  referenceLink?: string;
 }
 
 interface OvenCuringStep {
@@ -201,6 +202,68 @@ interface ActiveTask {
   startedAt: string;
 }
 
+function isWithinTolerance(measuredValue: string, tolerance: string, requirement: string): boolean | null {
+  if (!measuredValue.trim() || !tolerance) return null;
+  const val = measuredValue.trim().toLowerCase();
+  const tol = tolerance.trim().toLowerCase();
+
+  if (tol === 'n/a' || tol === 'for record only') return true;
+
+  if (tol === 'y/n' || tol === 'yes/no') {
+    return val === 'y' || val === 'yes';
+  }
+  if (tol === 'pass/fail' || tol === 'pass/ fail') {
+    return val === 'pass' || val === 'p';
+  }
+  if (tol === 'go/no go' || tol === 'go / no go' || tol === 'go/nogo') {
+    return val === 'go' || val === 'yes' || val === 'pass';
+  }
+
+  const numVal = parseFloat(val.replace(/[^0-9.\-]/g, ''));
+  if (isNaN(numVal)) return null;
+
+  const rangeMatch = tol.match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
+  if (rangeMatch) {
+    const lo = parseFloat(rangeMatch[1]);
+    const hi = parseFloat(rangeMatch[2]);
+    return numVal >= lo && numVal <= hi;
+  }
+
+  const reqRange = (requirement || '').trim().match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
+  if (reqRange) {
+    const lo = parseFloat(reqRange[1]);
+    const hi = parseFloat(reqRange[2]);
+    return numVal >= lo && numVal <= hi;
+  }
+
+  const pmMatch = tol.match(/[+±]\/?-?\s*\.?(\d+\.?\d*)/);
+  if (pmMatch) {
+    const dev = parseFloat(pmMatch[1]);
+    const reqVal = parseFloat((requirement || '').replace(/[^0-9.\-]/g, ''));
+    if (!isNaN(reqVal)) {
+      return numVal >= (reqVal - dev) && numVal <= (reqVal + dev);
+    }
+  }
+
+  const minMatch = tol.match(/min(?:imum)?\s*(\d+\.?\d*)/i);
+  if (minMatch) {
+    return numVal >= parseFloat(minMatch[1]);
+  }
+
+  if (tol.match(/level\s/i)) {
+    const levelMatch = val.match(/level\s*(\w+)/i) || val.match(/^(\w+)$/i);
+    const tolLevel = tol.match(/level\s*(\w+)/i);
+    if (levelMatch && tolLevel) {
+      const levelOrder: Record<string, number> = { 'i': 1, 'ii': 2, 'iii': 3, '1': 1, '2': 2, '3': 3 };
+      const measuredLevel = levelOrder[levelMatch[1].toLowerCase()] ?? 99;
+      const maxLevel = levelOrder[tolLevel[1].toLowerCase()] ?? 99;
+      return measuredLevel <= maxLevel;
+    }
+  }
+
+  return null;
+}
+
 export default function P2TravelerPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -215,6 +278,8 @@ export default function P2TravelerPage() {
   const [traceabilityData, setTraceabilityData] = useState<Array<{
     inventoryPartId?: string;
     inventoryPartNumber?: string;
+    materialIndex?: number;
+    materialLabel?: string;
     type: string;
     label: string;
     value: string;
@@ -226,6 +291,7 @@ export default function P2TravelerPage() {
     requirement: string;
     measuredValue: string;
     passed: boolean | null;
+    referenceLink?: string;
   }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
@@ -374,14 +440,16 @@ export default function P2TravelerPage() {
       const initialTraceability: any[] = [];
       const materialFieldTypes = new Set<string>();
       
-      // Add material requirements
+      // Add material requirements - tag each with material index for grouping
       if (data.departmentConfig.materials) {
-        data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
+        data.departmentConfig.materials.forEach((material: MaterialRequirement, matIdx: number) => {
           material.requiredFields.forEach((fieldType: string) => {
             materialFieldTypes.add(fieldType);
             initialTraceability.push({
               inventoryPartId: material.partId,
               inventoryPartNumber: material.partNumber,
+              materialIndex: matIdx,
+              materialLabel: material.partName || material.partNumber || `Material ${matIdx + 1}`,
               type: fieldType,
               label: `${material.partName} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
               value: '',
@@ -436,12 +504,13 @@ export default function P2TravelerPage() {
           seenStandards.add(key);
           return true;
         });
-        setQcResults(uniqueQcStandards.map((qc: QCStandard) => ({
+        setQcResults(uniqueQcStandards.map((qc: any) => ({
           standard: qc.standard,
           tolerance: qc.tolerance,
           requirement: qc.requirement,
           measuredValue: '',
           passed: null,
+          ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
         })));
       }
 
@@ -606,6 +675,29 @@ export default function P2TravelerPage() {
     const updated = [...traceabilityData];
     updated[index].value = value;
     setTraceabilityData(updated);
+  };
+
+  // Add another material traceability entry
+  const addMaterialTraceEntry = () => {
+    const existingMaterialIndices = traceabilityData
+      .filter(item => item.materialIndex !== undefined)
+      .map(item => item.materialIndex!);
+    const nextIndex = existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+    
+    const defaultFields = ['material_lot', 'material_expiration_date'];
+    const newEntries = defaultFields.map(fieldType => ({
+      materialIndex: nextIndex,
+      materialLabel: `Material ${nextIndex + 1}`,
+      type: fieldType,
+      label: `Material ${nextIndex + 1} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
+      value: '',
+    }));
+    setTraceabilityData(prev => [...prev, ...newEntries]);
+  };
+
+  // Remove a material group by index
+  const removeMaterialGroup = (materialIndex: number) => {
+    setTraceabilityData(prev => prev.filter(item => item.materialIndex !== materialIndex));
   };
 
   // Handle custom data update
@@ -897,74 +989,134 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Material Traceability Section — only shown when department has trace requirements */}
-                  {traceabilityData.length > 0 && (
+                  {/* Material Traceability Section — always shown so workers can add materials */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-semibold">Material Traceability <span className="text-sm font-normal text-muted-foreground">(Optional)</span></Label>
-                      <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
-                        <TabsList className="h-8">
-                          <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">
-                            <QrCode className="h-3 w-3" />
-                            Scan Barcode
-                          </TabsTrigger>
-                          <TabsTrigger value="manual" className="text-xs px-3 gap-1" data-testid="tab-manual-mode">
-                            <FileText className="h-3 w-3" />
-                            Control Number
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
+                      {traceabilityData.length > 0 && (
+                        <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
+                          <TabsList className="h-8">
+                            <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">
+                              <QrCode className="h-3 w-3" />
+                              Scan Barcode
+                            </TabsTrigger>
+                            <TabsTrigger value="manual" className="text-xs px-3 gap-1" data-testid="tab-manual-mode">
+                              <FileText className="h-3 w-3" />
+                              Control Number
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      )}
                     </div>
 
-                    {traceabilityMode === 'scan' ? (
-                      <div className="space-y-3">
-                        <Alert>
-                          <QrCode className="h-4 w-4" />
-                          <AlertDescription>
-                            Scan material packet barcode to capture lot/batch traceability data
-                          </AlertDescription>
-                        </Alert>
-                        {traceabilityData.map((item, index) => (
-                          <div key={index} className="space-y-2">
-                            <Label htmlFor={`trace-${index}`}>{item.label}</Label>
-                            <Input
-                              id={`trace-${index}`}
-                              type="text"
-                              value={item.value}
-                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
-                              placeholder={`Scan barcode for ${item.label}...`}
-                              autoFocus={index === 0}
-                              data-testid={`input-trace-${index}`}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <Alert>
-                          <FileText className="h-4 w-4" />
-                          <AlertDescription>
-                            Enter internal control number to link traceability records
-                          </AlertDescription>
-                        </Alert>
-                        {traceabilityData.map((item, index) => (
-                          <div key={index} className="space-y-2">
-                            <Label htmlFor={`trace-manual-${index}`}>{item.label} - Control Number</Label>
-                            <Input
-                              id={`trace-manual-${index}`}
-                              type="text"
-                              value={item.value}
-                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
-                              placeholder="Enter internal control number..."
-                              autoFocus={index === 0}
-                              data-testid={`input-trace-manual-${index}`}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const materialGroups = new Map<number, typeof traceabilityData>();
+                      const ungrouped: typeof traceabilityData = [];
+                      traceabilityData.forEach((item, idx) => {
+                        if (item.materialIndex !== undefined) {
+                          if (!materialGroups.has(item.materialIndex)) materialGroups.set(item.materialIndex, []);
+                          materialGroups.get(item.materialIndex)!.push({ ...item, _originalIndex: idx } as any);
+                        } else {
+                          ungrouped.push({ ...item, _originalIndex: idx } as any);
+                        }
+                      });
+
+                      const materialGroupEntries = Array.from(materialGroups.entries()).sort((a, b) => a[0] - b[0]);
+                      const totalMaterials = materialGroupEntries.length;
+
+                      return (
+                        <div className="space-y-3">
+                          {traceabilityData.length > 0 && (
+                            traceabilityMode === 'scan' ? (
+                              <Alert>
+                                <QrCode className="h-4 w-4" />
+                                <AlertDescription>
+                                  Scan material packet barcode to capture lot/batch traceability data
+                                </AlertDescription>
+                              </Alert>
+                            ) : (
+                              <Alert>
+                                <FileText className="h-4 w-4" />
+                                <AlertDescription>
+                                  Enter internal control number to link traceability records
+                                </AlertDescription>
+                              </Alert>
+                            )
+                          )}
+
+                          {materialGroupEntries.map(([matIdx, items]) => (
+                            <div key={matIdx} className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/20 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Package className="h-4 w-4 text-blue-600" />
+                                  <span className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                                    {items[0]?.materialLabel || `Material ${matIdx + 1}`}
+                                  </span>
+                                  {totalMaterials > 1 && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                      {matIdx + 1} of {totalMaterials}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {!(items as any)[0]?.inventoryPartId && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
+                                    onClick={() => removeMaterialGroup(matIdx)}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              {items.map((item: any) => (
+                                <div key={item._originalIndex} className="space-y-1">
+                                  <Label htmlFor={`trace-${item._originalIndex}`} className="text-xs">
+                                    {item.type.replace(/_/g, ' ').toUpperCase()}
+                                  </Label>
+                                  <Input
+                                    id={`trace-${item._originalIndex}`}
+                                    type="text"
+                                    value={item.value}
+                                    onChange={(e) => updateTraceabilityField(item._originalIndex, e.target.value)}
+                                    placeholder={traceabilityMode === 'scan' ? `Scan barcode...` : 'Enter control number...'}
+                                    data-testid={`input-trace-${item._originalIndex}`}
+                                    className="h-9"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+
+                          {ungrouped.map((item: any) => (
+                            <div key={item._originalIndex} className="space-y-2">
+                              <Label htmlFor={`trace-${item._originalIndex}`}>{item.label}</Label>
+                              <Input
+                                id={`trace-${item._originalIndex}`}
+                                type="text"
+                                value={item.value}
+                                onChange={(e) => updateTraceabilityField(item._originalIndex, e.target.value)}
+                                placeholder={traceabilityMode === 'scan' ? `Scan barcode for ${item.label}...` : 'Enter control number...'}
+                                data-testid={`input-trace-${item._originalIndex}`}
+                              />
+                            </div>
+                          ))}
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-dashed border-blue-300 text-blue-700 hover:bg-blue-50"
+                            onClick={addMaterialTraceEntry}
+                          >
+                            <Package className="h-4 w-4 mr-2" />
+                            {traceabilityData.length > 0 ? 'Add Another Material' : 'Add Material'}
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  )}
 
                   {/* Start Phase Checks */}
                   {verificationData.departmentConfig.startChecks && verificationData.departmentConfig.startChecks.length > 0 && (
@@ -1071,6 +1223,11 @@ export default function P2TravelerPage() {
                                 <div className="text-xs text-muted-foreground">
                                   Tolerance: <span className="font-mono">{qc.tolerance}</span> · {qc.requirement}
                                 </div>
+                                {qc.referenceLink && (
+                                  <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-0.5">
+                                    <ExternalLink className="h-3 w-3" /> Reference Table/Chart
+                                  </a>
+                                )}
                               </div>
                               <div className="flex gap-1">
                                 <Button
@@ -1111,6 +1268,9 @@ export default function P2TravelerPage() {
                               onChange={(e) => {
                                 const updated = [...qcResults];
                                 updated[index].measuredValue = e.target.value;
+                                const result = isWithinTolerance(e.target.value, qc.tolerance, qc.requirement);
+                                if (result === true) updated[index].passed = true;
+                                else if (result === false) updated[index].passed = false;
                                 setQcResults(updated);
                               }}
                               placeholder="Enter measured value..."

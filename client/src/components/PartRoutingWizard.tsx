@@ -64,6 +64,7 @@ import {
   CheckSquare,
   Settings,
   Flag,
+  ExternalLink,
 } from 'lucide-react';
 import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
@@ -115,6 +116,7 @@ interface QCStandard {
   tolerance: string; // Acceptable tolerance/variance
   requirement: string; // Specific requirement or specification
   hardQcStop?: boolean;
+  referenceLink?: string; // URL to reference table, chart, or document
 }
 
 interface OvenCuringStep {
@@ -319,7 +321,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
-  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string }>>({});
+  const [qcReferenceLinkInput, setQcReferenceLinkInput] = useState<string>('');
+  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string; referenceLink?: string }>>({});
   
   const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
   const [showDocPicker, setShowDocPicker] = useState(false);
@@ -345,6 +348,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [stdQcStandard, setStdQcStandard] = useState<string>('');
   const [stdQcTolerance, setStdQcTolerance] = useState<string>('');
   const [stdQcRequirement, setStdQcRequirement] = useState<string>('');
+  const [stdQcReferenceLink, setStdQcReferenceLink] = useState<string>('');
   const [stdFieldName, setStdFieldName] = useState<string>('');
   const [stdFieldType, setStdFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
   const [stdFieldRequired, setStdFieldRequired] = useState<boolean>(false);
@@ -360,6 +364,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [spQcStandard, setSpQcStandard] = useState<string>('');
   const [spQcTolerance, setSpQcTolerance] = useState<string>('');
   const [spQcRequirement, setSpQcRequirement] = useState<string>('');
+  const [spQcReferenceLink, setSpQcReferenceLink] = useState<string>('');
   const [spFieldName, setSpFieldName] = useState<string>('');
   const [spFieldType, setSpFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
   const [spFieldRequired, setSpFieldRequired] = useState<boolean>(false);
@@ -850,6 +855,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       standard: qcStandardInput.trim(),
       tolerance: qcToleranceInput.trim(),
       requirement: qcRequirementInput.trim(),
+      ...(qcReferenceLinkInput.trim() ? { referenceLink: qcReferenceLinkInput.trim() } : {}),
     };
 
     setDepartmentConfig({
@@ -860,10 +866,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       },
     });
     
-    // Clear inputs
     setQcStandardInput('');
     setQcToleranceInput('');
     setQcRequirementInput('');
+    setQcReferenceLinkInput('');
     
     toast({
       title: 'QC Standard Added',
@@ -1027,11 +1033,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         standard: stdQcStandard.trim(),
         tolerance: stdQcTolerance.trim(),
         requirement: stdQcRequirement.trim(),
+        ...(stdQcReferenceLink.trim() ? { referenceLink: stdQcReferenceLink.trim() } : {}),
       }],
     });
     setStdQcStandard('');
     setStdQcTolerance('');
     setStdQcRequirement('');
+    setStdQcReferenceLink('');
   };
 
   const removeStdQcStandard = (index: number) => {
@@ -1208,11 +1216,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         standard: spQcStandard.trim(),
         tolerance: spQcTolerance.trim(),
         requirement: spQcRequirement.trim(),
+        ...(spQcReferenceLink.trim() ? { referenceLink: spQcReferenceLink.trim() } : {}),
       }],
     });
     setSpQcStandard('');
     setSpQcTolerance('');
     setSpQcRequirement('');
+    setSpQcReferenceLink('');
   };
 
   // Remove QC standard from special process
@@ -1346,13 +1356,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string) => {
     const s = standard || qcStandardInput;
     const t = tolerance || qcToleranceInput;
     const r = requirement || qcRequirementInput;
     if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim(), ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}) };
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, startQcStandards: [...(config.startQcStandards || []), newStandard] },
@@ -1368,13 +1378,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string) => {
+  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string) => {
     const s = standard || qcStandardInput;
     const t = tolerance || qcToleranceInput;
     const r = requirement || qcRequirementInput;
     if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim() };
+    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim(), ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}) };
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, finishQcStandards: [...(config.finishQcStandards || []), newStandard] },
@@ -2126,6 +2136,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium">{qc.standard}</p>
                                             <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                            {qc.referenceLink && (
+                                              <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 mt-0.5">
+                                                <ExternalLink className="h-2.5 w-2.5" /> Reference
+                                              </a>
+                                            )}
                                           </div>
                                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStartQcStandard(dept, idx)}>
                                             <X className="h-3 w-3" />
@@ -2151,11 +2166,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Input placeholder="Tolerance" value={qcInputDept[`start_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
                                     <Input placeholder="Requirement" value={qcInputDept[`start_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
+                                  <Input placeholder="Reference link (table/chart URL, optional)" value={qcInputDept[`start_${dept}`]?.referenceLink || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), referenceLink: e.target.value } }))} className="text-sm" />
                                   <Button size="sm" onClick={() => {
                                     const vals = qcInputDept[`start_${dept}`];
                                     if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
-                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
-                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink);
+                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '' } }));
                                   }} disabled={!qcInputDept[`start_${dept}`]?.standard?.trim() || !qcInputDept[`start_${dept}`]?.tolerance?.trim() || !qcInputDept[`start_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
@@ -2852,6 +2868,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium">{qc.standard}</p>
                                             <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                            {qc.referenceLink && (
+                                              <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 mt-0.5">
+                                                <ExternalLink className="h-2.5 w-2.5" /> Reference
+                                              </a>
+                                            )}
                                           </div>
                                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFinishQcStandard(dept, idx)}>
                                             <X className="h-3 w-3" />
@@ -2877,11 +2898,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Input placeholder="Tolerance" value={qcInputDept[`finish_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
                                     <Input placeholder="Requirement" value={qcInputDept[`finish_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
+                                  <Input placeholder="Reference link (table/chart URL, optional)" value={qcInputDept[`finish_${dept}`]?.referenceLink || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), referenceLink: e.target.value } }))} className="text-sm" />
                                   <Button size="sm" onClick={() => {
                                     const vals = qcInputDept[`finish_${dept}`];
                                     if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
-                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement);
-                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink);
+                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '' } }));
                                   }} disabled={!qcInputDept[`finish_${dept}`]?.standard?.trim() || !qcInputDept[`finish_${dept}`]?.tolerance?.trim() || !qcInputDept[`finish_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
@@ -3489,6 +3511,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             <p className="font-mono">{qc.requirement}</p>
                           </div>
                         </div>
+                        {qc.referenceLink && (
+                          <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-2">
+                            <ExternalLink className="h-3 w-3" /> Reference Table/Chart
+                          </a>
+                        )}
                       </Card>
                     ))}
                   </div>
@@ -3509,6 +3536,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     placeholder="Requirement (e.g., 32 Ra max)"
                     value={spQcRequirement}
                     onChange={(e) => setSpQcRequirement(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Reference link (table/chart URL, optional)"
+                    value={spQcReferenceLink}
+                    onChange={(e) => setSpQcReferenceLink(e.target.value)}
                   />
                   <Button
                     size="sm"
@@ -3820,6 +3852,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             <p className="font-mono">{qc.requirement}</p>
                           </div>
                         </div>
+                        {qc.referenceLink && (
+                          <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-2">
+                            <ExternalLink className="h-3 w-3" /> Reference Table/Chart
+                          </a>
+                        )}
                       </Card>
                     ))}
                   </div>
@@ -3840,6 +3877,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     placeholder="Requirement (e.g., 32 Ra max)"
                     value={stdQcRequirement}
                     onChange={(e) => setStdQcRequirement(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Reference link (table/chart URL, optional)"
+                    value={stdQcReferenceLink}
+                    onChange={(e) => setStdQcReferenceLink(e.target.value)}
                   />
                   <Button
                     size="sm"

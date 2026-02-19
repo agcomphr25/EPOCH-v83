@@ -56,6 +56,7 @@ interface QCStandard {
   standard: string;
   tolerance: string;
   requirement: string;
+  referenceLink?: string;
 }
 
 interface OvenCuringStep {

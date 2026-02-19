@@ -788,8 +788,6 @@ router.get('/session', async (req, res) => {
       req.cookies?.sessionToken ||
       req.headers.authorization?.replace('Bearer ', '');
 
-    console.log('🔍 Session check - token present:', !!sessionToken, 'from cookie:', !!req.cookies?.sessionToken);
-
     if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }

@@ -630,14 +630,101 @@ export default function TravelerExecution() {
     },
   });
 
+  const isWithinTolerance = (measuredValue: string, tolerance: string, requirement: string): boolean | null => {
+    if (!measuredValue.trim() || !tolerance) return null;
+    const val = measuredValue.trim().toLowerCase();
+    const tol = tolerance.trim().toLowerCase();
+
+    if (tol === 'n/a' || tol === 'for record only') return true;
+
+    if (tol === 'y/n' || tol === 'yes/no') {
+      return val === 'y' || val === 'yes';
+    }
+    if (tol === 'pass/fail' || tol === 'pass/ fail') {
+      return val === 'pass' || val === 'p';
+    }
+    if (tol === 'go/no go' || tol === 'go / no go' || tol === 'go/nogo') {
+      return val === 'go' || val === 'yes' || val === 'pass';
+    }
+
+    const numVal = parseFloat(val.replace(/[^0-9.\-]/g, ''));
+    if (isNaN(numVal)) return null;
+
+    const rangeMatch = tol.match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
+    if (rangeMatch) {
+      const lo = parseFloat(rangeMatch[1]);
+      const hi = parseFloat(rangeMatch[2]);
+      return numVal >= lo && numVal <= hi;
+    }
+
+    const reqRange = (requirement || '').trim().match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
+    if (reqRange) {
+      const lo = parseFloat(reqRange[1]);
+      const hi = parseFloat(reqRange[2]);
+      return numVal >= lo && numVal <= hi;
+    }
+
+    const pmMatch = tol.match(/[+±]\/?-?\s*\.?(\d+\.?\d*)/);
+    if (pmMatch) {
+      const dev = parseFloat(pmMatch[1]);
+      const reqVal = parseFloat((requirement || '').replace(/[^0-9.\-]/g, ''));
+      if (!isNaN(reqVal)) {
+        return numVal >= (reqVal - dev) && numVal <= (reqVal + dev);
+      }
+    }
+
+    const minMatch = tol.match(/min(?:imum)?\s*(\d+\.?\d*)/i);
+    if (minMatch) {
+      return numVal >= parseFloat(minMatch[1]);
+    }
+    const geMatch = (requirement || '').trim().match(/^>?\/?=?\s*(\d+\.?\d*)/);
+    if (geMatch && tol.includes('min')) {
+      return numVal >= parseFloat(geMatch[1]);
+    }
+
+    if (tol.match(/level\s/i)) {
+      const levelMatch = val.match(/level\s*(\w+)/i) || val.match(/^(\w+)$/i);
+      const tolLevel = tol.match(/level\s*(\w+)/i);
+      if (levelMatch && tolLevel) {
+        const levelOrder: Record<string, number> = { 'i': 1, 'ii': 2, 'iii': 3, '1': 1, '2': 2, '3': 3 };
+        const measuredLevel = levelOrder[levelMatch[1].toLowerCase()] ?? 99;
+        const maxLevel = levelOrder[tolLevel[1].toLowerCase()] ?? 99;
+        return measuredLevel <= maxLevel;
+      }
+    }
+
+    return null;
+  };
+
   const handleFieldChange = (taskId: string, fieldKey: string, value: string) => {
-    setFieldValues((prev) => ({
-      ...prev,
-      [taskId]: {
-        ...prev[taskId],
-        [fieldKey]: value,
-      },
-    }));
+    setFieldValues((prev) => {
+      const updated = {
+        ...prev,
+        [taskId]: {
+          ...prev[taskId],
+          [fieldKey]: value,
+        },
+      };
+
+      if (fieldKey.endsWith('_result')) {
+        const baseKey = fieldKey.replace(/_result$/, '');
+        const step = travelerData?.steps?.find((s: any) =>
+          s.tasks?.some((t: any) => t.id === taskId)
+        );
+        const task = step?.tasks?.find((t: any) => t.id === taskId);
+        const field = task?.fields?.find((f: any) => f.fieldKey === baseKey);
+        if (field?.validation?.tolerance) {
+          const result = isWithinTolerance(value, field.validation.tolerance, field.validation.requirement);
+          if (result === true) {
+            updated[taskId] = { ...updated[taskId], [baseKey]: 'yes' };
+          } else if (result === false) {
+            updated[taskId] = { ...updated[taskId], [baseKey]: 'no' };
+          }
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
@@ -1545,6 +1632,12 @@ export default function TravelerExecution() {
                                                                 <Shield className="h-3 w-3" />
                                                                 Requirement: {field.validation.requirement}
                                                               </span>
+                                                            )}
+                                                            {field.validation.referenceLink && (
+                                                              <a href={field.validation.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer no-underline">
+                                                                <ExternalLink className="h-3 w-3" />
+                                                                Reference
+                                                              </a>
                                                             )}
                                                             {field.validation.temperature && (
                                                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">

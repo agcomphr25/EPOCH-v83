@@ -881,8 +881,10 @@ export default function TravelerExecution() {
                       ) : (
                         <div className="space-y-3">
                           <div>
-                            <Label className="text-xs">Reason for admin action</Label>
+                            <Label htmlFor="admin-force-reason" className="text-xs">Reason for admin action</Label>
                             <Input
+                              id="admin-force-reason"
+                              name="admin-force-reason"
                               value={adminForceReason}
                               onChange={(e) => setAdminForceReason(e.target.value)}
                               placeholder="e.g., Work completed before digital system"
@@ -1009,8 +1011,10 @@ export default function TravelerExecution() {
                     </p>
                     <div className="max-w-xs mx-auto space-y-3">
                       <div className="space-y-1">
-                        <Label className="text-sm">Scan Badge</Label>
+                        <Label htmlFor="step-badge-scan" className="text-sm">Scan Badge</Label>
                         <Input
+                          id="step-badge-scan"
+                          name="step-badge-scan"
                           type="password"
                           placeholder="Scan badge..."
                           value={signatureData.badgeScan}
@@ -1031,8 +1035,10 @@ export default function TravelerExecution() {
                               Badge not recognized. Enter your name manually to continue.
                             </p>
                             <div className="space-y-1">
-                              <Label className="text-sm">Your Name</Label>
+                              <Label htmlFor="tech-name-fallback" className="text-sm">Your Name</Label>
                               <Input
+                                id="tech-name-fallback"
+                                name="tech-name-fallback"
                                 placeholder="Enter your full name..."
                                 value={signatureData.signedByName}
                                 onChange={(e) =>
@@ -1559,6 +1565,8 @@ export default function TravelerExecution() {
                                                               Measured Result {field.required && <span className="text-red-500">*</span>}
                                                             </Label>
                                                             <Input
+                                                              id={`qc-result-${task.id}-${field.fieldKey}`}
+                                                              name={`qc-result-${task.id}-${field.fieldKey}`}
                                                               placeholder={field.validation?.tolerance ? `Enter result (Tolerance: ${field.validation.tolerance})` : 'Enter measured result...'}
                                                               value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
                                                               onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
@@ -1593,6 +1601,8 @@ export default function TravelerExecution() {
                                                       <div className="space-y-1">
                                                         <div className="flex gap-2">
                                                           <Input
+                                                            id={`inv-${task.id}-${field.fieldKey}`}
+                                                            name={`inv-${task.id}-${field.fieldKey}`}
                                                             value={
                                                               fieldValues[task.id]?.[field.fieldKey] ||
                                                               field.value ||
@@ -1626,6 +1636,8 @@ export default function TravelerExecution() {
                                                       </div>
                                                     ) : field.fieldType === 'textarea' ? (
                                                       <Textarea
+                                                        id={`ta-${task.id}-${field.fieldKey}`}
+                                                        name={`ta-${task.id}-${field.fieldKey}`}
                                                         value={
                                                           fieldValues[task.id]?.[field.fieldKey] ||
                                                           field.value ||
@@ -1643,6 +1655,8 @@ export default function TravelerExecution() {
                                                       />
                                                     ) : (
                                                       <Input
+                                                        id={`field-${task.id}-${field.fieldKey}`}
+                                                        name={`field-${task.id}-${field.fieldKey}`}
                                                         type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
                                                         value={
                                                           fieldValues[task.id]?.[field.fieldKey] ||
@@ -1892,8 +1906,10 @@ export default function TravelerExecution() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Employee ID / Badge *</Label>
+                <Label htmlFor="sign-badge">Employee ID / Badge *</Label>
                 <Input
+                  id="sign-badge"
+                  name="sign-badge"
                   type="password"
                   value={signatureData.signedBy}
                   onChange={(e) =>
@@ -1905,8 +1921,10 @@ export default function TravelerExecution() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Full Name</Label>
+                <Label htmlFor="sign-name">Full Name</Label>
                 <Input
+                  id="sign-name"
+                  name="sign-name"
                   value={signatureData.signedByName}
                   onChange={(e) =>
                     setSignatureData({ ...signatureData, signedByName: e.target.value })
@@ -2060,8 +2078,10 @@ export default function TravelerExecution() {
             </div>
 
             <div className="space-y-2">
-              <Label>Authorized Approver Name *</Label>
+              <Label htmlFor="qc-approver-name">Authorized Approver Name *</Label>
               <Input
+                id="qc-approver-name"
+                name="qc-approver-name"
                 value={qcApproverName}
                 onChange={(e) => setQcApproverName(e.target.value)}
                 placeholder="Enter approver's full name..."
@@ -2069,8 +2089,10 @@ export default function TravelerExecution() {
             </div>
 
             <div className="space-y-2">
-              <Label>Approval Notes / Justification *</Label>
+              <Label htmlFor="qc-approval-notes">Approval Notes / Justification *</Label>
               <Textarea
+                id="qc-approval-notes"
+                name="qc-approval-notes"
                 value={qcApprovalNotes}
                 onChange={(e) => setQcApprovalNotes(e.target.value)}
                 placeholder="Explain why this deviation is acceptable..."

@@ -91,7 +91,11 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     }
 
     if (!serializedItem) {
-      return res.status(404).json({ error: 'Part not found' });
+      const looksLikeBadge = /^EMP\d+$/i.test(barcode) || barcode.toUpperCase() === employeeCode.toUpperCase();
+      if (looksLikeBadge) {
+        return res.status(404).json({ error: 'That looks like a badge code, not a part barcode. Please scan the part label instead.' });
+      }
+      return res.status(404).json({ error: 'Part not found. Verify the barcode and try again.' });
     }
 
     // Get part routing - try exact match first, then base part number (without revision)

@@ -293,6 +293,22 @@ export default function P2TravelerPage() {
     passed: boolean | null;
     referenceLink?: string;
   }>>([]);
+  const [startQcResults, setStartQcResults] = useState<Array<{
+    standard: string;
+    tolerance: string;
+    requirement: string;
+    measuredValue: string;
+    passed: boolean | null;
+    referenceLink?: string;
+  }>>([]);
+  const [finishQcResults, setFinishQcResults] = useState<Array<{
+    standard: string;
+    tolerance: string;
+    requirement: string;
+    measuredValue: string;
+    passed: boolean | null;
+    referenceLink?: string;
+  }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
@@ -327,6 +343,8 @@ export default function P2TravelerPage() {
     setTraceabilityData([]);
     setCustomData({});
     setQcResults([]);
+    setStartQcResults([]);
+    setFinishQcResults([]);
     setNotes('');
     setTraceabilityMode('scan');
     setShowOvenModal(false);
@@ -491,25 +509,36 @@ export default function P2TravelerPage() {
         setCustomData(initialCustomData);
       }
 
-      // Initialize QC standards - only use work-phase qcStandards here
-      // Start and finish QC standards are rendered in their respective phase sections
-      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
-      if (workQcStandards.length > 0) {
-        const seenStandards = new Set<string>();
-        const uniqueQcStandards = workQcStandards.filter(qc => {
+      const initQcArray = (standards: QCStandard[]) => {
+        const seen = new Set<string>();
+        return standards.filter(qc => {
           const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
-          if (seenStandards.has(key)) return false;
-          seenStandards.add(key);
+          if (seen.has(key)) return false;
+          seen.add(key);
           return true;
-        });
-        setQcResults(uniqueQcStandards.map((qc: any) => ({
+        }).map((qc: any) => ({
           standard: qc.standard,
-          tolerance: qc.tolerance,
-          requirement: qc.requirement,
+          tolerance: qc.tolerance || '',
+          requirement: qc.requirement || '',
           measuredValue: '',
           passed: null,
           ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
-        })));
+        }));
+      };
+
+      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
+      if (workQcStandards.length > 0) {
+        setQcResults(initQcArray(workQcStandards));
+      }
+
+      const startQcStandards: QCStandard[] = data.departmentConfig.startQcStandards || [];
+      if (startQcStandards.length > 0) {
+        setStartQcResults(initQcArray(startQcStandards));
+      }
+
+      const finishQcStandards: QCStandard[] = data.departmentConfig.finishQcStandards || [];
+      if (finishQcStandards.length > 0) {
+        setFinishQcResults(initQcArray(finishQcStandards));
       }
 
       setScanState('PART_SCANNED');
@@ -580,8 +609,9 @@ export default function P2TravelerPage() {
       }
 
       // Validate QC results - all must have a measured value and pass/fail
-      if (qcResults.length > 0) {
-        const incompleteQc = qcResults.filter(r => !r.measuredValue.trim() || r.passed === null);
+      const allQcResults = [...qcResults, ...startQcResults, ...finishQcResults];
+      if (allQcResults.length > 0) {
+        const incompleteQc = allQcResults.filter(r => !r.measuredValue.trim() || r.passed === null);
         if (incompleteQc.length > 0) {
           throw new Error(`Please enter measured values and mark pass/fail for all QC standards`);
         }
@@ -603,7 +633,7 @@ export default function P2TravelerPage() {
           partName: item.partName || item.partNumber || 'Unknown',
           traceabilityData: traceabilityData.filter(item => item.value.trim()),
           customData: Object.keys(customData).length > 0 ? customData : null,
-          qcResults: qcResults.length > 0 ? qcResults : null,
+          qcResults: allQcResults.length > 0 ? allQcResults : null,
           notes,
         }),
       }) as any;
@@ -1138,20 +1168,32 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Start Phase QC Standards */}
-                  {verificationData.departmentConfig.startQcStandards && verificationData.departmentConfig.startQcStandards.length > 0 && (
+                  {/* Start Phase QC Standards - with result entry */}
+                  {startQcResults.length > 0 && (
                     <div className="space-y-3 rounded-lg border-2 border-green-200 bg-green-50/50 p-4">
                       <div className="flex items-center gap-2 pb-1 border-b border-green-200">
                         <ClipboardCheck className="h-4 w-4 text-green-600" />
-                        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase QC Standards</p>
+                        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase QC Standards — Enter Results</p>
                       </div>
-                      {verificationData.departmentConfig.startQcStandards.map((qc, idx) => (
-                        <div key={idx} className="bg-white rounded-md border border-green-100 p-2">
-                          <p className="text-sm font-medium">{qc.standard}</p>
-                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
-                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
-                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
+                      {startQcResults.map((qc, index) => (
+                        <div key={index} className={`border rounded-lg p-3 space-y-2 ${qc.passed === true ? 'border-green-300 bg-green-50' : qc.passed === false ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">{qc.standard}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {qc.tolerance && <>Tolerance: <span className="font-mono">{qc.tolerance}</span> · </>}{qc.requirement}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button type="button" size="sm" variant={qc.passed === true ? 'default' : 'outline'} className={`h-8 px-3 ${qc.passed === true ? 'bg-green-600 hover:bg-green-700' : ''}`} onClick={() => { const u = [...startQcResults]; u[index].passed = true; setStartQcResults(u); }}>
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" /> Pass
+                              </Button>
+                              <Button type="button" size="sm" variant={qc.passed === false ? 'default' : 'outline'} className={`h-8 px-3 ${qc.passed === false ? 'bg-red-600 hover:bg-red-700' : ''}`} onClick={() => { const u = [...startQcResults]; u[index].passed = false; setStartQcResults(u); }}>
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Fail
+                              </Button>
+                            </div>
                           </div>
+                          <Input type="text" value={qc.measuredValue} onChange={(e) => { const u = [...startQcResults]; u[index].measuredValue = e.target.value; const r = isWithinTolerance(e.target.value, qc.tolerance, qc.requirement); if (r === true) u[index].passed = true; else if (r === false) u[index].passed = false; setStartQcResults(u); }} placeholder="Enter measured value..." className="h-9" />
                         </div>
                       ))}
                     </div>
@@ -1406,20 +1448,32 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Finish Phase QC Standards */}
-                  {verificationData.departmentConfig.finishQcStandards && verificationData.departmentConfig.finishQcStandards.length > 0 && (
+                  {/* Finish Phase QC Standards - with result entry */}
+                  {finishQcResults.length > 0 && (
                     <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4">
                       <div className="flex items-center gap-2 pb-1 border-b border-blue-200">
                         <ClipboardCheck className="h-4 w-4 text-blue-600" />
-                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Finish Phase QC Standards</p>
+                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Finish Phase QC Standards — Enter Results</p>
                       </div>
-                      {verificationData.departmentConfig.finishQcStandards.map((qc, idx) => (
-                        <div key={idx} className="bg-white rounded-md border border-blue-100 p-2">
-                          <p className="text-sm font-medium">{qc.standard}</p>
-                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
-                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
-                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
+                      {finishQcResults.map((qc, index) => (
+                        <div key={index} className={`border rounded-lg p-3 space-y-2 ${qc.passed === true ? 'border-green-300 bg-green-50' : qc.passed === false ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">{qc.standard}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {qc.tolerance && <>Tolerance: <span className="font-mono">{qc.tolerance}</span> · </>}{qc.requirement}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button type="button" size="sm" variant={qc.passed === true ? 'default' : 'outline'} className={`h-8 px-3 ${qc.passed === true ? 'bg-green-600 hover:bg-green-700' : ''}`} onClick={() => { const u = [...finishQcResults]; u[index].passed = true; setFinishQcResults(u); }}>
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" /> Pass
+                              </Button>
+                              <Button type="button" size="sm" variant={qc.passed === false ? 'default' : 'outline'} className={`h-8 px-3 ${qc.passed === false ? 'bg-red-600 hover:bg-red-700' : ''}`} onClick={() => { const u = [...finishQcResults]; u[index].passed = false; setFinishQcResults(u); }}>
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Fail
+                              </Button>
+                            </div>
                           </div>
+                          <Input type="text" value={qc.measuredValue} onChange={(e) => { const u = [...finishQcResults]; u[index].measuredValue = e.target.value; const r = isWithinTolerance(e.target.value, qc.tolerance, qc.requirement); if (r === true) u[index].passed = true; else if (r === false) u[index].passed = false; setFinishQcResults(u); }} placeholder="Enter measured value..." className="h-9" />
                         </div>
                       ))}
                     </div>

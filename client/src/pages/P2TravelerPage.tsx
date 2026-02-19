@@ -278,6 +278,8 @@ export default function P2TravelerPage() {
   const [traceabilityData, setTraceabilityData] = useState<Array<{
     inventoryPartId?: string;
     inventoryPartNumber?: string;
+    materialIndex?: number;
+    materialLabel?: string;
     type: string;
     label: string;
     value: string;
@@ -438,14 +440,16 @@ export default function P2TravelerPage() {
       const initialTraceability: any[] = [];
       const materialFieldTypes = new Set<string>();
       
-      // Add material requirements
+      // Add material requirements - tag each with material index for grouping
       if (data.departmentConfig.materials) {
-        data.departmentConfig.materials.forEach((material: MaterialRequirement) => {
+        data.departmentConfig.materials.forEach((material: MaterialRequirement, matIdx: number) => {
           material.requiredFields.forEach((fieldType: string) => {
             materialFieldTypes.add(fieldType);
             initialTraceability.push({
               inventoryPartId: material.partId,
               inventoryPartNumber: material.partNumber,
+              materialIndex: matIdx,
+              materialLabel: material.partName || material.partNumber || `Material ${matIdx + 1}`,
               type: fieldType,
               label: `${material.partName} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
               value: '',
@@ -671,6 +675,29 @@ export default function P2TravelerPage() {
     const updated = [...traceabilityData];
     updated[index].value = value;
     setTraceabilityData(updated);
+  };
+
+  // Add another material traceability entry
+  const addMaterialTraceEntry = () => {
+    const existingMaterialIndices = traceabilityData
+      .filter(item => item.materialIndex !== undefined)
+      .map(item => item.materialIndex!);
+    const nextIndex = existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+    
+    const defaultFields = ['material_lot', 'material_expiration_date'];
+    const newEntries = defaultFields.map(fieldType => ({
+      materialIndex: nextIndex,
+      materialLabel: `Material ${nextIndex + 1}`,
+      type: fieldType,
+      label: `Material ${nextIndex + 1} - ${fieldType.replace(/_/g, ' ').toUpperCase()}`,
+      value: '',
+    }));
+    setTraceabilityData(prev => [...prev, ...newEntries]);
+  };
+
+  // Remove a material group by index
+  const removeMaterialGroup = (materialIndex: number) => {
+    setTraceabilityData(prev => prev.filter(item => item.materialIndex !== materialIndex));
   };
 
   // Handle custom data update
@@ -962,74 +989,134 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Material Traceability Section — only shown when department has trace requirements */}
-                  {traceabilityData.length > 0 && (
+                  {/* Material Traceability Section — always shown so workers can add materials */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-semibold">Material Traceability <span className="text-sm font-normal text-muted-foreground">(Optional)</span></Label>
-                      <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
-                        <TabsList className="h-8">
-                          <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">
-                            <QrCode className="h-3 w-3" />
-                            Scan Barcode
-                          </TabsTrigger>
-                          <TabsTrigger value="manual" className="text-xs px-3 gap-1" data-testid="tab-manual-mode">
-                            <FileText className="h-3 w-3" />
-                            Control Number
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
+                      {traceabilityData.length > 0 && (
+                        <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
+                          <TabsList className="h-8">
+                            <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">
+                              <QrCode className="h-3 w-3" />
+                              Scan Barcode
+                            </TabsTrigger>
+                            <TabsTrigger value="manual" className="text-xs px-3 gap-1" data-testid="tab-manual-mode">
+                              <FileText className="h-3 w-3" />
+                              Control Number
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      )}
                     </div>
 
-                    {traceabilityMode === 'scan' ? (
-                      <div className="space-y-3">
-                        <Alert>
-                          <QrCode className="h-4 w-4" />
-                          <AlertDescription>
-                            Scan material packet barcode to capture lot/batch traceability data
-                          </AlertDescription>
-                        </Alert>
-                        {traceabilityData.map((item, index) => (
-                          <div key={index} className="space-y-2">
-                            <Label htmlFor={`trace-${index}`}>{item.label}</Label>
-                            <Input
-                              id={`trace-${index}`}
-                              type="text"
-                              value={item.value}
-                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
-                              placeholder={`Scan barcode for ${item.label}...`}
-                              autoFocus={index === 0}
-                              data-testid={`input-trace-${index}`}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <Alert>
-                          <FileText className="h-4 w-4" />
-                          <AlertDescription>
-                            Enter internal control number to link traceability records
-                          </AlertDescription>
-                        </Alert>
-                        {traceabilityData.map((item, index) => (
-                          <div key={index} className="space-y-2">
-                            <Label htmlFor={`trace-manual-${index}`}>{item.label} - Control Number</Label>
-                            <Input
-                              id={`trace-manual-${index}`}
-                              type="text"
-                              value={item.value}
-                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
-                              placeholder="Enter internal control number..."
-                              autoFocus={index === 0}
-                              data-testid={`input-trace-manual-${index}`}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const materialGroups = new Map<number, typeof traceabilityData>();
+                      const ungrouped: typeof traceabilityData = [];
+                      traceabilityData.forEach((item, idx) => {
+                        if (item.materialIndex !== undefined) {
+                          if (!materialGroups.has(item.materialIndex)) materialGroups.set(item.materialIndex, []);
+                          materialGroups.get(item.materialIndex)!.push({ ...item, _originalIndex: idx } as any);
+                        } else {
+                          ungrouped.push({ ...item, _originalIndex: idx } as any);
+                        }
+                      });
+
+                      const materialGroupEntries = Array.from(materialGroups.entries()).sort((a, b) => a[0] - b[0]);
+                      const totalMaterials = materialGroupEntries.length;
+
+                      return (
+                        <div className="space-y-3">
+                          {traceabilityData.length > 0 && (
+                            traceabilityMode === 'scan' ? (
+                              <Alert>
+                                <QrCode className="h-4 w-4" />
+                                <AlertDescription>
+                                  Scan material packet barcode to capture lot/batch traceability data
+                                </AlertDescription>
+                              </Alert>
+                            ) : (
+                              <Alert>
+                                <FileText className="h-4 w-4" />
+                                <AlertDescription>
+                                  Enter internal control number to link traceability records
+                                </AlertDescription>
+                              </Alert>
+                            )
+                          )}
+
+                          {materialGroupEntries.map(([matIdx, items]) => (
+                            <div key={matIdx} className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/20 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Package className="h-4 w-4 text-blue-600" />
+                                  <span className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                                    {items[0]?.materialLabel || `Material ${matIdx + 1}`}
+                                  </span>
+                                  {totalMaterials > 1 && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                      {matIdx + 1} of {totalMaterials}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {!(items as any)[0]?.inventoryPartId && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
+                                    onClick={() => removeMaterialGroup(matIdx)}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              {items.map((item: any) => (
+                                <div key={item._originalIndex} className="space-y-1">
+                                  <Label htmlFor={`trace-${item._originalIndex}`} className="text-xs">
+                                    {item.type.replace(/_/g, ' ').toUpperCase()}
+                                  </Label>
+                                  <Input
+                                    id={`trace-${item._originalIndex}`}
+                                    type="text"
+                                    value={item.value}
+                                    onChange={(e) => updateTraceabilityField(item._originalIndex, e.target.value)}
+                                    placeholder={traceabilityMode === 'scan' ? `Scan barcode...` : 'Enter control number...'}
+                                    data-testid={`input-trace-${item._originalIndex}`}
+                                    className="h-9"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+
+                          {ungrouped.map((item: any) => (
+                            <div key={item._originalIndex} className="space-y-2">
+                              <Label htmlFor={`trace-${item._originalIndex}`}>{item.label}</Label>
+                              <Input
+                                id={`trace-${item._originalIndex}`}
+                                type="text"
+                                value={item.value}
+                                onChange={(e) => updateTraceabilityField(item._originalIndex, e.target.value)}
+                                placeholder={traceabilityMode === 'scan' ? `Scan barcode for ${item.label}...` : 'Enter control number...'}
+                                data-testid={`input-trace-${item._originalIndex}`}
+                              />
+                            </div>
+                          ))}
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-dashed border-blue-300 text-blue-700 hover:bg-blue-50"
+                            onClick={addMaterialTraceEntry}
+                          >
+                            <Package className="h-4 w-4 mr-2" />
+                            {traceabilityData.length > 0 ? 'Add Another Material' : 'Add Material'}
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  )}
 
                   {/* Start Phase Checks */}
                   {verificationData.departmentConfig.startChecks && verificationData.departmentConfig.startChecks.length > 0 && (

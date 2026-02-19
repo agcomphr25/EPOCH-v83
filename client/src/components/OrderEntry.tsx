@@ -1141,7 +1141,7 @@ export default function OrderEntry() {
     toast,
   ]);
 
-  // Business rule: M1A stock models - default Action Inlet to M1A and restrict Left handedness
+  // Business rule: M1A stock models - default Action Inlet, Barrel Inlet, Bottom Metal to Factory M1A and restrict Left handedness
   useEffect(() => {
     if (!modelId || modelOptions.length === 0) return;
 
@@ -1153,9 +1153,19 @@ export default function OrderEntry() {
       const updates: Record<string, string | undefined> = {};
       const messages: string[] = [];
 
-      if (features.action_inlet !== 'm1a') {
-        updates.action_inlet = 'm1a';
-        messages.push('Action Inlet set to M1A');
+      if (features.action_inlet !== 'factory_m1a') {
+        updates.action_inlet = 'factory_m1a';
+        messages.push('Action Inlet set to Factory M1A');
+      }
+
+      if (features.barrel_inlet !== 'factory_m1a') {
+        updates.barrel_inlet = 'factory_m1a';
+        messages.push('Barrel Inlet set to Factory M1A');
+      }
+
+      if (features.bottom_metal !== 'factory_m1a') {
+        updates.bottom_metal = 'factory_m1a';
+        messages.push('Bottom Metal set to Factory M1A');
       }
 
       if (features.handedness === 'left') {
@@ -1182,6 +1192,8 @@ export default function OrderEntry() {
     modelId,
     modelOptions,
     features.action_inlet,
+    features.barrel_inlet,
+    features.bottom_metal,
     features.handedness,
     toast,
   ]);

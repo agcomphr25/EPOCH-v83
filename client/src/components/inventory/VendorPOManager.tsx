@@ -98,11 +98,12 @@ function formatCurrency(value: number | undefined | null, decimals: number = 2):
 // Types based on our schema
 type VendorPO = {
   id: number;
-  poNumber: string;
+  poNumber: string | null;
   vendorId: number;
   vendorName?: string; // From join
   status:
     | 'Draft'
+    | 'RFQ Sent'
     | 'Sent'
     | 'Partially Received'
     | 'Fully Received'
@@ -262,6 +263,8 @@ function getStatusColor(status: VendorPO['status']) {
   switch (status) {
     case 'Draft':
       return 'bg-gray-100 text-gray-800';
+    case 'RFQ Sent':
+      return 'bg-orange-100 text-orange-800';
     case 'Sent':
       return 'bg-blue-100 text-blue-800';
     case 'Partially Received':
@@ -550,7 +553,7 @@ function VendorPOCard({
   onCreateRevision: (vendorPo: VendorPO) => void;
   onViewPDF: (vendorPo: VendorPO) => void;
 }) {
-  // Check if PO is issued (cannot be directly edited)
+  // Check if PO is formally issued (cannot be directly edited) — RFQ Sent remains editable
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
   
   return (
@@ -565,7 +568,7 @@ function VendorPOCard({
               className="text-lg"
               data-testid={`text-po-number-${vendorPo.id}`}
             >
-              {vendorPo.poNumber}
+              {vendorPo.poNumber || `Draft #${vendorPo.id}`}
             </CardTitle>
             <CardDescription
               className="mt-1"
@@ -643,7 +646,7 @@ function VendorPOCard({
             data-testid={`button-view-pdf-${vendorPo.id}`}
           >
             <FileText className="w-4 h-4 mr-1" />
-            View PO
+            {vendorPo.poNumber ? 'View PO' : 'View RFQ'}
           </Button>
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {/* Show Edit button only for Draft POs */}
@@ -1006,7 +1009,7 @@ export default function VendorPOManager() {
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      toast.success(`Revision created: ${data.poNumber}. You can now edit the new draft.`);
+      toast.success(`Revision created${data.poNumber ? `: ${data.poNumber}` : ''}. You can now edit the new draft.`);
       setShowRevisionDialog(false);
       setRevisionReason('');
       setRevisionPO(null);
@@ -1048,11 +1051,34 @@ export default function VendorPOManager() {
     },
   });
 
+  // Send RFQ mutation - sends quote request email to vendor
+  const sendRFQMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      if (data.emailSent) {
+        toast.success(`RFQ sent to ${data.emailRecipient}`);
+      } else {
+        toast.error(data.message || 'Failed to send RFQ');
+      }
+      if (selectedVendorPO) {
+        setSelectedVendorPO({ ...selectedVendorPO, status: 'RFQ Sent' });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to send RFQ');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
-      vendorPo.poNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (vendorPo.poNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `Draft #${vendorPo.id}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;
     const matchesStatus =
       statusFilter === 'all' || vendorPo.status === statusFilter;
@@ -1206,7 +1232,7 @@ export default function VendorPOManager() {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Purchase Order - ${po.poNumber}</title>
+            <title>${po.poNumber ? 'Purchase Order' : 'Request for Quote'} - ${po.poNumber || `Draft #${po.id}`}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
               .print-controls { 
@@ -1294,8 +1320,8 @@ export default function VendorPOManager() {
             ` : ''}
             
             <div class="header">
-              <h1>PURCHASE ORDER</h1>
-              <p>PO Number: ${po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>
+              <h1>${po.poNumber ? 'PURCHASE ORDER' : 'REQUEST FOR QUOTE'}</h1>
+              ${po.poNumber ? `<p>PO Number: ${po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>` : '<p style="color: #e67e22; font-weight: bold;">This is a request for quote — not a binding purchase order</p>'}
             </div>
             
             <div class="info-section">
@@ -1407,7 +1433,7 @@ export default function VendorPOManager() {
       console.log('HTML written successfully');
       
       // Window stays open for viewing - user can print if they want
-      toast.success('Purchase Order opened in new window');
+      toast.success(po.poNumber ? 'Purchase Order opened in new window' : 'Request for Quote opened in new window');
       
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -1423,6 +1449,8 @@ export default function VendorPOManager() {
   const getNextStatus = (currentStatus: string): string | null => {
     switch (currentStatus) {
       case 'Draft':
+        return 'Sent';
+      case 'RFQ Sent':
         return 'Sent';
       case 'Sent':
         return 'Partially Received';
@@ -1466,6 +1494,7 @@ export default function VendorPOManager() {
   const statusOptions = [
     'all',
     'Draft',
+    'RFQ Sent',
     'Sent',
     'Partially Received',
     'Fully Received',
@@ -1494,7 +1523,7 @@ export default function VendorPOManager() {
                   className="text-2xl font-bold tracking-tight"
                   data-testid="detail-po-number"
                 >
-                  {selectedVendorPO.poNumber}
+                  {selectedVendorPO.poNumber || `Draft #${selectedVendorPO.id}`}
                 </h2>
                 <p className="text-muted-foreground">
                   {selectedVendorPO.vendorName ||
@@ -1511,6 +1540,21 @@ export default function VendorPOManager() {
               {selectedVendorPO.status}
             </Badge>
             
+            {/* Send RFQ Button (only for Draft) */}
+            {selectedVendorPO.status === 'Draft' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sendRFQMutation.mutate(selectedVendorPO.id)}
+                disabled={sendRFQMutation.isPending}
+                className="text-orange-600 hover:text-orange-800 border-orange-300 hover:border-orange-400"
+                data-testid="button-send-rfq"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {sendRFQMutation.isPending ? 'Sending...' : 'Send RFQ'}
+              </Button>
+            )}
+
             {/* Status Workflow Buttons */}
             {nextStatus && (
               <Button
@@ -1526,8 +1570,8 @@ export default function VendorPOManager() {
               </Button>
             )}
             
-            {/* Cancel Button (only for Draft or Sent) */}
-            {(selectedVendorPO.status === 'Draft' || selectedVendorPO.status === 'Sent') && (
+            {/* Cancel Button (only for Draft, RFQ Sent, or Sent) */}
+            {(['Draft', 'RFQ Sent', 'Sent'].includes(selectedVendorPO.status)) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1547,7 +1591,7 @@ export default function VendorPOManager() {
               data-testid="button-view-po"
             >
               <Eye className="w-4 h-4 mr-2" />
-              View PO
+              {selectedVendorPO.poNumber ? 'View PO' : 'View RFQ'}
             </Button>
           </div>
         </div>
@@ -1631,7 +1675,7 @@ export default function VendorPOManager() {
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
               vendorId={selectedVendorPO.vendorId}
-              poNumber={selectedVendorPO.poNumber}
+              poNumber={selectedVendorPO.poNumber || `Draft #${selectedVendorPO.id}`}
               onTotalChange={(total: number) => {
                 queryClient.invalidateQueries({
                   queryKey: ['/api/vendor-pos'],
@@ -1731,7 +1775,7 @@ export default function VendorPOManager() {
                 <div className="flex items-center justify-between w-full pr-4">
                   <div className="flex items-center gap-4">
                     <div className="text-left">
-                      <div className="font-semibold">{vendorPo.poNumber}</div>
+                      <div className="font-semibold">{vendorPo.poNumber || `Draft #${vendorPo.id}`}</div>
                       <div className="text-sm text-muted-foreground flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
                         {vendorPo.vendorName || 'Unknown Vendor'}
@@ -1782,7 +1826,7 @@ export default function VendorPOManager() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle data-testid="revision-dialog-title">
-              Create Revision for {revisionPO?.poNumber}
+              Create Revision for {revisionPO?.poNumber || `Draft #${revisionPO?.id}`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will create a new draft revision of this purchase order. The original 

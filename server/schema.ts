@@ -3259,11 +3259,11 @@ export const vendorParts = pgTable('vendor_parts', {
 // Vendor Purchase Orders
 export const vendorPOs = pgTable('vendor_pos', {
   id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull(),
+  poNumber: text('po_number'),
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
-  status: text('status').notNull().default('Draft'), // Draft, Sent, Partially Received, Fully Received, Cancelled
+  status: text('status').notNull().default('Draft'), // Draft, RFQ Sent, Sent, Partially Received, Fully Received, Cancelled
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
   actualDeliveryDate: date('actual_delivery_date'),
@@ -3628,9 +3628,9 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
     updatedAt: true,
   })
   .extend({
-    poNumber: z.string().min(1, 'PO number is required').optional(),
+    poNumber: z.string().nullable().optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
-    status: z.enum(['Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
+    status: z.enum(['Draft', 'RFQ Sent', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
     orderDate: z.string().optional().nullable(),
     expectedDeliveryDate: z.string().optional().nullable(),
     actualDeliveryDate: z.string().optional().nullable(),

@@ -7706,33 +7706,26 @@ export class DatabaseStorage implements IStorage {
     return vendorPO;
   }
 
-  async createVendorPO(data: any): Promise<any> {
-    // Auto-generate PO number if not provided
-    if (!data.poNumber) {
-      // Get current year (last 2 digits)
-      const currentYear = new Date().getFullYear().toString().slice(-2);
-      
-      // Get the latest vendor PO for this year
-      const latestPO = await db
-        .select({ poNumber: vendorPOs.poNumber })
-        .from(vendorPOs)
-        .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
-        .orderBy(desc(vendorPOs.id))
-        .limit(1);
-      
-      let nextNumber = 1;
-      if (latestPO.length > 0 && latestPO[0].poNumber) {
-        // Extract the sequential part (last 3 digits) from format VPO-YYNNN
-        const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
-        if (match) {
-          nextNumber = parseInt(match[1]) + 1;
-        }
-      }
-      
-      // Format: VPO-YYNNN (e.g., VPO-25001, VPO-25099)
-      data.poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
-    }
+  async generateNextVPONumber(): Promise<string> {
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    const latestPO = await db
+      .select({ poNumber: vendorPOs.poNumber })
+      .from(vendorPOs)
+      .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
+      .orderBy(desc(vendorPOs.id))
+      .limit(1);
     
+    let nextNumber = 1;
+    if (latestPO.length > 0 && latestPO[0].poNumber) {
+      const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1;
+      }
+    }
+    return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+  }
+
+  async createVendorPO(data: any): Promise<any> {
     // Auto-generate barcode if not provided
     if (!data.barcode) {
       data.barcode = nanoid(12);
@@ -7788,9 +7781,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vendorPOs.id, poId));
     
     // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
-    const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, ''); // Remove any existing revision suffix
+    const basePONumber = originalPO.poNumber ? originalPO.poNumber.replace(/-R[A-Z]+$/, '') : null;
     const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
-    const newPONumber = `${basePONumber}-R${revisionLetter}`;
+    const newPONumber = basePONumber ? `${basePONumber}-R${revisionLetter}` : null;
     
     // Create the new revision PO (copy of the original with revision metadata)
     const revisionData = {

@@ -14092,9 +14092,14 @@ export class DatabaseStorage implements IStorage {
           if (seenFieldKeys.has(fieldKey)) continue;
           seenFieldKeys.add(fieldKey);
 
-          const reqNorm = (qc.requirement || '').toString().trim().toLowerCase()
-            .replace(/[^a-z0-9./+-]/g, '');
+          const normalizedName = (qc.standard || '').toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+          if (normalizedName && seenFieldKeys.has(`name_${normalizedName}`)) continue;
+          if (normalizedName) seenFieldKeys.add(`name_${normalizedName}`);
+
           const tolNorm = (qc.tolerance || '').toString().trim().toLowerCase()
+            .replace(/[^a-z0-9./+-]/g, '');
+          const reqNorm = (qc.requirement || '').toString().trim().toLowerCase()
             .replace(/[^a-z0-9./+-]/g, '');
           const compositeKey = `${reqNorm}||${tolNorm}`;
           if (reqNorm && usedQcCompositeKeys.has(compositeKey)) continue;

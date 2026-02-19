@@ -233,6 +233,47 @@ router.get('/global-search', async (req, res) => {
       console.log('⚠️ Central Storage search failed:', err.message);
     }
 
+    // Search Vendor POs - match on PO number, vendor name, notes, status
+    try {
+      const vendorPoResults = await db.execute(sql`
+        SELECT vp.id, vp.po_number, vp.status, vp.notes, vp.order_date, vp.total_amount,
+               v.name as vendor_name
+        FROM vendor_pos vp
+        LEFT JOIN vendors v ON vp.vendor_id = v.id
+        WHERE 
+          (vp.is_current_revision IS NULL OR vp.is_current_revision = true) AND (
+            vp.po_number ILIKE ${searchTerm} OR
+            v.name ILIKE ${searchTerm} OR
+            vp.notes ILIKE ${searchTerm} OR
+            vp.barcode ILIKE ${searchTerm} OR
+            vp.created_by ILIKE ${searchTerm}
+          )
+        ORDER BY vp.order_date DESC NULLS LAST
+        LIMIT 10
+      `);
+
+      vendorPoResults.rows.forEach((po: any) => {
+        const statusLabel = po.status ? po.status.replace(/_/g, ' ') : 'Unknown';
+        results.push({
+          type: 'Vendor PO',
+          id: po.id,
+          title: `PO ${po.po_number || po.id}`,
+          subtitle: [
+            po.vendor_name ? `Vendor: ${po.vendor_name}` : null,
+            `Status: ${statusLabel}`,
+            po.total_amount ? `$${Number(po.total_amount).toFixed(2)}` : null,
+          ].filter(Boolean).join(' • '),
+          matchedField: 'vendor PO',
+          matchedValue: po.po_number || po.vendor_name || '',
+          url: `/vendor-pos?poId=${po.id}`,
+          icon: '🧾'
+        });
+      });
+      console.log(`✅ Found ${vendorPoResults.rows.length} vendor POs`);
+    } catch (err: any) {
+      console.log('⚠️ Vendor PO search failed:', err.message);
+    }
+
     // Search Signed Documents
     try {
       const signedDocResults = await db.execute(sql`

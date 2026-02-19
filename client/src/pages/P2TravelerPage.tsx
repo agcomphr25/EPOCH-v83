@@ -425,15 +425,12 @@ export default function P2TravelerPage() {
         setCustomData(initialCustomData);
       }
 
-      // Initialize QC standards - merge legacy qcStandards with phase-specific standards
-      const allQcStandards: QCStandard[] = [
-        ...(data.departmentConfig.qcStandards || []),
-        ...(data.departmentConfig.startQcStandards || []),
-        ...(data.departmentConfig.finishQcStandards || []),
-      ];
-      if (allQcStandards.length > 0) {
+      // Initialize QC standards - only use work-phase qcStandards here
+      // Start and finish QC standards are rendered in their respective phase sections
+      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
+      if (workQcStandards.length > 0) {
         const seenStandards = new Set<string>();
-        const uniqueQcStandards = allQcStandards.filter(qc => {
+        const uniqueQcStandards = workQcStandards.filter(qc => {
           const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
           if (seenStandards.has(key)) return false;
           seenStandards.add(key);
@@ -994,6 +991,25 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
+                  {/* Start Phase QC Standards */}
+                  {verificationData.departmentConfig.startQcStandards && verificationData.departmentConfig.startQcStandards.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-green-200 bg-green-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-green-200">
+                        <ClipboardCheck className="h-4 w-4 text-green-600" />
+                        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase QC Standards</p>
+                      </div>
+                      {verificationData.departmentConfig.startQcStandards.map((qc, idx) => (
+                        <div key={idx} className="bg-white rounded-md border border-green-100 p-2">
+                          <p className="text-sm font-medium">{qc.standard}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
+                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Custom Data Fields - merged from legacy, start, and finish phases */}
                   {(() => {
                     const allFields: CustomDataField[] = [];
@@ -1158,6 +1174,25 @@ export default function P2TravelerPage() {
                             {check.requiresSignature && (
                               <Badge variant="outline" className="mt-1 text-[10px] border-blue-300">Signature Required ({check.signatureRole || 'OPERATOR'})</Badge>
                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Finish Phase QC Standards */}
+                  {verificationData.departmentConfig.finishQcStandards && verificationData.departmentConfig.finishQcStandards.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-blue-200">
+                        <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Finish Phase QC Standards</p>
+                      </div>
+                      {verificationData.departmentConfig.finishQcStandards.map((qc, idx) => (
+                        <div key={idx} className="bg-white rounded-md border border-blue-100 p-2">
+                          <p className="text-sm font-medium">{qc.standard}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
+                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
                           </div>
                         </div>
                       ))}

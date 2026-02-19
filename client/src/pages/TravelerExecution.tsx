@@ -1633,6 +1633,12 @@ export default function TravelerExecution() {
                                                                 Requirement: {field.validation.requirement}
                                                               </span>
                                                             )}
+                                                            {field.validation.referenceLink && (
+                                                              <a href={field.validation.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer no-underline">
+                                                                <ExternalLink className="h-3 w-3" />
+                                                                Reference
+                                                              </a>
+                                                            )}
                                                             {field.validation.temperature && (
                                                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                                                                 Temp: {field.validation.temperature}

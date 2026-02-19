@@ -89,6 +89,7 @@ interface QCStandard {
   standard: string;
   tolerance: string;
   requirement: string;
+  referenceLink?: string;
 }
 
 interface OvenCuringStep {
@@ -288,6 +289,7 @@ export default function P2TravelerPage() {
     requirement: string;
     measuredValue: string;
     passed: boolean | null;
+    referenceLink?: string;
   }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
@@ -498,12 +500,13 @@ export default function P2TravelerPage() {
           seenStandards.add(key);
           return true;
         });
-        setQcResults(uniqueQcStandards.map((qc: QCStandard) => ({
+        setQcResults(uniqueQcStandards.map((qc: any) => ({
           standard: qc.standard,
           tolerance: qc.tolerance,
           requirement: qc.requirement,
           measuredValue: '',
           passed: null,
+          ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
         })));
       }
 
@@ -1133,6 +1136,11 @@ export default function P2TravelerPage() {
                                 <div className="text-xs text-muted-foreground">
                                   Tolerance: <span className="font-mono">{qc.tolerance}</span> · {qc.requirement}
                                 </div>
+                                {qc.referenceLink && (
+                                  <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-0.5">
+                                    <ExternalLink className="h-3 w-3" /> Reference Table/Chart
+                                  </a>
+                                )}
                               </div>
                               <div className="flex gap-1">
                                 <Button

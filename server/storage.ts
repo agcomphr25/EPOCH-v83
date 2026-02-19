@@ -3149,26 +3149,96 @@ export class DatabaseStorage implements IStorage {
       // Map PO specifications to features object with snake_case keys
       const mappedFeatures: any = {};
       if (parsedSpecs) {
-        // Map camelCase to snake_case for feature fields
         if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
         if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
-        if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
-        if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
+        if (parsedSpecs.bottomMetal || parsedSpecs.bottom_metal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal || parsedSpecs.bottom_metal;
+        if (parsedSpecs.barrelInlet || parsedSpecs.barrel_inlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet || parsedSpecs.barrel_inlet;
         if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
-        if (parsedSpecs.swivelStuds) mappedFeatures.swivel_studs = parsedSpecs.swivelStuds;
-        if (parsedSpecs.paintOptions) mappedFeatures.paint_options = parsedSpecs.paintOptions;
+        if (parsedSpecs.swivelStuds || parsedSpecs.swivel_studs) mappedFeatures.swivel_studs = parsedSpecs.swivelStuds || parsedSpecs.swivel_studs;
+        if (parsedSpecs.paintOptions || parsedSpecs.paint_options) mappedFeatures.paint_options = parsedSpecs.paintOptions || parsedSpecs.paint_options;
         if (parsedSpecs.texture) mappedFeatures.texture = parsedSpecs.texture;
-        if (parsedSpecs.flatTop !== undefined) mappedFeatures.flat_top = parsedSpecs.flatTop;
-        
-        // Also check if there's a nested features object (fallback)
+        if (parsedSpecs.flatTop !== undefined || parsedSpecs.flat_top !== undefined) mappedFeatures.flat_top = parsedSpecs.flatTop ?? parsedSpecs.flat_top;
+        if (parsedSpecs.flattop !== undefined) mappedFeatures.flattop = parsedSpecs.flattop;
+        if (parsedSpecs.material || parsedSpecs.material_type || parsedSpecs.materialType) {
+          mappedFeatures.material = parsedSpecs.material || parsedSpecs.material_type || parsedSpecs.materialType;
+        }
+        if (parsedSpecs.stockModel || parsedSpecs.stock_model) {
+          mappedFeatures.stock_model = parsedSpecs.stockModel || parsedSpecs.stock_model;
+        }
+        if (parsedSpecs.platform) mappedFeatures.platform = parsedSpecs.platform;
+        if (parsedSpecs.inlet) mappedFeatures.inlet = parsedSpecs.inlet;
+        if (parsedSpecs.receiver) mappedFeatures.receiver = parsedSpecs.receiver;
+        if (parsedSpecs.action) mappedFeatures.action = parsedSpecs.action;
+        if (parsedSpecs.handedness) mappedFeatures.handedness = parsedSpecs.handedness;
+
         if (parsedSpecs.features && typeof parsedSpecs.features === 'object') {
           Object.assign(mappedFeatures, parsedSpecs.features);
+        }
+
+        if (parsedSpecs.specifications && typeof parsedSpecs.specifications === 'object') {
+          const nestedSpecs = parsedSpecs.specifications;
+          if (!mappedFeatures.action_length && (nestedSpecs.actionLength || nestedSpecs.action_length)) {
+            mappedFeatures.action_length = nestedSpecs.actionLength || nestedSpecs.action_length;
+          }
+          if (!mappedFeatures.action_inlet && (nestedSpecs.actionInlet || nestedSpecs.action_inlet)) {
+            mappedFeatures.action_inlet = nestedSpecs.actionInlet || nestedSpecs.action_inlet;
+          }
+          if (!mappedFeatures.material && (nestedSpecs.material || nestedSpecs.material_type || nestedSpecs.materialType)) {
+            mappedFeatures.material = nestedSpecs.material || nestedSpecs.material_type || nestedSpecs.materialType;
+          }
+          if (!mappedFeatures.stock_model && (nestedSpecs.stockModel || nestedSpecs.stock_model)) {
+            mappedFeatures.stock_model = nestedSpecs.stockModel || nestedSpecs.stock_model;
+          }
+          if (!mappedFeatures.platform && nestedSpecs.platform) mappedFeatures.platform = nestedSpecs.platform;
+          if (!mappedFeatures.inlet && nestedSpecs.inlet) mappedFeatures.inlet = nestedSpecs.inlet;
+          if (!mappedFeatures.receiver && nestedSpecs.receiver) mappedFeatures.receiver = nestedSpecs.receiver;
+          if (!mappedFeatures.barrel_inlet && (nestedSpecs.barrelInlet || nestedSpecs.barrel_inlet)) {
+            mappedFeatures.barrel_inlet = nestedSpecs.barrelInlet || nestedSpecs.barrel_inlet;
+          }
+          if (!mappedFeatures.bottom_metal && (nestedSpecs.bottomMetal || nestedSpecs.bottom_metal)) {
+            mappedFeatures.bottom_metal = nestedSpecs.bottomMetal || nestedSpecs.bottom_metal;
+          }
         }
       }
       
       // Look up the proper item name from purchase_order_items table
       const resolvedItemName = poItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
       
+      // Derive modelId with fallback chain for robust stock model resolution
+      let derivedModelId = parsedSpecs?.stockModel
+        || parsedSpecs?.stock_model
+        || (parsedSpecs?.specifications?.stockModel)
+        || (parsedSpecs?.specifications?.stock_model)
+        || po.itemId;
+
+      // If modelId is still numeric or empty, attempt match from resolvedItemName
+      if (!derivedModelId || /^\d+$/.test(String(derivedModelId))) {
+        const nameForMatch = (resolvedItemName || '').toLowerCase().replace(/\s+/g, '_');
+        const stockModelKeys = Array.from(stockModelMap.keys());
+        const exactMatch = stockModelKeys.find(k => k === nameForMatch);
+        if (exactMatch) {
+          derivedModelId = exactMatch;
+        } else {
+          const partialMatch = stockModelKeys.find(k => {
+            const kNorm = k.toLowerCase().replace(/-/g, '_');
+            return nameForMatch.includes(kNorm) || kNorm.includes(nameForMatch);
+          });
+          if (partialMatch) {
+            derivedModelId = partialMatch;
+          }
+        }
+      }
+
+      // Detect tikka from any available field
+      const tikkaDetected = [
+        String(derivedModelId || ''),
+        String(resolvedItemName || ''),
+        String(mappedFeatures.action_inlet || ''),
+        String(mappedFeatures.platform || ''),
+        String(mappedFeatures.inlet || ''),
+        String(mappedFeatures.receiver || ''),
+      ].some(f => f.toLowerCase().includes('tikka'));
+
       return {
         id: po.id,
         orderId: po.orderId,
@@ -3180,7 +3250,7 @@ export class DatabaseStorage implements IStorage {
         fbOrderNumber: null,
         agrOrderDetails: null,
         isCustomOrder: null,
-        modelId: parsedSpecs?.stockModel || po.itemId,
+        modelId: derivedModelId,
         itemId: po.itemId,
         itemName: resolvedItemName,
         handedness: parsedSpecs?.handedness ?? null,
@@ -3194,7 +3264,8 @@ export class DatabaseStorage implements IStorage {
         showCustomDiscount: false,
         priceOverride: null,
         shipping: 0,
-        tikkaOption: null,
+        tikkaOption: tikkaDetected ? true : null,
+        parsedSpecs: parsedSpecs,
         status: po.productionStatus,
         productionStatus: po.productionStatus,
         statusId: null,
@@ -3249,11 +3320,30 @@ export class DatabaseStorage implements IStorage {
       };
     }) as any;
 
-    // Merge regular orders and production orders
-    const allOrdersMerged = [...enrichedOrders, ...normalizedProductionOrders];
+    // Deduplicate: if an orderId exists in both all_orders and production_orders,
+    // prefer the production_orders version (it has properly normalized features).
+    const productionOrderIds = new Set(
+      normalizedProductionOrders.map((po: any) => po.orderId)
+    );
+    const duplicatesRemoved: string[] = [];
+    const deduplicatedRegularOrders = enrichedOrders.filter((order: any) => {
+      if (productionOrderIds.has(order.orderId)) {
+        duplicatesRemoved.push(order.orderId);
+        return false;
+      }
+      return true;
+    });
+
+    const allOrdersMerged = [...deduplicatedRegularOrders, ...normalizedProductionOrders];
+
+    if (duplicatesRemoved.length > 0) {
+      console.log(
+        `🔄 getAllOrders DEDUP: Removed ${duplicatesRemoved.length} duplicate(s) from all_orders (kept production_orders version): [${duplicatesRemoved.slice(0, 10).join(', ')}${duplicatesRemoved.length > 10 ? '...' : ''}]`
+      );
+    }
 
     console.log(
-      `✅ getAllOrders: Returning ${enrichedOrders.length} regular orders + ${normalizedProductionOrders.length} P1 PO items = ${allOrdersMerged.length} total orders`
+      `✅ getAllOrders: Returning ${deduplicatedRegularOrders.length} regular orders + ${normalizedProductionOrders.length} P1 PO items = ${allOrdersMerged.length} total (${duplicatesRemoved.length} duplicates removed)`
     );
 
     return allOrdersMerged;

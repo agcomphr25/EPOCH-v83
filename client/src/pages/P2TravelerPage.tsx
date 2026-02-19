@@ -475,18 +475,16 @@ export default function P2TravelerPage() {
 
       setTraceabilityData(initialTraceability);
 
-      // Initialize custom data fields - merge legacy customDataFields with phase-specific fields
+      // Initialize custom data fields from all phases (each shown in its own section)
       const allCustomDataFields: CustomDataField[] = [
-        ...(data.departmentConfig.customDataFields || []),
         ...(data.departmentConfig.startCustomDataFields || []),
+        ...(data.departmentConfig.customDataFields || []),
         ...(data.departmentConfig.finishCustomDataFields || []),
       ];
       if (allCustomDataFields.length > 0) {
         const initialCustomData: Record<string, string> = {};
-        const seenFields = new Set<string>();
         allCustomDataFields.forEach((field: CustomDataField) => {
-          if (!seenFields.has(field.fieldName)) {
-            seenFields.add(field.fieldName);
+          if (!(field.fieldName in initialCustomData)) {
             initialCustomData[field.fieldName] = '';
           }
         });
@@ -1159,25 +1157,54 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Custom Data Fields - merged from legacy, start, and finish phases */}
+                  {/* START Phase Custom Data Fields */}
                   {(() => {
-                    const allFields: CustomDataField[] = [];
-                    const seenNames = new Set<string>();
-                    [
-                      ...(verificationData.departmentConfig.customDataFields || []),
-                      ...(verificationData.departmentConfig.startCustomDataFields || []),
-                      ...(verificationData.departmentConfig.finishCustomDataFields || []),
-                    ].forEach(field => {
-                      if (!seenNames.has(field.fieldName)) {
-                        seenNames.add(field.fieldName);
-                        allFields.push(field);
-                      }
-                    });
-                    if (allFields.length === 0) return null;
+                    const startFields: CustomDataField[] = verificationData.departmentConfig.startCustomDataFields || [];
+                    if (startFields.length === 0) return null;
+                    return (
+                      <div className="space-y-3 rounded-lg border-2 border-green-200 bg-green-50/50 p-4">
+                        <div className="flex items-center gap-2 pb-1 border-b border-green-200">
+                          <Play className="h-4 w-4 text-green-600" />
+                          <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase Data</p>
+                        </div>
+                        {startFields.map((field, index) => (
+                          <div key={index} className="space-y-2">
+                            <Label htmlFor={`custom-start-${field.fieldName}`}>
+                              {field.fieldName}
+                              {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            </Label>
+                            {field.fieldType === 'textarea' ? (
+                              <Textarea
+                                id={`custom-start-${field.fieldName}`}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            ) : (
+                              <Input
+                                id={`custom-start-${field.fieldName}`}
+                                type={field.fieldType}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* WORK Phase Custom Data Fields */}
+                  {(() => {
+                    const workFields: CustomDataField[] = verificationData.departmentConfig.customDataFields || [];
+                    if (workFields.length === 0) return null;
                     return (
                       <div className="space-y-3">
-                        <Label className="text-base font-semibold">Department-Specific Data</Label>
-                        {allFields.map((field, index) => (
+                        <Label className="text-base font-semibold">Process Data</Label>
+                        {workFields.map((field, index) => (
                           <div key={index} className="space-y-2">
                             <Label htmlFor={`custom-${field.fieldName}`}>
                               {field.fieldName}
@@ -1316,6 +1343,46 @@ export default function P2TravelerPage() {
                       )}
                     </div>
                   )}
+
+                  {/* FINISH Phase Custom Data Fields */}
+                  {(() => {
+                    const finishFields: CustomDataField[] = verificationData.departmentConfig.finishCustomDataFields || [];
+                    if (finishFields.length === 0) return null;
+                    return (
+                      <div className="space-y-3 rounded-lg border-2 border-orange-200 bg-orange-50/50 p-4">
+                        <div className="flex items-center gap-2 pb-1 border-b border-orange-200">
+                          <ArrowRight className="h-4 w-4 text-orange-600" />
+                          <p className="text-xs font-bold text-orange-800 uppercase tracking-wider">Finish Phase Data</p>
+                        </div>
+                        {finishFields.map((field, index) => (
+                          <div key={index} className="space-y-2">
+                            <Label htmlFor={`custom-finish-${field.fieldName}`}>
+                              {field.fieldName}
+                              {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            </Label>
+                            {field.fieldType === 'textarea' ? (
+                              <Textarea
+                                id={`custom-finish-${field.fieldName}`}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            ) : (
+                              <Input
+                                id={`custom-finish-${field.fieldName}`}
+                                type={field.fieldType}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Finish Phase Checks */}
                   {verificationData.departmentConfig.finishChecks && verificationData.departmentConfig.finishChecks.length > 0 && (

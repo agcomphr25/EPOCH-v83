@@ -3312,6 +3312,9 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   customerPoId: integer('customer_po_id')
     .references(() => p2PurchaseOrders.id), // Optional link to customer PO (internal tracking only)
   otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
+  historicalAvgPrice: real('historical_avg_price'),
+  priceVariancePercent: real('price_variance_percent'),
+  varianceFlag: boolean('variance_flag').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

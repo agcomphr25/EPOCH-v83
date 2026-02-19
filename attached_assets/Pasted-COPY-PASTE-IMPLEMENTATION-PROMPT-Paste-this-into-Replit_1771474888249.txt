@@ -1,0 +1,97 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+
+Paste this into Replit Agent exactly:
+
+We are implementing Phase 1: Historical Price Variance Tracking at PO Issuance.
+
+Requirements:
+- Compare each line item's unit price against historical average for that vendor + AG part number.
+- Only consider previously issued POs (status IN ('Sent','Partially Received','Fully Received')).
+- Only include current revisions (is_current_revision = true).
+- Use last 5 historical records (ordered by created_at DESC).
+- Compute average of purchaseUnitPrice.
+- Calculate variance percent:
+      (currentPrice - historicalAvg) / historicalAvg * 100
+- Flag variance if absolute value > 3%.
+- Do NOT block issuance — only compute and store.
+
+-----------------------------------------
+1) DATABASE MIGRATION
+-----------------------------------------
+
+Add to vendor_po_items table:
+
+historical_avg_price numeric
+price_variance_percent numeric
+variance_flag boolean DEFAULT false
+
+Return migration SQL.
+
+-----------------------------------------
+2) SERVICE LAYER LOGIC
+-----------------------------------------
+
+Inside the transactional issueVendorPO method:
+
+After PO number is assigned but before commit:
+
+For each vendor_po_item in the PO:
+
+1) Query last 5 historical prices:
+   - Same vendor_id
+   - Same agPartNumber
+   - vendor_pos.status IN ('Sent','Partially Received','Fully Received')
+   - vendor_pos.is_current_revision = true
+   - Exclude current PO id
+   - Order by vendor_pos.created_at DESC
+   - Limit 5
+
+2) Compute average price.
+
+3) If no history exists:
+   - Leave historical_avg_price null
+   - Leave variance fields null
+   - Do not flag.
+
+4) If history exists:
+   - Compute variance %
+   - Store:
+       historical_avg_price
+       price_variance_percent
+       variance_flag (abs(variance) > 3)
+
+All writes must occur inside the same issuance transaction.
+
+-----------------------------------------
+3) FRONTEND DISPLAY
+-----------------------------------------
+
+In VendorPOManager view:
+
+If variance_flag = true:
+   - Show orange warning badge next to line item:
+       "Price variance +5.4% vs historical avg"
+
+If variance_flag = false but variance exists:
+   - Show subtle gray text:
+       "Variance +1.2%"
+
+If no history:
+   - Show nothing.
+
+-----------------------------------------
+4) OPTIONAL LOGGING
+-----------------------------------------
+
+Log to console during issuance:
+   "Variance computed for PA13-8058: +4.8%"
+
+-----------------------------------------
+
+Return:
+- Migration SQL
+- Full backend diff
+- Updated issuance method
+- Updated item select queries (if needed)
+- Frontend display changes
+- Any performance considerations

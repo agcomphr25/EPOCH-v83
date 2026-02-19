@@ -7605,7 +7605,12 @@ export class DatabaseStorage implements IStorage {
     const conditions = [];
     
     if (search) {
-      conditions.push(ilike(vendorPOs.poNumber, `%${search}%`));
+      conditions.push(
+        or(
+          sql`COALESCE(${vendorPOs.poNumber}, '') ILIKE ${`%${search}%`}`,
+          ilike(vendors.name, `%${search}%`)
+        )
+      );
     }
     
     if (status && status !== 'any') {
@@ -7658,6 +7663,7 @@ export class DatabaseStorage implements IStorage {
       db
         .select({ count: sql<number>`count(*)` })
         .from(vendorPOs)
+        .leftJoin(vendors, eq(vendorPOs.vendorId, vendors.id))
         .where(whereExpr),
     ]);
 
@@ -7725,6 +7731,53 @@ export class DatabaseStorage implements IStorage {
     return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
   }
 
+  async issueVendorPO(id: number): Promise<{ vendorPO: any; poNumber: string }> {
+    return await db.transaction(async (tx) => {
+      const [lockedPO] = await tx
+        .select()
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, id))
+        .for('update');
+
+      if (!lockedPO) {
+        throw new Error('Vendor PO not found');
+      }
+
+      if (lockedPO.status !== 'Draft' && lockedPO.status !== 'RFQ Sent') {
+        throw new Error(`PO cannot be issued — already in ${lockedPO.status} status`);
+      }
+
+      let poNumber = lockedPO.poNumber;
+      if (!poNumber) {
+        const currentYear = new Date().getFullYear().toString().slice(-2);
+        const latestPO = await tx
+          .select({ poNumber: vendorPOs.poNumber })
+          .from(vendorPOs)
+          .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
+          .orderBy(desc(vendorPOs.id))
+          .limit(1)
+          .for('update');
+
+        let nextNumber = 1;
+        if (latestPO.length > 0 && latestPO[0].poNumber) {
+          const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
+          if (match) {
+            nextNumber = parseInt(match[1]) + 1;
+          }
+        }
+        poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+      }
+
+      const [updatedPO] = await tx
+        .update(vendorPOs)
+        .set({ status: 'Sent', poNumber, updatedAt: new Date() })
+        .where(eq(vendorPOs.id, id))
+        .returning();
+
+      return { vendorPO: updatedPO, poNumber };
+    });
+  }
+
   async createVendorPO(data: any): Promise<any> {
     // Auto-generate barcode if not provided
     if (!data.barcode) {
@@ -7750,96 +7803,107 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Revision Management
   async createVendorPORevision(poId: number, changeReason: string, revisedBy?: string): Promise<any> {
-    // Get the original PO
-    const originalPO = await this.getVendorPO(poId);
-    if (!originalPO) {
-      throw new Error('Vendor PO not found');
-    }
+    return await db.transaction(async (tx) => {
+      // Lock the source PO row for update
+      const [originalPO] = await tx
+        .select()
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, poId))
+        .for('update');
 
-    // Determine the root parent (original PO in the chain)
-    const rootParentId = originalPO.parentPoId || originalPO.id;
-    
-    // Get the highest revision number for this PO family
-    const existingRevisions = await db
-      .select({ revisionNumber: vendorPOs.revisionNumber })
-      .from(vendorPOs)
-      .where(
-        or(
-          eq(vendorPOs.id, rootParentId),
-          eq(vendorPOs.parentPoId, rootParentId)
+      if (!originalPO) {
+        throw new Error('Vendor PO not found');
+      }
+
+      // Determine the root parent (original PO in the chain)
+      const rootParentId = originalPO.parentPoId || originalPO.id;
+
+      // Lock all family members to prevent concurrent revision creation
+      const existingRevisions = await tx
+        .select({ revisionNumber: vendorPOs.revisionNumber })
+        .from(vendorPOs)
+        .where(
+          or(
+            eq(vendorPOs.id, rootParentId),
+            eq(vendorPOs.parentPoId, rootParentId)
+          )
         )
-      )
-      .orderBy(desc(vendorPOs.revisionNumber))
-      .limit(1);
-    
-    const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
-    
-    // Mark the current PO as no longer the current revision
-    await db
-      .update(vendorPOs)
-      .set({ isCurrentRevision: false, updatedAt: new Date() })
-      .where(eq(vendorPOs.id, poId));
-    
-    // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
-    const basePONumber = originalPO.poNumber ? originalPO.poNumber.replace(/-R[A-Z]+$/, '') : null;
-    const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
-    const newPONumber = basePONumber ? `${basePONumber}-R${revisionLetter}` : null;
-    
-    // Create the new revision PO (copy of the original with revision metadata)
-    const revisionData = {
-      poNumber: newPONumber,
-      vendorId: originalPO.vendorId,
-      status: 'Draft', // New revision starts as Draft for editing
-      orderDate: originalPO.orderDate,
-      expectedDeliveryDate: originalPO.expectedDeliveryDate,
-      actualDeliveryDate: originalPO.actualDeliveryDate,
-      shipVia: originalPO.shipVia,
-      barcode: nanoid(12), // New unique barcode
-      subtotal: originalPO.subtotal,
-      tax: originalPO.tax,
-      shippingCost: originalPO.shippingCost,
-      totalCost: originalPO.totalCost,
-      notes: originalPO.notes,
-      createdBy: originalPO.createdBy,
-      revisionNumber: nextRevisionNumber,
-      parentPoId: rootParentId,
-      changeReason: changeReason,
-      isCurrentRevision: true,
-      revisedAt: new Date(),
-      revisedBy: revisedBy,
-    };
-    
-    const [newRevision] = await db.insert(vendorPOs).values(revisionData).returning();
-    
-    // Copy all line items from the original PO to the new revision
-    const originalItems = await this.getVendorPOItems(poId);
-    for (const item of originalItems) {
-      const itemData = {
-        vendorPoId: newRevision.id,
-        lineNumber: item.lineNumber,
-        agPartNumber: item.agPartNumber,
-        description: item.description,
-        purchaseQty: item.purchaseQty,
-        purchaseUnitPrice: item.purchaseUnitPrice,
-        purchaseUnit: item.purchaseUnit,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        vendorUnit: item.vendorUnit,
-        conversionFactor: item.conversionFactor,
-        lineTotal: item.lineTotal,
-        receivedQuantity: 0, // Reset received quantity for new revision
-        notes: item.notes,
+        .orderBy(desc(vendorPOs.revisionNumber))
+        .limit(1)
+        .for('update');
+
+      const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+
+      // Mark the current PO as no longer the current revision
+      await tx
+        .update(vendorPOs)
+        .set({ isCurrentRevision: false, updatedAt: new Date() })
+        .where(eq(vendorPOs.id, poId));
+
+      // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
+      const basePONumber = originalPO.poNumber ? originalPO.poNumber.replace(/-R[A-Z]+$/, '') : null;
+      const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
+      const newPONumber = basePONumber ? `${basePONumber}-R${revisionLetter}` : null;
+
+      // Create the new revision PO (copy of the original with revision metadata)
+      const revisionData = {
+        poNumber: newPONumber,
+        vendorId: originalPO.vendorId,
+        status: 'Draft' as const,
+        orderDate: originalPO.orderDate,
+        expectedDeliveryDate: originalPO.expectedDeliveryDate,
+        actualDeliveryDate: originalPO.actualDeliveryDate,
+        shipVia: originalPO.shipVia,
+        barcode: nanoid(12),
+        subtotal: originalPO.subtotal,
+        tax: originalPO.tax,
+        shippingCost: originalPO.shippingCost,
+        totalCost: originalPO.totalCost,
+        notes: originalPO.notes,
+        createdBy: originalPO.createdBy,
+        revisionNumber: nextRevisionNumber,
+        parentPoId: rootParentId,
+        changeReason: changeReason,
+        isCurrentRevision: true,
+        revisedAt: new Date(),
+        revisedBy: revisedBy,
       };
-      await db.insert(vendorPOItems).values(itemData);
-    }
-    
-    // Copy optional settings from original PO
-    const originalSettings = await this.getPOOptionalSettings(poId);
-    for (const setting of originalSettings) {
-      await this.addPOOptionalSetting(newRevision.id, setting.id);
-    }
-    
-    return newRevision;
+
+      const [newRevision] = await tx.insert(vendorPOs).values(revisionData).returning();
+
+      // Copy all line items from the original PO to the new revision
+      const originalItems = await tx
+        .select()
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.vendorPoId, poId));
+      for (const item of originalItems) {
+        const itemData = {
+          vendorPoId: newRevision.id,
+          lineNumber: item.lineNumber,
+          agPartNumber: item.agPartNumber,
+          description: item.description,
+          purchaseQty: item.purchaseQty,
+          purchaseUnitPrice: item.purchaseUnitPrice,
+          purchaseUnit: item.purchaseUnit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          vendorUnit: item.vendorUnit,
+          conversionFactor: item.conversionFactor,
+          lineTotal: item.lineTotal,
+          receivedQuantity: 0,
+          notes: item.notes,
+        };
+        await tx.insert(vendorPOItems).values(itemData);
+      }
+
+      // Copy optional settings from original PO
+      const originalSettings = await this.getPOOptionalSettings(poId);
+      for (const setting of originalSettings) {
+        await this.addPOOptionalSetting(newRevision.id, setting.id);
+      }
+
+      return newRevision;
+    });
   }
 
   async getVendorPORevisionHistory(poId: number): Promise<any[]> {

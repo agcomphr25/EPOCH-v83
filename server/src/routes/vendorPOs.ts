@@ -269,7 +269,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
     const data = insertVendorPOSchema.partial().parse(req.body);
     
-    // Allow status changes (e.g., moving to Sent, Received, etc.) even on issued POs
+    // Prevent setting status to 'Sent' via PUT — must use POST /:id/issue for atomic number generation
+    if (data.status === 'Sent') {
+      return res.status(400).json({
+        error: 'Cannot set status to Sent directly',
+        message: 'Use the POST /api/vendor-pos/:id/issue endpoint to formally issue a PO. This ensures proper PO number generation.',
+      });
+    }
+
+    // Allow status changes (e.g., moving to Received, Cancelled, etc.) even on issued POs
     const isStatusOnlyChange = Object.keys(data).length === 1 && data.status !== undefined;
     
     if (issuedStatuses.includes(existingPO.status) && !isStatusOnlyChange) {
@@ -788,13 +796,13 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
 
     const { skipEmail } = req.body || {};
 
-    // Get the PO
+    // Get the PO first for vendor lookup and pre-flight checks
     const vendorPO = await storage.getVendorPO(id);
     if (!vendorPO) {
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
 
-    // Check if PO is in Draft or RFQ Sent status (both can be formally issued)
+    // Pre-flight status check (non-locking, for fast rejection)
     if (vendorPO.status !== 'Draft' && vendorPO.status !== 'RFQ Sent') {
       return res.status(400).json({ 
         error: 'PO cannot be issued', 
@@ -808,15 +816,9 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor not found' });
     }
 
-    // Generate VPO number at formal issuance time (if not already assigned)
-    let poNumber = vendorPO.poNumber;
-    if (!poNumber) {
-      poNumber = await storage.generateNextVPONumber();
-    }
-
-    // If skipEmail is true, just update the status and assign PO number without sending email
+    // If skipEmail is true, use atomic transactional issuance (lock, generate number, update status)
     if (skipEmail) {
-      const updatedPO = await storage.updateVendorPO(id, { status: 'Sent', poNumber });
+      const { vendorPO: updatedPO, poNumber } = await storage.issueVendorPO(id);
       console.log(`✅ PO ${poNumber} marked as issued (no email sent - manual entry mode)`);
       return res.json({
         ...updatedPO,
@@ -834,7 +836,10 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
-    // Generate magic link for PO confirmation (before email so we can include it)
+    // Atomic transactional issuance: lock row, generate number, update status
+    const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+
+    // Generate magic link for PO confirmation
     const { link, expiresAt } = await generateMagicLink({
       email: vendor.email,
       purpose: 'vendor_po_confirmation',
@@ -942,7 +947,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       <div class="po-details">
         <p><strong>PO Number:</strong> ${poNumber}</p>
         <p><strong>Vendor:</strong> ${vendor.name}</p>
-        ${vendorPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
+        ${issuedPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
       </div>
       
       <div style="text-align: center;">
@@ -982,7 +987,7 @@ AG Composites has issued a new Purchase Order to your company. Please confirm re
 
 PO Number: ${poNumber}
 Vendor: ${vendor.name}
-${vendorPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
+${issuedPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
 
 Confirm your receipt: ${link}
 
@@ -1009,21 +1014,19 @@ Email: sales@agcomposites.com
 
     if (!emailResult.success) {
       console.error('Failed to send PO confirmation email:', emailResult.error);
-      // Email failed - don't update PO status, return error
+      // PO is already issued (status = Sent) but email failed - report the failure
       return res.status(500).json({
-        error: 'Failed to send confirmation email',
-        message: emailResult.error || 'Email service unavailable. Please try again.',
+        error: 'PO issued but confirmation email failed',
+        message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
         emailSent: false,
+        poNumber,
       });
     }
-
-    // Email sent successfully - now update PO status to Sent and assign PO number
-    const updatedPO = await storage.updateVendorPO(id, { status: 'Sent', poNumber });
 
     console.log(`✅ PO ${poNumber} issued and confirmation email sent to ${vendor.email} (cc: laurie@agcomposites.com)`);
 
     res.json({
-      ...updatedPO,
+      ...issuedPO,
       emailSent: true,
       emailRecipient: vendor.email,
       emailCc: 'laurie@agcomposites.com',

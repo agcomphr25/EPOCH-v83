@@ -16,6 +16,7 @@ const LABEL_HEIGHT = (4 / 3) * POINTS_PER_INCH;
 
 const COLUMNS = 2;
 const ROWS = 7;
+const LABELS_PER_PAGE = COLUMNS * ROWS;
 
 const LEFT_MARGIN = 0.15625 * POINTS_PER_INCH;
 const TOP_MARGIN = 0.5 * POINTS_PER_INCH;
@@ -102,6 +103,7 @@ const generateSchema = z.object({
     description: z.string().max(500).optional(),
     product_name: z.string().max(500).optional(),
     copies: z.number().int().min(1).max(200).optional(),
+    fillPage: z.boolean().optional(),
   })).min(1).max(500),
   copies: z.number().int().min(1).max(200).optional(),
 });
@@ -118,12 +120,18 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
     const labelItems: Array<{ barcodeValue: string; description: string }> = [];
 
     for (const product of products) {
-      const qty = product.copies || copies || 1;
-      for (let i = 0; i < qty; i++) {
-        labelItems.push({
-          barcodeValue: product.barcodeValue || product.barcode || '',
-          description: (product.description || product.product_name || '').slice(0, 200),
-        });
+      const barcodeVal = product.barcodeValue || product.barcode || '';
+      const desc = (product.description || product.product_name || '').slice(0, 200);
+
+      if (product.fillPage) {
+        for (let i = 0; i < LABELS_PER_PAGE; i++) {
+          labelItems.push({ barcodeValue: barcodeVal, description: desc });
+        }
+      } else {
+        const qty = product.copies || copies || 1;
+        for (let i = 0; i < qty; i++) {
+          labelItems.push({ barcodeValue: barcodeVal, description: desc });
+        }
       }
     }
 
@@ -135,14 +143,13 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const labelsPerPage = COLUMNS * ROWS;
-    const totalPages = Math.ceil(labelItems.length / labelsPerPage);
+    const totalPages = Math.ceil(labelItems.length / LABELS_PER_PAGE);
 
     for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
-      const startIndex = pageIndex * labelsPerPage;
-      const endIndex = Math.min(startIndex + labelsPerPage, labelItems.length);
+      const startIndex = pageIndex * LABELS_PER_PAGE;
+      const endIndex = Math.min(startIndex + LABELS_PER_PAGE, labelItems.length);
 
       for (let i = startIndex; i < endIndex; i++) {
         const labelIndex = i - startIndex;

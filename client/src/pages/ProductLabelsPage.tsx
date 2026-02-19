@@ -4,9 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-
 import { useToast } from '@/hooks/use-toast';
-import { Printer, Tag, Package, Plus, Minus, Trash2 } from 'lucide-react';
+import { Printer, Tag, Package, Plus, Minus, Trash2, FileSpreadsheet } from 'lucide-react';
 
 interface ProductItem {
   id: number;
@@ -29,17 +28,20 @@ interface LabelItem {
   barcodeValue: string;
   description: string;
   copies: number;
+  fillPage: boolean;
 }
 
 function buildDescription(product: ProductItem): string {
   const parts: string[] = ['AG Composites'];
 
   const name = product.product_name || '';
-  if (name.includes('BM-') || name.includes('Bottom')) {
-    if (name.includes('M5')) {
-      parts.push('M5 Bottom Metal');
-    } else if (name.includes('BDL')) {
+  const ptype = product.product_type || '';
+
+  if (name.includes('BM-') || name.includes('Bottom') || ptype.includes('BDL') || ptype.includes('M5')) {
+    if (name.includes('M5BDL') || ptype.includes('BDL')) {
       parts.push('BDL Bottom Metal');
+    } else if (name.includes('M5') || ptype.includes('M5')) {
+      parts.push('M5 Bottom Metal');
     } else {
       parts.push('Bottom Metal');
     }
@@ -61,8 +63,16 @@ function buildDescription(product: ProductItem): string {
   }
 
   if (product.action_length) {
-    const length = product.action_length.replace(/_/g, ' ');
-    parts.push(length.charAt(0).toUpperCase() + length.slice(1) + ' Action');
+    const len = product.action_length.replace(/_/g, ' ').trim();
+    parts.push(len.charAt(0).toUpperCase() + len.slice(1) + ' Action');
+  } else {
+    const pName = product.product_name || '';
+    const pType = product.product_type || '';
+    if (pName.includes('-LA') || pType.includes('-LA') || pName.toLowerCase().includes('long')) {
+      parts.push('Long Action');
+    } else if (pName.includes('-SA') || pType.includes('-SA') || pName.toLowerCase().includes('short')) {
+      parts.push('Short Action');
+    }
   }
 
   if (product.material) {
@@ -72,9 +82,18 @@ function buildDescription(product: ProductItem): string {
     } else if (mat.includes('aluminum') || mat.includes('alum')) {
       parts.push('blk Aluminum');
     }
+  } else {
+    const pName = product.product_name || '';
+    if (pName.includes('BM-') || pName.includes('Bottom')) {
+      parts.push('blk Aluminum');
+    }
   }
 
   return parts.join(' ');
+}
+
+function getLabelCode(product: ProductItem): string {
+  return product.customer_product_number || product.barcode || '';
 }
 
 export default function ProductLabelsPage() {
@@ -114,9 +133,10 @@ export default function ProductLabelsPage() {
         ...labelItems,
         {
           productId: product.id,
-          barcodeValue: product.barcode,
+          barcodeValue: getLabelCode(product),
           description: buildDescription(product),
           copies: 1,
+          fillPage: false,
         },
       ]);
     }
@@ -127,10 +147,38 @@ export default function ProductLabelsPage() {
       labelItems
         .map((item) =>
           item.productId === productId
-            ? { ...item, copies: Math.max(0, item.copies + delta) }
+            ? { ...item, copies: Math.max(0, item.copies + delta), fillPage: false }
             : item
         )
         .filter((item) => item.copies > 0)
+    );
+  };
+
+  const setCopies = (productId: number, value: string) => {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1) return;
+    setLabelItems(
+      labelItems.map((item) =>
+        item.productId === productId ? { ...item, copies: Math.min(num, 200), fillPage: false } : item
+      )
+    );
+  };
+
+  const toggleFillPage = (productId: number) => {
+    setLabelItems(
+      labelItems.map((item) =>
+        item.productId === productId
+          ? { ...item, fillPage: !item.fillPage, copies: !item.fillPage ? 14 : 1 }
+          : item
+      )
+    );
+  };
+
+  const updateBarcodeValue = (productId: number, barcodeValue: string) => {
+    setLabelItems(
+      labelItems.map((item) =>
+        item.productId === productId ? { ...item, barcodeValue } : item
+      )
     );
   };
 
@@ -151,9 +199,10 @@ export default function ProductLabelsPage() {
       .filter((p) => !labelItems.find((l) => l.productId === p.id))
       .map((product) => ({
         productId: product.id,
-        barcodeValue: product.barcode,
+        barcodeValue: getLabelCode(product),
         description: buildDescription(product),
         copies: 1,
+        fillPage: false,
       }));
     setLabelItems([...labelItems, ...newItems]);
   };
@@ -184,7 +233,8 @@ export default function ProductLabelsPage() {
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
 
-      toast({ title: 'Labels Generated', description: `${labelItems.reduce((sum, i) => sum + i.copies, 0)} labels ready to print.` });
+      const totalCount = labelItems.reduce((sum, i) => i.fillPage ? sum + 14 : sum + i.copies, 0);
+      toast({ title: 'Labels Generated', description: `${totalCount} labels ready to print.` });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
@@ -192,7 +242,7 @@ export default function ProductLabelsPage() {
     }
   };
 
-  const totalLabels = labelItems.reduce((sum, item) => sum + item.copies, 0);
+  const totalLabels = labelItems.reduce((sum, item) => item.fillPage ? sum + 14 : sum + item.copies, 0);
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
@@ -236,6 +286,7 @@ export default function ProductLabelsPage() {
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {products.map((product) => {
                 const inQueue = labelItems.find((l) => l.productId === product.id);
+                const code = getLabelCode(product);
                 return (
                   <div
                     key={product.id}
@@ -246,10 +297,15 @@ export default function ProductLabelsPage() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{product.product_name}</p>
-                      <p className="text-xs text-muted-foreground">Barcode: {product.barcode}</p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {product.customer_product_number
+                          ? <>{product.customer_product_number} <span className="text-green-600">(Red Hawk code)</span></>
+                          : <>POP: {product.barcode}</>
+                        }
+                      </p>
                     </div>
                     {inQueue ? (
-                      <span className="text-xs text-primary font-medium ml-2">Added ({inQueue.copies})</span>
+                      <span className="text-xs text-primary font-medium ml-2">Added ({inQueue.fillPage ? 'Full Page' : inQueue.copies})</span>
                     ) : (
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); addToLabels(product); }}>
                         <Plus className="h-4 w-4" />
@@ -287,25 +343,52 @@ export default function ProductLabelsPage() {
                 {labelItems.map((item) => (
                   <div key={item.productId} className="border rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-bold">{item.barcodeValue}</span>
                       <Button variant="ghost" size="sm" onClick={() => removeItem(item.productId)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
-                    <Input
-                      value={item.description}
-                      onChange={(e) => updateDescription(item.productId, e.target.value)}
-                      className="text-sm"
-                      placeholder="Label description..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Copies:</span>
-                      <Button variant="outline" size="sm" onClick={() => updateCopies(item.productId, -1)}>
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center font-medium">{item.copies}</span>
-                      <Button variant="outline" size="sm" onClick={() => updateCopies(item.productId, 1)}>
-                        <Plus className="h-3 w-3" />
+                    <div>
+                      <label className="text-xs text-muted-foreground">Product Code (barcode value)</label>
+                      <Input
+                        value={item.barcodeValue}
+                        onChange={(e) => updateBarcodeValue(item.productId, e.target.value)}
+                        className="text-sm font-mono font-bold"
+                        placeholder="Product code..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Description text</label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateDescription(item.productId, e.target.value)}
+                        className="text-sm"
+                        placeholder="Label description..."
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Copies:</span>
+                        <Button variant="outline" size="sm" onClick={() => updateCopies(item.productId, -1)} disabled={item.fillPage}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          value={item.fillPage ? '14' : item.copies}
+                          onChange={(e) => setCopies(item.productId, e.target.value)}
+                          className="w-14 text-center text-sm"
+                          disabled={item.fillPage}
+                        />
+                        <Button variant="outline" size="sm" onClick={() => updateCopies(item.productId, 1)} disabled={item.fillPage}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant={item.fillPage ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => toggleFillPage(item.productId)}
+                        className="gap-1 ml-auto"
+                      >
+                        <FileSpreadsheet className="h-3 w-3" />
+                        Fill Page
                       </Button>
                     </div>
                   </div>

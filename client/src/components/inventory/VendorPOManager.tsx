@@ -1243,203 +1243,434 @@ export default function VendorPOManager() {
       
       console.log('Popup window opened successfully');
       
+      const isRFQ = !po.poNumber;
+      const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
+      const accentColor = isRFQ ? '#e67e22' : '#1a3a5c';
+      const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '') : '';
+      const orderDate = po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+      const deliveryDate = po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+      const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
+
       const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${po.poNumber ? 'Purchase Order' : 'Request for Quote'} - ${po.poNumber || `Draft #${po.id}`}</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 40px; }
-              .print-controls { 
-                position: fixed; 
-                top: 10px; 
-                right: 10px; 
-                z-index: 1000;
-                display: flex;
-                gap: 10px;
-              }
-              .print-btn {
-                background-color: #2563eb;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 6px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-              }
-              .print-btn:hover {
-                background-color: #1d4ed8;
-              }
-              .company-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #333; }
-              .company-header h1 { margin: 0 0 10px 0; font-size: 26px; color: #333; }
-              .company-header p { margin: 3px 0; color: #555; font-size: 13px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .header h1 { margin: 0; font-size: 24px; }
-              .info-section { margin-bottom: 20px; }
-              .info-row { display: flex; margin-bottom: 8px; }
-              .info-label { font-weight: bold; width: 200px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-              th { background-color: #f2f2f2; font-weight: bold; }
-              .totals { text-align: right; margin-top: 20px; }
-              .total-line { font-size: 18px; font-weight: bold; }
-              @media print {
-                body { padding: 20px; }
-                .print-controls { display: none !important; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="print-controls">
-              <button class="print-btn" onclick="window.print()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                  <rect x="6" y="14" width="12" height="8"></rect>
-                </svg>
-                Print PO
-              </button>
-            </div>
-            ${settings?.companyName || settings?.companyAddress || settings?.companyPhone || settings?.companyEmail ? `
-              <div class="company-header">
-                ${settings.companyName ? `<h1>${settings.companyName}</h1>` : ''}
-                ${settings.companyAddress ? `<p style="white-space: pre-wrap;">${settings.companyAddress}</p>` : ''}
-                ${settings.companyPhone || settings.companyEmail ? `
-                  <p>
-                    ${settings.companyPhone ? settings.companyPhone : ''}
-                    ${settings.companyPhone && settings.companyEmail ? ' | ' : ''}
-                    ${settings.companyEmail ? settings.companyEmail : ''}
-                  </p>
-                ` : ''}
-                ${settings.companyWebsite ? `<p>${settings.companyWebsite}</p>` : ''}
-              </div>
-            ` : ''}
-            
-            ${settings?.contactName || settings?.contactTitle || settings?.contactPhone || settings?.contactEmail ? `
-              <div style="margin-bottom: 30px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-                <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #555;">Purchasing Contact:</div>
-                ${settings.contactName ? `<div style="font-size: 13px; margin-bottom: 3px;"><strong>${settings.contactName}</strong>${settings.contactTitle ? `, ${settings.contactTitle}` : ''}</div>` : ''}
-                ${settings.contactPhone || settings.contactEmail ? `
-                  <div style="font-size: 13px; color: #666;">
-                    ${settings.contactPhone ? settings.contactPhone : ''}
-                    ${settings.contactPhone && settings.contactEmail ? ' | ' : ''}
-                    ${settings.contactEmail ? settings.contactEmail : ''}
-                  </div>
-                ` : ''}
-              </div>
-            ` : ''}
-            
-            <div class="header">
-              <h1>${po.poNumber ? 'PURCHASE ORDER' : 'REQUEST FOR QUOTE'}</h1>
-              ${po.poNumber ? `<p>PO Number: ${po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>` : '<p style="color: #e67e22; font-weight: bold;">This is a request for quote — not a binding purchase order</p>'}
-            </div>
-            
-            <div class="info-section">
-              <div class="info-row">
-                <div class="info-label">Vendor:</div>
-                <div>${po.vendorName || `ID: ${po.vendorId}`}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Status:</div>
-                <div>${po.status}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Requested Delivery Date:</div>
-                <div>${po.expectedDeliveryDate || 'N/A'}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Ship Via:</div>
-                <div>${po.shipVia || 'N/A'}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Barcode:</div>
-                <div>${po.barcode}</div>
-              </div>
-            </div>
-            
-            <table>
-              <thead>
-                <tr>
-                  <th>Line</th>
-                  <th>Supplier Part#</th>
-                  <th>Description</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Unit Price</th>
-                  <th>Line Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${items.map(item => `
-                  <tr>
-                    <td>${item.lineNumber}</td>
-                    <td>${item.supplierPartNumber || '-'}</td>
-                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.purchaseUnit} ordered)</small>` : ''}</td>
-                    <td>${item.quantity != null ? Number(item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                    <td>${item.vendorUnit || item.uom || '-'}</td>
-                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            
-            <div class="totals">
-              <div class="total-line">
-                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-            
-            ${po.notes ? `
-              <div style="margin-top: 30px;">
-                <div style="font-weight: bold;">Notes:</div>
-                <div>${po.notes}</div>
-              </div>
-            ` : ''}
-            
-            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions || optionalSettings.length > 0 ? `
-              <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd;">
-                ${settings?.paymentTerms ? `
-                  <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; font-size: 14px;">Payment Terms:</div>
-                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.paymentTerms}</div>
-                  </div>
-                ` : ''}
-                
-                ${settings?.shippingInstructions ? `
-                  <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; font-size: 14px;">Shipping Instructions:</div>
-                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.shippingInstructions}</div>
-                  </div>
-                ` : ''}
-                
-                ${settings?.termsAndConditions ? `
-                  <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; font-size: 14px;">Terms and Conditions:</div>
-                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.termsAndConditions}</div>
-                  </div>
-                ` : ''}
-                
-                ${optionalSettings.length > 0 ? `
-                  <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; font-size: 14px;">Additional Requirements:</div>
-                    ${optionalSettings.map((setting, index) => `
-                      <div style="margin-top: 10px; padding-left: 10px;">
-                        <div style="font-weight: bold; font-size: 12px;">${index + 1}. ${setting.name}</div>
-                        <div style="white-space: pre-wrap; margin-top: 5px; font-size: 12px;">${setting.statement}</div>
-                      </div>
-                    `).join('')}
-                  </div>
-                ` : ''}
-              </div>
-            ` : ''}
-          </body>
-        </html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${isRFQ ? 'Request for Quote' : 'Purchase Order'} - ${po.poNumber || 'Draft #' + po.id}</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      padding: 36px 40px;
+      color: #1a1a1a;
+      font-size: 12px;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .print-controls {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+    .print-btn {
+      background-color: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .print-btn:hover { background-color: #1d4ed8; }
+
+    /* ── RFQ Watermark ── */
+    .rfq-watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-35deg);
+      font-size: 120px;
+      font-weight: 800;
+      color: #000;
+      opacity: 0.04;
+      z-index: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      letter-spacing: 8px;
+    }
+
+    /* ── Top Header Grid ── */
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0;
+    }
+    .company-block h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 4px;
+    }
+    .company-block p {
+      font-size: 12px;
+      color: #555;
+      margin: 1px 0;
+      line-height: 1.6;
+    }
+
+    .meta-panel {
+      border: 1.5px solid ${accentColor};
+      border-radius: 6px;
+      min-width: 260px;
+      max-width: 300px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .meta-panel-title {
+      background-color: ${accentColor};
+      color: #fff;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 8px 16px;
+      text-transform: uppercase;
+    }
+    .meta-panel-body {
+      padding: 10px 16px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      font-size: 12px;
+    }
+    .meta-label { color: #666; font-weight: 500; }
+    .meta-value { font-weight: 600; color: #1a1a1a; text-align: right; }
+    .meta-divider { border-top: 1px solid #e5e5e5; margin: 6px 0; }
+    .barcode-container { text-align: center; padding: 6px 0 2px 0; }
+    .barcode-container svg { max-width: 100%; height: auto; }
+    .barcode-fallback { font-family: monospace; font-size: 11px; color: #888; letter-spacing: 1px; }
+
+    /* ── Divider ── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 20px 0;
+    }
+
+    /* ── Vendor / Ship-To Panels ── */
+    .panels-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .panel {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .panel-header {
+      background-color: #f5f5f5;
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #555;
+      border-bottom: 1px solid #ddd;
+    }
+    .panel-body {
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .panel-body strong { color: #1a1a1a; }
+
+    /* ── Line Items Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 4px;
+    }
+    thead th {
+      background-color: #f5f5f5;
+      border-bottom: 2px solid #ccc;
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #444;
+      text-align: left;
+    }
+    thead th.num { text-align: right; }
+    tbody td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+      vertical-align: top;
+    }
+    tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr:nth-child(even) { background-color: #fafafa; }
+    tbody td small { color: #777; font-size: 11px; }
+
+    /* ── Totals Box ── */
+    .totals-box {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+      margin-bottom: 24px;
+    }
+    .totals-inner {
+      background-color: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      border-radius: 5px;
+      padding: 12px 24px;
+      min-width: 220px;
+      text-align: right;
+    }
+    .totals-inner .total-label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+    .totals-inner .total-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-top: 2px;
+    }
+
+    /* ── Notes ── */
+    .notes-section {
+      margin-bottom: 20px;
+    }
+    .section-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .notes-body {
+      font-size: 12px;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    /* ── Footer Terms ── */
+    .terms-section {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+    }
+    .term-block {
+      margin-bottom: 14px;
+    }
+    .term-block-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 3px;
+    }
+    .term-block-body {
+      font-size: 11px;
+      color: #555;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+    .optional-item {
+      margin-top: 8px;
+      padding-left: 12px;
+    }
+    .optional-item-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #444;
+    }
+    .optional-item-body {
+      font-size: 11px;
+      color: #555;
+      white-space: pre-wrap;
+      margin-top: 2px;
+      line-height: 1.5;
+    }
+
+    /* ── Contact Strip ── */
+    .contact-strip {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 10px 14px;
+      background-color: #f9f9f9;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .contact-strip strong { color: #555; font-weight: 600; }
+
+    @media print {
+      body { padding: 20px; }
+      .print-controls { display: none !important; }
+      .rfq-watermark { position: fixed; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-controls">
+    <button class="print-btn" onclick="window.print()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+        <rect x="6" y="14" width="12" height="8"></rect>
+      </svg>
+      Print
+    </button>
+  </div>
+
+  ${isRFQ ? '<div class="rfq-watermark">REQUEST FOR QUOTE</div>' : ''}
+
+  <!-- ── Header: Company + Meta Panel ── -->
+  <div class="doc-header">
+    <div class="company-block">
+      ${settings.companyName ? '<h1>' + settings.companyName + '</h1>' : ''}
+      ${settings.companyAddress ? '<p style="white-space:pre-wrap;">' + settings.companyAddress + '</p>' : ''}
+      ${settings.companyPhone || settings.companyEmail ? '<p>' + (settings.companyPhone || '') + (settings.companyPhone && settings.companyEmail ? ' | ' : '') + (settings.companyEmail || '') + '</p>' : ''}
+      ${settings.companyWebsite ? '<p>' + settings.companyWebsite + '</p>' : ''}
+    </div>
+    <div class="meta-panel">
+      <div class="meta-panel-title">${docTitle}</div>
+      <div class="meta-panel-body">
+        ${isRFQ
+          ? '<div style="text-align:center;color:#e67e22;font-weight:600;font-size:11px;padding:2px 0;">Non-binding quote request</div>'
+          : '<div class="meta-row"><span class="meta-label">PO Number</span><span class="meta-value">' + formattedPONumber + '</span></div>'
+        }
+        <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${orderDate}</span></div>
+        <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">${deliveryDate}</span></div>
+        <div class="meta-row"><span class="meta-label">Ship Via</span><span class="meta-value">${po.shipVia || 'N/A'}</span></div>
+        <div class="meta-row"><span class="meta-label">Status</span><span class="meta-value">${po.status}</span></div>
+        ${po.barcode ? '<div class="meta-divider"></div><div class="barcode-container"><svg id="barcode"></svg><div class="barcode-fallback" id="barcode-fallback" style="display:none;">' + po.barcode + '</div></div>' : ''}
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider" />
+
+  <!-- ── Purchasing Contact ── -->
+  ${settings.contactName || settings.contactPhone || settings.contactEmail ? '<div class="contact-strip"><div><strong>Purchasing Contact:</strong> ' + (settings.contactName || '') + (settings.contactTitle ? ', ' + settings.contactTitle : '') + '</div>' + (settings.contactPhone || settings.contactEmail ? '<div>' + (settings.contactPhone || '') + (settings.contactPhone && settings.contactEmail ? ' | ' : '') + (settings.contactEmail || '') + '</div>' : '') + '</div>' : ''}
+
+  <!-- ── Vendor + Ship-To Panels ── -->
+  <div class="panels-row">
+    <div class="panel">
+      <div class="panel-header">Vendor</div>
+      <div class="panel-body">
+        <strong>${po.vendorName || 'Vendor ID: ' + po.vendorId}</strong>
+        ${vendor?.address ? '<br/>' + vendor.address : ''}
+        ${vendor?.city || vendor?.state || vendor?.zip ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip ? ' ' + vendor.zip : '') : ''}
+        ${vendor?.phone ? '<br/>Ph: ' + vendor.phone : ''}
+        ${vendor?.email ? '<br/>' + vendor.email : ''}
+        ${vendor?.contactPerson ? '<br/>Attn: ' + vendor.contactPerson : ''}
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Ship To</div>
+      <div class="panel-body">
+        <strong>${settings.companyName || ''}</strong>
+        ${settings.companyAddress ? '<br/><span style="white-space:pre-wrap;">' + settings.companyAddress + '</span>' : ''}
+        ${settings.companyPhone ? '<br/>Ph: ' + settings.companyPhone : ''}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Line Items ── -->
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px;">Line</th>
+        <th>Supplier Part #</th>
+        <th>Description</th>
+        <th class="num" style="width:70px;">Qty</th>
+        <th style="width:60px;">Unit</th>
+        <th class="num" style="width:90px;">Unit Price</th>
+        <th class="num" style="width:100px;">Line Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map(item => {
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.unitPrice) || 0;
+        const lineTotal = qty * price;
+        return '<tr>' +
+          '<td>' + item.lineNumber + '</td>' +
+          '<td>' + (item.supplierPartNumber || '-') + '</td>' +
+          '<td>' + (item.description || '-') +
+            (item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit
+              ? '<br/><small>(' + Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + item.purchaseUnit + ' ordered)</small>'
+              : '') +
+          '</td>' +
+          '<td class="num">' + qty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
+          '<td>' + (item.vendorUnit || item.uom || '-') + '</td>' +
+          '<td class="num">$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
+          '<td class="num">$' + lineTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
+        '</tr>';
+      }).join('')}
+    </tbody>
+  </table>
+
+  <!-- ── Totals ── -->
+  <div class="totals-box">
+    <div class="totals-inner">
+      <div class="total-label">Total</div>
+      <div class="total-amount">$${lineItemTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+    </div>
+  </div>
+
+  <!-- ── Notes ── -->
+  ${po.notes ? '<div class="notes-section"><div class="section-label">Notes</div><div class="notes-body">' + po.notes + '</div></div>' : ''}
+
+  <!-- ── Terms / Footer ── -->
+  ${settings.termsAndConditions || settings.paymentTerms || settings.shippingInstructions || optionalSettings.length > 0 ? '<div class="terms-section">' +
+    (settings.paymentTerms ? '<div class="term-block"><div class="term-block-title">Payment Terms</div><div class="term-block-body">' + settings.paymentTerms + '</div></div>' : '') +
+    (settings.shippingInstructions ? '<div class="term-block"><div class="term-block-title">Shipping Instructions</div><div class="term-block-body">' + settings.shippingInstructions + '</div></div>' : '') +
+    (settings.termsAndConditions ? '<div class="term-block"><div class="term-block-title">Terms and Conditions</div><div class="term-block-body">' + settings.termsAndConditions + '</div></div>' : '') +
+    (optionalSettings.length > 0 ? '<div class="term-block"><div class="term-block-title">Additional Requirements</div>' +
+      optionalSettings.map(function(s, i) { return '<div class="optional-item"><div class="optional-item-name">' + (i+1) + '. ' + s.name + '</div><div class="optional-item-body">' + s.statement + '</div></div>'; }).join('') +
+    '</div>' : '') +
+  '</div>' : ''}
+
+  <script>
+    try {
+      if (typeof JsBarcode !== 'undefined' && document.getElementById('barcode')) {
+        JsBarcode('#barcode', '${po.barcode || ''}', {
+          format: 'CODE128',
+          width: 1.5,
+          height: 40,
+          displayValue: true,
+          fontSize: 11,
+          margin: 4,
+          font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
+        });
+      }
+    } catch(e) {
+      var fb = document.getElementById('barcode-fallback');
+      var bc = document.getElementById('barcode');
+      if (fb) fb.style.display = 'block';
+      if (bc) bc.style.display = 'none';
+    }
+  <\/script>
+</body>
+</html>
       `;
       
       console.log('Writing HTML to popup window...');

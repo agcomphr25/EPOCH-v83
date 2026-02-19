@@ -1,0 +1,92 @@
+COPY-PASTE INTO REPLIT AGENT
+We need to harden Vendor PO issuance logic for concurrency safety and number integrity.
+
+Please perform a deep technical audit and return exact code snippets (not summaries) for the following:
+
+---------------------------------------
+1) VPO NUMBER GENERATION LOGIC
+---------------------------------------
+
+- Show the full generateNextVPONumber() function (or equivalent logic).
+- Show how it queries the latest VPO number.
+- Show whether it filters by:
+    - status
+    - revision_number
+    - is_current_revision
+    - cancellation
+- Confirm whether it uses a transaction.
+- Confirm whether it uses SELECT ... FOR UPDATE.
+- Confirm whether it could produce duplicate numbers under concurrency.
+
+---------------------------------------
+2) ISSUE ENDPOINT
+---------------------------------------
+
+Show full code for:
+
+POST /:id/issue
+
+Specifically:
+- Where po_number is generated
+- Whether status change and number generation are inside a transaction
+- Whether number generation is guarded by po_number == null
+- Whether it can be triggered twice safely
+
+---------------------------------------
+3) UPDATE ROUTE (STATUS CHANGES)
+---------------------------------------
+
+Show full code for:
+
+PUT /:id
+
+Specifically:
+- Can status be updated directly to 'Sent'?
+- If yes, does that trigger number generation?
+- Is there central enforcement that ensures:
+      if status becomes 'Sent' and po_number is null → generate number
+
+---------------------------------------
+4) REVISION LOGIC
+---------------------------------------
+
+Show code for:
+
+POST /:id/revisions
+
+Specifically:
+- Does it copy po_number from parent?
+- Does it ever regenerate base number?
+- How are RA / RB / RC suffixes appended?
+
+---------------------------------------
+5) SEARCH / FILTERING
+---------------------------------------
+
+Show all query logic used for:
+- Searching vendor POs
+- Filtering by PO number
+- Filtering by vendor
+- Filtering by status
+
+Specifically:
+- Does search use ILIKE?
+- Does it null-guard po_number?
+- Could po_number being null cause runtime errors?
+
+---------------------------------------
+6) DATABASE CONSTRAINTS
+---------------------------------------
+
+Show:
+- Current vendor_pos table definition (DDL)
+- Any unique constraints on po_number
+- Any indexes on po_number
+- Whether po_number is UNIQUE
+
+---------------------------------------
+
+Return raw code snippets only.
+Do not summarize.
+Do not paraphrase.
+We need exact implementation details for concurrency hardening.

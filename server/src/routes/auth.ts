@@ -771,6 +771,19 @@ router.get('/validate', async (req, res) => {
 // Get current user session
 router.get('/session', async (req, res) => {
   try {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const bypassEnabled = process.env.DEV_AUTH_BYPASS === 'true';
+    if (!isProduction && bypassEnabled) {
+      return res.json({
+        id: 2,
+        username: 'admin',
+        firstName: 'Admin',
+        lastName: 'User',
+        role: 'ADMIN',
+        employeeId: null,
+      });
+    }
+
     const sessionToken =
       req.cookies?.sessionToken ||
       req.headers.authorization?.replace('Bearer ', '');

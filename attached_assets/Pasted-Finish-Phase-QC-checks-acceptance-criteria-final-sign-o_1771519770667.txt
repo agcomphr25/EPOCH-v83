@@ -1,0 +1,146 @@
+Finish Phase
+QC checks, acceptance criteria, final sign-off
+
+0/5 complete
+
+Quality Control Checks
+
+QC • Required
+QC
+Complete all quality control verifications
+
+Go/No Go on Inner Dimension*
+Tolerance: Go/No Go
+Requirement: 11.780
+Measured Result *
+Enter result (Tolerance: Go/No Go)
+
+Verified / Pass
+Zone 1 outer dimension measurement*
+Tolerance: +/- .005
+Requirement: 11.891-11.901
+Measured Result *
+Enter result (Tolerance: +/- .005)
+
+Verified / Pass
+Zone 2 outer dimension measurement*
+Tolerance: +/- .005
+Requirement: 11.891-11.901
+Measured Result *
+Enter result (Tolerance: +/- .005)
+
+Verified / Pass
+Zone 3 outer dimension measurement*
+Tolerance: +/- .005
+Requirement: 11.891-11.901
+Measured Result *
+Enter result (Tolerance: +/- .005)
+
+Verified / Pass
+Serial numbers clearly marked on blue tape*
+Tolerance: Y/N
+Requirement: Y/N
+Measured Result *
+Enter result (Tolerance: Y/N)
+
+Verified / Pass
+Center of seams marked with orange marker*
+Tolerance: Y/N
+Requirement: Y/N
+Measured Result *
+Enter result (Tolerance: Y/N)
+
+Verified / Pass
+Tip to tip length*
+Tolerance: Minimum 96"
+Requirement: >/= 96"
+Measured Result *
+Enter result (Tolerance: Minimum 96")
+
+Verified / Pass
+Weight (g)*
+Tolerance: N/A
+Requirement: for record only
+Measured Result *
+Enter result (Tolerance: N/A)
+
+Verified / Pass
+Inner dimensions*
+Requirement: 11.780
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Outer dimensions - End #1*
+Requirement: 11.891-11.901
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Outer dimensions - End #2*
+Requirement: 11.891-11.901
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Outer dimensions - Middle*
+Requirement: 11.891-11.901
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Serial number visibility*
+Requirement: Serial numbers clearly marked on blue tape
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Seams marking*
+Requirement: Center of seams marked with orange marker
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Length*
+Requirement: >/= 96
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Weight recording*
+Requirement: Weight (g) for record only
+Measured Result *
+Enter measured result...
+
+Verified / Pass
+Complete Task
+
+Visual Inspection
+
+QC • Required
+Perform visual inspection for defects, damage, and workmanship per AS9100 standards
+
+Complete Task
+
+Dimensional / Criteria Check
+
+QC • Required
+Verify critical dimensions and acceptance criteria are within tolerance per engineering drawing
+
+Complete Task
+
+Department Signoff
+
+SIGNATURE • Required
+LEAD
+Lead or QC signature confirming all work in this department is complete and meets requirements
+
+Sign (LEAD)
+
+Department Signoff — Final QC
+
+SIGNATURE • Required
+OPERATOR
+Operator signature required to complete Final QC
+
+Sign (OPERATOR)

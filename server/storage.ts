@@ -14098,77 +14098,46 @@ export class DatabaseStorage implements IStorage {
       const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
 
-      const createQcFieldsForTask = async (qcTaskId: string, standards: any[]) => {
-        const qcFields = standards.map((qc: any) => ({
-          fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
-          fieldLabel: qc.standard || 'QC Check',
-          tolerance: qc.tolerance,
-          requirement: qc.requirement,
-          hardQcStop: qc.hardQcStop || false,
-        }));
-        for (const qcField of this._dedupeFieldsByKey(qcFields)) {
-          await this.createTravelerTaskField({
-            travelerTaskId: qcTaskId,
-            fieldKey: qcField.fieldKey,
-            fieldLabel: qcField.fieldLabel,
-            fieldType: 'yes_no',
-            required: true,
-            validation: {
-              tolerance: qcField.tolerance,
-              requirement: qcField.requirement,
-              ...(qcField.hardQcStop ? { hardQcStop: true } : {}),
-            },
-          });
+      const usedQcCompositeKeys = new Set<string>();
+
+      const dedupeQcStandards = (standards: any[]): any[] => {
+        const seenFieldKeys = new Set<string>();
+        const out: any[] = [];
+        for (const qc of standards) {
+          const fieldKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
+          if (seenFieldKeys.has(fieldKey)) continue;
+          seenFieldKeys.add(fieldKey);
+
+          const reqNorm = (qc.requirement || '').toString().trim().toLowerCase()
+            .replace(/[^a-z0-9./+-]/g, '');
+          const tolNorm = (qc.tolerance || '').toString().trim().toLowerCase()
+            .replace(/[^a-z0-9./+-]/g, '');
+          const compositeKey = `${reqNorm}||${tolNorm}`;
+          if (reqNorm && usedQcCompositeKeys.has(compositeKey)) continue;
+          if (reqNorm) usedQcCompositeKeys.add(compositeKey);
+
+          out.push(qc);
         }
+        return out;
       };
 
-      if (startQcStandards.length > 0) {
-        const startQcTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'QC',
-          taskPhase: 'START',
-          title: 'Incoming QC Inspection',
-          instructions: 'Complete START phase quality control verifications',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: true,
-          signatureRole: 'QC',
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-        if (startQcTask) {
-          await createQcFieldsForTask(startQcTask.id, startQcStandards);
-        }
-      }
+      const qcPhaseConfigs = [
+        { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
+        { standards: workQcStandards, phase: 'WORK' as const, title: 'Quality Control Checks', instructions: 'Complete WORK phase quality control verifications' },
+        { standards: finishQcStandards, phase: 'FINISH' as const, title: 'Final QC Inspection', instructions: 'Complete FINISH phase quality control verifications' },
+      ];
 
-      if (workQcStandards.length > 0) {
-        const workQcTask = await this._createTaskIfAllowed({
-          travelerStepId: step.id,
-          taskType: 'QC',
-          taskPhase: 'WORK',
-          title: 'Quality Control Checks',
-          instructions: 'Complete WORK phase quality control verifications',
-          required: true,
-          sortOrder: sortOrder++,
-          timePolicy: 'AUTO_ON_COMPLETE',
-          requiresSignature: true,
-          signatureRole: 'QC',
-          requiresCertification: false,
-          status: 'NOT_STARTED',
-        }, enabledPhases, createdTaskKeys);
-        if (workQcTask) {
-          await createQcFieldsForTask(workQcTask.id, workQcStandards);
-        }
-      }
+      for (const qcPhase of qcPhaseConfigs) {
+        if (qcPhase.standards.length === 0) continue;
+        const uniqueStandards = dedupeQcStandards(qcPhase.standards);
+        if (uniqueStandards.length === 0) continue;
 
-      if (finishQcStandards.length > 0) {
-        const finishQcTask = await this._createTaskIfAllowed({
+        const qcTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'QC',
-          taskPhase: 'FINISH',
-          title: 'Final QC Inspection',
-          instructions: 'Complete FINISH phase quality control verifications',
+          taskPhase: qcPhase.phase,
+          title: qcPhase.title,
+          instructions: qcPhase.instructions,
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -14177,8 +14146,28 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
-        if (finishQcTask) {
-          await createQcFieldsForTask(finishQcTask.id, finishQcStandards);
+        if (qcTask) {
+          const qcFields = uniqueStandards.map((qc: any) => ({
+            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            fieldLabel: qc.standard || 'QC Check',
+            tolerance: qc.tolerance,
+            requirement: qc.requirement,
+            hardQcStop: qc.hardQcStop || false,
+          }));
+          for (const qcField of this._dedupeFieldsByKey(qcFields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: qcTask.id,
+              fieldKey: qcField.fieldKey,
+              fieldLabel: qcField.fieldLabel,
+              fieldType: 'yes_no',
+              required: true,
+              validation: {
+                tolerance: qcField.tolerance,
+                requirement: qcField.requirement,
+                ...(qcField.hardQcStop ? { hardQcStop: true } : {}),
+              },
+            });
+          }
         }
       }
 

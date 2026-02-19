@@ -66,7 +66,9 @@ router.get('/products', authenticateToken, async (req: Request, res: Response) =
     const { customerName } = req.query;
     let query = `SELECT id, customer_name, product_name, product_type, barcode, customer_product_number, 
                         material, handedness, action_length, action_inlet, bottom_metal, barrel_inlet, notes
+
                  FROM po_products WHERE (barcode IS NOT NULL AND barcode != '') OR (customer_product_number IS NOT NULL AND customer_product_number != '')`;
+
     const params: string[] = [];
     
     if (customerName) {
@@ -87,7 +89,7 @@ router.get('/products', authenticateToken, async (req: Request, res: Response) =
 router.get('/customers', authenticateToken, async (req: Request, res: Response) => {
   try {
     const rows = await pool.query(
-      `SELECT DISTINCT customer_name FROM po_products WHERE barcode IS NOT NULL AND barcode != '' ORDER BY customer_name`
+      `SELECT DISTINCT customer_name FROM po_products WHERE customer_name IS NOT NULL AND customer_name != '' ORDER BY customer_name`
     );
     res.json(rows.map((r: any) => r.customer_name));
   } catch (error: any) {

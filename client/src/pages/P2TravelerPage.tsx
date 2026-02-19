@@ -672,6 +672,7 @@ export default function P2TravelerPage() {
                     onChange={(e) => setBadgeInput(e.target.value)}
                     placeholder="Scan or enter badge code..."
                     autoFocus
+                    autoComplete="off"
                     className="flex-1"
                     data-testid="input-badge-code"
                   />
@@ -718,6 +719,7 @@ export default function P2TravelerPage() {
                       onChange={(e) => setPartInput(e.target.value)}
                       placeholder="Scan or enter part barcode..."
                       autoFocus
+                      autoComplete="off"
                       className="flex-1"
                       data-testid="input-part-barcode"
                     />
@@ -1292,6 +1294,7 @@ export default function P2TravelerPage() {
                     onChange={(e) => setBadgeInput(e.target.value)}
                     placeholder="Scan badge to verify..."
                     autoFocus
+                    autoComplete="off"
                     data-testid="input-complete-badge"
                   />
                 </div>
@@ -1304,6 +1307,7 @@ export default function P2TravelerPage() {
                     value={partInput}
                     onChange={(e) => setPartInput(e.target.value)}
                     placeholder="Scan part to verify..."
+                    autoComplete="off"
                     data-testid="input-complete-part"
                   />
                 </div>

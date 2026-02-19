@@ -856,17 +856,17 @@ export default function BarcodeQueuePage() {
                       );
                       const actionLength =
                         order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
-                      // Determine material type from stock model ID
+                      const isTikka = order.modelId?.includes('tikka') || order.tikkaOption;
                       const materialType = order.modelId?.startsWith('cf_')
                         ? 'Carbon Fiber'
                         : order.modelId?.startsWith('fg_')
                           ? 'Fiberglass'
-                          : order.modelId?.includes('tikka')
-                            ? 'Tikka'
-                            : order.modelId?.startsWith('m1a_')
-                              ? 'M1A'
-                              : order.modelId?.startsWith('apr_')
-                                ? 'APR'
+                          : order.modelId?.startsWith('m1a_')
+                            ? 'M1A'
+                            : order.modelId?.startsWith('apr_')
+                              ? 'APR'
+                              : order.modelId?.includes('tikka')
+                                ? 'Tikka'
                                 : 'Standard';
 
                       return (
@@ -950,6 +950,14 @@ export default function BarcodeQueuePage() {
                                     >
                                       {materialType}
                                     </Badge>
+                                    {isTikka && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs border-purple-600 text-purple-700 bg-purple-50 font-semibold"
+                                      >
+                                        Tikka
+                                      </Badge>
+                                    )}
                                     <Badge
                                       variant="outline"
                                       className={`text-xs ${
@@ -1180,19 +1188,19 @@ export default function BarcodeQueuePage() {
                             );
                             const actionLength =
                               order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
-                            // Determine material type from stock model ID
+                            const isTikka = order.modelId?.includes('tikka') || order.tikkaOption;
                             const materialType = order.modelId?.startsWith(
                               'cf_'
                             )
                               ? 'Carbon Fiber'
                               : order.modelId?.startsWith('fg_')
                                 ? 'Fiberglass'
-                                : order.modelId?.includes('tikka')
-                                  ? 'Tikka'
-                                  : order.modelId?.startsWith('m1a_')
-                                    ? 'M1A'
-                                    : order.modelId?.startsWith('apr_')
-                                      ? 'APR'
+                                : order.modelId?.startsWith('m1a_')
+                                  ? 'M1A'
+                                  : order.modelId?.startsWith('apr_')
+                                    ? 'APR'
+                                    : order.modelId?.includes('tikka')
+                                      ? 'Tikka'
                                       : 'Standard';
 
                             // Check if this is a PO order (no label printing needed)
@@ -1274,6 +1282,14 @@ export default function BarcodeQueuePage() {
                                         >
                                           {materialType}
                                         </Badge>
+                                        {isTikka && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs border-purple-600 text-purple-700 bg-purple-50 font-semibold"
+                                          >
+                                            Tikka
+                                          </Badge>
+                                        )}
                                         <Badge
                                           variant="outline"
                                           className={`text-xs ${

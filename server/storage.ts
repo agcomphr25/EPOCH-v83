@@ -4740,6 +4740,22 @@ export class DatabaseStorage implements IStorage {
           console.error(`Failed to parse specifications for production order ${po.orderId}:`, error);
           parsedSpecs = null;
         }
+
+        const mappedFeatures: any = {};
+        if (parsedSpecs) {
+          if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
+          if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
+          if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
+          if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
+          if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
+          if (parsedSpecs.swivelStuds) mappedFeatures.swivel_studs = parsedSpecs.swivelStuds;
+          if (parsedSpecs.paintOptions) mappedFeatures.paint_options = parsedSpecs.paintOptions;
+          if (parsedSpecs.texture) mappedFeatures.texture = parsedSpecs.texture;
+          if (parsedSpecs.flatTop !== undefined) mappedFeatures.flat_top = parsedSpecs.flatTop;
+          if (parsedSpecs.features && typeof parsedSpecs.features === 'object') {
+            Object.assign(mappedFeatures, parsedSpecs.features);
+          }
+        }
         
         return {
           id: po.id,
@@ -4753,14 +4769,14 @@ export class DatabaseStorage implements IStorage {
           fbOrderNumber: null,
           agrOrderDetails: null,
           isCustomOrder: null,
-          modelId: po.itemId, // Map itemId to modelId for consistency
-          itemId: po.itemId, // Keep itemId for P1 PO identification
-          itemName: po.itemName, // Keep itemName for display
+          modelId: parsedSpecs?.stockModel || po.itemId,
+          itemId: po.itemId,
+          itemName: po.itemName,
           productName: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
-          stockModelId: po.itemId,
+          stockModelId: parsedSpecs?.stockModel || po.itemId,
           handedness: parsedSpecs?.handedness ?? null,
-          shankLength: parsedSpecs?.shank_length ?? null,
-          features: parsedSpecs?.features ?? null,
+          shankLength: parsedSpecs?.shank_length ?? parsedSpecs?.shankLength ?? null,
+          features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
           featureQuantities: null,
         discountCode: null,
         notes: po.notes,

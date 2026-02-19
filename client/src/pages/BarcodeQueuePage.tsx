@@ -64,6 +64,7 @@ import { useLocation, Link } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+import { deriveOrderLabels, logBarcodeDebug } from '@/utils/deriveOrderLabels';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
@@ -251,6 +252,14 @@ export default function BarcodeQueuePage() {
   const orderIdsForTickets = useMemo(() => barcodeOrders.map((o: any) => o.orderId), [barcodeOrders]);
   const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
 
+  const debugLabelsLogged = React.useRef(false);
+  React.useEffect(() => {
+    if (import.meta.env.VITE_BARCODE_DEBUG_LABELS === 'true' && barcodeOrders.length > 0 && !debugLabelsLogged.current) {
+      debugLabelsLogged.current = true;
+      logBarcodeDebug(barcodeOrders);
+    }
+  }, [barcodeOrders]);
+
   // Count orders in previous department (Layup/Plugging)
   const layupCount = useMemo(() => {
     return (allOrders as any[]).filter(
@@ -295,19 +304,13 @@ export default function BarcodeQueuePage() {
 
       let cleanedName = baseName
         .replace(/^CF\s+/i, '')
-        .replace(/^FG\s+/i, '');
+        .replace(/^FG\s+/i, '')
+        .replace(/^M1A\s+/i, '')
+        .replace(/^APR\s+/i, '');
       cleanedName = cleanedName.replace(/-Tikka$/i, '');
 
-      const actionLabel =
-        order.features?.action_length === 'short'
-          ? 'Short Action'
-          : order.features?.action_length === 'long'
-          ? 'Long Action'
-          : order.features?.action_length === 'medium'
-          ? 'Medium Action'
-          : 'Unknown';
-
-      const categoryKey = `${cleanedName} - ${actionLabel}`;
+      const labels = deriveOrderLabels(order);
+      const categoryKey = `${cleanedName} - ${labels.actionLabel}`;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -854,20 +857,10 @@ export default function BarcodeQueuePage() {
                         new Date(),
                         new Date(order.dueDate)
                       );
-                      const actionLength =
-                        order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
-                      const isTikka = order.modelId?.includes('tikka') || order.tikkaOption;
-                      const materialType = order.modelId?.startsWith('cf_')
-                        ? 'Carbon Fiber'
-                        : order.modelId?.startsWith('fg_')
-                          ? 'Fiberglass'
-                          : order.modelId?.startsWith('m1a_')
-                            ? 'M1A'
-                            : order.modelId?.startsWith('apr_')
-                              ? 'APR'
-                              : order.modelId?.includes('tikka')
-                                ? 'Tikka'
-                                : 'Standard';
+                      const orderLabels = deriveOrderLabels(order);
+                      const actionLength = orderLabels.actionLengthRaw;
+                      const isTikka = orderLabels.isTikka;
+                      const materialType = orderLabels.materialLabel;
 
                       return (
                         <Card
@@ -1186,22 +1179,10 @@ export default function BarcodeQueuePage() {
                               new Date(),
                               new Date(order.dueDate)
                             );
-                            const actionLength =
-                              order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
-                            const isTikka = order.modelId?.includes('tikka') || order.tikkaOption;
-                            const materialType = order.modelId?.startsWith(
-                              'cf_'
-                            )
-                              ? 'Carbon Fiber'
-                              : order.modelId?.startsWith('fg_')
-                                ? 'Fiberglass'
-                                : order.modelId?.startsWith('m1a_')
-                                  ? 'M1A'
-                                  : order.modelId?.startsWith('apr_')
-                                    ? 'APR'
-                                    : order.modelId?.includes('tikka')
-                                      ? 'Tikka'
-                                      : 'Standard';
+                            const orderLabels2 = deriveOrderLabels(order);
+                            const actionLength = orderLabels2.actionLengthRaw;
+                            const isTikka = orderLabels2.isTikka;
+                            const materialType = orderLabels2.materialLabel;
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');

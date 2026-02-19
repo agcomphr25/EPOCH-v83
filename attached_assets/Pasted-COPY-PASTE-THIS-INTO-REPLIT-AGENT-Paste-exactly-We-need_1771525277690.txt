@@ -1,0 +1,92 @@
+COPY-PASTE THIS INTO REPLIT AGENT
+
+Paste exactly:
+
+We need to diagnose why production Barcode Department still shows:
+
+Material: "Standard"
+Action: "Unknown Action"
+
+even after normalization fixes were applied.
+
+We suspect:
+- Environment drift
+- Missing data in production DB
+- Normalization not re-run
+- Prod running old build
+
+-----------------------------------------
+STEP 1 — SELECT A SINGLE PROBLEM PO
+-----------------------------------------
+
+Use this PO ID from production:
+PO-P18526-62-1
+
+Return:
+
+1) Full database record for this PO:
+   - All columns
+   - Parsed specs JSON if exists
+   - stockModel
+   - action
+   - material
+   - group
+   - style
+   - adjustable flag
+
+2) All related line items
+
+-----------------------------------------
+STEP 2 — BARCODE API RESPONSE
+-----------------------------------------
+
+Return full raw JSON returned by the backend endpoint used by:
+
+/department-queue/barcode
+
+for that PO.
+
+No formatting.
+Raw JSON.
+
+-----------------------------------------
+STEP 3 — NORMALIZATION PATH
+-----------------------------------------
+
+For that specific PO:
+
+1) Show the normalization function being applied.
+2) Log the output of:
+   parsedSpecs
+   derivedAction
+   derivedMaterial
+   derivedModel
+3) Show where fallback values are being applied.
+
+-----------------------------------------
+STEP 4 — ENVIRONMENT VERIFICATION
+-----------------------------------------
+
+Return:
+
+1) Current git commit hash running in production
+2) Build timestamp
+3) Whether the normalization fix commit exists in this build
+4) Confirm migration version for any schema changes
+
+-----------------------------------------
+STEP 5 — DATA PARITY CHECK
+-----------------------------------------
+
+Run same queries against dev DB for same PO number (if exists) or similar PO.
+
+Compare:
+- Are parsedSpecs different?
+- Is action null in prod but not in dev?
+- Is material null in prod but not in dev?
+
+-----------------------------------------
+
+Return raw results only.
+No summaries.
+We will diagnose from actual data.

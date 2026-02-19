@@ -1141,6 +1141,63 @@ export default function OrderEntry() {
     toast,
   ]);
 
+  // Business rule: M1A stock models - default Action Inlet, Barrel Inlet, Bottom Metal to Factory M1A and restrict Left handedness
+  useEffect(() => {
+    if (!modelId || modelOptions.length === 0) return;
+
+    const selectedModel = modelOptions.find((m) => m.id === modelId);
+    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+    const isM1AModel = modelName.toLowerCase().includes('m1a');
+
+    if (isM1AModel) {
+      const updates: Record<string, string | undefined> = {};
+      const messages: string[] = [];
+
+      if (features.action_inlet !== 'factory_m1a') {
+        updates.action_inlet = 'factory_m1a';
+        messages.push('Action Inlet set to Factory M1A');
+      }
+
+      if (features.barrel_inlet !== 'factory_m1a') {
+        updates.barrel_inlet = 'factory_m1a';
+        messages.push('Barrel Inlet set to Factory M1A');
+      }
+
+      if (features.bottom_metal !== 'factory_m1a') {
+        updates.bottom_metal = 'factory_m1a';
+        messages.push('Bottom Metal set to Factory M1A');
+      }
+
+      if (features.handedness === 'left') {
+        updates.handedness = undefined;
+        messages.push('Left handedness is not available for M1A models');
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setFeatures((prev) => ({
+          ...prev,
+          ...updates,
+        }));
+
+        if (messages.length > 0) {
+          toast({
+            title: 'M1A Model Constraints Applied',
+            description: messages.join('. '),
+            variant: 'default',
+          });
+        }
+      }
+    }
+  }, [
+    modelId,
+    modelOptions,
+    features.action_inlet,
+    features.barrel_inlet,
+    features.bottom_metal,
+    features.handedness,
+    toast,
+  ]);
+
   // Preload order data for duplication (copies most fields but generates new ID)
   const preloadDuplicateOrder = async (duplicateOrderId: string) => {
     try {
@@ -3428,8 +3485,27 @@ export default function OrderEntry() {
                             .toLowerCase()
                             .includes('impact');
                         const isLongAction = features.action_length === 'long';
-                        const shouldRestrictLeft =
+                        const impactRestriction =
                           hasImpactInlet && isLongAction;
+
+                        // Business rule: M1A stock models cannot have Left handedness
+                        const selectedModelForHandedness = modelOptions.find(
+                          (m) => m.id === modelId
+                        );
+                        const modelNameForHandedness =
+                          selectedModelForHandedness?.displayName ||
+                          selectedModelForHandedness?.name ||
+                          '';
+                        const isM1AModel = modelNameForHandedness
+                          .toLowerCase()
+                          .includes('m1a');
+
+                        const shouldRestrictLeft =
+                          impactRestriction || isM1AModel;
+
+                        const restrictionReason = isM1AModel
+                          ? 'Left not available for M1A models'
+                          : 'Left not available for Impact Inlet + Long Action';
 
                         return (
                           <Select
@@ -3453,8 +3529,7 @@ export default function OrderEntry() {
                               )}
                               {shouldRestrictLeft && (
                                 <div className="px-2 py-1.5 text-sm text-gray-500 italic">
-                                  Left not available for Impact Inlet + Long
-                                  Action
+                                  {restrictionReason}
                                 </div>
                               )}
                             </SelectContent>

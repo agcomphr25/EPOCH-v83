@@ -129,6 +129,17 @@ router.get('/all', async (req: Request, res: Response) => {
   try {
     // getAllOrders already combines all_orders and production_orders tables
     const allOrdersCombined = await storage.getAllOrders();
+
+    const debugBarcode = req.query.debug_barcode === 'true' || process.env.BARCODE_DEBUG_LABELS === 'true';
+    if (debugBarcode) {
+      const barcodeOrders = allOrdersCombined.filter((o: any) => o.currentDepartment === 'Barcode');
+      console.log(`[BARCODE_DEBUG_SERVER] ${barcodeOrders.length} orders in Barcode department:`);
+      for (const o of barcodeOrders) {
+        const featureKeys = o.features ? Object.keys(o.features) : [];
+        console.log(`[BARCODE_DEBUG_SERVER] orderId=${o.orderId} modelId=${o.modelId || 'null'} product=${o.product || 'null'} featureKeys=[${featureKeys.join(',')}] action_length=${o.features?.action_length || 'null'} handedness=${o.handedness || 'null'}`);
+      }
+    }
+
     res.json(allOrdersCombined);
   } catch (error) {
     console.error('Error retrieving all orders:', error);

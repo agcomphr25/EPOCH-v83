@@ -8,12 +8,12 @@ import crypto from 'crypto';
 
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
+router.use(authorizeApiRoute());
 
 // Ensure vendor-approvals and vendor-documents directories exist
 const uploadsDir = path.join(process.cwd(), 'uploads');

@@ -103,17 +103,79 @@ interface InstructionPack {
   media?: Array<{ type: 'image' | 'pdf'; documentId: string; caption?: string }>;
 }
 
+interface PhaseCheck {
+  title: string;
+  instructions?: string;
+  required: boolean;
+  taskType: 'CHECK' | 'PROCESS' | 'QC' | 'TRACEABILITY' | 'DOCUMENT' | 'SIGNATURE';
+  timePolicy: 'AUTO_ON_START' | 'AUTO_ON_COMPLETE' | 'MANUAL_ENTRY';
+  requiresSignature: boolean;
+  signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
+  requiresCertification: boolean;
+  hardQcStop?: boolean;
+  instructionPack?: InstructionPack;
+}
+
+interface CustomDataField {
+  fieldName: string;
+  fieldType: 'text' | 'number' | 'date' | 'textarea';
+  isRequired: boolean;
+}
+
+interface SignatureConfig {
+  startRequiresSignature: boolean;
+  finishRequiresSignature: boolean;
+  requiredSignatures: string[];
+}
+
+interface StandardProcessConfig {
+  processName: string;
+  notes: string;
+  requiredTechnicianId: number | null;
+  materials: MaterialRequirement[];
+  qcStandards: QCStandard[];
+  customDataFields: CustomDataField[];
+}
+
+interface StandardProcess {
+  name: string;
+  description: string;
+  config?: StandardProcessConfig;
+}
+
+interface SpecialProcessConfig {
+  processName: string;
+  notes: string;
+  requiredTechnicianId: number | null;
+  materials: MaterialRequirement[];
+  qcStandards: QCStandard[];
+  customDataFields: CustomDataField[];
+}
+
+interface TimerConfig {
+  enabled: boolean;
+  defaultProgramId?: string;
+  defaultProgramName?: string;
+}
+
 interface DepartmentConfig {
   materials?: MaterialRequirement[];
-  customDataFields?: Array<{
-    fieldName: string;
-    fieldType: 'text' | 'number' | 'date' | 'textarea';
-    isRequired: boolean;
-  }>;
+  customDataFields?: CustomDataField[];
+  startCustomDataFields?: CustomDataField[];
+  finishCustomDataFields?: CustomDataField[];
   qcStandards?: QCStandard[];
+  startQcStandards?: QCStandard[];
+  finishQcStandards?: QCStandard[];
+  startChecks?: PhaseCheck[];
+  finishChecks?: PhaseCheck[];
   allowMultipleTasks?: boolean;
   instructionPack?: InstructionPack;
   ovenCuringSteps?: OvenCuringStep[];
+  standardProcesses?: StandardProcess[];
+  specialProcess?: string;
+  specialProcessConfig?: SpecialProcessConfig;
+  signatureConfig?: SignatureConfig;
+  timerConfig?: TimerConfig;
 }
 
 interface VerificationData {
@@ -345,17 +407,36 @@ export default function P2TravelerPage() {
 
       setTraceabilityData(initialTraceability);
 
-      // Initialize custom data fields
-      if (data.departmentConfig.customDataFields) {
+      // Initialize custom data fields - merge legacy customDataFields with phase-specific fields
+      const allCustomDataFields: CustomDataField[] = [
+        ...(data.departmentConfig.customDataFields || []),
+        ...(data.departmentConfig.startCustomDataFields || []),
+        ...(data.departmentConfig.finishCustomDataFields || []),
+      ];
+      if (allCustomDataFields.length > 0) {
         const initialCustomData: Record<string, string> = {};
-        data.departmentConfig.customDataFields.forEach((field: { fieldName: string; fieldType: string; isRequired: boolean }) => {
-          initialCustomData[field.fieldName] = '';
+        const seenFields = new Set<string>();
+        allCustomDataFields.forEach((field: CustomDataField) => {
+          if (!seenFields.has(field.fieldName)) {
+            seenFields.add(field.fieldName);
+            initialCustomData[field.fieldName] = '';
+          }
         });
         setCustomData(initialCustomData);
       }
 
-      if (data.departmentConfig.qcStandards && data.departmentConfig.qcStandards.length > 0) {
-        setQcResults(data.departmentConfig.qcStandards.map((qc: QCStandard) => ({
+      // Initialize QC standards - only use work-phase qcStandards here
+      // Start and finish QC standards are rendered in their respective phase sections
+      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
+      if (workQcStandards.length > 0) {
+        const seenStandards = new Set<string>();
+        const uniqueQcStandards = workQcStandards.filter(qc => {
+          const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+          if (seenStandards.has(key)) return false;
+          seenStandards.add(key);
+          return true;
+        });
+        setQcResults(uniqueQcStandards.map((qc: QCStandard) => ({
           standard: qc.standard,
           tolerance: qc.tolerance,
           requirement: qc.requirement,
@@ -888,38 +969,94 @@ export default function P2TravelerPage() {
                   </div>
                   )}
 
-                  {/* Custom Data Fields */}
-                  {verificationData.departmentConfig.customDataFields && verificationData.departmentConfig.customDataFields.length > 0 && (
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Department-Specific Data</Label>
-                      {verificationData.departmentConfig.customDataFields.map((field, index) => (
-                        <div key={index} className="space-y-2">
-                          <Label htmlFor={`custom-${field.fieldName}`}>
-                            {field.fieldName}
-                            {field.isRequired && <span className="text-red-500 ml-1">*</span>}
-                          </Label>
-                          {field.fieldType === 'textarea' ? (
-                            <Textarea
-                              id={`custom-${field.fieldName}`}
-                              value={customData[field.fieldName] || ''}
-                              onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
-                              placeholder={`Enter ${field.fieldName}...`}
-                              data-testid={`input-custom-${field.fieldName}`}
-                            />
-                          ) : (
-                            <Input
-                              id={`custom-${field.fieldName}`}
-                              type={field.fieldType}
-                              value={customData[field.fieldName] || ''}
-                              onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
-                              placeholder={`Enter ${field.fieldName}...`}
-                              data-testid={`input-custom-${field.fieldName}`}
-                            />
-                          )}
+                  {/* Start Phase Checks */}
+                  {verificationData.departmentConfig.startChecks && verificationData.departmentConfig.startChecks.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-green-200 bg-green-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-green-200">
+                        <Play className="h-4 w-4 text-green-600" />
+                        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase Checks</p>
+                      </div>
+                      {verificationData.departmentConfig.startChecks.map((check, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white rounded-md border border-green-100 p-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{check.title}</p>
+                            {check.instructions && <p className="text-xs text-muted-foreground">{check.instructions}</p>}
+                            {check.requiresSignature && (
+                              <Badge variant="outline" className="mt-1 text-[10px] border-green-300">Signature Required ({check.signatureRole || 'OPERATOR'})</Badge>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {/* Start Phase QC Standards */}
+                  {verificationData.departmentConfig.startQcStandards && verificationData.departmentConfig.startQcStandards.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-green-200 bg-green-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-green-200">
+                        <ClipboardCheck className="h-4 w-4 text-green-600" />
+                        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">Start Phase QC Standards</p>
+                      </div>
+                      {verificationData.departmentConfig.startQcStandards.map((qc, idx) => (
+                        <div key={idx} className="bg-white rounded-md border border-green-100 p-2">
+                          <p className="text-sm font-medium">{qc.standard}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
+                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Custom Data Fields - merged from legacy, start, and finish phases */}
+                  {(() => {
+                    const allFields: CustomDataField[] = [];
+                    const seenNames = new Set<string>();
+                    [
+                      ...(verificationData.departmentConfig.customDataFields || []),
+                      ...(verificationData.departmentConfig.startCustomDataFields || []),
+                      ...(verificationData.departmentConfig.finishCustomDataFields || []),
+                    ].forEach(field => {
+                      if (!seenNames.has(field.fieldName)) {
+                        seenNames.add(field.fieldName);
+                        allFields.push(field);
+                      }
+                    });
+                    if (allFields.length === 0) return null;
+                    return (
+                      <div className="space-y-3">
+                        <Label className="text-base font-semibold">Department-Specific Data</Label>
+                        {allFields.map((field, index) => (
+                          <div key={index} className="space-y-2">
+                            <Label htmlFor={`custom-${field.fieldName}`}>
+                              {field.fieldName}
+                              {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            </Label>
+                            {field.fieldType === 'textarea' ? (
+                              <Textarea
+                                id={`custom-${field.fieldName}`}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            ) : (
+                              <Input
+                                id={`custom-${field.fieldName}`}
+                                type={field.fieldType}
+                                value={customData[field.fieldName] || ''}
+                                onChange={(e) => updateCustomField(field.fieldName, e.target.value)}
+                                placeholder={`Enter ${field.fieldName}...`}
+                                data-testid={`input-custom-${field.fieldName}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* QC Standards / Tolerance Requirements - with result entry */}
                   {qcResults.length > 0 && (
@@ -984,6 +1121,81 @@ export default function P2TravelerPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Standard Processes */}
+                  {verificationData.departmentConfig.standardProcesses && verificationData.departmentConfig.standardProcesses.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-amber-200 bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-amber-200">
+                        <Clipboard className="h-4 w-4 text-amber-600" />
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Standard Processes</p>
+                      </div>
+                      {verificationData.departmentConfig.standardProcesses.map((proc, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white rounded-md border border-amber-100 p-2">
+                          <ClipboardCheck className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{proc.name}</p>
+                            {proc.description && <p className="text-xs text-muted-foreground">{proc.description}</p>}
+                            {proc.config?.notes && <p className="text-xs text-muted-foreground">Notes: {proc.config.notes}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Special Process */}
+                  {verificationData.departmentConfig.specialProcessConfig?.processName && (
+                    <div className="rounded-lg border-2 border-purple-200 bg-purple-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-purple-200 mb-2">
+                        <AlertCircle className="h-4 w-4 text-purple-600" />
+                        <p className="text-xs font-bold text-purple-800 uppercase tracking-wider">Special Process</p>
+                      </div>
+                      <p className="text-sm font-medium">{verificationData.departmentConfig.specialProcessConfig.processName}</p>
+                      {verificationData.departmentConfig.specialProcessConfig.notes && (
+                        <p className="text-xs text-muted-foreground mt-1">{verificationData.departmentConfig.specialProcessConfig.notes}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Finish Phase Checks */}
+                  {verificationData.departmentConfig.finishChecks && verificationData.departmentConfig.finishChecks.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-blue-200">
+                        <ArrowRight className="h-4 w-4 text-blue-600" />
+                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Finish Phase Checks</p>
+                      </div>
+                      {verificationData.departmentConfig.finishChecks.map((check, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white rounded-md border border-blue-100 p-2">
+                          <CheckCircle className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{check.title}</p>
+                            {check.instructions && <p className="text-xs text-muted-foreground">{check.instructions}</p>}
+                            {check.requiresSignature && (
+                              <Badge variant="outline" className="mt-1 text-[10px] border-blue-300">Signature Required ({check.signatureRole || 'OPERATOR'})</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Finish Phase QC Standards */}
+                  {verificationData.departmentConfig.finishQcStandards && verificationData.departmentConfig.finishQcStandards.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-blue-200">
+                        <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Finish Phase QC Standards</p>
+                      </div>
+                      {verificationData.departmentConfig.finishQcStandards.map((qc, idx) => (
+                        <div key={idx} className="bg-white rounded-md border border-blue-100 p-2">
+                          <p className="text-sm font-medium">{qc.standard}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                            {qc.tolerance && <span>Tolerance: {qc.tolerance}</span>}
+                            {qc.requirement && <span>Requirement: {qc.requirement}</span>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 

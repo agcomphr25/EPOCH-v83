@@ -4740,6 +4740,22 @@ export class DatabaseStorage implements IStorage {
           console.error(`Failed to parse specifications for production order ${po.orderId}:`, error);
           parsedSpecs = null;
         }
+
+        const mappedFeatures: any = {};
+        if (parsedSpecs) {
+          if (parsedSpecs.actionLength || parsedSpecs.action_length) mappedFeatures.action_length = parsedSpecs.actionLength || parsedSpecs.action_length;
+          if (parsedSpecs.actionInlet || parsedSpecs.action_inlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet || parsedSpecs.action_inlet;
+          if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
+          if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
+          if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
+          if (parsedSpecs.swivelStuds) mappedFeatures.swivel_studs = parsedSpecs.swivelStuds;
+          if (parsedSpecs.paintOptions) mappedFeatures.paint_options = parsedSpecs.paintOptions;
+          if (parsedSpecs.texture) mappedFeatures.texture = parsedSpecs.texture;
+          if (parsedSpecs.flatTop !== undefined) mappedFeatures.flat_top = parsedSpecs.flatTop;
+          if (parsedSpecs.features && typeof parsedSpecs.features === 'object') {
+            Object.assign(mappedFeatures, parsedSpecs.features);
+          }
+        }
         
         return {
           id: po.id,
@@ -4753,14 +4769,14 @@ export class DatabaseStorage implements IStorage {
           fbOrderNumber: null,
           agrOrderDetails: null,
           isCustomOrder: null,
-          modelId: po.itemId, // Map itemId to modelId for consistency
-          itemId: po.itemId, // Keep itemId for P1 PO identification
-          itemName: po.itemName, // Keep itemName for display
+          modelId: parsedSpecs?.stockModel || po.itemId,
+          itemId: po.itemId,
+          itemName: po.itemName,
           productName: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
-          stockModelId: po.itemId,
+          stockModelId: parsedSpecs?.stockModel || po.itemId,
           handedness: parsedSpecs?.handedness ?? null,
-          shankLength: parsedSpecs?.shank_length ?? null,
-          features: parsedSpecs?.features ?? null,
+          shankLength: parsedSpecs?.shank_length ?? parsedSpecs?.shankLength ?? null,
+          features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
           featureQuantities: null,
         discountCode: null,
         notes: po.notes,
@@ -7605,7 +7621,12 @@ export class DatabaseStorage implements IStorage {
     const conditions = [];
     
     if (search) {
-      conditions.push(ilike(vendorPOs.poNumber, `%${search}%`));
+      conditions.push(
+        or(
+          sql`COALESCE(${vendorPOs.poNumber}, '') ILIKE ${`%${search}%`}`,
+          ilike(vendors.name, `%${search}%`)
+        )
+      );
     }
     
     if (status && status !== 'any') {
@@ -7658,6 +7679,7 @@ export class DatabaseStorage implements IStorage {
       db
         .select({ count: sql<number>`count(*)` })
         .from(vendorPOs)
+        .leftJoin(vendors, eq(vendorPOs.vendorId, vendors.id))
         .where(whereExpr),
     ]);
 
@@ -7706,33 +7728,118 @@ export class DatabaseStorage implements IStorage {
     return vendorPO;
   }
 
-  async createVendorPO(data: any): Promise<any> {
-    // Auto-generate PO number if not provided
-    if (!data.poNumber) {
-      // Get current year (last 2 digits)
-      const currentYear = new Date().getFullYear().toString().slice(-2);
-      
-      // Get the latest vendor PO for this year
-      const latestPO = await db
-        .select({ poNumber: vendorPOs.poNumber })
-        .from(vendorPOs)
-        .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
-        .orderBy(desc(vendorPOs.id))
-        .limit(1);
-      
-      let nextNumber = 1;
-      if (latestPO.length > 0 && latestPO[0].poNumber) {
-        // Extract the sequential part (last 3 digits) from format VPO-YYNNN
-        const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
-        if (match) {
-          nextNumber = parseInt(match[1]) + 1;
-        }
-      }
-      
-      // Format: VPO-YYNNN (e.g., VPO-25001, VPO-25099)
-      data.poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
-    }
+  async generateNextVPONumber(): Promise<string> {
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    const latestPO = await db
+      .select({ poNumber: vendorPOs.poNumber })
+      .from(vendorPOs)
+      .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
+      .orderBy(desc(vendorPOs.id))
+      .limit(1);
     
+    let nextNumber = 1;
+    if (latestPO.length > 0 && latestPO[0].poNumber) {
+      const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1;
+      }
+    }
+    return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+  }
+
+  async issueVendorPO(id: number): Promise<{ vendorPO: any; poNumber: string }> {
+    return await db.transaction(async (tx) => {
+      const [lockedPO] = await tx
+        .select()
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, id))
+        .for('update');
+
+      if (!lockedPO) {
+        throw new Error('Vendor PO not found');
+      }
+
+      if (lockedPO.status !== 'Draft' && lockedPO.status !== 'RFQ Sent') {
+        throw new Error(`PO cannot be issued — already in ${lockedPO.status} status`);
+      }
+
+      let poNumber = lockedPO.poNumber;
+      if (!poNumber) {
+        const currentYear = new Date().getFullYear().toString().slice(-2);
+        const latestPO = await tx
+          .select({ poNumber: vendorPOs.poNumber })
+          .from(vendorPOs)
+          .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
+          .orderBy(desc(vendorPOs.id))
+          .limit(1)
+          .for('update');
+
+        let nextNumber = 1;
+        if (latestPO.length > 0 && latestPO[0].poNumber) {
+          const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
+          if (match) {
+            nextNumber = parseInt(match[1]) + 1;
+          }
+        }
+        poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+      }
+
+      const [updatedPO] = await tx
+        .update(vendorPOs)
+        .set({ status: 'Sent', poNumber, updatedAt: new Date() })
+        .where(eq(vendorPOs.id, id))
+        .returning();
+
+      // Historical Price Variance Tracking
+      const poItems = await tx
+        .select()
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.vendorPoId, id));
+
+      for (const item of poItems) {
+        if (!item.agPartNumber || item.purchaseUnitPrice == null) continue;
+
+        const historicalPrices = await tx
+          .select({ purchaseUnitPrice: vendorPOItems.purchaseUnitPrice })
+          .from(vendorPOItems)
+          .innerJoin(vendorPOs, eq(vendorPOItems.vendorPoId, vendorPOs.id))
+          .where(
+            and(
+              eq(vendorPOs.vendorId, lockedPO.vendorId),
+              eq(vendorPOItems.agPartNumber, item.agPartNumber),
+              inArray(vendorPOs.status, ['Sent', 'Partially Received', 'Fully Received']),
+              eq(vendorPOs.isCurrentRevision, true),
+              sql`${vendorPOs.id} != ${id}`,
+              sql`${vendorPOItems.purchaseUnitPrice} IS NOT NULL`
+            )
+          )
+          .orderBy(desc(vendorPOs.createdAt))
+          .limit(5);
+
+        if (historicalPrices.length === 0) continue;
+
+        const avgPrice = historicalPrices.reduce((sum, p) => sum + (p.purchaseUnitPrice as number), 0) / historicalPrices.length;
+        const variancePercent = avgPrice !== 0 ? ((item.purchaseUnitPrice - avgPrice) / avgPrice) * 100 : 0;
+        const flagged = Math.abs(variancePercent) > 3;
+
+        await tx
+          .update(vendorPOItems)
+          .set({
+            historicalAvgPrice: Math.round(avgPrice * 100) / 100,
+            priceVariancePercent: Math.round(variancePercent * 100) / 100,
+            varianceFlag: flagged,
+            updatedAt: new Date(),
+          })
+          .where(eq(vendorPOItems.id, item.id));
+
+        console.log(`Variance computed for ${item.agPartNumber}: ${variancePercent >= 0 ? '+' : ''}${variancePercent.toFixed(1)}%`);
+      }
+
+      return { vendorPO: updatedPO, poNumber };
+    });
+  }
+
+  async createVendorPO(data: any): Promise<any> {
     // Auto-generate barcode if not provided
     if (!data.barcode) {
       data.barcode = nanoid(12);
@@ -7757,96 +7864,107 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Revision Management
   async createVendorPORevision(poId: number, changeReason: string, revisedBy?: string): Promise<any> {
-    // Get the original PO
-    const originalPO = await this.getVendorPO(poId);
-    if (!originalPO) {
-      throw new Error('Vendor PO not found');
-    }
+    return await db.transaction(async (tx) => {
+      // Lock the source PO row for update
+      const [originalPO] = await tx
+        .select()
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, poId))
+        .for('update');
 
-    // Determine the root parent (original PO in the chain)
-    const rootParentId = originalPO.parentPoId || originalPO.id;
-    
-    // Get the highest revision number for this PO family
-    const existingRevisions = await db
-      .select({ revisionNumber: vendorPOs.revisionNumber })
-      .from(vendorPOs)
-      .where(
-        or(
-          eq(vendorPOs.id, rootParentId),
-          eq(vendorPOs.parentPoId, rootParentId)
+      if (!originalPO) {
+        throw new Error('Vendor PO not found');
+      }
+
+      // Determine the root parent (original PO in the chain)
+      const rootParentId = originalPO.parentPoId || originalPO.id;
+
+      // Lock all family members to prevent concurrent revision creation
+      const existingRevisions = await tx
+        .select({ revisionNumber: vendorPOs.revisionNumber })
+        .from(vendorPOs)
+        .where(
+          or(
+            eq(vendorPOs.id, rootParentId),
+            eq(vendorPOs.parentPoId, rootParentId)
+          )
         )
-      )
-      .orderBy(desc(vendorPOs.revisionNumber))
-      .limit(1);
-    
-    const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
-    
-    // Mark the current PO as no longer the current revision
-    await db
-      .update(vendorPOs)
-      .set({ isCurrentRevision: false, updatedAt: new Date() })
-      .where(eq(vendorPOs.id, poId));
-    
-    // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
-    const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, ''); // Remove any existing revision suffix
-    const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
-    const newPONumber = `${basePONumber}-R${revisionLetter}`;
-    
-    // Create the new revision PO (copy of the original with revision metadata)
-    const revisionData = {
-      poNumber: newPONumber,
-      vendorId: originalPO.vendorId,
-      status: 'Draft', // New revision starts as Draft for editing
-      orderDate: originalPO.orderDate,
-      expectedDeliveryDate: originalPO.expectedDeliveryDate,
-      actualDeliveryDate: originalPO.actualDeliveryDate,
-      shipVia: originalPO.shipVia,
-      barcode: nanoid(12), // New unique barcode
-      subtotal: originalPO.subtotal,
-      tax: originalPO.tax,
-      shippingCost: originalPO.shippingCost,
-      totalCost: originalPO.totalCost,
-      notes: originalPO.notes,
-      createdBy: originalPO.createdBy,
-      revisionNumber: nextRevisionNumber,
-      parentPoId: rootParentId,
-      changeReason: changeReason,
-      isCurrentRevision: true,
-      revisedAt: new Date(),
-      revisedBy: revisedBy,
-    };
-    
-    const [newRevision] = await db.insert(vendorPOs).values(revisionData).returning();
-    
-    // Copy all line items from the original PO to the new revision
-    const originalItems = await this.getVendorPOItems(poId);
-    for (const item of originalItems) {
-      const itemData = {
-        vendorPoId: newRevision.id,
-        lineNumber: item.lineNumber,
-        agPartNumber: item.agPartNumber,
-        description: item.description,
-        purchaseQty: item.purchaseQty,
-        purchaseUnitPrice: item.purchaseUnitPrice,
-        purchaseUnit: item.purchaseUnit,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        vendorUnit: item.vendorUnit,
-        conversionFactor: item.conversionFactor,
-        lineTotal: item.lineTotal,
-        receivedQuantity: 0, // Reset received quantity for new revision
-        notes: item.notes,
+        .orderBy(desc(vendorPOs.revisionNumber))
+        .limit(1)
+        .for('update');
+
+      const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+
+      // Mark the current PO as no longer the current revision
+      await tx
+        .update(vendorPOs)
+        .set({ isCurrentRevision: false, updatedAt: new Date() })
+        .where(eq(vendorPOs.id, poId));
+
+      // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
+      const basePONumber = originalPO.poNumber ? originalPO.poNumber.replace(/-R[A-Z]+$/, '') : null;
+      const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
+      const newPONumber = basePONumber ? `${basePONumber}-R${revisionLetter}` : null;
+
+      // Create the new revision PO (copy of the original with revision metadata)
+      const revisionData = {
+        poNumber: newPONumber,
+        vendorId: originalPO.vendorId,
+        status: 'Draft' as const,
+        orderDate: originalPO.orderDate,
+        expectedDeliveryDate: originalPO.expectedDeliveryDate,
+        actualDeliveryDate: originalPO.actualDeliveryDate,
+        shipVia: originalPO.shipVia,
+        barcode: nanoid(12),
+        subtotal: originalPO.subtotal,
+        tax: originalPO.tax,
+        shippingCost: originalPO.shippingCost,
+        totalCost: originalPO.totalCost,
+        notes: originalPO.notes,
+        createdBy: originalPO.createdBy,
+        revisionNumber: nextRevisionNumber,
+        parentPoId: rootParentId,
+        changeReason: changeReason,
+        isCurrentRevision: true,
+        revisedAt: new Date(),
+        revisedBy: revisedBy,
       };
-      await db.insert(vendorPOItems).values(itemData);
-    }
-    
-    // Copy optional settings from original PO
-    const originalSettings = await this.getPOOptionalSettings(poId);
-    for (const setting of originalSettings) {
-      await this.addPOOptionalSetting(newRevision.id, setting.id);
-    }
-    
-    return newRevision;
+
+      const [newRevision] = await tx.insert(vendorPOs).values(revisionData).returning();
+
+      // Copy all line items from the original PO to the new revision
+      const originalItems = await tx
+        .select()
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.vendorPoId, poId));
+      for (const item of originalItems) {
+        const itemData = {
+          vendorPoId: newRevision.id,
+          lineNumber: item.lineNumber,
+          agPartNumber: item.agPartNumber,
+          description: item.description,
+          purchaseQty: item.purchaseQty,
+          purchaseUnitPrice: item.purchaseUnitPrice,
+          purchaseUnit: item.purchaseUnit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          vendorUnit: item.vendorUnit,
+          conversionFactor: item.conversionFactor,
+          lineTotal: item.lineTotal,
+          receivedQuantity: 0,
+          notes: item.notes,
+        };
+        await tx.insert(vendorPOItems).values(itemData);
+      }
+
+      // Copy optional settings from original PO
+      const originalSettings = await this.getPOOptionalSettings(poId);
+      for (const setting of originalSettings) {
+        await this.addPOOptionalSetting(newRevision.id, setting.id);
+      }
+
+      return newRevision;
+    });
   }
 
   async getVendorPORevisionHistory(poId: number): Promise<any[]> {
@@ -13975,20 +14093,42 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Consolidated QC Standards - merge start, work, and finish QC into a single task
+      // Phase-separated QC Standards - create separate QC tasks per phase to avoid duplication
       const startQcStandards = deptConfig.startQcStandards || [];
-      const allQcStandards = [
-        ...startQcStandards.map((qc: any) => ({ ...qc, _source: 'start' })),
-        ...(deptConfig.qcStandards || []).map((qc: any) => ({ ...qc, _source: 'work' })),
-        ...(deptConfig.finishQcStandards || []).map((qc: any) => ({ ...qc, _source: 'finish' })),
-      ];
-      if (allQcStandards.length > 0) {
-        const qcTask = await this._createTaskIfAllowed({
+      const workQcStandards = deptConfig.qcStandards || [];
+      const finishQcStandards = deptConfig.finishQcStandards || [];
+
+      const createQcFieldsForTask = async (qcTaskId: string, standards: any[]) => {
+        const qcFields = standards.map((qc: any) => ({
+          fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+          fieldLabel: qc.standard || 'QC Check',
+          tolerance: qc.tolerance,
+          requirement: qc.requirement,
+          hardQcStop: qc.hardQcStop || false,
+        }));
+        for (const qcField of this._dedupeFieldsByKey(qcFields)) {
+          await this.createTravelerTaskField({
+            travelerTaskId: qcTaskId,
+            fieldKey: qcField.fieldKey,
+            fieldLabel: qcField.fieldLabel,
+            fieldType: 'yes_no',
+            required: true,
+            validation: {
+              tolerance: qcField.tolerance,
+              requirement: qcField.requirement,
+              ...(qcField.hardQcStop ? { hardQcStop: true } : {}),
+            },
+          });
+        }
+      };
+
+      if (startQcStandards.length > 0) {
+        const startQcTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'QC',
-          taskPhase: 'FINISH',
-          title: 'Quality Control Checks',
-          instructions: 'Complete all quality control verifications',
+          taskPhase: 'START',
+          title: 'Incoming QC Inspection',
+          instructions: 'Complete START phase quality control verifications',
           required: true,
           sortOrder: sortOrder++,
           timePolicy: 'AUTO_ON_COMPLETE',
@@ -13997,29 +14137,48 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: false,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
+        if (startQcTask) {
+          await createQcFieldsForTask(startQcTask.id, startQcStandards);
+        }
+      }
 
-        if (qcTask) {
-          const qcFields = allQcStandards.map((qc: any) => ({
-            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
-            fieldLabel: qc.standard || 'QC Check',
-            tolerance: qc.tolerance,
-            requirement: qc.requirement,
-            hardQcStop: qc.hardQcStop || false,
-          }));
-          for (const qcField of this._dedupeFieldsByKey(qcFields)) {
-            await this.createTravelerTaskField({
-              travelerTaskId: qcTask.id,
-              fieldKey: qcField.fieldKey,
-              fieldLabel: qcField.fieldLabel,
-              fieldType: 'yes_no',
-              required: true,
-              validation: {
-                tolerance: qcField.tolerance,
-                requirement: qcField.requirement,
-                ...(qcField.hardQcStop ? { hardQcStop: true } : {}),
-              },
-            });
-          }
+      if (workQcStandards.length > 0) {
+        const workQcTask = await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          taskPhase: 'WORK',
+          title: 'Quality Control Checks',
+          instructions: 'Complete WORK phase quality control verifications',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: true,
+          signatureRole: 'QC',
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+        if (workQcTask) {
+          await createQcFieldsForTask(workQcTask.id, workQcStandards);
+        }
+      }
+
+      if (finishQcStandards.length > 0) {
+        const finishQcTask = await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          taskPhase: 'FINISH',
+          title: 'Final QC Inspection',
+          instructions: 'Complete FINISH phase quality control verifications',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: true,
+          signatureRole: 'QC',
+          requiresCertification: false,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+        if (finishQcTask) {
+          await createQcFieldsForTask(finishQcTask.id, finishQcStandards);
         }
       }
 

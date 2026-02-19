@@ -1,0 +1,143 @@
+Step 5: Quality Control
+Started by EMP002
+IN PROGRESS
+Start Phase
+Material scans, tooling verification, technician assignment
+
+3/3 complete
+Phase Complete
+
+Material Lot Entry
+
+TRACEABILITY • Required
+Record traceability for: 594
+
+Completed by EMP002 at 2/19/2026, 8:29:09 AM
+
+
+Start Phase Data Entry
+
+PROCESS • Required
+Enter required data for the START phase
+
+Sand off sharp edges on both ends.
+Y
+Finish Work Needed Y/n*
+N
+Completed by EMP002 at 2/19/2026, 8:29:48 AM
+
+
+Incoming Inspection
+
+QC • Required
+QC
+Complete incoming quality checks before work begins
+
+Delamination, edges*
+Tolerance: Level 1, none
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Wrinkles*
+Tolerance: Level I, none
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Lack of fillout*
+Tolerance: Level II, 1/4" max
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Scratch*
+Tolerance: Level III, 1" max
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Pit (pinhole) & porosity*
+Tolerance: Level III, 1/32" & <50
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Completed by EMP002 at 2/19/2026, 8:30:38 AM
+
+Work Phase
+Process data entry, special process parameters
+
+2/2 complete
+Phase Complete
+
+Process Data Entry
+
+PROCESS • Required
+Enter required process data
+
+Sand off edges on both sides
+Y
+Completed by EMP002 at 2/19/2026, 8:30:44 AM
+
+
+Quality Control Checks
+
+QC • Required
+QC
+Complete all quality control verifications
+
+Delamination, edges*
+Tolerance: Level I, none
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Wrinkles*
+Tolerance: Level I, none
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Lack of fillout*
+Tolerance: Level II, 1/4" max
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Scratch*
+Tolerance: Level III, 1" max
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Pit (pinhole) & porosity*
+Tolerance: Level III, 1/32" & <50
+Requirement: ASTM D2563-08(2015)
+Measured Result *
+Level I
+
+Verified / Pass
+Completed by EMP002 at 2/19/2026, 8:31:05 AM
+
+Finish Phase
+QC checks, acceptance criteria, final sign-off
+
+0/1 complete
+
+Department Signoff — Quality Control
+
+SIGNATURE • Required
+OPERATOR
+Operator signature required to complete Quality Control
+
+Sign (OPERATOR)

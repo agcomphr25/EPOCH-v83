@@ -1,0 +1,104 @@
+COPY-PASTE THIS INTO REPLIT AGENT
+
+Paste exactly as written:
+
+We need to diagnose incorrect badge + classification behavior in the Barcode Department view.
+
+Two issues:
+
+1) Adjustable style stocks that are Tikka are NOT displaying the Tikka badge.
+2) PO orders are showing:
+      - Material = "Standard"
+      - Action = "Unknown Action"
+   on the Barcode Department card.
+
+We need a full derivation audit.
+
+-----------------------------------------
+1) BARCODE DEPARTMENT CARD COMPONENT
+-----------------------------------------
+
+Return full code for:
+
+- The Barcode Department card component
+- Any component rendering:
+      - Stock model badge
+      - Action badge
+      - Material badge
+      - Group / model display
+- All props passed into that card
+
+-----------------------------------------
+2) DATA SOURCE FOR BARCODE QUEUE
+-----------------------------------------
+
+Return:
+
+- API endpoint used to populate Barcode Queue
+- Backend route code
+- SQL query used
+- All joins
+- Any computed fields
+
+-----------------------------------------
+3) NORMALIZATION / DERIVATION LOGIC
+-----------------------------------------
+
+Find where the following fields are derived:
+
+- stockModel
+- group
+- action
+- material
+- style
+- adjustable flag
+- Tikka detection logic
+
+Return full code for:
+
+- The normalization function
+- Any parsing of specs (parsedSpecs)
+- Any fallback logic such as:
+      parsedSpecs?.action || 'Unknown Action'
+      parsedSpecs?.material || 'Standard'
+- Any mapping tables for:
+      action types
+      material types
+      model groups
+
+-----------------------------------------
+4) ADJUSTABLE STOCK HANDLING
+-----------------------------------------
+
+Search for logic involving:
+- adjustable
+- style
+- tikka
+- model variants
+- stock type
+
+Return any conditionals that might exclude Tikka badge for adjustable stocks.
+
+-----------------------------------------
+5) DEFAULT FALLBACK LOGIC
+-----------------------------------------
+
+Find every place in code where:
+- "Standard" is defaulted
+- "Unknown Action" is defaulted
+
+Return those snippets.
+
+-----------------------------------------
+
+Goal:
+We need to understand exactly:
+
+- Why adjustable Tikka stocks are not triggering the Tikka badge
+- Why material defaults to Standard
+- Why action defaults to Unknown Action
+- Whether this is a parsing issue, mapping issue, or missing data issue
+
+Return raw code only.
+No summaries.
+We will diagnose from the code.

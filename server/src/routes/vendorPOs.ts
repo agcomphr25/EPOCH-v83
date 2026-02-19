@@ -18,7 +18,7 @@ const listVendorPOsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
-  status: z.enum(['Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'any']).default('any'),
+  status: z.enum(['Draft', 'RFQ Sent', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'any']).default('any'),
   vendorId: z.coerce.number().int().positive().optional(),
   sort: z.string().default('createdAt:desc'),
 });
@@ -269,7 +269,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
     const data = insertVendorPOSchema.partial().parse(req.body);
     
-    // Allow status changes (e.g., moving to Sent, Received, etc.) even on issued POs
+    // Prevent setting status to 'Sent' via PUT — must use POST /:id/issue for atomic number generation
+    if (data.status === 'Sent') {
+      return res.status(400).json({
+        error: 'Cannot set status to Sent directly',
+        message: 'Use the POST /api/vendor-pos/:id/issue endpoint to formally issue a PO. This ensures proper PO number generation.',
+      });
+    }
+
+    // Allow status changes (e.g., moving to Received, Cancelled, etc.) even on issued POs
     const isStatusOnlyChange = Object.keys(data).length === 1 && data.status !== undefined;
     
     if (issuedStatuses.includes(existingPO.status) && !isStatusOnlyChange) {
@@ -557,6 +565,227 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/vendor-pos/:id/send-rfq - Send an RFQ email to vendor (non-binding quote request)
+router.post('/:id/send-rfq', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    if (vendorPO.status !== 'Draft') {
+      return res.status(400).json({
+        error: 'RFQ can only be sent from Draft status',
+        message: `PO is currently in ${vendorPO.status} status`,
+      });
+    }
+
+    const vendor = await storage.getVendor(vendorPO.vendorId);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    if (!vendor.email) {
+      return res.status(400).json({
+        error: 'Vendor email not configured',
+        message: 'Please add a contact email for this vendor before sending an RFQ.',
+      });
+    }
+
+    // Fetch line items for the RFQ
+    const items = await storage.getVendorPOItems(id);
+
+    const subject = `Request for Quote from AG Composites`;
+
+    const itemsTableRows = items.map((item: any) =>
+      `<tr>
+        <td style="border: 1px solid #ddd; padding: 8px;">${item.lineNumber}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${item.supplierPartNumber || '-'}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${item.description || '-'}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${item.quantity != null ? Number(item.quantity).toFixed(2) : '0.00'}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${item.vendorUnit || item.uom || '-'}</td>
+      </tr>`
+    ).join('');
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #e67e22;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #1a1a1a;
+      font-size: 24px;
+      margin: 0;
+    }
+    .content { margin-bottom: 30px; }
+    .rfq-details {
+      background-color: #fef9e7;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .rfq-details p { margin: 5px 0; }
+    .notice {
+      background-color: #fef9e7;
+      border-left: 4px solid #e67e22;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Request for Quote</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
+      
+      <p>AG Composites is requesting a quote for the following items. <strong>This is not a purchase order</strong> — we are seeking pricing and availability information.</p>
+      
+      <div class="rfq-details">
+        <p><strong>Vendor:</strong> ${vendor.name}</p>
+        ${vendorPO.expectedDeliveryDate ? `<p><strong>Desired Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
+      </div>
+      
+      ${items.length > 0 ? `
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <thead>
+          <tr style="background-color: #f5f5f5;">
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Line</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Part #</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Qty</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsTableRows}
+        </tbody>
+      </table>
+      ` : '<p><em>No specific items listed. Please contact us for details.</em></p>'}
+      
+      <div class="notice">
+        <strong>Note:</strong> This is a Request for Quote only. No commitment to purchase is implied. Please reply to this email with your pricing and availability.
+      </div>
+      
+      <p>If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const text = `
+Request for Quote
+
+Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
+
+AG Composites is requesting a quote for the following items. This is NOT a purchase order — we are seeking pricing and availability information.
+
+Vendor: ${vendor.name}
+${vendorPO.expectedDeliveryDate ? `Desired Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
+
+${items.length > 0 ? items.map((item: any) => `- ${item.description || 'Item'}: Qty ${item.quantity || 0} ${item.vendorUnit || item.uom || ''}`).join('\n') : 'No specific items listed. Please contact us for details.'}
+
+Note: This is a Request for Quote only. No commitment to purchase is implied.
+Please reply to this email with your pricing and availability.
+
+If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com
+    `.trim();
+
+    const emailResult = await sendEmailViaSendGrid({
+      to: vendor.email,
+      cc: 'laurie@agcomposites.com',
+      subject,
+      text,
+      html,
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to send RFQ email:', emailResult.error);
+      return res.status(500).json({
+        error: 'Failed to send RFQ email',
+        message: emailResult.error || 'Email service unavailable. Please try again.',
+        emailSent: false,
+      });
+    }
+
+    // Update status to RFQ Sent (no PO number assigned — stays null)
+    const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+
+    console.log(`✅ RFQ sent to ${vendor.email} for vendor PO ID ${id} (cc: laurie@agcomposites.com)`);
+
+    res.json({
+      ...updatedPO,
+      emailSent: true,
+      emailRecipient: vendor.email,
+      emailCc: 'laurie@agcomposites.com',
+      message: `RFQ sent successfully to ${vendor.email}.`,
+    });
+  } catch (error) {
+    console.error('Send RFQ error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to send RFQ' });
+  }
+});
+
 // POST /api/vendor-pos/:id/issue - Issue a PO and optionally send confirmation email with magic link
 router.post('/:id/issue', async (req: Request, res: Response) => {
   try {
@@ -567,14 +796,14 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
 
     const { skipEmail } = req.body || {};
 
-    // Get the PO
+    // Get the PO first for vendor lookup and pre-flight checks
     const vendorPO = await storage.getVendorPO(id);
     if (!vendorPO) {
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
 
-    // Check if PO is in Draft status
-    if (vendorPO.status !== 'Draft') {
+    // Pre-flight status check (non-locking, for fast rejection)
+    if (vendorPO.status !== 'Draft' && vendorPO.status !== 'RFQ Sent') {
       return res.status(400).json({ 
         error: 'PO cannot be issued', 
         message: `PO is already in ${vendorPO.status} status` 
@@ -587,10 +816,10 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor not found' });
     }
 
-    // If skipEmail is true, just update the status without sending email
+    // If skipEmail is true, use atomic transactional issuance (lock, generate number, update status)
     if (skipEmail) {
-      const updatedPO = await storage.updateVendorPO(id, { status: 'Sent' });
-      console.log(`✅ PO ${vendorPO.poNumber} marked as issued (no email sent - manual entry mode)`);
+      const { vendorPO: updatedPO, poNumber } = await storage.issueVendorPO(id);
+      console.log(`✅ PO ${poNumber} marked as issued (no email sent - manual entry mode)`);
       return res.json({
         ...updatedPO,
         emailSent: false,
@@ -607,13 +836,16 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
-    // Generate magic link for PO confirmation (before email so we can include it)
+    // Atomic transactional issuance: lock row, generate number, update status
+    const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+
+    // Generate magic link for PO confirmation
     const { link, expiresAt } = await generateMagicLink({
       email: vendor.email,
       purpose: 'vendor_po_confirmation',
       metadata: {
         vendorPoId: id,
-        poNumber: vendorPO.poNumber,
+        poNumber: poNumber,
         vendorId: vendor.id,
         vendorName: vendor.name,
       },
@@ -624,7 +856,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     const baseUrl = getMagicLinkBaseUrl();
     
     // Generate email content
-    const subject = `PO ${vendorPO.poNumber} from AG Composites - Confirmation Requested`;
+    const subject = `PO ${poNumber} from AG Composites - Confirmation Requested`;
     
     const html = `
 <!DOCTYPE html>
@@ -713,9 +945,9 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       <p>AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
       
       <div class="po-details">
-        <p><strong>PO Number:</strong> ${vendorPO.poNumber}</p>
+        <p><strong>PO Number:</strong> ${poNumber}</p>
         <p><strong>Vendor:</strong> ${vendor.name}</p>
-        ${vendorPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
+        ${issuedPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
       </div>
       
       <div style="text-align: center;">
@@ -753,9 +985,9 @@ Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
 
 AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
 
-PO Number: ${vendorPO.poNumber}
+PO Number: ${poNumber}
 Vendor: ${vendor.name}
-${vendorPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
+${issuedPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
 
 Confirm your receipt: ${link}
 
@@ -782,21 +1014,19 @@ Email: sales@agcomposites.com
 
     if (!emailResult.success) {
       console.error('Failed to send PO confirmation email:', emailResult.error);
-      // Email failed - don't update PO status, return error
+      // PO is already issued (status = Sent) but email failed - report the failure
       return res.status(500).json({
-        error: 'Failed to send confirmation email',
-        message: emailResult.error || 'Email service unavailable. Please try again.',
+        error: 'PO issued but confirmation email failed',
+        message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
         emailSent: false,
+        poNumber,
       });
     }
 
-    // Email sent successfully - now update PO status to Sent
-    const updatedPO = await storage.updateVendorPO(id, { status: 'Sent' });
-
-    console.log(`✅ PO ${vendorPO.poNumber} issued and confirmation email sent to ${vendor.email} (cc: laurie@agcomposites.com)`);
+    console.log(`✅ PO ${poNumber} issued and confirmation email sent to ${vendor.email} (cc: laurie@agcomposites.com)`);
 
     res.json({
-      ...updatedPO,
+      ...issuedPO,
       emailSent: true,
       emailRecipient: vendor.email,
       emailCc: 'laurie@agcomposites.com',

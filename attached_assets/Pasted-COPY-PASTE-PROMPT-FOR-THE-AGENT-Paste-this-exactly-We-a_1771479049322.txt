@@ -1,0 +1,88 @@
+COPY-PASTE PROMPT FOR THE AGENT
+
+Paste this exactly:
+
+We are redesigning the Vendor PO PDF layout for a more professional appearance while keeping the current window.open HTML architecture.
+
+Do NOT change how the PDF is generated.
+Do NOT introduce server-side PDF engines.
+We are only restructuring the HTML + CSS inside handleDownloadPDF.
+
+------------------------------------------
+GOALS
+------------------------------------------
+
+1) Replace single-column layout with structured grid header:
+   - Two-column header
+   - Left: Company block
+   - Right: Boxed metadata panel containing:
+        • Document Title (PO or RFQ)
+        • PO Number or RFQ label
+        • Order Date
+        • Status
+        • Barcode (visually separated)
+
+2) Vendor + Ship To layout:
+   - Two equal-width bordered panels side-by-side
+   - Clear section labels
+   - Consistent padding (12–16px)
+   - Subtle gray section header background
+
+3) Line Item Table Improvements:
+   - Remove heavy full borders
+   - Add:
+        border-bottom only
+        zebra striping (nth-child)
+        right-align numeric columns
+        slightly smaller header caps
+        lighter header background (#f5f5f5)
+   - Improve spacing rhythm
+
+4) Totals Section:
+   - Right-aligned box
+   - Light gray background
+   - Larger bold total
+   - Thin top border
+
+5) Typography:
+   - Use system font stack:
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+   - Tighten vertical spacing
+   - Add letter-spacing: 0.5px on main title
+   - Use consistent 12px / 14px / 18px sizing system
+
+6) Add subtle document divider:
+   - Thin horizontal rule after header section
+
+7) Keep RFQ conditional logic intact.
+   - RFQ should use orange accent color
+   - Add light watermark text for RFQ:
+        position: fixed;
+        opacity: 0.05;
+        font-size: 120px;
+        centered;
+        z-index: 0;
+        "REQUEST FOR QUOTE"
+
+8) Barcode Improvement:
+   - Replace plain text barcode display with simple visual barcode using JsBarcode
+   - Inject CDN inside print window:
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+   - Render barcode inside SVG element after window loads
+   - Fallback to plain text if script fails
+
+------------------------------------------
+OUTPUT REQUIRED
+------------------------------------------
+
+Return:
+
+1) Updated full HTML template string
+2) Updated <style> block
+3) Any added JS inside the print window
+4) Exact modifications only inside handleDownloadPDF
+5) No changes outside this function
+6) Maintain compatibility with existing conditional logic
+
+Do NOT summarize.
+Return full updated HTML block ready to paste.

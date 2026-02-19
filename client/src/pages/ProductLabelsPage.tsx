@@ -93,7 +93,7 @@ function buildDescription(product: ProductItem): string {
 }
 
 function getLabelCode(product: ProductItem): string {
-  return product.customer_product_number || product.barcode || '';
+  return product.customer_product_number || product.barcode || product.product_name || '';
 }
 
 export default function ProductLabelsPage() {

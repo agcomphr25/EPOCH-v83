@@ -14233,7 +14233,7 @@ export class DatabaseStorage implements IStorage {
           timePolicy: 'AUTO_ON_COMPLETE',
           requiresSignature: false,
           requiresCertification: false,
-          instructionPack: hasInstructionPack ? routingInstructionPack : null,
+          instructionPack: null,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
 
@@ -14264,7 +14264,7 @@ export class DatabaseStorage implements IStorage {
           timePolicy: 'MANUAL_ENTRY',
           requiresSignature: false,
           requiresCertification: false,
-          instructionPack: hasInstructionPack ? routingInstructionPack : null,
+          instructionPack: null,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
 

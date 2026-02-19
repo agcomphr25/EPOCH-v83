@@ -1104,6 +1104,8 @@ export default function P2TravelerPage() {
                               </div>
                             </div>
                             <Input
+                              id={`qc-result-${index}`}
+                              name={`qc-result-${index}`}
                               type="text"
                               value={qc.measuredValue}
                               onChange={(e) => {

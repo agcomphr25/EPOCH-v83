@@ -13748,7 +13748,7 @@ export class DatabaseStorage implements IStorage {
 
   private _getTracePolicyForDepartment(departmentName: string) {
     const p = DatabaseStorage.TRACE_POLICY[departmentName];
-    return p ?? { enabled: true, phase: 'START' as const, capture: { internalControlNumber: true } };
+    return p ?? { enabled: false, phase: 'START' as const, capture: { internalControlNumber: true } };
   }
 
   private _buildTraceFields(capture: Record<string, boolean | undefined>) {
@@ -14293,8 +14293,12 @@ export class DatabaseStorage implements IStorage {
         }, enabledPhases, createdTaskKeys);
       }
 
-      // Work Instructions task — always create when instruction pack has content
-      if (hasInstructionPack) {
+      // Work Instructions task — only create when instruction pack has content
+      // AND no WI Acknowledged start check already covers it (prevents duplication)
+      const hasWiAckStartCheck = startChecks.some((check: any) =>
+        check.title?.toLowerCase().includes('work instruction') && check.title?.toLowerCase().includes('acknowledged')
+      );
+      if (hasInstructionPack && !hasWiAckStartCheck) {
         await this._createTaskIfAllowed({
           travelerStepId: step.id,
           taskType: 'PROCESS',

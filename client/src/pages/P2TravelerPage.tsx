@@ -499,13 +499,8 @@ export default function P2TravelerPage() {
     mutationFn: async () => {
       if (!verificationData) throw new Error('No verification data');
 
-      // Validate required traceability data (only if there are actual trace fields)
-      if (traceabilityData.length > 0) {
-        const missingFields = traceabilityData.filter(item => !item.value.trim());
-        if (missingFields.length > 0) {
-          throw new Error('Please fill in all traceability fields');
-        }
-      }
+      // Traceability data is optional - only send filled-in fields
+      // Do NOT block task start when traceability fields are empty
 
       // Validate required custom data
       if (verificationData.departmentConfig.customDataFields) {
@@ -539,7 +534,7 @@ export default function P2TravelerPage() {
           department: verificationData.nextDepartment,
           partNumber: item.partNumber,
           partName: item.partName || item.partNumber || 'Unknown',
-          traceabilityData,
+          traceabilityData: traceabilityData.filter(item => item.value.trim()),
           customData: Object.keys(customData).length > 0 ? customData : null,
           qcResults: qcResults.length > 0 ? qcResults : null,
           notes,
@@ -906,7 +901,7 @@ export default function P2TravelerPage() {
                   {traceabilityData.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label className="text-base font-semibold">Material Traceability</Label>
+                      <Label className="text-base font-semibold">Material Traceability <span className="text-sm font-normal text-muted-foreground">(Optional)</span></Label>
                       <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
                         <TabsList className="h-8">
                           <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">

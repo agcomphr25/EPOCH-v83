@@ -1100,6 +1100,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     queryFn: () => apiRequest('/api/inventory/items-groups-map'),
   });
 
+  const { data: balancesData } = useQuery<{ balances: Array<{ agPartNumber: string; quantityOnHand: number }> }>({
+    queryKey: ['/api/enhanced/inventory/balances'],
+  });
+
+  const balancesByPart = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    if (balancesData?.balances) {
+      for (const b of balancesData.balances) {
+        map[b.agPartNumber] = (map[b.agPartNumber] || 0) + b.quantityOnHand;
+      }
+    }
+    return map;
+  }, [balancesData]);
+
   // Sort handler function
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -1186,6 +1200,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             case 'costPer':
               aValue = a.costPer || 0;
               bValue = b.costPer || 0;
+              break;
+            case 'currentQty':
+              aValue = balancesByPart[a.agPartNumber] || 0;
+              bValue = balancesByPart[b.agPartNumber] || 0;
               break;
             default:
               return 0;
@@ -2174,6 +2192,34 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   </div>
                 </th>
                 <th
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('currentQty')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('currentQty')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={
+                    sortColumn === 'currentQty'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  data-testid="header-currentQty"
+                >
+                  <div className="flex items-center gap-2">
+                    Current Qty
+                    {sortColumn === 'currentQty' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                </th>
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('supplierPartNumber')}
                   onKeyDown={(e) =>
@@ -2269,6 +2315,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-right font-medium">
+                      {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.supplierPartNumber || '-'}

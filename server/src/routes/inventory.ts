@@ -91,6 +91,35 @@ router.get('/items', async (req: Request, res: Response) => {
   }
 });
 
+// Get next available AG Part Number
+router.get('/items/next-part-number', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`
+    );
+    const maxNum = result.rows?.[0]?.ag_part_number ? parseInt(result.rows[0].ag_part_number as string, 10) : 0;
+    res.json({ nextPartNumber: String(maxNum + 1) });
+  } catch (error) {
+    console.error('Get next part number error:', error);
+    res.status(500).json({ error: 'Failed to get next part number' });
+  }
+});
+
+// Check if AG Part Number already exists
+router.get('/items/check-part-number/:partNumber', async (req: Request, res: Response) => {
+  try {
+    const { partNumber } = req.params;
+    const result = await db.execute(
+      sql`SELECT ag_part_number, name FROM inventory_items WHERE ag_part_number = ${partNumber} LIMIT 1`
+    );
+    const exists = (result.rows?.length ?? 0) > 0;
+    res.json({ exists, existingItem: exists ? { agPartNumber: result.rows![0].ag_part_number, name: result.rows![0].name } : null });
+  } catch (error) {
+    console.error('Check part number error:', error);
+    res.status(500).json({ error: 'Failed to check part number' });
+  }
+});
+
 // Simple endpoint to get part numbers for dropdown selection
 router.get('/items/part-numbers', async (req: Request, res: Response) => {
   try {

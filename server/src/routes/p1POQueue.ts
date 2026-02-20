@@ -613,14 +613,47 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
       try {
         const { customerId, customerName, poNumber } = getCustomerInfo(row.order_id);
         const stockModelName = row.stock_model_name || row.mold_id?.split('-')[0] || 'Unknown';
-        
+
+        const parts = row.order_id.split('-');
+        const poItemId = parts.length >= 4 ? parseInt(parts[parts.length - 2], 10) : null;
+
+        let itemType = 'stock';
+        let specs: any = null;
+        let poId: number | null = null;
+
+        if (poItemId && !isNaN(poItemId)) {
+          const poItemResult = await pool.query(
+            `SELECT poi.item_type, poi.specifications, poi.po_id
+             FROM purchase_order_items poi
+             WHERE poi.id = $1`,
+            [poItemId]
+          );
+          if (poItemResult.length > 0) {
+            const poItem = poItemResult[0];
+            itemType = poItem.item_type || 'stock';
+            specs = poItem.specifications || null;
+            poId = poItem.po_id || null;
+            if (!specs) {
+              console.warn(`Backfill warning: purchase_order_items id=${poItemId} has null specifications for order ${row.order_id}`);
+            }
+          } else {
+            console.warn(`Backfill warning: purchase_order_items id=${poItemId} not found for order ${row.order_id}`);
+          }
+        } else {
+          console.warn(`Backfill warning: Could not parse po_item_id from order_id ${row.order_id}`);
+        }
+
         await pool.query(`
           INSERT INTO production_orders (
             order_id,
+            po_id,
+            po_item_id,
             customer_id,
             customer_name,
             po_number,
+            item_type,
             item_name,
+            specifications,
             current_department,
             production_status,
             order_date,
@@ -628,8 +661,19 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
             is_fulfilled,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, $4, $5, 'Layup/Plugging', 'PENDING', $6, $6, false, NOW(), NOW())
-        `, [row.order_id, customerId, customerName, poNumber, stockModelName, row.scheduled_date]);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'Layup/Plugging', 'PENDING', $10, $10, false, NOW(), NOW())
+        `, [
+          row.order_id,
+          poId,
+          poItemId,
+          customerId,
+          customerName,
+          poNumber,
+          itemType,
+          stockModelName,
+          specs ? JSON.stringify(specs) : '{}',
+          row.scheduled_date,
+        ]);
         
         backfilled++;
       } catch (err: any) {

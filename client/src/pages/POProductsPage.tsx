@@ -31,7 +31,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Package, Plus, Save, Edit, Trash2, Eye, Check, ChevronsUpDown } from 'lucide-react';
+import { Package, Plus, Save, Edit, Trash2, Eye, Check, ChevronsUpDown, Search } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -130,6 +130,8 @@ export default function POProductsPage() {
     price: '',
     otherOptions: [],
   });
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch PO Products
   const {
@@ -365,8 +367,17 @@ export default function POProductsPage() {
 
       {/* Products Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle>All PO Product Items</CardTitle>
+          <div className="relative w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search customer, product name, or type..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {productsLoading ? (
@@ -384,7 +395,16 @@ export default function POProductsPage() {
                 Create Your First Product
               </Button>
             </div>
-          ) : (
+          ) : (() => {
+            const q = searchQuery.toLowerCase().trim();
+            const filtered = q
+              ? poProducts.filter((p) =>
+                  (p.customerName || '').toLowerCase().includes(q) ||
+                  (p.productName || '').toLowerCase().includes(q) ||
+                  (p.productType || '').toLowerCase().includes(q)
+                )
+              : poProducts;
+            return (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -399,7 +419,13 @@ export default function POProductsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {poProducts.map((product) => (
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No products match "{searchQuery}"
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell data-testid={`text-customer-${product.id}`}>
                       {product.customerName}
@@ -449,7 +475,8 @@ export default function POProductsPage() {
                 ))}
               </TableBody>
             </Table>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 

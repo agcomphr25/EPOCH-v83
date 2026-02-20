@@ -140,6 +140,10 @@ export const VALID_NAVBAR_ROUTES = [
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   // Admin users with full navigation access
+  admin: {
+    routes: [],
+    fullAccess: true,
+  },
   glennj: {
     routes: [],
     fullAccess: true,

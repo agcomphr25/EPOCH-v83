@@ -129,6 +129,46 @@ import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
 
 export function registerRoutes(app: Express): Server {
+  // Temporary debug route - raw order data inspector
+  app.get('/api/debug/order/:orderId', authenticateToken, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { pool } = await import('../../db');
+
+      const allOrdersResult = await pool.query(
+        `SELECT * FROM all_orders WHERE order_id = $1`,
+        [orderId]
+      );
+
+      const productionOrdersResult = await pool.query(
+        `SELECT * FROM production_orders WHERE order_id = $1`,
+        [orderId]
+      );
+
+      const allOrderRow = allOrdersResult.length > 0 ? allOrdersResult[0] : null;
+      const prodOrderRow = productionOrdersResult.length > 0 ? productionOrdersResult[0] : null;
+
+      console.log('=== DEBUG RAW ORDER DATA ===');
+      console.log('Order ID:', orderId);
+      console.log('--- all_orders.features ---');
+      console.log(JSON.stringify(allOrderRow?.features, null, 2));
+      console.log('--- production_orders.specifications ---');
+      console.log(JSON.stringify(prodOrderRow?.specifications, null, 2));
+      console.log('--- production_orders.features ---');
+      console.log(JSON.stringify(prodOrderRow?.features, null, 2));
+      console.log('=== END DEBUG ===');
+
+      res.json({
+        orderId,
+        all_orders: allOrderRow,
+        production_orders: prodOrderRow,
+      });
+    } catch (error: any) {
+      console.error('Debug route error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Authentication routes
   app.use('/api/auth', authRoutes);
 

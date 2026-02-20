@@ -182,7 +182,7 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             const barcodeDisplayWidth = Math.min(labelInnerWidth - 10, 250);
             const barcodeDisplayHeight = 44;
             const barcodeX = centerX - barcodeDisplayWidth / 2;
-            const barcodeY = y + LABEL_HEIGHT - 60;
+            const barcodeY = y + LABEL_HEIGHT - 62;
 
             page.drawImage(barcodeImage, {
               x: barcodeX,

@@ -11,22 +11,23 @@ const POINTS_PER_INCH = 72;
 const PAGE_WIDTH = 8.5 * POINTS_PER_INCH;
 const PAGE_HEIGHT = 11 * POINTS_PER_INCH;
 
-const LABEL_WIDTH = 4 * POINTS_PER_INCH;
+const LABEL_WIDTH = 4.0 * POINTS_PER_INCH;
 const LABEL_HEIGHT = (4 / 3) * POINTS_PER_INCH;
 
 const COLUMNS = 2;
 const ROWS = 7;
 const LABELS_PER_PAGE = COLUMNS * ROWS;
 
-const LEFT_MARGIN = 0.15625 * POINTS_PER_INCH;
-const TOP_MARGIN = 0.5 * POINTS_PER_INCH;
-const H_GAP = 0.1875 * POINTS_PER_INCH;
+const LEFT_MARGIN = 0.156 * POINTS_PER_INCH;
+const TOP_MARGIN = 0.833 * POINTS_PER_INCH;
+const H_GAP = 0.188 * POINTS_PER_INCH;
+const V_GAP = 0;
 
 function getLabelPosition(index: number): { x: number; y: number } {
   const col = index % COLUMNS;
   const row = Math.floor(index % (COLUMNS * ROWS) / COLUMNS);
   const x = LEFT_MARGIN + col * (LABEL_WIDTH + H_GAP);
-  const y = PAGE_HEIGHT - TOP_MARGIN - (row + 1) * LABEL_HEIGHT;
+  const y = PAGE_HEIGHT - TOP_MARGIN - (row + 1) * LABEL_HEIGHT - row * V_GAP;
   return { x, y };
 }
 

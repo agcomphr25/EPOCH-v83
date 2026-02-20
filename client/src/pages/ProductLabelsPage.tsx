@@ -250,7 +250,7 @@ export default function ProductLabelsPage() {
         <Tag className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">Product Label Generator</h1>
-          <p className="text-muted-foreground">Generate Avery 5162 product labels with barcodes</p>
+          <p className="text-muted-foreground">Generate Avery 8162 product labels with barcodes</p>
         </div>
       </div>
 

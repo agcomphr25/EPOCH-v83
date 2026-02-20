@@ -283,12 +283,21 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
       otherOptions,
       departments,
       statuses,
+      customerName,
       dateRange,
       logicMode, // 'AND' or 'OR'
     } = req.body;
 
     // Build dynamic WHERE conditions
     const conditions: any[] = [];
+
+    // Customer name filter (case-insensitive partial match via subquery)
+    if (customerName && customerName.trim()) {
+      const searchTerm = `%${customerName.trim()}%`;
+      conditions.push(
+        sql`${allOrders.customerId}::integer IN (SELECT id FROM customers WHERE LOWER(name) LIKE LOWER(${searchTerm}))`
+      );
+    }
 
     // Stock model filter
     if (selectedModels && selectedModels.length > 0) {

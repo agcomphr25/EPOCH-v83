@@ -88,6 +88,7 @@ interface Filters {
   otherOptions: string[];
   departments: string[];
   statuses: string[];
+  customerName: string;
   dateRange: { start: string; end: string };
   logicMode: 'AND' | 'OR';
 }
@@ -116,6 +117,7 @@ export default function OrderReports() {
     otherOptions: [],
     departments: [],
     statuses: [],
+    customerName: '',
     dateRange: { start: '', end: '' },
     logicMode: 'AND',
   });
@@ -291,6 +293,7 @@ export default function OrderReports() {
       otherOptions: [],
       departments: [],
       statuses: [],
+      customerName: '',
       dateRange: { start: '', end: '' },
       logicMode: 'AND',
     });
@@ -315,6 +318,7 @@ export default function OrderReports() {
     filters.otherOptions.length > 0 ||
     filters.departments.length > 0 ||
     filters.statuses.length > 0 ||
+    filters.customerName.trim().length > 0 ||
     filters.dateRange.start ||
     filters.dateRange.end;
 
@@ -679,6 +683,25 @@ export default function OrderReports() {
                 {filters.paintOptions.length > 0 && (
                   <div className="text-xs text-gray-600">
                     {filters.paintOptions.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Name */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Customer Name</Label>
+                <Input
+                  placeholder="Search by customer name..."
+                  value={filters.customerName}
+                  onChange={(e) =>
+                    setFilters({ ...filters, customerName: e.target.value })
+                  }
+                  className="w-full"
+                  data-testid="input-customer-name"
+                />
+                {filters.customerName && (
+                  <div className="text-xs text-gray-600">
+                    Filtering: "{filters.customerName}"
                   </div>
                 )}
               </div>
@@ -1070,6 +1093,9 @@ export default function OrderReports() {
                   )}
                   {filters.otherOptions.length > 0 && (
                     <Badge variant="secondary">Other Options: {filters.otherOptions.length}</Badge>
+                  )}
+                  {filters.customerName.trim() && (
+                    <Badge variant="secondary">Customer: {filters.customerName.trim()}</Badge>
                   )}
                   {filters.departments.length > 0 && (
                     <Badge variant="secondary">Departments: {filters.departments.length}</Badge>

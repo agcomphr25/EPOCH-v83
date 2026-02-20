@@ -633,6 +633,7 @@ export default function POProductsPage() {
                             Carbon Fiber
                           </SelectItem>
                           <SelectItem value="fiberglass">Fiberglass</SelectItem>
+                          <SelectItem value="blk_aluminum">Blk Aluminum</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

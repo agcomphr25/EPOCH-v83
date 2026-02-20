@@ -929,6 +929,25 @@ export default function POManager() {
     return matchesSearch && matchesStatus;
   });
 
+  const groupedPOs = (() => {
+    const groups: Record<string, { customerName: string; customerId: string; pos: typeof filteredPOs }> = {};
+    filteredPOs.forEach((po) => {
+      const key = po.customerId;
+      if (!groups[key]) {
+        groups[key] = { customerName: po.customerName, customerId: po.customerId, pos: [] };
+      }
+      groups[key].pos.push(po);
+    });
+    Object.values(groups).forEach((group) => {
+      group.pos.sort((a, b) => {
+        const numA = parseInt(a.poNumber.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.poNumber.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
+    });
+    return Object.values(groups).sort((a, b) => a.customerName.localeCompare(b.customerName));
+  })();
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'OPEN':
@@ -1261,8 +1280,8 @@ export default function POManager() {
             </Select>
           </div>
 
-          {/* Purchase Orders List */}
-          <div className="grid gap-4">
+          {/* Purchase Orders List - Grouped by Customer */}
+          <div className="space-y-6">
             {isLoading ? (
               <div className="text-center py-8">Loading purchase orders...</div>
             ) : filteredPOs.length === 0 ? (
@@ -1272,22 +1291,32 @@ export default function POManager() {
                   : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
               </div>
             ) : (
-              filteredPOs.map((po) => (
-                <POCard
-                  key={po.id}
-                  po={po}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onViewItems={handleViewItems}
-                  onCalculateSchedule={handleCalculateSchedule}
-                  onGenerateProductionOrders={handleGenerateProductionOrders}
-                  onReassignCustomer={(po) => {
-                    setReassignPO(po);
-                    setReassignTargetCustomer(null);
-                    setReassignCustomerSearch('');
-                  }}
-                  isGeneratingOrders={isGeneratingOrders}
-                />
+              groupedPOs.map((group) => (
+                <div key={group.customerId} className="space-y-3">
+                  <div className="flex items-center gap-2 border-b pb-2">
+                    <h3 className="text-lg font-semibold text-gray-800">{group.customerName}</h3>
+                    <Badge variant="secondary" className="text-xs">{group.pos.length} PO{group.pos.length !== 1 ? 's' : ''}</Badge>
+                  </div>
+                  <div className="grid gap-4 pl-2">
+                    {group.pos.map((po) => (
+                      <POCard
+                        key={po.id}
+                        po={po}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onViewItems={handleViewItems}
+                        onCalculateSchedule={handleCalculateSchedule}
+                        onGenerateProductionOrders={handleGenerateProductionOrders}
+                        onReassignCustomer={(po) => {
+                          setReassignPO(po);
+                          setReassignTargetCustomer(null);
+                          setReassignCustomerSearch('');
+                        }}
+                        isGeneratingOrders={isGeneratingOrders}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))
             )}
           </div>

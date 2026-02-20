@@ -61,6 +61,7 @@ import {
   Check,
   ChevronsUpDown,
   Paperclip,
+  ExternalLink,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -2675,9 +2676,14 @@ export default function OrderEntry() {
                             : orderStatus === 'CANCELLED'
                             ? 'bg-red-100 text-red-800 border-red-300'
                             : 'bg-gray-100 text-gray-800 border-gray-300'
-                        }`}
+                        } ${(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? 'cursor-pointer hover:ring-2 hover:ring-green-400 hover:ring-offset-1 transition-all' : ''}`}
+                        onClick={(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? () => setLocation(`/shipping-tracker?search=${orderId}`) : undefined}
+                        title={(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? 'Click to view in Shipping Tracker' : undefined}
                       >
                         {orderStatus.replace(/_/g, ' ')}
+                        {(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') && (
+                          <ExternalLink className="h-3 w-3 ml-1 inline" />
+                        )}
                       </Badge>
                     )}
                     {currentDepartment && (

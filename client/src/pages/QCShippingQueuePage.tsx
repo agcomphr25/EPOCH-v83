@@ -1672,7 +1672,14 @@ export default function QCShippingQueuePage() {
                                       </CollapsibleTrigger>
                                       <CollapsibleContent>
                                         <div className="px-4 pb-4 space-y-2">
-                                          {po.items.map((item: any) => {
+                                          {[...po.items].sort((a: any, b: any) => {
+                                            const unitA = parseInt(a.unitNumber) || 0;
+                                            const unitB = parseInt(b.unitNumber) || 0;
+                                            if (unitA !== unitB) return unitA - unitB;
+                                            const descA = (a.description || a.stockModel || '').toLowerCase();
+                                            const descB = (b.description || b.stockModel || '').toLowerCase();
+                                            return descA.localeCompare(descB);
+                                          }).map((item: any) => {
                                             // Create unique key for selection - must use orderId if exists, fallback to poItemId-unitNumber
                                             const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
                                             const isSelected = selectedPOItems.has(itemKey);

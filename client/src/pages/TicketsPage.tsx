@@ -126,6 +126,7 @@ export default function TicketsPage() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const filterOrderId = urlParams.get('orderId') || '';
+  const urlTicketId = urlParams.get('ticketId') || '';
 
   const [filters, setFilters] = useState({
     status: '',
@@ -193,6 +194,22 @@ export default function TicketsPage() {
     queryKey: ['/api/tickets', selectedTicketId, 'orders'],
     enabled: !!selectedTicketId,
   });
+
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
+
+  useEffect(() => {
+    if (urlTicketId && !hasAutoSelected) {
+      setSelectedTicketId(urlTicketId);
+      setHasAutoSelected(true);
+    }
+  }, [urlTicketId, hasAutoSelected]);
+
+  useEffect(() => {
+    if (!urlTicketId && filterOrderId && tickets.length === 1 && !hasAutoSelected && !searchQuery) {
+      setSelectedTicketId(tickets[0].id);
+      setHasAutoSelected(true);
+    }
+  }, [filterOrderId, tickets, urlTicketId, hasAutoSelected, searchQuery]);
 
   const createTicketMutation = useMutation({
     mutationFn: async (data: typeof newTicket) => {

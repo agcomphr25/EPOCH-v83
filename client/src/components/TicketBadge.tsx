@@ -8,6 +8,7 @@ interface TicketCountInfo {
   count: number;
   hasHighPriority: boolean;
   statuses: string[];
+  ticketIds: string[];
 }
 
 type TicketMap = Record<string, TicketCountInfo>;
@@ -40,22 +41,28 @@ export default function TicketBadge({ orderId, ticketMap }: TicketBadgeProps) {
   const info = ticketMap[orderId];
   const isHigh = info.hasHighPriority;
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (info.count === 1 && info.ticketIds?.length === 1) {
+      setLocation(`/tickets?orderId=${orderId}&ticketId=${info.ticketIds[0]}`);
+    } else {
+      setLocation(`/tickets?orderId=${orderId}`);
+    }
+  };
+
   return (
     <Badge
-      className={`cursor-pointer text-xs px-1.5 py-0 flex items-center gap-1 ${
+      className={`cursor-pointer text-xs font-semibold px-2 py-0.5 flex items-center gap-1 border-2 shadow-sm animate-none ${
         isHigh
-          ? 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800'
-          : 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-300 dark:hover:bg-amber-800'
+          ? 'bg-red-500 text-white hover:bg-red-600 border-red-600 dark:bg-red-600 dark:hover:bg-red-700 dark:border-red-700'
+          : 'bg-amber-500 text-white hover:bg-amber-600 border-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 dark:border-amber-700'
       }`}
-      title={`${info.count} open ticket${info.count > 1 ? 's' : ''} linked to this order${isHigh ? ' (HIGH PRIORITY)' : ''}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        setLocation(`/tickets?orderId=${orderId}`);
-      }}
+      title={`${info.count} open ticket${info.count > 1 ? 's' : ''} linked to this order${isHigh ? ' (HIGH PRIORITY)' : ''} — click to view`}
+      onClick={handleClick}
     >
-      <Ticket className="h-3 w-3" />
-      {info.count}
+      <Ticket className="h-3.5 w-3.5" />
+      {info.count} {info.count === 1 ? 'Ticket' : 'Tickets'}
     </Badge>
   );
 }

@@ -707,7 +707,8 @@ router.post('/by-orders', sessionAwareAuth, async (req, res) => {
         tor.order_id,
         COUNT(DISTINCT t.id) as ticket_count,
         MAX(CASE WHEN t.priority = 'high' THEN 1 ELSE 0 END) as has_high_priority,
-        ARRAY_AGG(DISTINCT t.status) as statuses
+        ARRAY_AGG(DISTINCT t.status) as statuses,
+        ARRAY_AGG(DISTINCT t.id) as ticket_ids
       FROM ticket_orders tor
       JOIN tickets t ON tor.ticket_id = t.id
       WHERE tor.order_id = ANY(${orderIdArray}::text[])
@@ -715,12 +716,13 @@ router.post('/by-orders', sessionAwareAuth, async (req, res) => {
       GROUP BY tor.order_id
     `);
 
-    const ticketMap: Record<string, { count: number; hasHighPriority: boolean; statuses: string[] }> = {};
+    const ticketMap: Record<string, { count: number; hasHighPriority: boolean; statuses: string[]; ticketIds: string[] }> = {};
     result.rows.forEach((row: any) => {
       ticketMap[row.order_id] = {
         count: parseInt(row.ticket_count),
         hasHighPriority: row.has_high_priority === 1,
         statuses: row.statuses || [],
+        ticketIds: Array.isArray(row.ticket_ids) ? row.ticket_ids.map(String) : [],
       };
     });
 

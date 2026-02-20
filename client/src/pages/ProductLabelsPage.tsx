@@ -93,7 +93,7 @@ function buildDescription(product: ProductItem): string {
 }
 
 function getLabelCode(product: ProductItem): string {
-  return product.customer_product_number || product.barcode || product.product_name || '';
+  return product.product_name || product.barcode || '';
 }
 
 export default function ProductLabelsPage() {
@@ -299,8 +299,8 @@ export default function ProductLabelsPage() {
                       <p className="font-medium text-sm truncate">{product.product_name}</p>
                       <p className="text-xs text-muted-foreground font-mono">
                         {product.customer_product_number
-                          ? <>{product.customer_product_number} <span className="text-green-600">(Red Hawk code)</span></>
-                          : <>POP: {product.barcode}</>
+                          ? <>{product.customer_product_number}</>
+                          : null
                         }
                       </p>
                     </div>

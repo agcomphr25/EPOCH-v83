@@ -23,7 +23,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function ProductionForecastPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('off_track');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [expectedDeptFilter, setExpectedDeptFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');

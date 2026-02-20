@@ -1057,9 +1057,12 @@ export default function VendorPOManager() {
       } else {
         toast.error(data.message || 'PO issued but email failed to send');
       }
-      // Update the selected PO if viewing details
       if (selectedVendorPO) {
-        setSelectedVendorPO({ ...selectedVendorPO, status: 'Sent' });
+        setSelectedVendorPO({
+          ...selectedVendorPO,
+          status: 'Sent',
+          poNumber: data.po_number || data.poNumber || selectedVendorPO.poNumber,
+        });
       }
     },
     onError: (error: any) => {

@@ -1046,12 +1046,6 @@ export default function Navigation() {
       description: 'Estimated department progression and ship dates',
     },
     {
-      path: '/production-forecast/weekly',
-      label: 'Weekly Forecast',
-      icon: CalendarDays,
-      description: 'Weekly production forecast with verification',
-    },
-    {
       path: '/projects',
       label: 'Projects',
       icon: FolderKanban,

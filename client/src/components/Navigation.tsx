@@ -926,6 +926,12 @@ export default function Navigation() {
       description: 'Product configuration for purchase orders',
     },
     {
+      path: '/product-labels',
+      label: 'Product Labels',
+      icon: Printer,
+      description: 'Generate Avery 5162 product labels with barcodes',
+    },
+    {
       path: '/projects',
       label: 'P2 Projects',
       icon: FolderKanban,

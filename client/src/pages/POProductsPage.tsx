@@ -542,7 +542,7 @@ export default function POProductsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="customerProductNumber">Customer Product Number</Label>
+                    <Label htmlFor="customerProductNumber">Customer Product Number (Label Barcode)</Label>
                     <Input
                       id="customerProductNumber"
                       data-testid="input-customer-product-number"
@@ -550,7 +550,7 @@ export default function POProductsPage() {
                       onChange={(e) =>
                         handleInputChange('customerProductNumber', e.target.value)
                       }
-                      placeholder="Enter customer product number"
+                      placeholder="e.g. AGM5LA002 — used as barcode on product labels"
                     />
                   </div>
                 </div>

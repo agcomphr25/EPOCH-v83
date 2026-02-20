@@ -66,7 +66,7 @@ router.get('/products', authenticateToken, async (req: Request, res: Response) =
     const { customerName } = req.query;
     let query = `SELECT id, customer_name, product_name, product_type, barcode, customer_product_number, 
                         material, handedness, action_length, action_inlet, bottom_metal, barrel_inlet, notes
-                 FROM po_products WHERE customer_name IS NOT NULL AND customer_name != ''`;
+                 FROM po_products WHERE (barcode IS NOT NULL AND barcode != '') OR (customer_product_number IS NOT NULL AND customer_product_number != '')`;
     const params: string[] = [];
     
     if (customerName) {

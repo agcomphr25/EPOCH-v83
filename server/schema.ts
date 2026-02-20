@@ -7161,6 +7161,7 @@ export const poProducts = pgTable('po_products', {
   status: text('status').default('pending'),
   priorityNote: text('priority_note'),
   barcode: text('barcode'),
+  customerProductNumber: text('customer_product_number'),
 });
 
 // PO Product Selections table for tracking selection batches

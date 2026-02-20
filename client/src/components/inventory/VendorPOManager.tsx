@@ -1574,8 +1574,8 @@ export default function VendorPOManager() {
       <div class="panel-header">Vendor</div>
       <div class="panel-body">
         <strong>${po.vendorName || 'Vendor ID: ' + po.vendorId}</strong>
-        ${vendor?.address ? '<br/>' + vendor.address : ''}
-        ${vendor?.city || vendor?.state || vendor?.zip ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip ? ' ' + vendor.zip : '') : ''}
+        ${vendor?.street ? '<br/>' + vendor.street : (vendor?.address ? '<br/>' + vendor.address : '')}
+        ${vendor?.city || vendor?.state || vendor?.zip_code ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip_code ? ' ' + vendor.zip_code : '') : ''}
         ${vendor?.phone ? '<br/>Ph: ' + vendor.phone : ''}
         ${vendor?.email ? '<br/>' + vendor.email : ''}
         ${vendor?.contactPerson ? '<br/>Attn: ' + vendor.contactPerson : ''}

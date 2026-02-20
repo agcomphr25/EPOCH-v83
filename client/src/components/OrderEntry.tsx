@@ -59,6 +59,7 @@ import {
   CheckCircle,
   Check,
   ChevronsUpDown,
+  Paperclip,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -5156,18 +5157,7 @@ export default function OrderEntry() {
 
                 {/* Order Attachments */}
                 {orderId && (
-                  <div className="mt-6">
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="attachments">
-                        <AccordionTrigger className="text-left">
-                          <span className="font-medium">Order Attachments</span>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <OrderAttachments orderId={orderId} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
+                  <OrderAttachmentsSection orderId={orderId} />
                 )}
               </form>
             </CardContent>
@@ -6281,6 +6271,40 @@ export default function OrderEntry() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function OrderAttachmentsSection({ orderId }: { orderId: string }) {
+  const { data: attachments = [] } = useQuery<any[]>({
+    queryKey: ['order-attachments', orderId],
+    queryFn: () => apiRequest(`/api/order-attachments/${orderId}`),
+    enabled: !!orderId,
+  });
+
+  const count = attachments.length;
+  const hasAttachments = count > 0;
+
+  return (
+    <div className="mt-6">
+      <Accordion type="single" collapsible defaultValue={hasAttachments ? 'attachments' : undefined} className="w-full">
+        <AccordionItem value="attachments" className={hasAttachments ? 'border-blue-300 bg-blue-50/50 rounded-lg' : ''}>
+          <AccordionTrigger className="text-left px-3">
+            <div className="flex items-center gap-2">
+              <Paperclip className={`h-4 w-4 ${hasAttachments ? 'text-blue-600' : 'text-gray-400'}`} />
+              <span className="font-medium">Order Attachments</span>
+              {hasAttachments && (
+                <Badge variant="default" className="bg-blue-600 hover:bg-blue-600 text-white text-xs px-2 py-0.5">
+                  {count} file{count !== 1 ? 's' : ''} attached
+                </Badge>
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-3">
+            <OrderAttachments orderId={orderId} />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

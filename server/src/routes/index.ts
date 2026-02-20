@@ -169,6 +169,47 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Temporary debug route - one-time repair for missing production order specs
+  app.post('/api/debug/repair-missing-production-specs', authenticateToken, async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+
+      await pool.query('BEGIN');
+
+      const result = await pool.query(`
+        UPDATE production_orders po
+        SET
+          specifications = to_jsonb(poi.specifications),
+          item_type = COALESCE(poi.item_type, po.item_type)
+        FROM purchase_order_items poi
+        WHERE po.po_item_id = poi.id
+          AND (po.specifications IS NULL OR po.specifications::text = '{}' OR po.specifications::text = 'null')
+          AND poi.specifications IS NOT NULL
+        RETURNING po.order_id, poi.item_type, poi.specifications
+      `);
+
+      const updated = Array.isArray(result) ? result : (result as any).rows || [];
+
+      await pool.query('COMMIT');
+
+      console.log(`=== REPAIR COMPLETE: ${updated.length} production orders updated ===`);
+      for (const row of updated) {
+        console.log(`  Updated ${row.order_id}: item_type=${row.item_type}`);
+      }
+
+      res.json({
+        success: true,
+        updatedCount: updated.length,
+        updatedOrders: updated.map((r: any) => r.order_id),
+      });
+    } catch (error: any) {
+      const { pool } = await import('../../db');
+      await pool.query('ROLLBACK');
+      console.error('Repair route error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Authentication routes
   app.use('/api/auth', authRoutes);
 

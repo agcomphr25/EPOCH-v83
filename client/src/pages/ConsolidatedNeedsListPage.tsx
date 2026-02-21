@@ -135,6 +135,11 @@ export default function ConsolidatedNeedsListPage() {
   const [bulkExpectedDelivery, setBulkExpectedDelivery] = useState('');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [selectedOrderMethod, setSelectedOrderMethod] = useState<'PO' | 'WEBSITE'>('PO');
+  const [batchQuantities, setBatchQuantities] = useState<Record<number, number>>({});
+  const [batchNotes, setBatchNotes] = useState('');
+  const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
+  const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Get current user for approval tracking
   const { data: user } = useQuery<{ username: string; firstName: string; lastName: string }>({
@@ -223,6 +228,101 @@ export default function ConsolidatedNeedsListPage() {
       });
     },
   });
+
+  // Create order batch mutation
+  const createBatchMutation = useMutation({
+    mutationFn: async (data: {
+      vendorId: number | null;
+      vendorName: string;
+      orderMethod: string | null;
+      requestIds: number[];
+      quantities: Record<number, number>;
+      createdBy: string;
+      notes?: string;
+    }) => {
+      return apiRequest('/api/inventory/parts-requests/batches', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/batches'] });
+      toast({
+        title: 'Order Batch Created',
+        description: 'Selected parts have been added to an order batch.',
+      });
+      setIsCreateBatchDialogOpen(false);
+      setBatchVendorGroup(null);
+      setBatchQuantities({});
+      setBatchNotes('');
+      setSelectedVendorRequests(new Set());
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to create order batch.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Reject request mutation
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (data: { id: number; rejectedBy: string; reason: string }) => {
+      return apiRequest(`/api/inventory/parts-requests/${data.id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ rejectedBy: data.rejectedBy, reason: data.reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
+      toast({ title: 'Request Rejected', description: 'The parts request has been rejected.' });
+      setIsActionDialogOpen(false);
+      setSelectedRequest(null);
+      setRejectionReason('');
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to reject request.', variant: 'destructive' });
+    },
+  });
+
+  const openCreateBatchDialog = (vendorGroup: VendorGroup) => {
+    const approvedRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED');
+    if (approvedRequests.length === 0) {
+      toast({
+        title: 'No Approved Requests',
+        description: 'There are no approved requests in this vendor group to create a batch from.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setBatchVendorGroup(vendorGroup);
+    const defaultQuantities: Record<number, number> = {};
+    approvedRequests.forEach(r => { defaultQuantities[r.id] = r.quantity; });
+    setBatchQuantities(defaultQuantities);
+    setIsCreateBatchDialogOpen(true);
+  };
+
+  const handleCreateBatch = () => {
+    if (!batchVendorGroup || !user) return;
+    const requestIds = Object.keys(batchQuantities).map(Number).filter(id => batchQuantities[id] > 0);
+    if (requestIds.length === 0) {
+      toast({ title: 'No Items Selected', description: 'Set quantities for at least one item.', variant: 'destructive' });
+      return;
+    }
+    createBatchMutation.mutate({
+      vendorId: batchVendorGroup.vendorId,
+      vendorName: batchVendorGroup.vendorName,
+      orderMethod: batchVendorGroup.orderMethod,
+      requestIds,
+      quantities: batchQuantities,
+      createdBy: `${user.firstName} ${user.lastName}`,
+      notes: batchNotes || undefined,
+    });
+  };
 
   // Consolidate requests by part number
   const consolidateByPart = (requests: PartsRequest[]): ConsolidatedPart[] => {
@@ -503,9 +603,13 @@ export default function ConsolidatedNeedsListPage() {
       PENDING: { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300', icon: <Clock className="w-3 h-3" /> },
       APPROVED: { color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', icon: <CheckCircle className="w-3 h-3" /> },
       ORDERED: { color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300', icon: <ShoppingCart className="w-3 h-3" /> },
+      ORDERED_PARTIAL: { color: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300', icon: <ShoppingCart className="w-3 h-3" /> },
       RECEIVED: { color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300', icon: <Package className="w-3 h-3" /> },
+      RECEIVED_PARTIAL: { color: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300', icon: <Package className="w-3 h-3" /> },
       DELIVERED_TO_DEPT: { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300', icon: <Truck className="w-3 h-3" /> },
       REJECTED: { color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300', icon: <XCircle className="w-3 h-3" /> },
+      CANCEL_REQUESTED: { color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300', icon: <AlertTriangle className="w-3 h-3" /> },
+      CANCELED: { color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300', icon: <XCircle className="w-3 h-3" /> },
     };
 
     const config = statusConfig[status] || statusConfig.PENDING;
@@ -824,14 +928,25 @@ export default function ConsolidatedNeedsListPage() {
                       </>
                     )}
                     {approvedCount > 0 && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => selectAllInVendor(vendorGroup)}
-                        data-testid={`button-select-all-${vendorKey}`}
-                      >
-                        Select All Ready
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => openCreateBatchDialog(vendorGroup)}
+                          data-testid={`button-create-batch-${vendorKey}`}
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-1" />
+                          Create Order Batch ({approvedCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => selectAllInVendor(vendorGroup)}
+                          data-testid={`button-select-all-${vendorKey}`}
+                        >
+                          Select All Ready
+                        </Button>
+                      </>
                     )}
                     <Button
                       variant="ghost"
@@ -1284,6 +1399,86 @@ export default function ConsolidatedNeedsListPage() {
                 {bulkUpdateMutation.isPending ? 'Processing...' : 'Mark Ordered'}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Order Batch Dialog */}
+      <Dialog open={isCreateBatchDialogOpen} onOpenChange={setIsCreateBatchDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create Order Batch</DialogTitle>
+            <DialogDescription>
+              {batchVendorGroup ? `Create an order batch for ${batchVendorGroup.vendorName}. Adjust quantities as needed.` : 'Select items for the batch.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {batchVendorGroup && (
+              <>
+                <div className="max-h-80 overflow-y-auto border rounded-lg">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dept</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Requested</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Order Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {batchVendorGroup.requests
+                        .filter(r => r.status === 'APPROVED')
+                        .map(request => (
+                          <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <td className="px-3 py-2">
+                              <div className="text-sm font-medium">{request.partName}</div>
+                              <div className="text-xs text-gray-500">{request.partNumber}</div>
+                            </td>
+                            <td className="px-3 py-2 text-sm">{request.department}</td>
+                            <td className="px-3 py-2 text-center text-sm">{request.quantity}</td>
+                            <td className="px-3 py-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                max={request.quantity}
+                                value={batchQuantities[request.id] ?? request.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  setBatchQuantities(prev => ({ ...prev, [request.id]: val }));
+                                }}
+                                className="w-20 text-center mx-auto"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                  <Textarea
+                    value={batchNotes}
+                    onChange={(e) => setBatchNotes(e.target.value)}
+                    placeholder="Order notes..."
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsCreateBatchDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreateBatch}
+                    disabled={createBatchMutation.isPending}
+                  >
+                    {createBatchMutation.isPending ? 'Creating...' : 'Create Order Batch'}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

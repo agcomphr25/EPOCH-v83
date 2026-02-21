@@ -417,6 +417,12 @@ export default function Navigation() {
       description: 'Submit and track requests for parts and materials',
     },
     {
+      path: '/inventory/consolidated-needs',
+      label: 'Consolidated Needs',
+      icon: ClipboardList,
+      description: 'Admin view of all pending parts requests by vendor',
+    },
+    {
       path: '/vendors',
       label: 'Vendor Management',
       icon: Users,

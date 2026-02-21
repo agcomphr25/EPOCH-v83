@@ -563,11 +563,15 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     // Also allows PENDING → REJECTED
     if (updates.status) {
       const validTransitions: Record<string, string[]> = {
-        'APPROVED': ['PENDING'],           // Can only approve from PENDING
-        'REJECTED': ['PENDING'],           // Can only reject from PENDING
-        'ORDERED': ['APPROVED'],           // Can only order from APPROVED
-        'RECEIVED': ['ORDERED'],           // Can only receive from ORDERED
-        'DELIVERED_TO_DEPT': ['RECEIVED'], // Can only deliver from RECEIVED
+        'APPROVED': ['PENDING'],
+        'REJECTED': ['PENDING', 'CANCEL_REQUESTED'],
+        'ORDERED': ['APPROVED'],
+        'ORDERED_PARTIAL': ['APPROVED'],
+        'RECEIVED': ['ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL'],
+        'RECEIVED_PARTIAL': ['ORDERED', 'ORDERED_PARTIAL'],
+        'DELIVERED_TO_DEPT': ['RECEIVED', 'RECEIVED_PARTIAL'],
+        'CANCEL_REQUESTED': ['ORDERED', 'ORDERED_PARTIAL'],
+        'CANCELED': ['PENDING', 'APPROVED', 'CANCEL_REQUESTED'],
       };
       
       if (validTransitions[updates.status]) {
@@ -845,6 +849,372 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Bulk update parts requests error:', error);
     res.status(500).json({ error: 'Failed to bulk update parts requests' });
+  }
+});
+
+// ==========================================
+// PARTS REQUEST v2: BATCH & RECEIVING ROUTES
+// ==========================================
+
+// Create order batch from selected parts requests
+router.post('/parts-requests/batches', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, partsRequestBatches, partsRequestStatusHistory } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq, inArray } = await import('drizzle-orm');
+
+    const { vendorId, vendorName, orderMethod, requestIds, quantities, createdBy, notes } = req.body as {
+      vendorId: number | null;
+      vendorName: string;
+      orderMethod: string | null;
+      requestIds: number[];
+      quantities: Record<number, number>;
+      createdBy: string;
+      notes?: string;
+    };
+
+    if (!requestIds || requestIds.length === 0) {
+      return res.status(400).json({ error: 'No request IDs provided' });
+    }
+
+    const [batch] = await db.insert(partsRequestBatches).values({
+      vendorId,
+      vendorName,
+      orderMethod,
+      status: 'ORDERED',
+      createdBy,
+      notes: notes || null,
+      orderDate: new Date(),
+    }).returning();
+
+    for (const reqId of requestIds) {
+      const qtyOrdered = quantities[reqId] || 0;
+      if (qtyOrdered <= 0) continue;
+
+      const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, reqId));
+      if (!existing) continue;
+
+      const totalOrdered = (existing.qtyOrdered || 0) + qtyOrdered;
+      const newStatus = totalOrdered >= existing.quantity ? 'ORDERED' : 'ORDERED_PARTIAL';
+
+      await db.update(partsRequests).set({
+        batchId: batch.id,
+        qtyOrdered: totalOrdered,
+        status: newStatus,
+        vendorId: vendorId,
+        orderMethod: orderMethod,
+        orderDate: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(partsRequests.id, reqId));
+
+      await db.insert(partsRequestStatusHistory).values({
+        partsRequestId: reqId,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: createdBy,
+        reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered`,
+      });
+    }
+
+    res.status(201).json(batch);
+  } catch (error) {
+    console.error('Create order batch error:', error);
+    res.status(500).json({ error: 'Failed to create order batch' });
+  }
+});
+
+// Get all order batches
+router.get('/parts-requests/batches', async (req: Request, res: Response) => {
+  try {
+    const { partsRequestBatches, partsRequests } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq, desc } = await import('drizzle-orm');
+
+    const batches = await db.select().from(partsRequestBatches).orderBy(desc(partsRequestBatches.createdAt));
+
+    const result = await Promise.all(batches.map(async (batch) => {
+      const requests = await db.select().from(partsRequests).where(eq(partsRequests.batchId, batch.id));
+      return { ...batch, requests };
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Get order batches error:', error);
+    res.status(500).json({ error: 'Failed to fetch order batches' });
+  }
+});
+
+// Get pending receipts grouped by vendor
+router.get('/parts-requests/pending-receipts', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, vendors, partsRequestBatches } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { and, inArray, gt, isNotNull } = await import('drizzle-orm');
+    const { sql: sqlTag } = await import('drizzle-orm');
+
+    const orderedRequests = await db
+      .select()
+      .from(partsRequests)
+      .where(
+        and(
+          inArray(partsRequests.status, ['ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL']),
+          gt(partsRequests.qtyOrdered, 0)
+        )
+      );
+
+    const allVendors = await db.select().from(vendors);
+    const vendorMap = new Map(allVendors.map(v => [v.id, v]));
+
+    const vendorGroups: Record<string, {
+      vendorId: number | null;
+      vendorName: string;
+      requests: typeof orderedRequests;
+      totalOrdered: number;
+      totalReceived: number;
+    }> = {};
+
+    for (const req of orderedRequests) {
+      const vId = req.vendorId;
+      const key = vId ? `vendor-${vId}` : 'unassigned';
+      const vName = vId && vendorMap.has(vId) ? vendorMap.get(vId)!.name : 'Unknown Vendor';
+
+      if (!vendorGroups[key]) {
+        vendorGroups[key] = {
+          vendorId: vId,
+          vendorName: vName,
+          requests: [],
+          totalOrdered: 0,
+          totalReceived: 0,
+        };
+      }
+
+      vendorGroups[key].requests.push(req);
+      vendorGroups[key].totalOrdered += req.qtyOrdered || 0;
+      vendorGroups[key].totalReceived += req.qtyReceived || 0;
+    }
+
+    const result = Object.values(vendorGroups)
+      .filter(g => g.requests.length > 0)
+      .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Get pending receipts error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending receipts' });
+  }
+});
+
+// Receive parts against order
+router.post('/parts-requests/receive', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+
+    const { receivedBy, notes, lines } = req.body as {
+      receivedBy: string;
+      notes?: string;
+      lines: Array<{
+        partsRequestId: number;
+        qtyReceived: number;
+        allocatedDepartmentId?: number;
+        allocationNotes?: string;
+      }>;
+    };
+
+    if (!lines || lines.length === 0) {
+      return res.status(400).json({ error: 'No receipt lines provided' });
+    }
+
+    const batchId = lines[0]?.partsRequestId ? (
+      await db.select({ batchId: partsRequests.batchId }).from(partsRequests).where(eq(partsRequests.id, lines[0].partsRequestId))
+    )[0]?.batchId : null;
+
+    const [receipt] = await db.insert(partsRequestReceipts).values({
+      batchId: batchId || null,
+      vendorId: null,
+      receivedBy,
+      notes: notes || null,
+    }).returning();
+
+    for (const line of lines) {
+      if (line.qtyReceived <= 0) continue;
+
+      await db.insert(partsRequestReceiptLines).values({
+        receiptId: receipt.id,
+        partsRequestId: line.partsRequestId,
+        qtyReceived: line.qtyReceived,
+        allocatedDepartmentId: line.allocatedDepartmentId || null,
+        allocationNotes: line.allocationNotes || null,
+      });
+
+      const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, line.partsRequestId));
+      if (!existing) continue;
+
+      const totalReceived = (existing.qtyReceived || 0) + line.qtyReceived;
+      const newStatus = totalReceived >= (existing.qtyOrdered || existing.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+
+      await db.update(partsRequests).set({
+        qtyReceived: totalReceived,
+        status: newStatus,
+        actualDelivery: new Date().toISOString().split('T')[0],
+        updatedAt: new Date(),
+      }).where(eq(partsRequests.id, line.partsRequestId));
+
+      await db.insert(partsRequestStatusHistory).values({
+        partsRequestId: line.partsRequestId,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: receivedBy,
+        reason: `Received ${line.qtyReceived} units`,
+      });
+    }
+
+    res.status(201).json(receipt);
+  } catch (error) {
+    console.error('Receive parts error:', error);
+    res.status(500).json({ error: 'Failed to receive parts' });
+  }
+});
+
+// Cancel request (requester)
+router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, partsRequestStatusHistory } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+
+    const requestId = parseInt(req.params.id);
+    const { cancelledBy, reason } = req.body as { cancelledBy: string; reason?: string };
+
+    const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, requestId));
+    if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+    const canCancelDirectly = ['PENDING', 'APPROVED'].includes(existing.status);
+    const needsReview = ['ORDERED', 'ORDERED_PARTIAL'].includes(existing.status);
+
+    if (!canCancelDirectly && !needsReview) {
+      return res.status(400).json({ error: `Cannot cancel request in '${existing.status}' status` });
+    }
+
+    const newStatus = canCancelDirectly ? 'CANCELED' : 'CANCEL_REQUESTED';
+
+    await db.update(partsRequests).set({
+      status: newStatus,
+      cancelReason: reason || null,
+      cancelRequestedAt: new Date(),
+      cancelRequestedBy: cancelledBy,
+      updatedAt: new Date(),
+    }).where(eq(partsRequests.id, requestId));
+
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: requestId,
+      fromStatus: existing.status,
+      toStatus: newStatus,
+      changedBy: cancelledBy,
+      reason: reason || 'Cancelled by requester',
+    });
+
+    res.json({ success: true, newStatus });
+  } catch (error) {
+    console.error('Cancel parts request error:', error);
+    res.status(500).json({ error: 'Failed to cancel request' });
+  }
+});
+
+// Reject request (admin/IM)
+router.post('/parts-requests/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, partsRequestStatusHistory } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+
+    const requestId = parseInt(req.params.id);
+    const { rejectedBy, reason } = req.body as { rejectedBy: string; reason: string };
+
+    if (!reason) return res.status(400).json({ error: 'Rejection reason is required' });
+
+    const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, requestId));
+    if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+    const canReject = ['PENDING', 'CANCEL_REQUESTED'].includes(existing.status);
+    if (!canReject) {
+      return res.status(400).json({ error: `Cannot reject request in '${existing.status}' status` });
+    }
+
+    const newStatus = existing.status === 'CANCEL_REQUESTED' ? 'CANCELED' : 'REJECTED';
+
+    await db.update(partsRequests).set({
+      status: newStatus,
+      rejectionReason: reason,
+      rejectedBy,
+      rejectedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(partsRequests.id, requestId));
+
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: requestId,
+      fromStatus: existing.status,
+      toStatus: newStatus,
+      changedBy: rejectedBy,
+      reason,
+    });
+
+    res.json({ success: true, newStatus });
+  } catch (error) {
+    console.error('Reject parts request error:', error);
+    res.status(500).json({ error: 'Failed to reject request' });
+  }
+});
+
+// Get status history for a parts request
+router.get('/parts-requests/:id/history', async (req: Request, res: Response) => {
+  try {
+    const { partsRequestStatusHistory } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq, desc } = await import('drizzle-orm');
+
+    const requestId = parseInt(req.params.id);
+    const history = await db
+      .select()
+      .from(partsRequestStatusHistory)
+      .where(eq(partsRequestStatusHistory.partsRequestId, requestId))
+      .orderBy(desc(partsRequestStatusHistory.createdAt));
+
+    res.json(history);
+  } catch (error) {
+    console.error('Get status history error:', error);
+    res.status(500).json({ error: 'Failed to fetch status history' });
+  }
+});
+
+// Get all inventory items (for "Show all parts" feature)
+router.get('/items/all-for-request', async (req: Request, res: Response) => {
+  try {
+    const { inventoryItems } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+
+    const items = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+        department: inventoryItems.department,
+        currentBalance: inventoryItems.currentBalance,
+        minStock: inventoryItems.minStock,
+        maxStock: inventoryItems.maxStock,
+        usageUnit: inventoryItems.usageUnit,
+        vendorId: inventoryItems.vendorId,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.isActive, true));
+
+    res.json(items);
+  } catch (error) {
+    console.error('Get all items for request error:', error);
+    res.status(500).json({ error: 'Failed to fetch items' });
   }
 });
 

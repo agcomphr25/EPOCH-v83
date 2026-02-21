@@ -131,7 +131,7 @@ export default function DepartmentPartsRequestPage() {
       partName: string;
       quantity: number;
       urgency: string;
-      reason: string;
+      reason: string | null;
       department: string;
       departmentId: number;
       catalogFixNeeded: boolean;
@@ -199,7 +199,7 @@ export default function DepartmentPartsRequestPage() {
   };
 
   const handleSubmitRequest = () => {
-    if (!selectedItem || !user || !requestForm.quantity || !requestForm.reason) {
+    if (!selectedItem || !user || !requestForm.quantity) {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields.',
@@ -218,6 +218,15 @@ export default function DepartmentPartsRequestPage() {
     }
 
     const outOfDept = isOutOfDepartment(selectedItem);
+
+    if (outOfDept && !requestForm.reason.trim()) {
+      toast({
+        title: 'Missing Information',
+        description: 'Reason is required when requesting a part outside your department.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (outOfDept && !requestForm.outOfDeptReason.trim()) {
       toast({
@@ -244,7 +253,7 @@ export default function DepartmentPartsRequestPage() {
       partName: selectedItem.name,
       quantity,
       urgency: requestForm.urgency,
-      reason: requestForm.reason,
+      reason: requestForm.reason.trim() || null,
       department: effectiveDepartment,
       departmentId: effectiveDepartmentId || 0,
       catalogFixNeeded: outOfDept,
@@ -734,7 +743,7 @@ export default function DepartmentPartsRequestPage() {
             {/* Reason */}
             <div>
               <label className="block text-sm font-medium mb-1">
-                Reason <span className="text-red-500">*</span>
+                Reason {selectedItemOutOfDept ? <span className="text-red-500">*</span> : <span className="text-muted-foreground text-xs">(optional)</span>}
               </label>
               <Textarea
                 placeholder="Why do you need this part?"

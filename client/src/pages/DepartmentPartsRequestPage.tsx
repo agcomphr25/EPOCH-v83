@@ -87,7 +87,7 @@ export default function DepartmentPartsRequestPage() {
   });
 
   // Check if user is admin
-  const isAdmin = user?.username ? ['glennj', 'tasham', 'staciw', 'lauriet'].includes(user.username.toLowerCase()) : false;
+  const isAdmin = user?.username ? ['glennj', 'tasham', 'staciw', 'lauriet', 'admin'].includes(user.username.toLowerCase()) : false;
 
   // Get all departments (for admin users) - using inventory departments from orderDepartmentTypes
   const { data: departments = [] } = useQuery<Department[]>({

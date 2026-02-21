@@ -325,6 +325,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/vendor-pos',
       '/inventory/receiving',
       '/master-document-register',
+      '/inventory/parts-request',
     ],
   },
 

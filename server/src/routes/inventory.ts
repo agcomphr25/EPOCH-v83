@@ -859,9 +859,9 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
 // Create order batch from selected parts requests
 router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
-    const { partsRequests, partsRequestBatches, partsRequestStatusHistory } = await import('../../schema');
+    const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestStatusHistory } = await import('../../schema');
     const { db } = await import('../../db');
-    const { eq, inArray } = await import('drizzle-orm');
+    const { eq } = await import('drizzle-orm');
 
     const { vendorId, vendorName, orderMethod, requestIds, quantities, createdBy, notes } = req.body as {
       vendorId: number | null;
@@ -894,6 +894,26 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
       const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, reqId));
       if (!existing) continue;
 
+      const [orderLine] = await db.insert(partsRequestOrderLines).values({
+        batchId: batch.id,
+        vendorId: vendorId,
+        partNumber: existing.partNumber,
+        partName: existing.partName,
+        agPartNumber: existing.agPartNumber,
+        qtyOrdered,
+        qtyReceived: 0,
+        status: 'ORDERED',
+      }).returning();
+
+      await db.insert(partsRequestOrderAllocations).values({
+        orderLineId: orderLine.id,
+        partsRequestId: reqId,
+        qtyAllocated: qtyOrdered,
+        qtyReceivedApplied: 0,
+        departmentId: existing.departmentId,
+        status: 'ALLOCATED',
+      });
+
       const totalOrdered = (existing.qtyOrdered || 0) + qtyOrdered;
       const newStatus = totalOrdered >= existing.quantity ? 'ORDERED' : 'ORDERED_PARTIAL';
 
@@ -912,7 +932,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
         fromStatus: existing.status,
         toStatus: newStatus,
         changedBy: createdBy,
-        reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered`,
+        reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered via order line #${orderLine.id}`,
       });
     }
 
@@ -923,18 +943,20 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   }
 });
 
-// Get all order batches
+// Get all order batches with their order lines
 router.get('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
-    const { partsRequestBatches, partsRequests } = await import('../../schema');
+    const { partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequests } = await import('../../schema');
     const { db } = await import('../../db');
     const { eq, desc } = await import('drizzle-orm');
 
     const batches = await db.select().from(partsRequestBatches).orderBy(desc(partsRequestBatches.createdAt));
 
     const result = await Promise.all(batches.map(async (batch) => {
-      const requests = await db.select().from(partsRequests).where(eq(partsRequests.batchId, batch.id));
-      return { ...batch, requests };
+      const orderLines = await db.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.batchId, batch.id));
+      const allocations = await db.select().from(partsRequestOrderAllocations);
+      const lineAllocations = allocations.filter(a => orderLines.some(l => l.id === a.orderLineId));
+      return { ...batch, orderLines, allocations: lineAllocations };
     }));
 
     res.json(result);
@@ -944,57 +966,127 @@ router.get('/parts-requests/batches', async (req: Request, res: Response) => {
   }
 });
 
-// Get pending receipts grouped by vendor
+// Get pending receipts grouped by vendor — queries ORDER BATCHES and ORDER LINES only
 router.get('/parts-requests/pending-receipts', async (req: Request, res: Response) => {
   try {
-    const { partsRequests, vendors, partsRequestBatches } = await import('../../schema');
+    const { partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, vendors } = await import('../../schema');
     const { db } = await import('../../db');
-    const { and, inArray, gt, isNotNull } = await import('drizzle-orm');
+    const { eq, inArray, lt, and } = await import('drizzle-orm');
     const { sql: sqlTag } = await import('drizzle-orm');
 
-    const orderedRequests = await db
+    const pendingBatches = await db
       .select()
-      .from(partsRequests)
-      .where(
-        and(
-          inArray(partsRequests.status, ['ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL']),
-          gt(partsRequests.qtyOrdered, 0)
-        )
-      );
+      .from(partsRequestBatches)
+      .where(inArray(partsRequestBatches.status, ['ORDERED', 'PARTIALLY_RECEIVED']));
+
+    if (pendingBatches.length === 0) {
+      return res.json([]);
+    }
 
     const allVendors = await db.select().from(vendors);
     const vendorMap = new Map(allVendors.map(v => [v.id, v]));
 
-    const vendorGroups: Record<string, {
+    const batchIds = pendingBatches.map(b => b.id);
+    const orderLines = await db
+      .select()
+      .from(partsRequestOrderLines)
+      .where(inArray(partsRequestOrderLines.batchId, batchIds));
+
+    const allAllocations = await db
+      .select()
+      .from(partsRequestOrderAllocations)
+      .where(inArray(partsRequestOrderAllocations.orderLineId, orderLines.map(l => l.id)));
+
+    type VendorGroup = {
       vendorId: number | null;
       vendorName: string;
-      requests: typeof orderedRequests;
+      batches: Array<{
+        batchId: number;
+        batchStatus: string;
+        orderDate: Date | null;
+        orderLines: Array<{
+          orderLineId: number;
+          partNumber: string | null;
+          partName: string | null;
+          agPartNumber: string | null;
+          qtyOrdered: number;
+          qtyReceived: number;
+          remainingQty: number;
+          status: string;
+          allocations: Array<{
+            allocationId: number;
+            partsRequestId: number;
+            departmentId: number | null;
+            qtyAllocated: number;
+            qtyReceivedApplied: number;
+          }>;
+        }>;
+      }>;
       totalOrdered: number;
       totalReceived: number;
-    }> = {};
+    };
 
-    for (const req of orderedRequests) {
-      const vId = req.vendorId;
+    const vendorGroups: Record<string, VendorGroup> = {};
+
+    for (const batch of pendingBatches) {
+      const vId = batch.vendorId;
       const key = vId ? `vendor-${vId}` : 'unassigned';
-      const vName = vId && vendorMap.has(vId) ? vendorMap.get(vId)!.name : 'Unknown Vendor';
+      const vName = batch.vendorName || (vId && vendorMap.has(vId) ? vendorMap.get(vId)!.name : 'Unknown Vendor');
 
       if (!vendorGroups[key]) {
         vendorGroups[key] = {
           vendorId: vId,
           vendorName: vName,
-          requests: [],
+          batches: [],
           totalOrdered: 0,
           totalReceived: 0,
         };
       }
 
-      vendorGroups[key].requests.push(req);
-      vendorGroups[key].totalOrdered += req.qtyOrdered || 0;
-      vendorGroups[key].totalReceived += req.qtyReceived || 0;
+      const batchLines = orderLines.filter(l => l.batchId === batch.id);
+      const batchOrderLines = batchLines
+        .filter(l => l.qtyReceived < l.qtyOrdered)
+        .map(l => {
+          const lineAllocations = allAllocations
+            .filter(a => a.orderLineId === l.id)
+            .map(a => ({
+              allocationId: a.id,
+              partsRequestId: a.partsRequestId,
+              departmentId: a.departmentId,
+              qtyAllocated: a.qtyAllocated,
+              qtyReceivedApplied: a.qtyReceivedApplied,
+            }));
+
+          return {
+            orderLineId: l.id,
+            partNumber: l.partNumber,
+            partName: l.partName,
+            agPartNumber: l.agPartNumber,
+            qtyOrdered: l.qtyOrdered,
+            qtyReceived: l.qtyReceived,
+            remainingQty: l.qtyOrdered - l.qtyReceived,
+            status: l.status,
+            allocations: lineAllocations,
+          };
+        });
+
+      if (batchOrderLines.length > 0) {
+        vendorGroups[key].batches.push({
+          batchId: batch.id,
+          batchStatus: batch.status,
+          orderDate: batch.orderDate,
+          orderLines: batchOrderLines,
+        });
+
+        for (const line of batchLines) {
+          vendorGroups[key].totalOrdered += line.qtyOrdered;
+          vendorGroups[key].totalReceived += line.qtyReceived;
+        }
+      }
     }
 
     const result = Object.values(vendorGroups)
-      .filter(g => g.requests.length > 0)
+      .filter(g => g.batches.length > 0)
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
 
     res.json(result);
@@ -1004,31 +1096,26 @@ router.get('/parts-requests/pending-receipts', async (req: Request, res: Respons
   }
 });
 
-// Receive parts against order
+// Receive parts against ORDER LINES (not requests directly)
 router.post('/parts-requests/receive', async (req: Request, res: Response) => {
   try {
-    const { partsRequests, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
+    const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
     const { db } = await import('../../db');
-    const { eq } = await import('drizzle-orm');
+    const { eq, sql: sqlTag } = await import('drizzle-orm');
 
-    const { receivedBy, notes, lines } = req.body as {
+    const { batchId, receivedBy, notes, lines } = req.body as {
+      batchId: number;
       receivedBy: string;
       notes?: string;
       lines: Array<{
-        partsRequestId: number;
+        orderLineId: number;
         qtyReceived: number;
-        allocatedDepartmentId?: number;
-        allocationNotes?: string;
       }>;
     };
 
     if (!lines || lines.length === 0) {
       return res.status(400).json({ error: 'No receipt lines provided' });
     }
-
-    const batchId = lines[0]?.partsRequestId ? (
-      await db.select({ batchId: partsRequests.batchId }).from(partsRequests).where(eq(partsRequests.id, lines[0].partsRequestId))
-    )[0]?.batchId : null;
 
     const [receipt] = await db.insert(partsRequestReceipts).values({
       batchId: batchId || null,
@@ -1037,37 +1124,80 @@ router.post('/parts-requests/receive', async (req: Request, res: Response) => {
       notes: notes || null,
     }).returning();
 
+    let allFullyReceived = true;
+    let anyReceived = false;
+
     for (const line of lines) {
       if (line.qtyReceived <= 0) continue;
+      anyReceived = true;
+
+      const [orderLine] = await db.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
+      if (!orderLine) continue;
+
+      const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
+      const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+
+      await db.update(partsRequestOrderLines).set({
+        qtyReceived: newOrderLineReceived,
+        status: orderLineStatus,
+        updatedAt: new Date(),
+      }).where(eq(partsRequestOrderLines.id, line.orderLineId));
 
       await db.insert(partsRequestReceiptLines).values({
         receiptId: receipt.id,
-        partsRequestId: line.partsRequestId,
+        orderLineId: line.orderLineId,
         qtyReceived: line.qtyReceived,
-        allocatedDepartmentId: line.allocatedDepartmentId || null,
-        allocationNotes: line.allocationNotes || null,
       });
 
-      const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, line.partsRequestId));
-      if (!existing) continue;
+      if (newOrderLineReceived < orderLine.qtyOrdered) {
+        allFullyReceived = false;
+      }
 
-      const totalReceived = (existing.qtyReceived || 0) + line.qtyReceived;
-      const newStatus = totalReceived >= (existing.qtyOrdered || existing.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+      const allocations = await db.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
 
-      await db.update(partsRequests).set({
-        qtyReceived: totalReceived,
-        status: newStatus,
-        actualDelivery: new Date().toISOString().split('T')[0],
+      let remainingToApply = line.qtyReceived;
+      for (const alloc of allocations) {
+        if (remainingToApply <= 0) break;
+        const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
+        if (canApply <= 0) continue;
+
+        await db.update(partsRequestOrderAllocations).set({
+          qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
+          status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+          updatedAt: new Date(),
+        }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+
+        const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
+        if (request) {
+          const newTotalReceived = (request.qtyReceived || 0) + canApply;
+          const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+
+          await db.update(partsRequests).set({
+            qtyReceived: newTotalReceived,
+            status: requestStatus,
+            actualDelivery: new Date().toISOString().split('T')[0],
+            updatedAt: new Date(),
+          }).where(eq(partsRequests.id, alloc.partsRequestId));
+
+          await db.insert(partsRequestStatusHistory).values({
+            partsRequestId: alloc.partsRequestId,
+            fromStatus: request.status,
+            toStatus: requestStatus,
+            changedBy: receivedBy,
+            reason: `Received ${canApply} units via order line #${line.orderLineId}`,
+          });
+        }
+
+        remainingToApply -= canApply;
+      }
+    }
+
+    if (batchId && anyReceived) {
+      const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+      await db.update(partsRequestBatches).set({
+        status: batchStatus,
         updatedAt: new Date(),
-      }).where(eq(partsRequests.id, line.partsRequestId));
-
-      await db.insert(partsRequestStatusHistory).values({
-        partsRequestId: line.partsRequestId,
-        fromStatus: existing.status,
-        toStatus: newStatus,
-        changedBy: receivedBy,
-        reason: `Received ${line.qtyReceived} units`,
-      });
+      }).where(eq(partsRequestBatches.id, batchId));
     }
 
     res.status(201).json(receipt);

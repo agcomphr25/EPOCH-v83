@@ -154,30 +154,46 @@ function getItemTraceability(
   return { required: false, fields: [] };
 }
 
+type OrderLineForReceiving = {
+  orderLineId: number;
+  partNumber: string | null;
+  partName: string | null;
+  agPartNumber: string | null;
+  qtyOrdered: number;
+  qtyReceived: number;
+  remainingQty: number;
+  status: string;
+  allocations: Array<{
+    allocationId: number;
+    partsRequestId: number;
+    departmentId: number | null;
+    qtyAllocated: number;
+    qtyReceivedApplied: number;
+  }>;
+};
+
+type PendingBatchInfo = {
+  batchId: number;
+  batchStatus: string;
+  orderDate: string | null;
+  orderLines: OrderLineForReceiving[];
+};
+
 type PendingReceiptVendorGroup = {
   vendorId: number | null;
   vendorName: string;
-  requests: Array<{
-    id: number;
-    partNumber: string;
-    partName: string;
-    department: string;
-    quantity: number;
-    qtyOrdered: number;
-    qtyReceived: number;
-    status: string;
-    urgency: string;
-  }>;
+  batches: PendingBatchInfo[];
   totalOrdered: number;
   totalReceived: number;
 };
 
-function PartsRequestReceivingSection() {
+function OrderBatchReceivingSection() {
   const queryClient = useQueryClient();
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const [receiveQuantities, setReceiveQuantities] = useState<Record<number, number>>({});
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [receiveVendorGroup, setReceiveVendorGroup] = useState<PendingReceiptVendorGroup | null>(null);
+  const [receiveBatchId, setReceiveBatchId] = useState<number | null>(null);
   const [receiveNotes, setReceiveNotes] = useState('');
 
   const { data: user } = useQuery<{ username: string; firstName: string; lastName: string }>({
@@ -190,9 +206,10 @@ function PartsRequestReceivingSection() {
 
   const receiveMutation = useMutation({
     mutationFn: async (data: {
+      batchId: number;
       receivedBy: string;
       notes?: string;
-      lines: Array<{ partsRequestId: number; qtyReceived: number }>;
+      lines: Array<{ orderLineId: number; qtyReceived: number }>;
     }) => {
       return apiRequest('/api/inventory/parts-requests/receive', {
         method: 'POST',
@@ -202,9 +219,11 @@ function PartsRequestReceivingSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/pending-receipts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/batches'] });
       toast.success('Parts received successfully');
       setIsReceiveDialogOpen(false);
       setReceiveVendorGroup(null);
+      setReceiveBatchId(null);
       setReceiveQuantities({});
       setReceiveNotes('');
     },
@@ -215,20 +234,22 @@ function PartsRequestReceivingSection() {
 
   const openReceiveDialog = (group: PendingReceiptVendorGroup) => {
     setReceiveVendorGroup(group);
+    const allOrderLines = group.batches.flatMap(b => b.orderLines);
     const defaultQty: Record<number, number> = {};
-    group.requests.forEach(r => {
-      const remaining = (r.qtyOrdered || r.quantity) - (r.qtyReceived || 0);
-      defaultQty[r.id] = Math.max(0, remaining);
+    allOrderLines.forEach(l => {
+      defaultQty[l.orderLineId] = l.remainingQty;
     });
     setReceiveQuantities(defaultQty);
+    const firstBatchId = group.batches[0]?.batchId || null;
+    setReceiveBatchId(firstBatchId);
     setIsReceiveDialogOpen(true);
   };
 
   const handleReceive = () => {
-    if (!user) return;
+    if (!user || !receiveBatchId) return;
     const lines = Object.entries(receiveQuantities)
       .filter(([, qty]) => qty > 0)
-      .map(([id, qty]) => ({ partsRequestId: parseInt(id), qtyReceived: qty }));
+      .map(([id, qty]) => ({ orderLineId: parseInt(id), qtyReceived: qty }));
 
     if (lines.length === 0) {
       toast.error('Enter quantities for at least one item');
@@ -236,6 +257,7 @@ function PartsRequestReceivingSection() {
     }
 
     receiveMutation.mutate({
+      batchId: receiveBatchId,
       receivedBy: `${user.firstName} ${user.lastName}`,
       notes: receiveNotes || undefined,
       lines,
@@ -247,7 +269,7 @@ function PartsRequestReceivingSection() {
       <Card>
         <CardContent className="p-8 text-center">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-          <p className="text-muted-foreground">Loading pending parts requests...</p>
+          <p className="text-muted-foreground">Loading pending order batches...</p>
         </CardContent>
       </Card>
     );
@@ -258,20 +280,22 @@ function PartsRequestReceivingSection() {
       <Card>
         <CardContent className="p-8 text-center">
           <Package className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground">No pending parts request receipts.</p>
-          <p className="text-sm text-muted-foreground mt-1">Parts requests that have been ordered will appear here for receiving.</p>
+          <p className="text-muted-foreground">No pending order batch receipts.</p>
+          <p className="text-sm text-muted-foreground mt-1">Order batches created from parts requests will appear here for receiving.</p>
         </CardContent>
       </Card>
     );
   }
 
+  const allOrderLines = (group: PendingReceiptVendorGroup) => group.batches.flatMap(b => b.orderLines);
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Pending Parts Request Receipts</CardTitle>
+          <CardTitle>Pending Order Batch Receipts</CardTitle>
           <CardDescription>
-            Receive ordered parts grouped by vendor. Click "Receive" to record receipt quantities.
+            Receive ordered parts grouped by vendor. Receiving operates on order batches — request statuses are updated automatically through allocations.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -280,6 +304,7 @@ function PartsRequestReceivingSection() {
               const vendorKey = `vendor-${group.vendorId || 'unknown'}`;
               const isExpanded = expandedVendors.has(vendorKey);
               const remainingTotal = group.totalOrdered - group.totalReceived;
+              const lines = allOrderLines(group);
 
               return (
                 <div key={vendorKey} className="border rounded-lg">
@@ -299,7 +324,7 @@ function PartsRequestReceivingSection() {
                       <div>
                         <p className="font-medium">{group.vendorName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {group.requests.length} items | {remainingTotal} units remaining
+                          {group.batches.length} batch(es) | {lines.length} line items | {remainingTotal} units remaining
                         </p>
                       </div>
                     </div>
@@ -321,40 +346,48 @@ function PartsRequestReceivingSection() {
 
                   {isExpanded && (
                     <div className="border-t px-4 pb-4">
-                      <table className="w-full mt-2">
-                        <thead>
-                          <tr className="text-xs text-gray-500 uppercase">
-                            <th className="text-left py-2">Part</th>
-                            <th className="text-left py-2">Department</th>
-                            <th className="text-center py-2">Ordered</th>
-                            <th className="text-center py-2">Received</th>
-                            <th className="text-center py-2">Remaining</th>
-                            <th className="text-left py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {group.requests.map(req => {
-                            const remaining = (req.qtyOrdered || req.quantity) - (req.qtyReceived || 0);
-                            return (
-                              <tr key={req.id} className="text-sm">
-                                <td className="py-2">
-                                  <div className="font-medium">{req.partName}</div>
-                                  <div className="text-xs text-gray-500">{req.partNumber}</div>
-                                </td>
-                                <td className="py-2">{req.department}</td>
-                                <td className="py-2 text-center">{req.qtyOrdered || req.quantity}</td>
-                                <td className="py-2 text-center">{req.qtyReceived || 0}</td>
-                                <td className="py-2 text-center font-medium">{remaining}</td>
-                                <td className="py-2">
-                                  <Badge variant={remaining === 0 ? 'default' : 'secondary'}>
-                                    {req.status.replace(/_/g, ' ')}
-                                  </Badge>
-                                </td>
+                      {group.batches.map(batch => (
+                        <div key={batch.batchId} className="mt-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">Batch #{batch.batchId}</Badge>
+                            <Badge variant="secondary">{batch.batchStatus}</Badge>
+                            {batch.orderDate && (
+                              <span className="text-xs text-muted-foreground">
+                                Ordered: {new Date(batch.orderDate).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <table className="w-full">
+                            <thead>
+                              <tr className="text-xs text-gray-500 uppercase">
+                                <th className="text-left py-2">Part</th>
+                                <th className="text-center py-2">Ordered</th>
+                                <th className="text-center py-2">Received</th>
+                                <th className="text-center py-2">Remaining</th>
+                                <th className="text-left py-2">Status</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                            </thead>
+                            <tbody className="divide-y">
+                              {batch.orderLines.map(line => (
+                                <tr key={line.orderLineId} className="text-sm">
+                                  <td className="py-2">
+                                    <div className="font-medium">{line.partName}</div>
+                                    <div className="text-xs text-gray-500">{line.partNumber}</div>
+                                  </td>
+                                  <td className="py-2 text-center">{line.qtyOrdered}</td>
+                                  <td className="py-2 text-center">{line.qtyReceived}</td>
+                                  <td className="py-2 text-center font-medium">{line.remainingQty}</td>
+                                  <td className="py-2">
+                                    <Badge variant={line.remainingQty === 0 ? 'default' : 'secondary'}>
+                                      {line.status.replace(/_/g, ' ')}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -367,9 +400,9 @@ function PartsRequestReceivingSection() {
       <Dialog open={isReceiveDialogOpen} onOpenChange={setIsReceiveDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Receive Parts</DialogTitle>
+            <DialogTitle>Receive Parts from Order Batch</DialogTitle>
             <DialogDescription>
-              {receiveVendorGroup ? `Receive parts from ${receiveVendorGroup.vendorName}. Enter quantities received.` : ''}
+              {receiveVendorGroup ? `Receive parts from ${receiveVendorGroup.vendorName}. Enter quantities received per order line.` : ''}
             </DialogDescription>
           </DialogHeader>
 
@@ -381,40 +414,37 @@ function PartsRequestReceivingSection() {
                     <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dept</th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Already Rcvd</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Remaining</th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receive Qty</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {receiveVendorGroup.requests.map(req => {
-                        const remaining = (req.qtyOrdered || req.quantity) - (req.qtyReceived || 0);
-                        return (
-                          <tr key={req.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="px-3 py-2">
-                              <div className="text-sm font-medium">{req.partName}</div>
-                              <div className="text-xs text-gray-500">{req.partNumber}</div>
-                            </td>
-                            <td className="px-3 py-2 text-sm">{req.department}</td>
-                            <td className="px-3 py-2 text-center text-sm">{req.qtyOrdered || req.quantity}</td>
-                            <td className="px-3 py-2 text-center text-sm">{req.qtyReceived || 0}</td>
-                            <td className="px-3 py-2">
-                              <Input
-                                type="number"
-                                min="0"
-                                max={remaining}
-                                value={receiveQuantities[req.id] ?? 0}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value) || 0;
-                                  setReceiveQuantities(prev => ({ ...prev, [req.id]: val }));
-                                }}
-                                className="w-20 text-center mx-auto"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {allOrderLines(receiveVendorGroup).map(line => (
+                        <tr key={line.orderLineId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="px-3 py-2">
+                            <div className="text-sm font-medium">{line.partName}</div>
+                            <div className="text-xs text-gray-500">{line.partNumber}</div>
+                          </td>
+                          <td className="px-3 py-2 text-center text-sm">{line.qtyOrdered}</td>
+                          <td className="px-3 py-2 text-center text-sm">{line.qtyReceived}</td>
+                          <td className="px-3 py-2 text-center text-sm">{line.remainingQty}</td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              max={line.remainingQty}
+                              value={receiveQuantities[line.orderLineId] ?? 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setReceiveQuantities(prev => ({ ...prev, [line.orderLineId]: val }));
+                              }}
+                              className="w-20 text-center mx-auto"
+                            />
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1354,7 +1384,7 @@ export default function InventoryReceivingPage() {
         <TabsList>
           <TabsTrigger value="receive">Receive Items</TabsTrigger>
           <TabsTrigger value="pending">Pending Receipts</TabsTrigger>
-          <TabsTrigger value="parts-requests">Parts Requests</TabsTrigger>
+          <TabsTrigger value="order-batches">Order Batches</TabsTrigger>
           <TabsTrigger value="history">Receiving History</TabsTrigger>
         </TabsList>
 
@@ -1666,8 +1696,8 @@ export default function InventoryReceivingPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="parts-requests">
-          <PartsRequestReceivingSection />
+        <TabsContent value="order-batches">
+          <OrderBatchReceivingSection />
         </TabsContent>
 
         <TabsContent value="history">

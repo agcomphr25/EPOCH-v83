@@ -738,6 +738,33 @@ export const partsRequestBatches = pgTable('parts_request_batches', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const partsRequestOrderLines = pgTable('parts_request_order_lines', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => partsRequestBatches.id).notNull(),
+  vendorId: integer('vendor_id').references(() => vendors.id),
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  agPartNumber: text('ag_part_number'),
+  qtyOrdered: integer('qty_ordered').notNull().default(0),
+  qtyReceived: integer('qty_received').notNull().default(0),
+  unitCost: real('unit_cost'),
+  status: text('status').default('ORDERED').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const partsRequestOrderAllocations = pgTable('parts_request_order_allocations', {
+  id: serial('id').primaryKey(),
+  orderLineId: integer('order_line_id').references(() => partsRequestOrderLines.id).notNull(),
+  partsRequestId: integer('parts_request_id').references(() => partsRequests.id).notNull(),
+  qtyAllocated: integer('qty_allocated').notNull().default(0),
+  qtyReceivedApplied: integer('qty_received_applied').notNull().default(0),
+  departmentId: integer('department_id').references(() => departments.id),
+  status: text('status').default('ALLOCATED').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export const partsRequestReceipts = pgTable('parts_request_receipts', {
   id: serial('id').primaryKey(),
   batchId: integer('batch_id').references(() => partsRequestBatches.id),
@@ -751,6 +778,7 @@ export const partsRequestReceipts = pgTable('parts_request_receipts', {
 export const partsRequestReceiptLines = pgTable('parts_request_receipt_lines', {
   id: serial('id').primaryKey(),
   receiptId: integer('receipt_id').references(() => partsRequestReceipts.id),
+  orderLineId: integer('order_line_id').references(() => partsRequestOrderLines.id),
   partsRequestId: integer('parts_request_id').references(() => partsRequests.id),
   qtyReceived: integer('qty_received').notNull(),
   allocatedDepartmentId: integer('allocated_department_id').references(() => departments.id),
@@ -2862,6 +2890,8 @@ export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 export type PartsRequestBatch = typeof partsRequestBatches.$inferSelect;
+export type PartsRequestOrderLine = typeof partsRequestOrderLines.$inferSelect;
+export type PartsRequestOrderAllocation = typeof partsRequestOrderAllocations.$inferSelect;
 export type PartsRequestReceipt = typeof partsRequestReceipts.$inferSelect;
 export type PartsRequestReceiptLine = typeof partsRequestReceiptLines.$inferSelect;
 export type PartsRequestStatusHistory = typeof partsRequestStatusHistory.$inferSelect;

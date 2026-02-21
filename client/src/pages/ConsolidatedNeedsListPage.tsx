@@ -971,7 +971,7 @@ export default function ConsolidatedNeedsListPage() {
                             onCheckedChange={(checked) => {
                               if (checked) {
                                 setSelectedVendorRequests(new Set([
-                                  ...selectedVendorRequests,
+                                  ...Array.from(selectedVendorRequests),
                                   ...vendorGroup.requests.map(r => r.id)
                                 ]));
                               } else {

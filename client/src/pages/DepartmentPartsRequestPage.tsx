@@ -132,6 +132,7 @@ export default function DepartmentPartsRequestPage() {
       quantity: number;
       urgency: string;
       reason: string | null;
+      requestedBy: string;
       department: string;
       departmentId: number;
       catalogFixNeeded: boolean;
@@ -254,6 +255,7 @@ export default function DepartmentPartsRequestPage() {
       quantity,
       urgency: requestForm.urgency,
       reason: requestForm.reason.trim() || null,
+      requestedBy: user.username,
       department: effectiveDepartment,
       departmentId: effectiveDepartmentId || 0,
       catalogFixNeeded: outOfDept,

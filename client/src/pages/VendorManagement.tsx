@@ -155,7 +155,7 @@ export default function VendorManagement() {
   const [evalTo, setEvalTo] = useState('');
   const [sort, setSort] = useState('createdAt:desc');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(10000);
 
   const [vendorAddress, setVendorAddress] = useState<AddressData>({
     street: '',
@@ -2136,32 +2136,6 @@ export default function VendorManagement() {
         </div>
       </div>
 
-      {/* Pagination */}
-      {vendorsData && vendorsData.meta.pageCount > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Page {vendorsData.meta.page} of {vendorsData.meta.pageCount}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              data-testid="button-prev-page"
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setPage(page + 1)}
-              disabled={page === vendorsData.meta.pageCount}
-              data-testid="button-next-page"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Delete Vendor Confirmation Dialog */}
       <AlertDialog

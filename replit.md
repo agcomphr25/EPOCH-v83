@@ -27,9 +27,9 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Authentication**: Hybrid JWT + Session authentication with a 3-role (ADMIN, EMPLOYEE, OWNER) capability-based access control system.
 - **UI/UX**: Modern UI using ShadCN UI, Tailwind CSS, and Framer Motion.
 - **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
-- **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, path-based signature email architecture to prevent URL corruption, and card-before-save flow (PENDING_PAYMENT status) allowing credit card processing before formal order finalization.
-- **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment. Three-layer Parts Request/Order/Receiving architecture: Parts Requests (planning) → Order Batches with Order Lines + Allocations (purchasing) → Receiving (physical intake via order lines only). Request statuses are derived/cached fields updated through allocation cascades. Tables: parts_request_order_lines, parts_request_order_allocations.
-- **Quality Control**: Nonconformance Record System, Vendor Evaluation System with automated scoring, and Hard QC Stop enforcement with authorized deviation approval workflow on travelers.
+- **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, path-based signature email architecture, and card-before-save flow.
+- **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment. Three-layer Parts Request/Order/Receiving architecture.
+- **Quality Control**: Nonconformance Record System, Vendor Evaluation System, and Hard QC Stop enforcement with authorized deviation approval workflow.
 - **P2 Serialized Item Tracking**: Complete serialized item tracking for P2 purchase orders with customizable workflows, barcode scanning, traceability gating, Traveler Viewer, and Electronic Signature System.
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue.
 - **PDF Management**: Centralized PDF configuration, flexible Template Library System, and unified `orderPdfService` for intent-based PDF generation using frozen order snapshots. Supports "Resend Signature Email" and "Send Updated Order for Signature" with supersession tracking.
@@ -41,44 +41,23 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Voice Notes System**: Voice-activated note recording for production issues with automatic order ID extraction, issue categorization, and resolution tracking.
 - **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments with multi-person visibility sharing.
 - **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics.
-- **Attention & State-Confidence System**: Cross-domain system tracking confidence in the current state of work by using `lastConfirmedAt`, `lastConfirmedByUserId`, `confirmationNote`, and `attentionRisk` fields across entities. Features "Confirm Status" actions, configurable staleness rules, and an Admin Attention Dashboard.
-- **Real-Time WebSocket Notifications**: WebSocket server (ws library) attached to the HTTP server on `/ws/notifications`. Authenticates via JWT token, session token (query param), or session cookie. Tracks connected users with multi-tab support, sends targeted notifications on ticket assignment/unassignment. Client-side hook with exponential backoff reconnection and toast display. Key files: `server/src/services/notificationManager.ts`, `client/src/hooks/useWebSocketNotifications.ts`.
+- **Attention & State-Confidence System**: Cross-domain system tracking confidence in the current state of work using `lastConfirmedAt`, `lastConfirmedByUserId`, `confirmationNote`, and `attentionRisk` fields. Features "Confirm Status" actions, configurable staleness rules, and an Admin Attention Dashboard.
+- **Real-Time WebSocket Notifications**: WebSocket server attached to the HTTP server on `/ws/notifications` for targeted notifications on ticket assignment/unassignment.
 - **Fillable PDF Templates System**: MVP for customer fill-and-sign workflow, allowing admins to upload PDF templates with field definitions and create instances for customers via public signature links.
 - **Central QR Code System**: Generates and resolves QR codes to entity-specific routes based on user role, logs scan events, and provides admin CRUD UI.
-- **Asset Management & Work Order System**: Comprehensive asset tracking with hierarchical categories, physical locations with move history, and generalized work orders (Maintenance Events). Work orders support state transitions (open → in_progress → completed → closed), parts tracking with inventory cost snapshots, file attachments, and downtime tracking. Integrates with Preventive Maintenance schedules to generate preventive work orders. Admin-only access for create/edit operations. Tables: asset_categories, asset_locations, assets, asset_location_history, work_orders, work_order_parts, work_order_attachments.
+- **Asset Management & Work Order System**: Comprehensive asset tracking with hierarchical categories, physical locations, and generalized work orders. Supports state transitions, parts tracking, file attachments, and downtime tracking. Integrates with Preventive Maintenance schedules.
 - **Routing Document Management System**: AI-powered document management for P2 Control Center supporting work instructions, spec sheets, and traveler templates.
-- **Form Draft Persistence & Unsaved Changes Warning**: Reusable `useFormDraft` and `useUnsavedChangesWarning` hooks (`client/src/hooks/`) provide localStorage-based auto-save drafts and browser beforeunload warnings. Currently integrated into the New Vendor modal (`VendorManagement.tsx`) and Order Entry form (`OrderEntry.tsx`) for create/new mode only (not edit mode). Drafts are saved with debounced auto-save on input changes and cleared on successful submission. Users see a restore/discard banner when reopening a form with a saved draft.
-- **Centralized Address Domain Service**: All address creation and updates flow through `server/src/domain/address/addressService.ts` which normalizes inputs (trimming, state abbreviation, ZIP cleanup, ISO country codes) and validates via SmartyStreets US Street API. Returns validation status (raw/standardized/validated/invalid/overridden) with DPV match codes. Integrated into all address routes: `POST /api/customers/:id/addresses`, `POST/PUT /api/vendors`, and legacy `POST/PUT /api/addresses`. Frontend `AddressValidationModal` component shows validation failures with options to use suggested address, edit, or override with required reason. Shipping label creation has a soft gate that blocks labels for addresses with `invalid` validation status. Database columns: `validation_status`, `validated_at`, `validation_provider`, `dpv_match_code`, `override_reason` on both `customer_addresses` and `vendors` tables. Backfill script at `server/scripts/backfillAddressValidation.ts` processes unvalidated addresses in batches.
-- **Training Builder Module**: Self-contained training program management using the Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, and certification workflow.
+- **Form Draft Persistence & Unsaved Changes Warning**: Reusable hooks (`useFormDraft`, `useUnsavedChangesWarning`) for localStorage-based auto-save drafts and browser `beforeunload` warnings.
+- **Centralized Address Domain Service**: All address creation and updates flow through `addressService.ts` which normalizes inputs and validates via SmartyStreets US Street API, returning validation status.
+- **Training Builder Module**: Self-contained training program management using Train-the-Trainer methodology, including structured program definitions, task-based learning, content library, employee assignments, session tracking, and certification workflow.
 - **Epoch 4-Step Training System**: Comprehensive training management using the 4-step methodology, with AI-generated training plans and quizzes, sequential step completion, and automatic traveler authorization.
-- **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, session lifecycle management, and atomic finalization. Features include:
-  - Configurable onboarding paths with ordered fillable PDF templates (signature auth template + HR documents)
-  - Path configuration supports ordered template selection with up/down reordering, replacing legacy folder-based approach
-  - Session creation respects configured template order, creating fillable instances in sequence
-  - Backward compatibility: Legacy folder-based paths still work (documentFolderId fallback mode)
-  - Path purposes: ONBOARDING (new employees) and REHIRE (bringing back inactive employees)
-  - Simplified 4-step wizard UI: Signature Authorization, Demographics Intake, HR Documents, Review & Complete
-  - Fixed-schema demographics system with dedicated API endpoints and automatic re-hire prefill from existing employee records
-  - Tablet-first Demographics Intake UI with 5 card-based sections: Basic Information, Home Address, Transportation, Identification (sensitive), Payroll Information (sensitive)
-  - Demographics fields include: full name, preferred name, email, phone, address (street, apt/unit, city, state, zip), vehicle (type, make/model), driver's license (number, state, expiration), and bank information (name, routing, account, type)
-  - Step locking: Demographics step locked until Digital Signature Authorization is complete
-  - Sticky bottom action bar with "Save & Continue" and "Save for Later" actions
-  - Session lifecycle (in_progress, paused, completed) with pause/resume support
-  - Transactional finalization with mapDemographicsToEmployee() helper that prefers demographicsData over legacy intakeData, atomically creates/updates employee records, activates user accounts, and attaches signed documents
-  - Re-hire workflows: Select inactive employees, reactivate employee records, auto-reactivate linked user accounts
-  - Preflight validation with detailed error reporting
-  - Comprehensive audit trail (ONBOARDING_STARTED, PAUSED, RESUMED, FINALIZATION_BLOCKED, EMPLOYEE_CREATED, USER_ACTIVATED, EMPLOYEE_DOCUMENT_ATTACHED, ONBOARDING_COMPLETED, FINALIZATION_FAILED, ONBOARDING_BUNDLE_GENERATED, ONBOARDING_BUNDLE_EMAILED, ONBOARDING_BUNDLE_EMAIL_BLOCKED, ONBOARDING_BUNDLE_EMAIL_FAILED, REHIRE_STARTED, EMPLOYEE_REHIRED, USER_REACTIVATED, REHIRE_COMPLETED, REHIRE_FINALIZATION_FAILED, EMPLOYMENT_STARTED, EMPLOYMENT_ENDED)
-  - PDF bundle generation: Combines cover page, intake summary, signed documents, captured images, and audit summary into a single downloadable PDF stored in object storage with media library reference
-  - Email distribution: Controlled email delivery of PDF bundles to employees with CC options (admin, HR), preflight validation, and direct attachment (no public URLs)
-  - Employment Periods: First-class tracking of time-bounded employment engagements with derived active status via isEmployeeActive helper function
-  - Employer Signature System: Dual-signer workflow for HR documents requiring both employee and employer signatures. Authorized employer signers (Admin/Owner roles) are managed via Onboarding Settings. Templates can be marked as requiring employer signature, and finalization is blocked until all required employer signatures are obtained. Pending Employer Signatures queue shows documents awaiting employer signature.
+- **Employee Onboarding System**: Admin-driven employee onboarding with configurable paths, intake forms, session lifecycle management, and atomic finalization. Features include configurable paths with fillable PDF templates, fixed-schema demographics, tablet-first UI, step locking, session lifecycle management, transactional finalization, re-hire workflows, preflight validation, comprehensive audit trail, PDF bundle generation, email distribution, employment periods tracking, and employer signature system.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 - **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 - **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
-- **Security**: Dual-condition authentication bypass for development, global API authentication, JWT secret in production, bcrypt password hashing, Zod input validation, backend middleware mirroring frontend permissions, admin-only routes, and feature flags.
-- **Database Schema Standards**: All new tables use UUID for primary keys.
+- **Security**: Dual-condition authentication bypass for development, global API authentication, JWT secret in production, bcrypt password hashing, Zod input validation, backend middleware mirroring frontend permissions, admin-only routes, and feature flags. All new tables use UUID for primary keys.
 
 ## External Dependencies
 
@@ -103,7 +82,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - Authorize.Net (Payment Gateway)
 - Accept.Blue (Credit Card Processing)
 - UPS API (Shipping)
-- SendGrid (Email, Magic Link delivery)
+- SendGrid (Email)
 - Twilio (SMS)
 - Google Calendar (Event Integration)
 - Google Drive (File Access and PDF Processing)

@@ -25,6 +25,7 @@ export interface DomainAddress {
   validatedAt?: Date;
   validationProvider?: 'smarty';
   dpvMatchCode?: string;
+  error?: string;
   overrideReason?: string;
   suggestedAddress?: {
     street1: string;

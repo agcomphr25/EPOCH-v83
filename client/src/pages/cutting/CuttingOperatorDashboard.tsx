@@ -364,27 +364,35 @@ export default function CuttingOperatorDashboard() {
           printWindow.document.write(`
             <html>
               <head>
-                <title>Packet Labels</title>
+                <title>Packet Labels - Avery 8160</title>
                 <style>
-                  body { font-family: Arial, sans-serif; margin: 0; }
-                  .label { page-break-after: always; padding: 20px; border: 1px dashed #ccc; margin: 10px; }
-                  .label:last-child { page-break-after: auto; }
-                  .barcode { margin: 10px 0; }
-                  .info { font-size: 12px; margin: 4px 0; }
-                  .part-number { font-size: 16px; font-weight: bold; }
+                  @page { size: letter; margin: 0.5in 0.1875in 0.5in 0.1875in; }
+                  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                  .labels-container { width: 8.125in; margin: 0 auto; overflow: hidden; }
+                  .label {
+                    width: 2.625in; height: 1in; padding: 0.04in 0.06in;
+                    box-sizing: border-box; page-break-inside: avoid;
+                    float: left; overflow: hidden;
+                    border: 1px solid #ddd;
+                  }
+                  .part-number { font-size: 7pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                  .info { font-size: 6pt; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                  .barcode { max-width: 100%; height: 0.28in; display: block; margin: 2px auto; }
+                  @media print { .label { border: none; } }
                 </style>
               </head>
               <body>
+                <div class="labels-container">
                 ${data.labels.map((label: any) => `
                   <div class="label">
                     <div class="part-number">${label.partNumber}</div>
                     <div class="info">${label.partName}</div>
-                    ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div>${label.barcodeValue}</div>`}
-                    <div class="info">Lot: ${label.fabricLot || 'N/A'}</div>
-                    <div class="info">Roll: ${label.fabricRoll || 'N/A'}</div>
-                    <div class="info">Date: ${new Date().toLocaleDateString()}</div>
+                    ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div class="info">${label.barcodeValue}</div>`}
+                    <div class="info">Lot: ${label.fabricLot || 'N/A'} | Roll: ${label.fabricRoll || 'N/A'}</div>
+                    <div class="info">${new Date().toLocaleDateString()}</div>
                   </div>
                 `).join('')}
+                </div>
               </body>
             </html>
           `);

@@ -207,15 +207,15 @@ export function AveryLabelPrint({
                   font-family: Arial, sans-serif;
                 }
 
-                /* Avery 5160 Label Dimensions: 2.625" x 1" (30 labels per sheet) */
+                /* Avery 8160 Label Dimensions: 2.625" x 1" (30 labels per sheet, 3 cols x 10 rows) */
                 .avery-label {
                   width: 2.625in;
                   height: 1in;
                   border: 1px solid #ddd;
                   margin: 0;
                   padding: 0.03in;
-                  display: inline-block;
-                  vertical-align: top;
+                  display: block;
+                  float: left;
                   box-sizing: border-box;
                   page-break-inside: avoid;
                   background: white;
@@ -314,7 +314,7 @@ export function AveryLabelPrint({
                 }
 
                 @media print {
-                  body { margin: 0; }
+                  body { margin: 0; padding: 0; }
                   .avery-label {
                     border: none;
                     margin: 0;
@@ -322,18 +322,17 @@ export function AveryLabelPrint({
                     height: 1in;
                   }
 
-                  /* Ensure exact positioning for Avery 5160 */
+                  /* Avery 8160: 3 cols x 10 rows, 30 per sheet */
                   @page {
-                    size: 8.5in 11in;
-                    margin: 0.45in 0.1875in 0.5in 0.1875in; /* Adjusted top margin for proper alignment */
+                    size: letter;
+                    margin: 0.5in 0.1875in 0.5in 0.1875in;
                   }
                 }
 
                 .labels-container {
-                  display: flex;
-                  flex-wrap: wrap;
-                  justify-content: flex-start;
-                  width: 8.5in;
+                  width: 8.125in;
+                  margin: 0 auto;
+                  overflow: hidden;
                 }
 
                 /* Preview styles */
@@ -528,12 +527,12 @@ export function AveryLabelPrint({
           {/* Print Button */}
           <Button onClick={handlePrintLabels} className="w-full">
             <Printer className="h-4 w-4 mr-2" />
-            Print {copies} Avery Labels (5160)
+            Print {copies} Avery Labels (8160)
           </Button>
 
           <div className="text-xs text-gray-600 mt-2">
             <p>
-              <strong>Compatible with:</strong> Avery 5160 labels (2.625" x 1",
+              <strong>Compatible with:</strong> Avery 8160 labels (2.625" x 1",
               30 labels per sheet)
             </p>
             <p>

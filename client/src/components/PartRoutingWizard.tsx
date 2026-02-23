@@ -759,9 +759,41 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
+  const createMoldPrepDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Working Temp of Mandrel is b/t 70-80°F',
+        instructions: 'Verify mandrel surface temperature is between 70°F and 80°F before beginning mold prep.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    startQcStandards: [
+      {
+        standard: 'Mandrel Working Temperature',
+        tolerance: '70-80°F',
+        requirement: 'Record mandrel temperature (must be between 70-80°F)',
+      },
+    ],
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     if (departmentConfig[dept]) return departmentConfig[dept];
     if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
+    if (dept === 'Mold Prep') return createMoldPrepDefaultConfig();
     return createDefaultDeptConfig();
   };
 

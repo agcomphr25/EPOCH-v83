@@ -168,6 +168,7 @@ interface DepartmentConfig {
   startQcStandards?: QCStandard[];
   finishQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
+  workChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   allowMultipleTasks?: boolean;
   instructionPack?: InstructionPack;
@@ -1317,6 +1318,28 @@ export default function P2TravelerPage() {
                       </div>
                     );
                   })()}
+
+                  {/* Work Phase Checks */}
+                  {verificationData.departmentConfig.workChecks && verificationData.departmentConfig.workChecks.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-amber-200 bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-amber-200">
+                        <CheckCircle className="h-4 w-4 text-amber-600" />
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Work Phase Checks</p>
+                      </div>
+                      {verificationData.departmentConfig.workChecks.map((check, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white rounded-md border border-amber-100 p-2">
+                          <CheckCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{check.title}</p>
+                            {check.instructions && <p className="text-xs text-muted-foreground">{check.instructions}</p>}
+                            {check.requiresSignature && (
+                              <Badge variant="outline" className="mt-1 text-[10px] border-amber-300">Signature Required ({check.signatureRole || 'OPERATOR'})</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* QC Standards / Tolerance Requirements - with result entry */}
                   {qcResults.length > 0 && (

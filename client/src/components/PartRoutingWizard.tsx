@@ -214,6 +214,7 @@ interface DepartmentConfiguration {
   startQcStandards?: QCStandard[];
   finishQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
+  workChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
   instructionPack?: InstructionPack;
@@ -782,7 +783,29 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         requirement: 'Record mandrel temperature (must be between 70-80°F)',
       },
     ],
-    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    workChecks: [
+      {
+        title: 'Ensure Working Temp of Mandrel is b/t 70-80°F',
+        instructions: 'Verify mandrel surface temperature is between 70°F and 80°F during work phase.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishChecks: [
+      ...DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Working Temp of Mandrel is b/t 70-80°F',
+        instructions: 'Verify mandrel surface temperature is between 70°F and 80°F before completing mold prep.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
     signatureConfig: {
       startRequiresSignature: false,
       finishRequiresSignature: true,
@@ -2043,7 +2066,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.startCustomDataFields?.length || 0) + (config.startQcStandards?.length || 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.customDataFields?.length || 0) + (config.qcStandards?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.workChecks?.length || 0) + (config.customDataFields?.length || 0) + (config.qcStandards?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (config.finishCustomDataFields?.length || 0) + (config.finishQcStandards?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -2302,6 +2325,67 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
                                   Operations and processes performed during this department step.
                                 </p>
+                              </div>
+
+                              {/* Work Phase Gate Checks */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-amber-600" />
+                                  Work Phase Checks ({config.workChecks?.length || 0})
+                                </h4>
+                                {(!config.workChecks || config.workChecks.length === 0) && (
+                                  <p className="text-xs text-muted-foreground mb-2">No work phase checks configured.</p>
+                                )}
+                                {config.workChecks && config.workChecks.length > 0 && (
+                                  <div className="space-y-1.5 mb-2">
+                                    {config.workChecks.map((check, idx) => (
+                                      <div key={idx} className="flex items-center justify-between p-2 rounded border bg-background">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-[10px]">{check.taskType || 'CHECK'}</Badge>
+                                          <span className="text-sm">{check.title}</span>
+                                          {check.required && <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200">Required</Badge>}
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => {
+                                            setDepartmentConfig(prev => ({
+                                              ...prev,
+                                              [dept]: { ...config, workChecks: config.workChecks?.filter((_, i) => i !== idx) },
+                                            }));
+                                          }}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={() => {
+                                    const newCheck: PhaseCheck = {
+                                      title: 'New Work Check',
+                                      instructions: '',
+                                      required: true,
+                                      taskType: 'CHECK',
+                                      timePolicy: 'AUTO_ON_START',
+                                      requiresSignature: false,
+                                      requiresCertification: false,
+                                    };
+                                    setDepartmentConfig(prev => ({
+                                      ...prev,
+                                      [dept]: { ...config, workChecks: [...(config.workChecks || []), newCheck] },
+                                    }));
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Work Check
+                                </Button>
                               </div>
 
                               {/* Instruction Pack */}

@@ -1,0 +1,168 @@
+COPY-PASTE: EPOCH ADDRESS VALIDATION FORENSIC AUDIT
+You are performing a FULL READ-ONLY FORENSIC AUDIT of the EPOCH codebase.
+
+DO NOT modify any files.
+DO NOT write new code.
+DO NOT refactor.
+DO NOT guess.
+
+Your job is to understand EXACTLY how address data flows through the system today.
+
+====================================================
+OBJECTIVE
+====================================================
+
+We need to implement a robust, centralized Address Verification system that:
+
+• Auto-saves validated addresses
+• Auto-confirms standardized addresses
+• Works across:
+    - Customers
+    - Vendors
+    - Shipping destinations
+    - Possibly Billing addresses
+• Integrates properly with an external service (Smarty, UPS, USPS, etc.)
+• Does NOT create duplicate logic across modules
+• Is ERP-safe and audit-safe
+
+Before implementation, perform a COMPLETE SYSTEM MAP.
+
+====================================================
+STEP 1 — SCHEMA AUDIT
+====================================================
+
+1. Locate ALL tables that store address data.
+2. For each table:
+   - Table name
+   - Column names
+   - Data types
+   - Nullability
+   - Constraints
+   - Indexes
+   - Whether address is embedded JSON or structured columns
+3. Identify duplicate structures (customer vs vendor vs shipping).
+
+Output a structured report.
+
+====================================================
+STEP 2 — FRONTEND ENTRY POINT AUDIT
+====================================================
+
+Find ALL frontend components where addresses are:
+
+• Created
+• Edited
+• Displayed
+• Saved
+
+For each:
+- File path
+- Component name
+- How state is managed
+- Whether validation occurs client-side
+- Whether API calls are made onBlur / onSubmit / manual button
+
+====================================================
+STEP 3 — API ROUTE AUDIT
+====================================================
+
+Find all backend routes that:
+
+• Accept address data
+• Update address fields
+• Call external services (Smarty, UPS, etc.)
+
+For each route:
+- File path
+- HTTP method
+- Validation library used (Zod? Joi? none?)
+- External API calls made
+- Error handling pattern
+- Transaction safety
+
+====================================================
+STEP 4 — EXTERNAL SERVICE INTEGRATION AUDIT
+====================================================
+
+Search entire codebase for:
+
+"smarty"
+"ups"
+"usps"
+"address"
+"validate"
+"verify"
+
+For each integration:
+- File path
+- Environment variables used
+- SDK or raw HTTP?
+- Test vs production endpoint?
+- API version?
+- What fields are passed?
+- What fields are returned?
+- Where response is stored?
+- What happens on failure?
+
+Identify:
+• Dead code
+• Partially implemented logic
+• Commented-out attempts
+• Missing env variables
+
+====================================================
+STEP 5 — DATA FLOW TRACE
+====================================================
+
+Trace ONE full flow:
+
+Customer address creation →
+API →
+DB →
+Later shipping label creation →
+Carrier integration
+
+Map:
+• Where address is mutated
+• Where it is trusted
+• Where it is revalidated
+• Where it is assumed correct
+
+====================================================
+STEP 6 — ERROR STATE ANALYSIS
+====================================================
+
+Document:
+
+• What happens if validation fails?
+• Is user blocked?
+• Is address still saved?
+• Is there an "override" path?
+• Are validation results persisted?
+• Is there any audit trail?
+
+====================================================
+STEP 7 — CONSISTENCY & DUPLICATION REPORT
+====================================================
+
+Identify:
+
+• Duplicate validation logic
+• Duplicate formatting logic
+• Inconsistent field naming (zip vs postalCode etc.)
+• Risk of data drift
+• Risk of silent failure
+
+====================================================
+STEP 8 — DELIVERABLE
+====================================================
+
+Return:
+
+1. System Map (all address-related components)
+2. Risk Assessment
+3. Gaps
+4. Clean Architecture Recommendation
+
+DO NOT implement anything.
+This is analysis only.

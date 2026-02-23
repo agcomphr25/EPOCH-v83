@@ -857,15 +857,15 @@ router.post('/create-label', async (req: Request, res: Response) => {
         const matchingAddr = customerAddresses.find((a: any) =>
           a.street && shipToStreet && a.street.toLowerCase() === shipToStreet.toLowerCase()
         );
-        if (matchingAddr && matchingAddr.validationStatus) {
+        if (matchingAddr) {
           const status = matchingAddr.validationStatus;
-          if (status !== 'validated' && status !== 'overridden' && status !== 'standardized') {
-            console.warn(`⚠️ Shipping gate: address validation_status="${status}" for address ${matchingAddr.id}`);
+          if (!status || (status !== 'validated' && status !== 'overridden')) {
+            console.warn(`⚠️ Shipping gate: address validation_status="${status || 'null'}" for address ${matchingAddr.id}`);
             return res.status(400).json({
-              error: 'Ship-to address has not been validated',
-              message: `The shipping address must be validated before creating a label. Current status: ${status}. Please validate the address in Customer Management first.`,
+              error: 'Ship-to address must be validated before shipping.',
+              message: `The shipping address must be validated before creating a label. Current status: ${status || 'null'}. Please validate the address in Customer Management first.`,
               addressId: matchingAddr.id,
-              validationStatus: status,
+              validationStatus: status || null,
             });
           }
         }

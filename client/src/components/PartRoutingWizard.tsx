@@ -837,10 +837,46 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
+  const createLayupDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Ambient Temp is Within Spec',
+        instructions: 'Verify ambient temperature in the layup area is within the required specification before beginning layup.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    workChecks: [
+      {
+        title: 'Ensure Ambient Temp is Within Spec',
+        instructions: 'Verify ambient temperature in the layup area remains within the required specification during layup.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     if (departmentConfig[dept]) return departmentConfig[dept];
     if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
     if (dept === 'Mold Prep') return createMoldPrepDefaultConfig();
+    if (dept === 'Layup') return createLayupDefaultConfig();
     if (dept === 'Cello Wrap') return createCelloWrapDefaultConfig();
     return createDefaultDeptConfig();
   };

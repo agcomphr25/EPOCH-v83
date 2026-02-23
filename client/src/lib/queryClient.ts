@@ -142,7 +142,12 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         );
       }
 
-      throw new Error(errorMessage);
+      const err: any = new Error(errorMessage);
+      if (data) {
+        err.responseData = data;
+        err.status = response.status;
+      }
+      throw err;
     }
 
     // Handle empty responses (like 204 No Content)

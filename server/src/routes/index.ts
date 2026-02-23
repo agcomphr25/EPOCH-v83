@@ -4209,7 +4209,69 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 ADDRESS CREATE ROUTE CALLED');
       console.log('🔧 Request body:', req.body);
       const { storage } = await import('../../storage');
-      const addressData = req.body;
+      const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
+      const addressData = bodyData;
+
+      const hasAddress = addressData.street && addressData.city && addressData.state && addressData.zipCode;
+
+      if (hasAddress && !skipValidation) {
+        const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
+        const addressInput = fromLegacyFields({
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          zipCode: addressData.zipCode,
+          country: addressData.country || 'United States',
+        });
+
+        const result = await validateAndNormalize(addressInput);
+
+        if (result.success) {
+          const legacyFields = toLegacyFields(result.address);
+          const enrichedData = {
+            ...addressData,
+            ...legacyFields,
+            validationStatus: result.address.status,
+            validatedAt: result.address.validatedAt || new Date(),
+            validationProvider: result.address.validationProvider || null,
+            dpvMatchCode: result.address.dpvMatchCode || null,
+          };
+          const address = await storage.createCustomerAddress(enrichedData);
+          console.log('🔧 Created validated address:', address.id);
+          return res.status(201).json(address);
+        }
+
+        if (allowOverride && overrideReason) {
+          const legacyFields = toLegacyFields(result.address);
+          const enrichedData = {
+            ...addressData,
+            ...legacyFields,
+            validationStatus: 'overridden',
+            validatedAt: new Date(),
+            validationProvider: result.address.validationProvider || null,
+            dpvMatchCode: result.address.dpvMatchCode || null,
+            overrideReason,
+          };
+          const address = await storage.createCustomerAddress(enrichedData);
+          console.log('🔧 Created overridden address:', address.id);
+          return res.status(201).json(address);
+        }
+
+        return res.status(400).json({
+          error: 'Address validation failed',
+          message: result.message,
+          validationStatus: result.address.status,
+          dpvMatchCode: result.address.dpvMatchCode,
+          suggestedAddress: result.address.suggestedAddress,
+          originalAddress: {
+            street: addressData.street,
+            city: addressData.city,
+            state: addressData.state,
+            zipCode: addressData.zipCode,
+          },
+        });
+      }
+
       const address = await storage.createCustomerAddress(addressData);
       console.log('🔧 Created address:', address.id);
       res.status(201).json(address);
@@ -4224,7 +4286,57 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
-      const addressData = req.body;
+      const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
+      const addressData = bodyData;
+
+      const hasAddress = addressData.street && addressData.city && addressData.state && addressData.zipCode;
+
+      if (hasAddress && !skipValidation) {
+        const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
+        const addressInput = fromLegacyFields({
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          zipCode: addressData.zipCode,
+          country: addressData.country || 'United States',
+        });
+
+        const result = await validateAndNormalize(addressInput);
+
+        if (result.success) {
+          const legacyFields = toLegacyFields(result.address);
+          Object.assign(addressData, legacyFields, {
+            validationStatus: result.address.status,
+            validatedAt: result.address.validatedAt || new Date(),
+            validationProvider: result.address.validationProvider || null,
+            dpvMatchCode: result.address.dpvMatchCode || null,
+          });
+        } else if (allowOverride && overrideReason) {
+          const legacyFields = toLegacyFields(result.address);
+          Object.assign(addressData, legacyFields, {
+            validationStatus: 'overridden',
+            validatedAt: new Date(),
+            validationProvider: result.address.validationProvider || null,
+            dpvMatchCode: result.address.dpvMatchCode || null,
+            overrideReason,
+          });
+        } else {
+          return res.status(400).json({
+            error: 'Address validation failed',
+            message: result.message,
+            validationStatus: result.address.status,
+            dpvMatchCode: result.address.dpvMatchCode,
+            suggestedAddress: result.address.suggestedAddress,
+            originalAddress: {
+              street: addressData.street,
+              city: addressData.city,
+              state: addressData.state,
+              zipCode: addressData.zipCode,
+            },
+          });
+        }
+      }
+
       const address = await storage.updateCustomerAddress(
         parseInt(id),
         addressData

@@ -79,6 +79,8 @@ import {
 } from '@/hooks/useFeatureValidation';
 import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
 import { useSmartSort } from '@/hooks/useSmartSort';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import {
   FEATURE_IDS,
   findFeature,
@@ -112,6 +114,36 @@ interface MiscItem {
   quantity: number;
   unitPrice: number;
   total: number;
+}
+
+interface OrderDraftData {
+  customer: Customer | null;
+  modelId: string;
+  features: Record<string, any>;
+  customerPO: string;
+  hasCustomerPO: boolean;
+  fbOrderNumber: string;
+  hasAGROrder: boolean;
+  agrOrderDetails: string;
+  isFlattop: boolean;
+  discountCode: string;
+  customDiscountType: 'percent' | 'amount';
+  customDiscountValue: number;
+  priceOverride: number | null;
+  flattopPriceOverride: number | null;
+  shipping: number;
+  isCustomOrder: boolean;
+  notes: string;
+  miscItems: MiscItem[];
+  otherOptionsQuantities: Record<string, number>;
+  specialShipping: { international: boolean; nextDayAir: boolean; billToReceiver: boolean };
+  hasAltShipTo: boolean;
+  altShipToMode: 'existing' | 'manual';
+  altShipToName: string;
+  altShipToCompany: string;
+  altShipToEmail: string;
+  altShipToPhone: string;
+  altShipToAddress: { street: string; city: string; state: string; zipCode: string; country: string };
 }
 
 export default function OrderEntry() {
@@ -247,6 +279,92 @@ export default function OrderEntry() {
     sortedOptions: smartSortedActionInlet,
     trackSelection: trackActionInletSelection,
   } = useSmartSort('action_inlet', actionInletOptions);
+
+  const isNewOrderMode = !isEditMode && !isDuplicateMode && !editingOrderId;
+
+  const { hasDraft: hasOrderDraft, restoreDraft: restoreOrderDraft, clearDraft: clearOrderDraft } = useFormDraft<OrderDraftData>({
+    storageKey: 'order-entry-draft',
+    getValues: () => ({
+      customer,
+      modelId,
+      features,
+      customerPO,
+      hasCustomerPO,
+      fbOrderNumber,
+      hasAGROrder,
+      agrOrderDetails,
+      isFlattop,
+      discountCode,
+      customDiscountType,
+      customDiscountValue,
+      priceOverride,
+      flattopPriceOverride,
+      shipping,
+      isCustomOrder,
+      notes,
+      miscItems,
+      otherOptionsQuantities,
+      specialShipping,
+      hasAltShipTo,
+      altShipToMode,
+      altShipToName,
+      altShipToCompany,
+      altShipToEmail,
+      altShipToPhone,
+      altShipToAddress,
+    }),
+    enabled: isNewOrderMode,
+  });
+
+  const [showOrderDraftBanner, setShowOrderDraftBanner] = useState(false);
+  const [orderDraftChecked, setOrderDraftChecked] = useState(false);
+
+  useEffect(() => {
+    if (isNewOrderMode && !orderDraftChecked && hasOrderDraft) {
+      setShowOrderDraftBanner(true);
+      setOrderDraftChecked(true);
+    }
+  }, [isNewOrderMode, orderDraftChecked, hasOrderDraft]);
+
+  const hasUnsavedOrderChanges = isNewOrderMode && (
+    !!customer || !!modelId || Object.keys(features).length > 0 || !!customerPO || !!notes || miscItems.length > 0
+  );
+
+  useUnsavedChangesWarning(hasUnsavedOrderChanges);
+
+  const handleRestoreOrderDraft = useCallback(() => {
+    const draft = restoreOrderDraft();
+    if (draft) {
+      if (draft.customer) setCustomer(draft.customer);
+      if (draft.modelId) setModelId(draft.modelId);
+      if (draft.features && Object.keys(draft.features).length > 0) setFeatures(draft.features);
+      if (draft.customerPO) { setCustomerPO(draft.customerPO); setHasCustomerPO(true); }
+      if (draft.fbOrderNumber) setFbOrderNumber(draft.fbOrderNumber);
+      if (draft.hasAGROrder) { setHasAGROrder(true); setAgrOrderDetails(draft.agrOrderDetails || ''); }
+      if (draft.isFlattop) setIsFlattop(true);
+      if (draft.discountCode) setDiscountCode(draft.discountCode);
+      if (draft.customDiscountType) setCustomDiscountType(draft.customDiscountType);
+      if (draft.customDiscountValue) setCustomDiscountValue(draft.customDiscountValue);
+      if (draft.priceOverride !== null) { setPriceOverride(draft.priceOverride); setShowPriceOverride(true); }
+      if (draft.flattopPriceOverride !== null) { setFlattopPriceOverride(draft.flattopPriceOverride); setShowFlattopPriceOverride(true); }
+      if (draft.shipping !== undefined) setShipping(draft.shipping);
+      if (draft.isCustomOrder) setIsCustomOrder(true);
+      if (draft.notes) setNotes(draft.notes);
+      if (draft.miscItems?.length > 0) setMiscItems(draft.miscItems);
+      if (draft.otherOptionsQuantities) setOtherOptionsQuantities(draft.otherOptionsQuantities);
+      if (draft.specialShipping) setSpecialShipping(draft.specialShipping);
+      if (draft.hasAltShipTo) {
+        setHasAltShipTo(true);
+        setAltShipToMode(draft.altShipToMode || 'existing');
+        setAltShipToName(draft.altShipToName || '');
+        setAltShipToCompany(draft.altShipToCompany || '');
+        setAltShipToEmail(draft.altShipToEmail || '');
+        setAltShipToPhone(draft.altShipToPhone || '');
+        if (draft.altShipToAddress) setAltShipToAddress(draft.altShipToAddress);
+      }
+    }
+    setShowOrderDraftBanner(false);
+  }, [restoreOrderDraft]);
 
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
@@ -2461,6 +2579,8 @@ export default function OrderEntry() {
       }
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
+      clearOrderDraft();
+
       // Navigate to All Orders page after successful creation (not for drafts or edits)
       if (!saveAsDraft && !isEditMode) {
         // Small delay to ensure toast is visible before navigation
@@ -2711,6 +2831,35 @@ export default function OrderEntry() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {showOrderDraftBanner && isNewOrderMode && (
+                <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md p-3 text-sm">
+                  <span className="text-blue-800 dark:text-blue-200">You have a previous unsaved order draft. Would you like to restore it?</span>
+                  <div className="flex gap-2 ml-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        handleRestoreOrderDraft();
+                        toast({ title: 'Draft restored' });
+                      }}
+                    >
+                      Restore
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        clearOrderDraft();
+                        setShowOrderDraftBanner(false);
+                      }}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Order ID and Dates */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

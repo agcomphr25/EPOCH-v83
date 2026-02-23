@@ -1,0 +1,250 @@
+EPOCH — ADDRESS DOMAIN SERVICE IMPLEMENTATION MASTER PROMPT
+You are implementing a SAFE, PHASED, PRODUCTION-SAFE refactor of the EPOCH address system.
+
+This is a domain-level architecture upgrade.
+
+DO NOT break existing functionality.
+DO NOT remove legacy columns yet.
+DO NOT change behavior until Phase 2.
+DO NOT perform destructive migrations.
+
+We are introducing a centralized Address Domain Service.
+
+===========================================
+OBJECTIVE
+===========================================
+
+Create a centralized, authoritative Address Domain Model and Service that:
+
+• Normalizes addresses at write time
+• Validates using Smarty
+• Stores validation metadata
+• Supports override with audit
+• Prevents silent failure
+• Is reusable across:
+    - Customers
+    - Vendors
+    - Orders (alt ship)
+    - Billing (future)
+• Is backward compatible during rollout
+
+===========================================
+PHASE 0 — PREP (READ-ONLY ANALYSIS)
+===========================================
+
+1. Confirm all current address-related tables.
+2. Confirm all routes that write addresses.
+3. Confirm current Smarty integration.
+
+Do not modify anything in this phase.
+Return confirmation before proceeding.
+
+===========================================
+PHASE 1 — INTRODUCE ADDRESS DOMAIN MODEL
+===========================================
+
+Create:
+
+server/src/domain/address/types.ts
+
+Define:
+
+export type AddressStatus =
+  | 'raw'
+  | 'standardized'
+  | 'validated'
+  | 'invalid'
+  | 'overridden'
+
+export interface DomainAddress {
+  street1: string
+  street2?: string
+  city: string
+  state: string // always 2-letter uppercase
+  postalCode: string // normalized 5 or 9 digit
+  countryCode: string // ISO-2 (US)
+  status: AddressStatus
+  validatedAt?: Date
+  validationProvider?: 'smarty'
+  dpvMatchCode?: string
+  overrideReason?: string
+}
+
+===========================================
+PHASE 2 — BUILD CENTRAL ADDRESS SERVICE
+===========================================
+
+Create:
+
+server/src/domain/address/addressService.ts
+
+Implement:
+
+1) normalizeInput(address)
+   - trim whitespace
+   - uppercase state
+   - ISO country conversion
+   - strip ZIP non-numeric
+   - split 9-digit ZIP to 5+4 if needed
+
+2) validateWithSmarty(address)
+   - call Smarty US Street API
+   - parse:
+       delivery_line_1
+       components.city_name
+       components.state_abbreviation
+       components.zipcode
+       components.plus4_code
+       metadata.dpv_match_code
+   - determine:
+       dpv_match_code === 'Y' => validated
+       dpv_match_code === 'S' => partial
+       else => invalid
+
+3) validateAndNormalize(address)
+   - normalize first
+   - call Smarty
+   - return DomainAddress
+   - NEVER silently return original
+   - if Smarty fails (network):
+       return status = 'invalid'
+       include error message
+
+===========================================
+PHASE 3 — DATABASE EXTENSION (NON-DESTRUCTIVE)
+===========================================
+
+Add to customer_addresses table:
+
+ALTER TABLE customer_addresses
+ADD COLUMN IF NOT EXISTS validation_status text,
+ADD COLUMN IF NOT EXISTS validated_at timestamp,
+ADD COLUMN IF NOT EXISTS validation_provider text,
+ADD COLUMN IF NOT EXISTS dpv_match_code text,
+ADD COLUMN IF NOT EXISTS override_reason text;
+
+Do NOT remove isValidated yet.
+
+Repeat similar additions for vendors table.
+
+Do NOT touch orders yet.
+
+===========================================
+PHASE 4 — SAFE ROUTE INTEGRATION
+===========================================
+
+Modify ONLY these routes:
+
+- POST /api/customers/:id/addresses
+- POST/PUT /api/vendors
+
+Before saving:
+
+1. Call addressService.validateAndNormalize()
+2. If status === 'validated':
+      save normalized fields
+      set validation_status = 'validated'
+3. If status === 'invalid':
+      return 400 with:
+         suggestedAddress (if available)
+         dpvMatchCode
+         error message
+4. Add optional flag:
+      allowOverride: true
+   If override:
+      save normalized version
+      set validation_status = 'overridden'
+      require overrideReason
+
+Do NOT block existing orders or shipping yet.
+
+===========================================
+PHASE 5 — FRONTEND CONSOLIDATION
+===========================================
+
+1. Deprecate SimpleAddressInput.
+2. Standardize on one AddressInput component.
+3. On save:
+     - call backend
+     - if invalid:
+         show modal:
+           "We couldn't verify this address."
+           Options:
+             • Use Suggested
+             • Edit
+             • Override (requires reason)
+
+===========================================
+PHASE 6 — SHIPPING GATE (SOFT ENFORCEMENT)
+===========================================
+
+Before creating shipping label:
+
+If validation_status !== 'validated' AND !== 'overridden':
+    return error:
+      "Address must be validated before shipping."
+
+Do NOT auto-validate at shipping time.
+
+===========================================
+PHASE 7 — ALT SHIP MIGRATION (FUTURE SAFE)
+===========================================
+
+Create new table:
+
+order_addresses
+
+with same domain structure.
+
+Gradually migrate JSONB altShipToAddress into structured table.
+Keep JSONB until full migration complete.
+
+===========================================
+PHASE 8 — BACKFILL SCRIPT
+===========================================
+
+Create:
+
+server/scripts/backfillAddressValidation.ts
+
+Script should:
+
+1. Fetch all customer_addresses where validation_status IS NULL
+2. Run validateAndNormalize()
+3. Update rows
+4. Log summary:
+     validated
+     invalid
+     errors
+
+Run in batches (limit 50 per cycle).
+
+===========================================
+PHASE 9 — REMOVE LEGACY (FINAL CLEANUP)
+===========================================
+
+After system stable:
+
+- Remove isValidated
+- Remove duplicate normalization logic in shipping routes
+- Remove SimpleAddressInput
+- Remove silent fallback in addressUtils
+
+===========================================
+DELIVERABLES
+===========================================
+
+Return:
+
+1. New file tree structure
+2. Full addressService.ts
+3. Migration SQL
+4. Updated route examples
+5. Frontend integration outline
+6. Backfill script
+7. Rollout order checklist
+8. Risk analysis
+
+DO NOT skip phases.
+DO NOT rush to destructive migration.
+This must be production safe.

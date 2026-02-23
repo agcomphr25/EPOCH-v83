@@ -1,0 +1,185 @@
+EPOCH ADDRESS SYSTEM — END-TO-END WIRING AUDIT PROMPT
+
+Paste this into a fresh agent thread:
+
+You are performing a FULL END-TO-END EXECUTION AUDIT of the EPOCH Address Validation system.
+
+This is NOT an architecture review.
+This is NOT a refactor.
+This is NOT a migration.
+
+Your job is to verify whether the implemented Address Domain Service is ACTUALLY being executed in production code paths.
+
+Do not modify anything yet.
+Do not suggest improvements.
+Only verify wiring and execution.
+
+===========================================
+OBJECTIVE
+===========================================
+
+We need to determine why:
+
+• Autocomplete does not trigger
+• Invalid addresses can be saved
+• Validation modal does not appear
+• Shipping is not blocked
+
+You must trace the REAL runtime flow.
+
+===========================================
+STEP 1 — FRONTEND COMPONENT VERIFICATION
+===========================================
+
+1. Find ALL pages where addresses can be entered:
+   - CustomerManagement
+   - VendorManagement
+   - OrderEntry
+   - POManager
+   - DemographicsIntakeForm
+   - ShipmentDialog
+
+For each:
+   - Confirm which component is used:
+       • AddressInput
+       • SimpleAddressInput
+       • Manual input fields
+   - Confirm whether autocomplete is wired.
+   - Confirm whether validation errors are caught.
+   - Confirm whether 400 responses trigger AddressValidationModal.
+
+Return a table showing:
+Page | Component Used | Validation Triggered? | Modal Triggered?
+
+===========================================
+STEP 2 — ROUTE EXECUTION VERIFICATION
+===========================================
+
+For these routes:
+
+- POST /api/customers/:id/addresses
+- POST /api/addresses
+- PUT /api/addresses/:id
+- POST /api/vendors
+- PUT /api/vendors/:id
+
+Verify:
+
+1. Does the route call addressService.validateAndNormalize?
+2. Is the call awaited?
+3. What happens if status === 'invalid'?
+4. Is res.status(400).json(...) returned?
+5. Is there any try/catch swallowing the error?
+6. Is there any fallback that continues execution?
+
+Return exact code snippets that prove execution path.
+
+===========================================
+STEP 3 — ADDRESS SERVICE EXECUTION TRACE
+===========================================
+
+Open:
+
+server/src/domain/address/addressService.ts
+
+Verify:
+
+1. Does validateAndNormalize call validateWithSmarty?
+2. Does validateWithSmarty actually call Smarty endpoint?
+3. Are environment variables referenced?
+4. Is there any catch that returns a valid status on failure?
+5. Is any silent fallback present?
+
+Specifically look for patterns like:
+   return normalized
+   return address
+   catch { return something safe }
+
+Return exact logic of:
+   validateAndNormalize
+   validateWithSmarty
+
+===========================================
+STEP 4 — NETWORK CONFIRMATION
+===========================================
+
+Search entire backend for:
+
+SMARTY
+us-street
+autocomplete
+fetch
+
+Confirm:
+   - Which endpoint is being called
+   - Whether production or test endpoint
+   - Whether auth headers are correct
+   - Whether credentials exist in env
+
+Return the exact fetch block.
+
+===========================================
+STEP 5 — DATABASE WRITE CONFIRMATION
+===========================================
+
+Confirm when an address is saved:
+
+1. Is validation_status written?
+2. Is validated_at written?
+3. Is dpv_match_code written?
+4. Is override_reason required for override?
+5. Is legacy isValidated still being used?
+
+Show the INSERT/UPDATE block.
+
+===========================================
+STEP 6 — SHIPPING GATE EXECUTION
+===========================================
+
+Open shipping label route.
+
+Verify:
+
+1. Does it check validation_status?
+2. What values allow shipping?
+3. Is the check wrapped in try/catch?
+4. Does it actually block with res.status(400)?
+5. Or does it log and continue?
+
+Show the exact conditional logic.
+
+===========================================
+STEP 7 — RUNTIME PROOF
+===========================================
+
+Add TEMPORARY console logs in:
+
+- validateAndNormalize
+- Each address route
+- Shipping gate
+
+Then describe exactly what logs would appear if:
+
+1. A valid address is entered
+2. An invalid address is entered
+3. Smarty credentials are missing
+4. Network fails
+
+This must be hypothetical runtime proof.
+
+===========================================
+DELIVERABLE
+===========================================
+
+Return:
+
+1. Confirmation whether validation is ACTUALLY executing
+2. Where execution breaks (frontend, route, service, or network)
+3. Whether invalid addresses are correctly returning 400
+4. Whether modal logic is wired to 400
+5. Whether shipping gate blocks correctly
+6. Root cause hypothesis ranked by likelihood
+
+Do NOT recommend redesign.
+Do NOT recommend migration.
+Only report wiring truth.

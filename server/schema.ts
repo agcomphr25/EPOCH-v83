@@ -3173,6 +3173,11 @@ export const customerAddresses = pgTable('customer_addresses', {
   type: text('type'),
   isDefault: boolean('is_default'),
   isValidated: boolean('is_validated'),
+  validationStatus: text('validation_status'),
+  validatedAt: timestamp('validated_at'),
+  validationProvider: text('validation_provider'),
+  dpvMatchCode: text('dpv_match_code'),
+  overrideReason: text('override_reason'),
   createdAt: timestamp('created_at'),
   updatedAt: timestamp('updated_at'),
 });
@@ -3191,6 +3196,11 @@ export const vendors = pgTable('vendors', {
   state: text('state'),
   zipCode: text('zip_code'),
   country: text('country').default('United States'),
+  validationStatus: text('validation_status'),
+  validatedAt: timestamp('validated_at'),
+  validationProvider: text('validation_provider'),
+  dpvMatchCode: text('dpv_match_code'),
+  overrideReason: text('override_reason'),
   scope: text('scope'), // Materials/products vendor is approved to supply
   approvalLevel: text('approval_level'), // A, B, or C - vendor approval level
   approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"

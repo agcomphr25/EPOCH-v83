@@ -78,7 +78,10 @@ import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 import VendorScopeSelector from '@/components/VendorScopeSelector';
 import MediaLibraryPicker from '@/components/MediaLibraryPicker';
+import AddressValidationModal from '@/components/AddressValidationModal';
 import { FolderOpen } from 'lucide-react';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -155,7 +158,7 @@ export default function VendorManagement() {
   const [evalTo, setEvalTo] = useState('');
   const [sort, setSort] = useState('createdAt:desc');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(10000);
 
   const [vendorAddress, setVendorAddress] = useState<AddressData>({
     street: '',
@@ -164,6 +167,9 @@ export default function VendorManagement() {
     zipCode: '',
     country: 'United States',
   });
+
+  const [addressValidationError, setAddressValidationError] = useState<any>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<VendorFormData | null>(null);
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorFormSchema),
@@ -193,6 +199,26 @@ export default function VendorManagement() {
       shippingInstructions: '',
     },
   });
+
+  const isCreateMode = isModalOpen && !editingVendor;
+
+  const { hasDraft, restoreDraft, clearDraft } = useFormDraft<{
+    formValues: VendorFormData;
+    vendorAddress: AddressData;
+    pendingContacts: PendingContact[];
+  }>({
+    storageKey: 'vendor-draft',
+    getValues: () => ({
+      formValues: form.getValues(),
+      vendorAddress,
+      pendingContacts,
+    }),
+    enabled: isCreateMode,
+  });
+
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+
+  useUnsavedChangesWarning(isModalOpen && form.formState.isDirty);
 
   // Auto-update evaluated field based on scores
   useEffect(() => {
@@ -299,11 +325,16 @@ export default function VendorManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       toast({ title: 'Vendor created successfully' });
+      clearDraft();
       setIsModalOpen(false);
       setPendingContacts([]);
       form.reset();
     },
-    onError: () => {
+    onError: (error: any) => {
+      if (error.responseData?.validationStatus && error.status === 400) {
+        setAddressValidationError(error.responseData);
+        return;
+      }
       toast({ title: 'Failed to create vendor', variant: 'destructive' });
     },
   });
@@ -323,7 +354,11 @@ export default function VendorManagement() {
       setEditingVendor(null);
       form.reset();
     },
-    onError: () => {
+    onError: (error: any) => {
+      if (error.responseData?.validationStatus && error.status === 400) {
+        setAddressValidationError(error.responseData);
+        return;
+      }
       toast({ title: 'Failed to update vendor', variant: 'destructive' });
     },
   });
@@ -567,6 +602,7 @@ export default function VendorManagement() {
         zipCode: '',
         country: 'United States',
       });
+      setShowDraftBanner(hasDraft);
     }
     setIsModalOpen(true);
   };
@@ -575,6 +611,7 @@ export default function VendorManagement() {
     setIsModalOpen(false);
     setEditingVendor(null);
     setPendingContacts([]);
+    setShowDraftBanner(false);
     form.reset();
     setVendorAddress({
       street: '',
@@ -871,27 +908,31 @@ export default function VendorManagement() {
     }
   };
 
+  const buildNormalizedData = (data: VendorFormData, extra?: Record<string, any>) => ({
+    ...data,
+    contactPerson: data.contactPerson || undefined,
+    email: data.email || undefined,
+    additionalEmail: data.additionalEmail || undefined,
+    phone: data.phone || undefined,
+
+    street: vendorAddress.street || undefined,
+    city: vendorAddress.city || undefined,
+    state: vendorAddress.state || undefined,
+    zipCode: vendorAddress.zipCode || undefined,
+    country: vendorAddress.country || undefined,
+
+    evaluationDate: data.evaluationDate || undefined,
+    notes: data.notes || undefined,
+    approvalSource: data.approvalSource || undefined,
+    approvalPdfUrl: data.approvalPdfUrl || undefined,
+    startRenewalDate: data.startRenewalDate || undefined,
+    approvalExpiration: data.approvalExpiration || undefined,
+    ...extra,
+  });
+
   const onSubmit = (data: VendorFormData) => {
-    const normalizedData = {
-      ...data,
-      contactPerson: data.contactPerson || undefined,
-      email: data.email || undefined,
-      additionalEmail: data.additionalEmail || undefined,
-      phone: data.phone || undefined,
-
-      street: vendorAddress.street || undefined,
-      city: vendorAddress.city || undefined,
-      state: vendorAddress.state || undefined,
-      zipCode: vendorAddress.zipCode || undefined,
-      country: vendorAddress.country || undefined,
-
-      evaluationDate: data.evaluationDate || undefined,
-      notes: data.notes || undefined,
-      approvalSource: data.approvalSource || undefined,
-      approvalPdfUrl: data.approvalPdfUrl || undefined,
-      startRenewalDate: data.startRenewalDate || undefined,
-      approvalExpiration: data.approvalExpiration || undefined,
-    };
+    const normalizedData = buildNormalizedData(data);
+    setPendingSubmitData(data);
 
     if (editingVendor) {
       updateVendorMutation.mutate({
@@ -900,6 +941,31 @@ export default function VendorManagement() {
       });
     } else {
       createVendorMutation.mutate(normalizedData);
+    }
+  };
+
+  const handleUseSuggestedAddress = (suggested: { street: string; city: string; state: string; zipCode: string }) => {
+    setVendorAddress((prev) => ({ ...prev, ...suggested }));
+    setAddressValidationError(null);
+    if (pendingSubmitData) {
+      const normalizedData = buildNormalizedData(pendingSubmitData, suggested);
+      if (editingVendor) {
+        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
+      } else {
+        createVendorMutation.mutate(normalizedData);
+      }
+    }
+  };
+
+  const handleOverrideAddress = (reason: string) => {
+    setAddressValidationError(null);
+    if (pendingSubmitData) {
+      const normalizedData = buildNormalizedData(pendingSubmitData, { allowOverride: true, overrideReason: reason });
+      if (editingVendor) {
+        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
+      } else {
+        createVendorMutation.mutate(normalizedData);
+      }
     }
   };
 
@@ -975,6 +1041,40 @@ export default function VendorManagement() {
                 {editingVendor ? `Edit Vendor: ${editingVendor.name}` : 'New Vendor'}
               </DialogTitle>
             </DialogHeader>
+
+            {showDraftBanner && !editingVendor && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md p-3 text-sm">
+                <span className="text-blue-800 dark:text-blue-200">You have a previous unsaved draft. Would you like to restore it?</span>
+                <div className="flex gap-2 ml-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const draft = restoreDraft();
+                      if (draft) {
+                        form.reset(draft.formValues);
+                        setVendorAddress(draft.vendorAddress);
+                        setPendingContacts(draft.pendingContacts || []);
+                        toast({ title: 'Draft restored' });
+                      }
+                      setShowDraftBanner(false);
+                    }}
+                  >
+                    Restore
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      clearDraft();
+                      setShowDraftBanner(false);
+                    }}
+                  >
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-4">
@@ -2136,32 +2236,6 @@ export default function VendorManagement() {
         </div>
       </div>
 
-      {/* Pagination */}
-      {vendorsData && vendorsData.meta.pageCount > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Page {vendorsData.meta.page} of {vendorsData.meta.pageCount}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              data-testid="button-prev-page"
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setPage(page + 1)}
-              disabled={page === vendorsData.meta.pageCount}
-              data-testid="button-next-page"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Delete Vendor Confirmation Dialog */}
       <AlertDialog
@@ -2349,6 +2423,15 @@ export default function VendorManagement() {
         onSelect={handleSelectFromLibrary}
         acceptedTypes={['application/pdf']}
         title="Select Vendor Document from Library"
+      />
+
+      <AddressValidationModal
+        open={!!addressValidationError}
+        onOpenChange={(open) => { if (!open) setAddressValidationError(null); }}
+        validationError={addressValidationError}
+        onUseSuggested={handleUseSuggestedAddress}
+        onOverride={handleOverrideAddress}
+        onEdit={() => setAddressValidationError(null)}
       />
     </div>
   );

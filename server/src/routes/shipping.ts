@@ -849,6 +849,31 @@ router.post('/create-label', async (req: Request, res: Response) => {
       isResidential,
     };
 
+    // Shipping gate: check if ship-to address has been validated
+    if (order && order.customerId) {
+      try {
+        const customerAddresses = await storage.getCustomerAddresses(order.customerId);
+        const shipToStreet = finalShipToAddress?.street || '';
+        const matchingAddr = customerAddresses.find((a: any) =>
+          a.street && shipToStreet && a.street.toLowerCase() === shipToStreet.toLowerCase()
+        );
+        if (matchingAddr && matchingAddr.validationStatus) {
+          const status = matchingAddr.validationStatus;
+          if (status !== 'validated' && status !== 'overridden' && status !== 'standardized') {
+            console.warn(`⚠️ Shipping gate: address validation_status="${status}" for address ${matchingAddr.id}`);
+            return res.status(400).json({
+              error: 'Ship-to address has not been validated',
+              message: `The shipping address must be validated before creating a label. Current status: ${status}. Please validate the address in Customer Management first.`,
+              addressId: matchingAddr.id,
+              validationStatus: status,
+            });
+          }
+        }
+      } catch (gateErr) {
+        console.warn('Shipping gate check failed (non-blocking):', gateErr);
+      }
+    }
+
     // Validate required UPS OAuth credentials (2024+ API)
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
     const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();

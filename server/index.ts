@@ -620,6 +620,24 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Production forecast tables migration:', fcErr.message);
       }
 
+      // Ensure address validation columns exist on customer_addresses and vendors
+      try {
+        const { sql: sqlAddr } = await import('drizzle-orm');
+        await db.execute(sqlAddr`ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS validation_status TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP`);
+        await db.execute(sqlAddr`ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS validation_provider TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS dpv_match_code TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS override_reason TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS validation_status TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS validation_provider TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS dpv_match_code TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS override_reason TEXT`);
+        console.log('✅ Ensured address validation columns exist');
+      } catch (addrErr: any) {
+        console.warn('⚠️ Address validation columns migration:', addrErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

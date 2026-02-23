@@ -14306,7 +14306,9 @@ export class DatabaseStorage implements IStorage {
       }
 
       // PROCESS tasks from customDataFields (department-level WORK phase)
-      const customFields = deptConfig.customDataFields || [];
+      // Only use generic customDataFields for WORK phase if no phase-specific fields are configured
+      const hasPhaseSpecificDataFields = (deptConfig.startCustomDataFields?.length > 0) || (deptConfig.finishCustomDataFields?.length > 0);
+      const customFields = hasPhaseSpecificDataFields ? [] : (deptConfig.customDataFields || []);
       if (customFields.length > 0) {
         const customTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,

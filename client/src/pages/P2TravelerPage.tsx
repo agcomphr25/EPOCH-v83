@@ -497,7 +497,8 @@ export default function P2TravelerPage() {
       // Initialize custom data fields from all phases (each shown in its own section)
       // Deduplicate: if the same fieldName appears in multiple phase arrays, keep it only in the first phase
       const startFields = data.departmentConfig.startCustomDataFields || [];
-      const workFields = data.departmentConfig.customDataFields || [];
+      const hasPhaseSpecificFields = (data.departmentConfig.startCustomDataFields && data.departmentConfig.startCustomDataFields.length > 0) || (data.departmentConfig.finishCustomDataFields && data.departmentConfig.finishCustomDataFields.length > 0);
+      const workFields = hasPhaseSpecificFields ? [] : (data.departmentConfig.customDataFields || []);
       const finishFields = data.departmentConfig.finishCustomDataFields || [];
       const seenFieldNames = new Set<string>();
       startFields.forEach((f: CustomDataField) => seenFieldNames.add(f.fieldName));
@@ -619,9 +620,17 @@ export default function P2TravelerPage() {
       // Traceability data is optional - only send filled-in fields
       // Do NOT block task start when traceability fields are empty
 
-      // Validate required custom data
-      if (verificationData.departmentConfig.customDataFields) {
-        const missingCustom = verificationData.departmentConfig.customDataFields.filter(
+      // Validate required custom data across all phase-specific fields
+      const allPhaseFields: CustomDataField[] = [
+        ...(verificationData.departmentConfig.startCustomDataFields || []),
+        ...(verificationData.departmentConfig.finishCustomDataFields || []),
+      ];
+      const hasPhaseSpecific = allPhaseFields.length > 0;
+      if (!hasPhaseSpecific && verificationData.departmentConfig.customDataFields) {
+        allPhaseFields.push(...verificationData.departmentConfig.customDataFields);
+      }
+      if (allPhaseFields.length > 0) {
+        const missingCustom = allPhaseFields.filter(
           field => field.isRequired && !customData[field.fieldName]?.trim()
         );
         if (missingCustom.length > 0) {

@@ -494,10 +494,22 @@ export default function P2TravelerPage() {
       setTraceabilityData(initialTraceability);
 
       // Initialize custom data fields from all phases (each shown in its own section)
+      // Deduplicate: if the same fieldName appears in multiple phase arrays, keep it only in the first phase
+      const startFields = data.departmentConfig.startCustomDataFields || [];
+      const workFields = data.departmentConfig.customDataFields || [];
+      const finishFields = data.departmentConfig.finishCustomDataFields || [];
+      const seenFieldNames = new Set<string>();
+      startFields.forEach((f: CustomDataField) => seenFieldNames.add(f.fieldName));
+      const dedupedWorkFields = workFields.filter((f: CustomDataField) => !seenFieldNames.has(f.fieldName));
+      dedupedWorkFields.forEach((f: CustomDataField) => seenFieldNames.add(f.fieldName));
+      const dedupedFinishFields = finishFields.filter((f: CustomDataField) => !seenFieldNames.has(f.fieldName));
+      data.departmentConfig._dedupedWorkFields = dedupedWorkFields;
+      data.departmentConfig._dedupedFinishFields = dedupedFinishFields;
+
       const allCustomDataFields: CustomDataField[] = [
-        ...(data.departmentConfig.startCustomDataFields || []),
-        ...(data.departmentConfig.customDataFields || []),
-        ...(data.departmentConfig.finishCustomDataFields || []),
+        ...startFields,
+        ...dedupedWorkFields,
+        ...dedupedFinishFields,
       ];
       if (allCustomDataFields.length > 0) {
         const initialCustomData: Record<string, string> = {};
@@ -528,19 +540,25 @@ export default function P2TravelerPage() {
 
       const startQcStandards: QCStandard[] = data.departmentConfig.startQcStandards || [];
       const finishQcStandards: QCStandard[] = data.departmentConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
+      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
 
-      const workQcStandards: QCStandard[] = hasPhaseQcStandards ? [] : (data.departmentConfig.qcStandards || []);
-      if (workQcStandards.length > 0) {
-        setQcResults(initQcArray(workQcStandards));
+      // Deduplicate QC standards across phases (same standard+tolerance+requirement = duplicate)
+      const seenQcKeys = new Set<string>();
+      startQcStandards.forEach(qc => seenQcKeys.add(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      const dedupedWorkQc = workQcStandards.filter(qc => !seenQcKeys.has(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      dedupedWorkQc.forEach(qc => seenQcKeys.add(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      const dedupedFinishQc = finishQcStandards.filter(qc => !seenQcKeys.has(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+
+      if (dedupedWorkQc.length > 0) {
+        setQcResults(initQcArray(dedupedWorkQc));
       }
 
       if (startQcStandards.length > 0) {
         setStartQcResults(initQcArray(startQcStandards));
       }
 
-      if (finishQcStandards.length > 0) {
-        setFinishQcResults(initQcArray(finishQcStandards));
+      if (dedupedFinishQc.length > 0) {
+        setFinishQcResults(initQcArray(dedupedFinishQc));
       }
 
       setScanState('PART_SCANNED');
@@ -1263,9 +1281,9 @@ export default function P2TravelerPage() {
                     );
                   })()}
 
-                  {/* WORK Phase Custom Data Fields */}
+                  {/* WORK Phase Custom Data Fields (deduped against START) */}
                   {(() => {
-                    const workFields: CustomDataField[] = verificationData.departmentConfig.customDataFields || [];
+                    const workFields: CustomDataField[] = verificationData.departmentConfig._dedupedWorkFields || verificationData.departmentConfig.customDataFields || [];
                     if (workFields.length === 0) return null;
                     return (
                       <div className="space-y-3">
@@ -1410,9 +1428,9 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* FINISH Phase Custom Data Fields */}
+                  {/* FINISH Phase Custom Data Fields (deduped against START+WORK) */}
                   {(() => {
-                    const finishFields: CustomDataField[] = verificationData.departmentConfig.finishCustomDataFields || [];
+                    const finishFields: CustomDataField[] = verificationData.departmentConfig._dedupedFinishFields || verificationData.departmentConfig.finishCustomDataFields || [];
                     if (finishFields.length === 0) return null;
                     return (
                       <div className="space-y-3 rounded-lg border-2 border-orange-200 bg-orange-50/50 p-4">

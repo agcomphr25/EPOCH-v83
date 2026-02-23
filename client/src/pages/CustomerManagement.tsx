@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import AddressValidationModal from '@/components/AddressValidationModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -676,6 +677,9 @@ export default function CustomerManagement() {
 
   const [isValidatingAddress, setIsValidatingAddress] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
+  const [addressValidationError, setAddressValidationError] = useState<any>(null);
+  const [pendingAddressCustomerId, setPendingAddressCustomerId] = useState<string | null>(null);
+  const [pendingAddressData, setPendingAddressData] = useState<any>(null);
 
   // CSV Import states
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
@@ -999,33 +1003,49 @@ export default function CustomerManagement() {
 
       // Create address if address fields are provided (state optional for international)
       if (data.street && data.city) {
-        await apiRequest('/api/addresses', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customerId: customer.id.toString(),
-            street: data.street,
-            street2: data.street2,
-            city: data.city,
-            state: data.state || '',
-            zipCode: data.zipCode || '',
-            country: data.country,
-            type: data.addressType,
-            isDefault: true,
-          }),
-        });
+        const addrPayload = {
+          customerId: customer.id.toString(),
+          street: data.street,
+          street2: data.street2,
+          city: data.city,
+          state: data.state || '',
+          zipCode: data.zipCode || '',
+          country: data.country,
+          type: data.addressType,
+          isDefault: true,
+        };
+
+        try {
+          await apiRequest('/api/addresses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(addrPayload),
+          });
+        } catch (addrError: any) {
+          if (addrError.responseData?.validationStatus && addrError.status === 400) {
+            setPendingAddressCustomerId(customer.id.toString());
+            setPendingAddressData(addrPayload);
+            setAddressValidationError(addrError.responseData);
+            return customer;
+          }
+          throw addrError;
+        }
       }
 
       return customer;
     },
-    onSuccess: () => {
+    onSuccess: (customer) => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-      setIsCreateDialogOpen(false);
-      resetForm();
+      if (!addressValidationError) {
+        setIsCreateDialogOpen(false);
+        resetForm();
+      }
       toast({
         title: 'Success',
-        description: 'Customer and address created successfully',
+        description: addressValidationError
+          ? 'Customer created. Please review the address.'
+          : 'Customer and address created successfully',
       });
     },
     onError: (error: any) => {
@@ -1333,6 +1353,46 @@ export default function CustomerManagement() {
     setFormData(initialFormData);
     setFormErrors({});
     setSelectedCustomer(null);
+  };
+
+  const handleAddressUseSuggested = async (suggested: { street: string; city: string; state: string; zipCode: string }) => {
+    if (!pendingAddressCustomerId || !pendingAddressData) return;
+    try {
+      await apiRequest('/api/addresses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingAddressData, ...suggested }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+      toast({ title: 'Address saved with correction' });
+    } catch (err: any) {
+      toast({ title: 'Failed to save address', variant: 'destructive' });
+    }
+    setAddressValidationError(null);
+    setPendingAddressCustomerId(null);
+    setPendingAddressData(null);
+    setIsCreateDialogOpen(false);
+    resetForm();
+  };
+
+  const handleAddressOverride = async (reason: string) => {
+    if (!pendingAddressCustomerId || !pendingAddressData) return;
+    try {
+      await apiRequest('/api/addresses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingAddressData, allowOverride: true, overrideReason: reason }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+      toast({ title: 'Address saved with override' });
+    } catch (err: any) {
+      toast({ title: 'Failed to save address', variant: 'destructive' });
+    }
+    setAddressValidationError(null);
+    setPendingAddressCustomerId(null);
+    setPendingAddressData(null);
+    setIsCreateDialogOpen(false);
+    resetForm();
   };
 
   const handleBulkAction = (action: 'activate' | 'deactivate' | 'delete') => {
@@ -3185,6 +3245,15 @@ export default function CustomerManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AddressValidationModal
+        open={!!addressValidationError}
+        onOpenChange={(open) => { if (!open) { setAddressValidationError(null); setPendingAddressCustomerId(null); setPendingAddressData(null); } }}
+        validationError={addressValidationError}
+        onUseSuggested={handleAddressUseSuggested}
+        onOverride={handleAddressOverride}
+        onEdit={() => { setAddressValidationError(null); setPendingAddressCustomerId(null); setPendingAddressData(null); }}
+      />
     </div>
   );
 }

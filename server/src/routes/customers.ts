@@ -1102,12 +1102,72 @@ router.get('/:id/addresses', async (req: Request, res: Response) => {
 router.post('/:id/addresses', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
+    const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
+
     const addressData = insertCustomerAddressSchema.parse({
-      ...req.body,
+      ...bodyData,
       customerId,
     });
-    const newAddress = await storage.createCustomerAddress(addressData);
-    res.status(201).json(newAddress);
+
+    if (skipValidation) {
+      const newAddress = await storage.createCustomerAddress(addressData);
+      return res.status(201).json(newAddress);
+    }
+
+    const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
+
+    const addressInput = fromLegacyFields({
+      street: addressData.street,
+      city: addressData.city,
+      state: addressData.state,
+      zipCode: addressData.zipCode,
+      country: addressData.country || 'United States',
+    });
+
+    const result = await validateAndNormalize(addressInput);
+
+    if (result.success) {
+      const legacyFields = toLegacyFields(result.address);
+      const enrichedData = {
+        ...addressData,
+        ...legacyFields,
+        validationStatus: result.address.status,
+        validatedAt: result.address.validatedAt || new Date(),
+        validationProvider: result.address.validationProvider || null,
+        dpvMatchCode: result.address.dpvMatchCode || null,
+      };
+      const newAddress = await storage.createCustomerAddress(enrichedData);
+      return res.status(201).json(newAddress);
+    }
+
+    if (allowOverride && overrideReason) {
+      const legacyFields = toLegacyFields(result.address);
+      const enrichedData = {
+        ...addressData,
+        ...legacyFields,
+        validationStatus: 'overridden',
+        validatedAt: new Date(),
+        validationProvider: result.address.validationProvider || null,
+        dpvMatchCode: result.address.dpvMatchCode || null,
+        overrideReason,
+      };
+      const newAddress = await storage.createCustomerAddress(enrichedData);
+      return res.status(201).json(newAddress);
+    }
+
+    return res.status(400).json({
+      error: 'Address validation failed',
+      message: result.message,
+      validationStatus: result.address.status,
+      dpvMatchCode: result.address.dpvMatchCode,
+      suggestedAddress: result.address.suggestedAddress,
+      originalAddress: {
+        street: addressData.street,
+        city: addressData.city,
+        state: addressData.state,
+        zipCode: addressData.zipCode,
+      },
+    });
   } catch (error) {
     console.error('Create customer address error:', error);
     res.status(500).json({ error: 'Failed to create customer address' });

@@ -78,6 +78,7 @@ import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 import VendorScopeSelector from '@/components/VendorScopeSelector';
 import MediaLibraryPicker from '@/components/MediaLibraryPicker';
+import AddressValidationModal from '@/components/AddressValidationModal';
 import { FolderOpen } from 'lucide-react';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
@@ -166,6 +167,9 @@ export default function VendorManagement() {
     zipCode: '',
     country: 'United States',
   });
+
+  const [addressValidationError, setAddressValidationError] = useState<any>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<VendorFormData | null>(null);
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorFormSchema),
@@ -326,7 +330,11 @@ export default function VendorManagement() {
       setPendingContacts([]);
       form.reset();
     },
-    onError: () => {
+    onError: (error: any) => {
+      if (error.responseData?.validationStatus && error.status === 400) {
+        setAddressValidationError(error.responseData);
+        return;
+      }
       toast({ title: 'Failed to create vendor', variant: 'destructive' });
     },
   });
@@ -346,7 +354,11 @@ export default function VendorManagement() {
       setEditingVendor(null);
       form.reset();
     },
-    onError: () => {
+    onError: (error: any) => {
+      if (error.responseData?.validationStatus && error.status === 400) {
+        setAddressValidationError(error.responseData);
+        return;
+      }
       toast({ title: 'Failed to update vendor', variant: 'destructive' });
     },
   });
@@ -896,27 +908,31 @@ export default function VendorManagement() {
     }
   };
 
+  const buildNormalizedData = (data: VendorFormData, extra?: Record<string, any>) => ({
+    ...data,
+    contactPerson: data.contactPerson || undefined,
+    email: data.email || undefined,
+    additionalEmail: data.additionalEmail || undefined,
+    phone: data.phone || undefined,
+
+    street: vendorAddress.street || undefined,
+    city: vendorAddress.city || undefined,
+    state: vendorAddress.state || undefined,
+    zipCode: vendorAddress.zipCode || undefined,
+    country: vendorAddress.country || undefined,
+
+    evaluationDate: data.evaluationDate || undefined,
+    notes: data.notes || undefined,
+    approvalSource: data.approvalSource || undefined,
+    approvalPdfUrl: data.approvalPdfUrl || undefined,
+    startRenewalDate: data.startRenewalDate || undefined,
+    approvalExpiration: data.approvalExpiration || undefined,
+    ...extra,
+  });
+
   const onSubmit = (data: VendorFormData) => {
-    const normalizedData = {
-      ...data,
-      contactPerson: data.contactPerson || undefined,
-      email: data.email || undefined,
-      additionalEmail: data.additionalEmail || undefined,
-      phone: data.phone || undefined,
-
-      street: vendorAddress.street || undefined,
-      city: vendorAddress.city || undefined,
-      state: vendorAddress.state || undefined,
-      zipCode: vendorAddress.zipCode || undefined,
-      country: vendorAddress.country || undefined,
-
-      evaluationDate: data.evaluationDate || undefined,
-      notes: data.notes || undefined,
-      approvalSource: data.approvalSource || undefined,
-      approvalPdfUrl: data.approvalPdfUrl || undefined,
-      startRenewalDate: data.startRenewalDate || undefined,
-      approvalExpiration: data.approvalExpiration || undefined,
-    };
+    const normalizedData = buildNormalizedData(data);
+    setPendingSubmitData(data);
 
     if (editingVendor) {
       updateVendorMutation.mutate({
@@ -925,6 +941,31 @@ export default function VendorManagement() {
       });
     } else {
       createVendorMutation.mutate(normalizedData);
+    }
+  };
+
+  const handleUseSuggestedAddress = (suggested: { street: string; city: string; state: string; zipCode: string }) => {
+    setVendorAddress((prev) => ({ ...prev, ...suggested }));
+    setAddressValidationError(null);
+    if (pendingSubmitData) {
+      const normalizedData = buildNormalizedData(pendingSubmitData, suggested);
+      if (editingVendor) {
+        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
+      } else {
+        createVendorMutation.mutate(normalizedData);
+      }
+    }
+  };
+
+  const handleOverrideAddress = (reason: string) => {
+    setAddressValidationError(null);
+    if (pendingSubmitData) {
+      const normalizedData = buildNormalizedData(pendingSubmitData, { allowOverride: true, overrideReason: reason });
+      if (editingVendor) {
+        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
+      } else {
+        createVendorMutation.mutate(normalizedData);
+      }
     }
   };
 
@@ -2382,6 +2423,15 @@ export default function VendorManagement() {
         onSelect={handleSelectFromLibrary}
         acceptedTypes={['application/pdf']}
         title="Select Vendor Document from Library"
+      />
+
+      <AddressValidationModal
+        open={!!addressValidationError}
+        onOpenChange={(open) => { if (!open) setAddressValidationError(null); }}
+        validationError={addressValidationError}
+        onUseSuggested={handleUseSuggestedAddress}
+        onOverride={handleOverrideAddress}
+        onEdit={() => setAddressValidationError(null)}
       />
     </div>
   );

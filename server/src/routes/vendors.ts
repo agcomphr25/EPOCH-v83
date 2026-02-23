@@ -198,7 +198,67 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/vendors - Create a new vendor
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const data = insertVendorSchema.parse(req.body);
+    const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
+    const data = insertVendorSchema.parse(bodyData);
+
+    const hasAddress = data.street && data.city && data.state && data.zipCode;
+
+    if (hasAddress && !skipValidation) {
+      const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
+      const addressInput = fromLegacyFields({
+        street: data.street!,
+        city: data.city!,
+        state: data.state!,
+        zipCode: data.zipCode!,
+        country: data.country || 'United States',
+      });
+
+      const result = await validateAndNormalize(addressInput);
+
+      if (result.success) {
+        const legacyFields = toLegacyFields(result.address);
+        const enrichedData = {
+          ...data,
+          ...legacyFields,
+          validationStatus: result.address.status,
+          validatedAt: result.address.validatedAt || new Date(),
+          validationProvider: result.address.validationProvider || null,
+          dpvMatchCode: result.address.dpvMatchCode || null,
+        };
+        const vendor = await storage.createVendor(enrichedData);
+        return res.status(201).json(vendor);
+      }
+
+      if (allowOverride && overrideReason) {
+        const legacyFields = toLegacyFields(result.address);
+        const enrichedData = {
+          ...data,
+          ...legacyFields,
+          validationStatus: 'overridden',
+          validatedAt: new Date(),
+          validationProvider: result.address.validationProvider || null,
+          dpvMatchCode: result.address.dpvMatchCode || null,
+          overrideReason,
+        };
+        const vendor = await storage.createVendor(enrichedData);
+        return res.status(201).json(vendor);
+      }
+
+      return res.status(400).json({
+        error: 'Address validation failed',
+        message: result.message,
+        validationStatus: result.address.status,
+        dpvMatchCode: result.address.dpvMatchCode,
+        suggestedAddress: result.address.suggestedAddress,
+        originalAddress: {
+          street: data.street,
+          city: data.city,
+          state: data.state,
+          zipCode: data.zipCode,
+        },
+      });
+    }
+
     const vendor = await storage.createVendor(data);
     res.status(201).json(vendor);
   } catch (error) {
@@ -220,7 +280,56 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor ID' });
     }
 
-    const data = insertVendorSchema.partial().parse(req.body);
+    const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
+    const data = insertVendorSchema.partial().parse(bodyData);
+
+    const hasAddressUpdate = data.street && data.city && data.state && data.zipCode;
+
+    if (hasAddressUpdate && !skipValidation) {
+      const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
+      const addressInput = fromLegacyFields({
+        street: data.street!,
+        city: data.city!,
+        state: data.state!,
+        zipCode: data.zipCode!,
+        country: data.country || 'United States',
+      });
+
+      const result = await validateAndNormalize(addressInput);
+
+      if (result.success) {
+        const legacyFields = toLegacyFields(result.address);
+        Object.assign(data, legacyFields, {
+          validationStatus: result.address.status,
+          validatedAt: result.address.validatedAt || new Date(),
+          validationProvider: result.address.validationProvider || null,
+          dpvMatchCode: result.address.dpvMatchCode || null,
+        });
+      } else if (allowOverride && overrideReason) {
+        const legacyFields = toLegacyFields(result.address);
+        Object.assign(data, legacyFields, {
+          validationStatus: 'overridden',
+          validatedAt: new Date(),
+          validationProvider: result.address.validationProvider || null,
+          dpvMatchCode: result.address.dpvMatchCode || null,
+          overrideReason,
+        });
+      } else {
+        return res.status(400).json({
+          error: 'Address validation failed',
+          message: result.message,
+          validationStatus: result.address.status,
+          dpvMatchCode: result.address.dpvMatchCode,
+          suggestedAddress: result.address.suggestedAddress,
+          originalAddress: {
+            street: data.street,
+            city: data.city,
+            state: data.state,
+            zipCode: data.zipCode,
+          },
+        });
+      }
+    }
     
     // Auto-update evaluation status if evaluation scores are present
     const hasAnyScore = 

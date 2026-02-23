@@ -214,6 +214,7 @@ interface DepartmentConfiguration {
   startQcStandards?: QCStandard[];
   finishQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
+  workChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   signatureConfig?: SignatureConfig;
   instructionPack?: InstructionPack;
@@ -704,121 +705,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
-  const createOvenCureDefaultConfig = (): DepartmentConfiguration => ({
-    materials: [],
-    assignedTechnicianId: null,
-    qcStandards: [],
-    startChecks: [
-      {
-        title: 'Place Roll Mandrel on Trolley into Preheated Oven',
-        instructions: 'Verify oven is preheated to target temperature. Place roll mandrel on trolley and load into oven.',
-        required: true,
-        taskType: 'CHECK',
-        timePolicy: 'AUTO_ON_START',
-        requiresSignature: false,
-        requiresCertification: false,
-      },
-    ],
-    startQcStandards: [
-      {
-        standard: 'Oven Temperature',
-        tolerance: '+/- 15°F',
-        requirement: 'Record oven temperature at start',
-      },
-    ],
-    timerConfig: {
-      enabled: true,
-    },
-    finishChecks: [
-      {
-        title: 'Remove Trolley from Oven (105 min)',
-        instructions: 'After 105-minute cure cycle, remove trolley from oven.',
-        required: true,
-        taskType: 'CHECK',
-        timePolicy: 'AUTO_ON_COMPLETE',
-        requiresSignature: false,
-        requiresCertification: false,
-      },
-    ],
-    finishQcStandards: [
-      {
-        standard: 'Oven Temperature',
-        tolerance: '+/- 14°F',
-        requirement: 'Record oven temperature at finish',
-      },
-      {
-        standard: 'Surface Rating',
-        tolerance: '1-5',
-        requirement: 'QC surface quality rating (1-5 scale)',
-      },
-    ],
-    signatureConfig: {
-      startRequiresSignature: false,
-      finishRequiresSignature: true,
-      requiredSignatures: ['LEAD'],
-    },
-  });
-
-  const createMoldPrepDefaultConfig = (): DepartmentConfiguration => ({
-    materials: [],
-    assignedTechnicianId: null,
-    qcStandards: [],
-    startChecks: [
-      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
-      {
-        title: 'Ensure Working Temp of Mandrel is b/t 70-80°F',
-        instructions: 'Verify mandrel surface temperature is between 70°F and 80°F before beginning mold prep.',
-        required: true,
-        taskType: 'QC' as const,
-        timePolicy: 'AUTO_ON_START' as const,
-        requiresSignature: false,
-        requiresCertification: false,
-      },
-    ],
-    startQcStandards: [
-      {
-        standard: 'Mandrel Working Temperature',
-        tolerance: '70-80°F',
-        requirement: 'Record mandrel temperature (must be between 70-80°F)',
-      },
-    ],
-    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
-    signatureConfig: {
-      startRequiresSignature: false,
-      finishRequiresSignature: true,
-      requiredSignatures: ['LEAD'],
-    },
-  });
-
-  const createCelloWrapDefaultConfig = (): DepartmentConfiguration => ({
-    materials: [],
-    assignedTechnicianId: null,
-    qcStandards: [],
-    startChecks: [
-      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
-      {
-        title: 'Ensure Outer Layer of Poly is Removed',
-        instructions: 'Verify the outer layer of poly has been fully removed before beginning cello wrap.',
-        required: true,
-        taskType: 'CHECK' as const,
-        timePolicy: 'AUTO_ON_START' as const,
-        requiresSignature: false,
-        requiresCertification: false,
-      },
-    ],
-    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
-    signatureConfig: {
-      startRequiresSignature: false,
-      finishRequiresSignature: true,
-      requiredSignatures: ['LEAD'],
-    },
-  });
-
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     if (departmentConfig[dept]) return departmentConfig[dept];
-    if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
-    if (dept === 'Mold Prep') return createMoldPrepDefaultConfig();
-    if (dept === 'Cello Wrap') return createCelloWrapDefaultConfig();
     return createDefaultDeptConfig();
   };
 
@@ -2043,7 +1931,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           <div className="flex gap-1 mt-3">
                             {([
                               { key: 'START' as const, label: 'START', icon: PlayCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800', count: (config.startChecks?.length || 0) + (config.startCustomDataFields?.length || 0) + (config.startQcStandards?.length || 0) },
-                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
+                              { key: 'WORK' as const, label: 'WORK', icon: Wrench, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800', count: (config.workChecks?.length || 0) + (config.customDataFields?.length || 0) + (config.qcStandards?.length || 0) + (config.ovenCuringSteps?.length || 0) + (config.standardProcesses?.length || 0) + (config.specialProcessConfig?.processName ? 1 : 0) + (config.instructionPack?.workInstructionRefs?.length || 0) + (config.instructionPack?.aiSnippets?.length || 0) + (config.instructionPack?.specialNotes ? 1 : 0) + (config.instructionPack?.media?.length || 0) + (config.timerConfig?.enabled ? 1 : 0) },
                               { key: 'FINISH' as const, label: 'FINISH', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800', count: (config.finishChecks?.length || 0) + (config.finishCustomDataFields?.length || 0) + (config.finishQcStandards?.length || 0) + (sigConfig.requiredSignatures.length) },
                             ]).map(phase => (
                               <button
@@ -2302,6 +2190,67 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                 <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
                                   Operations and processes performed during this department step.
                                 </p>
+                              </div>
+
+                              {/* Work Phase Gate Checks */}
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-amber-600" />
+                                  Work Phase Checks ({config.workChecks?.length || 0})
+                                </h4>
+                                {(!config.workChecks || config.workChecks.length === 0) && (
+                                  <p className="text-xs text-muted-foreground mb-2">No work phase checks configured.</p>
+                                )}
+                                {config.workChecks && config.workChecks.length > 0 && (
+                                  <div className="space-y-1.5 mb-2">
+                                    {config.workChecks.map((check, idx) => (
+                                      <div key={idx} className="flex items-center justify-between p-2 rounded border bg-background">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-[10px]">{check.taskType || 'CHECK'}</Badge>
+                                          <span className="text-sm">{check.title}</span>
+                                          {check.required && <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200">Required</Badge>}
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => {
+                                            setDepartmentConfig(prev => ({
+                                              ...prev,
+                                              [dept]: { ...config, workChecks: config.workChecks?.filter((_, i) => i !== idx) },
+                                            }));
+                                          }}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={() => {
+                                    const newCheck: PhaseCheck = {
+                                      title: 'New Work Check',
+                                      instructions: '',
+                                      required: true,
+                                      taskType: 'CHECK',
+                                      timePolicy: 'AUTO_ON_START',
+                                      requiresSignature: false,
+                                      requiresCertification: false,
+                                    };
+                                    setDepartmentConfig(prev => ({
+                                      ...prev,
+                                      [dept]: { ...config, workChecks: [...(config.workChecks || []), newCheck] },
+                                    }));
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Work Check
+                                </Button>
                               </div>
 
                               {/* Instruction Pack */}
@@ -2599,6 +2548,117 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     </div>
                                   );
                                 })()}
+                              </div>
+
+                              {/* WORK Phase Custom Data Fields */}
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <PenLine className="h-4 w-4 text-amber-600" />
+                                  Work Phase Data Fields ({config.customDataFields?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Fields operators fill in during the WORK phase (e.g., process measurements, temperatures).</p>
+                                {config.customDataFields && config.customDataFields.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.customDataFields.map((field, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{field.fieldName}</p>
+                                          <div className="flex gap-1 mt-0.5">
+                                            <Badge variant="outline" className="text-[10px]">{field.fieldType}</Badge>
+                                            {field.isRequired && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                                          </div>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeCustomDataField(dept, idx)}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Field Name" value={selectedDeptForConfig === dept ? customFieldName : ''} onChange={(e) => { setSelectedDeptForConfig(dept); setCustomFieldName(e.target.value); }} onFocus={() => setSelectedDeptForConfig(dept)} className="text-sm" />
+                                    <Select value={selectedDeptForConfig === dept ? customFieldType : 'text'} onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => { setSelectedDeptForConfig(dept); setCustomFieldType(val); }}>
+                                      <SelectTrigger className="w-28 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="number">Number</SelectItem>
+                                        <SelectItem value="date">Date</SelectItem>
+                                        <SelectItem value="textarea">Text Area</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id={`work-field-req-${dept}`} checked={selectedDeptForConfig === dept ? customFieldRequired : false} onCheckedChange={(checked) => { setSelectedDeptForConfig(dept); setCustomFieldRequired(checked as boolean); }} />
+                                      <Label htmlFor={`work-field-req-${dept}`} className="text-xs cursor-pointer">Required</Label>
+                                    </div>
+                                    <Button size="sm" onClick={() => addCustomDataField(dept)} disabled={!customFieldName.trim() || selectedDeptForConfig !== dept}>
+                                      <Plus className="h-4 w-4 mr-1" /> Add Field
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* WORK Phase QC Standards */}
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                                  <CheckSquare className="h-4 w-4 text-amber-600" />
+                                  Work Phase QC ({config.qcStandards?.length || 0})
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">Quality checks performed during work operations.</p>
+                                {config.qcStandards && config.qcStandards.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.qcStandards.map((qc, idx) => (
+                                      <div key={idx} className="p-2 rounded border bg-background space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{qc.standard}</p>
+                                            <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                          </div>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => {
+                                            const updated = { ...config, qcStandards: (config.qcStandards || []).filter((_, i) => i !== idx) };
+                                            setDepartmentConfig({ ...departmentConfig, [dept]: updated });
+                                          }}>
+                                            <X className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 pl-1">
+                                          <Badge
+                                            variant={qc.hardQcStop ? 'destructive' : 'outline'}
+                                            className={`text-[10px] cursor-pointer ${qc.hardQcStop ? '' : 'text-muted-foreground'}`}
+                                            onClick={() => {
+                                              const updated = [...(config.qcStandards || [])];
+                                              updated[idx] = { ...updated[idx], hardQcStop: !updated[idx].hardQcStop };
+                                              setDepartmentConfig({ ...departmentConfig, [dept]: { ...config, qcStandards: updated } });
+                                            }}
+                                          >
+                                            <Flag className={`h-2.5 w-2.5 mr-0.5 ${qc.hardQcStop ? 'text-white' : ''}`} />
+                                            {qc.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="space-y-1">
+                                  <Input placeholder="QC Standard" value={qcInputDept[`work_${dept}`]?.standard || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), standard: e.target.value } }))} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Input placeholder="Tolerance" value={qcInputDept[`work_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
+                                    <Input placeholder="Requirement" value={qcInputDept[`work_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
+                                  </div>
+                                  <Button size="sm" onClick={() => {
+                                    const vals = qcInputDept[`work_${dept}`];
+                                    if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
+                                    const newQc: QCStandard = { standard: vals.standard.trim(), tolerance: vals.tolerance.trim(), requirement: vals.requirement.trim() };
+                                    setDepartmentConfig({ ...departmentConfig, [dept]: { ...config, qcStandards: [...(config.qcStandards || []), newQc] } });
+                                    setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                  }} disabled={!qcInputDept[`work_${dept}`]?.standard?.trim()}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add QC Standard
+                                  </Button>
+                                </div>
                               </div>
 
                               {/* Oven Curing */}

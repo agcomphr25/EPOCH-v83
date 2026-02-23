@@ -297,26 +297,32 @@ export default function BulkBarcodeReprint() {
       <head>
         <title>Bulk Barcode Print - ${title}</title>
         <style>
+          @page {
+            size: letter;
+            margin: 0.5in 0.1875in 0.5in 0.1875in;
+          }
+
           body {
             margin: 0;
-            padding: 0.5in;
+            padding: 0;
             font-family: Arial, sans-serif;
           }
 
           .labels-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.125in;
+            width: 8.125in;
+            margin: 0 auto;
+            overflow: hidden;
           }
 
           .avery-label {
             width: 2.625in;
             height: 1in;
             border: 1px solid #ccc;
-            padding: 0.05in;
+            padding: 0.04in 0.06in;
             box-sizing: border-box;
             page-break-inside: avoid;
             background: white;
+            float: left;
           }
 
           .label-content {
@@ -328,9 +334,9 @@ export default function BulkBarcodeReprint() {
           }
 
           .line1 {
-            font-size: 9pt;
+            font-size: 8pt;
             font-weight: bold;
-            color: #333;
+            color: #000;
           }
 
           .barcode-container {
@@ -341,26 +347,26 @@ export default function BulkBarcodeReprint() {
 
           .barcode-img {
             max-width: 100%;
-            max-height: 35px;
+            max-height: 0.3in;
           }
 
           .line2 {
-            font-size: 7pt;
-            color: #666;
+            font-size: 6pt;
+            color: #000;
           }
 
           .line3 {
-            font-size: 6pt;
-            color: #888;
+            font-size: 5.5pt;
+            color: #000;
           }
 
           .line4 {
             font-size: 5pt;
-            color: #aaa;
+            color: #666;
           }
 
           @media print {
-            body { margin: 0; padding: 0.5in; }
+            body { margin: 0; padding: 0; }
             .avery-label { border: none; }
           }
         </style>

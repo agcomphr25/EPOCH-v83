@@ -168,6 +168,7 @@ interface DepartmentConfig {
   startQcStandards?: QCStandard[];
   finishQcStandards?: QCStandard[];
   startChecks?: PhaseCheck[];
+  workChecks?: PhaseCheck[];
   finishChecks?: PhaseCheck[];
   allowMultipleTasks?: boolean;
   instructionPack?: InstructionPack;
@@ -494,10 +495,23 @@ export default function P2TravelerPage() {
       setTraceabilityData(initialTraceability);
 
       // Initialize custom data fields from all phases (each shown in its own section)
+      // Deduplicate: if the same fieldName appears in multiple phase arrays, keep it only in the first phase
+      const startFields = data.departmentConfig.startCustomDataFields || [];
+      const hasPhaseSpecificFields = (data.departmentConfig.startCustomDataFields && data.departmentConfig.startCustomDataFields.length > 0) || (data.departmentConfig.finishCustomDataFields && data.departmentConfig.finishCustomDataFields.length > 0);
+      const workFields = hasPhaseSpecificFields ? [] : (data.departmentConfig.customDataFields || []);
+      const finishFields = data.departmentConfig.finishCustomDataFields || [];
+      const seenFieldNames = new Set<string>();
+      startFields.forEach((f: CustomDataField) => seenFieldNames.add(f.fieldName));
+      const dedupedWorkFields = workFields.filter((f: CustomDataField) => !seenFieldNames.has(f.fieldName));
+      dedupedWorkFields.forEach((f: CustomDataField) => seenFieldNames.add(f.fieldName));
+      const dedupedFinishFields = finishFields.filter((f: CustomDataField) => !seenFieldNames.has(f.fieldName));
+      data.departmentConfig._dedupedWorkFields = dedupedWorkFields;
+      data.departmentConfig._dedupedFinishFields = dedupedFinishFields;
+
       const allCustomDataFields: CustomDataField[] = [
-        ...(data.departmentConfig.startCustomDataFields || []),
-        ...(data.departmentConfig.customDataFields || []),
-        ...(data.departmentConfig.finishCustomDataFields || []),
+        ...startFields,
+        ...dedupedWorkFields,
+        ...dedupedFinishFields,
       ];
       if (allCustomDataFields.length > 0) {
         const initialCustomData: Record<string, string> = {};
@@ -528,19 +542,25 @@ export default function P2TravelerPage() {
 
       const startQcStandards: QCStandard[] = data.departmentConfig.startQcStandards || [];
       const finishQcStandards: QCStandard[] = data.departmentConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
+      const workQcStandards: QCStandard[] = data.departmentConfig.qcStandards || [];
 
-      const workQcStandards: QCStandard[] = hasPhaseQcStandards ? [] : (data.departmentConfig.qcStandards || []);
-      if (workQcStandards.length > 0) {
-        setQcResults(initQcArray(workQcStandards));
+      // Deduplicate QC standards across phases (same standard+tolerance+requirement = duplicate)
+      const seenQcKeys = new Set<string>();
+      startQcStandards.forEach(qc => seenQcKeys.add(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      const dedupedWorkQc = workQcStandards.filter(qc => !seenQcKeys.has(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      dedupedWorkQc.forEach(qc => seenQcKeys.add(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+      const dedupedFinishQc = finishQcStandards.filter(qc => !seenQcKeys.has(`${qc.standard}|${qc.tolerance}|${qc.requirement}`));
+
+      if (dedupedWorkQc.length > 0) {
+        setQcResults(initQcArray(dedupedWorkQc));
       }
 
       if (startQcStandards.length > 0) {
         setStartQcResults(initQcArray(startQcStandards));
       }
 
-      if (finishQcStandards.length > 0) {
-        setFinishQcResults(initQcArray(finishQcStandards));
+      if (dedupedFinishQc.length > 0) {
+        setFinishQcResults(initQcArray(dedupedFinishQc));
       }
 
       setScanState('PART_SCANNED');
@@ -600,9 +620,17 @@ export default function P2TravelerPage() {
       // Traceability data is optional - only send filled-in fields
       // Do NOT block task start when traceability fields are empty
 
-      // Validate required custom data
-      if (verificationData.departmentConfig.customDataFields) {
-        const missingCustom = verificationData.departmentConfig.customDataFields.filter(
+      // Validate required custom data across all phase-specific fields
+      const allPhaseFields: CustomDataField[] = [
+        ...(verificationData.departmentConfig.startCustomDataFields || []),
+        ...(verificationData.departmentConfig.finishCustomDataFields || []),
+      ];
+      const hasPhaseSpecific = allPhaseFields.length > 0;
+      if (!hasPhaseSpecific && verificationData.departmentConfig.customDataFields) {
+        allPhaseFields.push(...verificationData.departmentConfig.customDataFields);
+      }
+      if (allPhaseFields.length > 0) {
+        const missingCustom = allPhaseFields.filter(
           field => field.isRequired && !customData[field.fieldName]?.trim()
         );
         if (missingCustom.length > 0) {
@@ -1263,9 +1291,9 @@ export default function P2TravelerPage() {
                     );
                   })()}
 
-                  {/* WORK Phase Custom Data Fields */}
+                  {/* WORK Phase Custom Data Fields (deduped against START) */}
                   {(() => {
-                    const workFields: CustomDataField[] = verificationData.departmentConfig.customDataFields || [];
+                    const workFields: CustomDataField[] = verificationData.departmentConfig._dedupedWorkFields || verificationData.departmentConfig.customDataFields || [];
                     if (workFields.length === 0) return null;
                     return (
                       <div className="space-y-3">
@@ -1299,6 +1327,28 @@ export default function P2TravelerPage() {
                       </div>
                     );
                   })()}
+
+                  {/* Work Phase Checks */}
+                  {verificationData.departmentConfig.workChecks && verificationData.departmentConfig.workChecks.length > 0 && (
+                    <div className="space-y-3 rounded-lg border-2 border-amber-200 bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-2 pb-1 border-b border-amber-200">
+                        <CheckCircle className="h-4 w-4 text-amber-600" />
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Work Phase Checks</p>
+                      </div>
+                      {verificationData.departmentConfig.workChecks.map((check, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white rounded-md border border-amber-100 p-2">
+                          <CheckCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{check.title}</p>
+                            {check.instructions && <p className="text-xs text-muted-foreground">{check.instructions}</p>}
+                            {check.requiresSignature && (
+                              <Badge variant="outline" className="mt-1 text-[10px] border-amber-300">Signature Required ({check.signatureRole || 'OPERATOR'})</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* QC Standards / Tolerance Requirements - with result entry */}
                   {qcResults.length > 0 && (
@@ -1410,9 +1460,9 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* FINISH Phase Custom Data Fields */}
+                  {/* FINISH Phase Custom Data Fields (deduped against START+WORK) */}
                   {(() => {
-                    const finishFields: CustomDataField[] = verificationData.departmentConfig.finishCustomDataFields || [];
+                    const finishFields: CustomDataField[] = verificationData.departmentConfig._dedupedFinishFields || verificationData.departmentConfig.finishCustomDataFields || [];
                     if (finishFields.length === 0) return null;
                     return (
                       <div className="space-y-3 rounded-lg border-2 border-orange-200 bg-orange-50/50 p-4">

@@ -377,6 +377,7 @@ export default function TravelerExecution() {
       finishQcStandards?: { standard: string; tolerance: string; requirement: string }[];
       materials?: { partId: string; partNumber: string; partName: string; requiredFields?: string[]; entryMethod?: string }[];
       startChecks?: { title: string; taskType?: string; required?: boolean }[];
+      workChecks?: { title: string; taskType?: string; required?: boolean }[];
       finishChecks?: { title: string; taskType?: string; required?: boolean }[];
       ovenCuringSteps?: { temperature: string; time: string }[];
       instructionPack?: {

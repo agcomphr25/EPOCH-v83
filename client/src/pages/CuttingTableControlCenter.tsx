@@ -1222,24 +1222,27 @@ export default function CuttingTableControlCenter() {
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Packet Labels</title>
+              <title>Packet Labels - Avery 8160</title>
               <style>
-                @page { size: 4in 2in; margin: 0; }
+                @page { size: letter; margin: 0.5in 0.1875in 0.5in 0.1875in; }
                 body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                .labels-container { width: 8.125in; margin: 0 auto; overflow: hidden; }
                 .label {
-                  width: 4in; height: 2in; padding: 0.25in;
-                  box-sizing: border-box; page-break-after: always;
-                  border: 1px solid #000;
+                  width: 2.625in; height: 1in; padding: 0.04in 0.06in;
+                  box-sizing: border-box; page-break-inside: avoid;
+                  float: left; overflow: hidden;
+                  border: 1px solid #ddd;
                 }
-                .label-header { font-size: 10pt; font-weight: bold; margin-bottom: 0.1in; }
-                .label-info { font-size: 9pt; margin: 0.05in 0; }
-                .barcode-container { margin-top: 0.1in; text-align: center; }
-                .barcode-container img { max-width: 100%; height: 0.5in; }
-                .barcode-text { font-family: monospace; font-size: 12pt; }
-                .item-number { font-size: 8pt; text-align: right; margin-top: 0.1in; }
+                .label-header { font-size: 7pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .label-info { font-size: 6pt; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .barcode-container { text-align: center; margin: 2px 0; }
+                .barcode-container img { max-width: 100%; height: 0.28in; }
+                .barcode-text { font-family: monospace; font-size: 7pt; }
+                .item-number { font-size: 5pt; text-align: right; }
+                @media print { .label { border: none; } }
               </style>
             </head>
-            <body>${labelsHtml}</body>
+            <body><div class="labels-container">${labelsHtml}</div></body>
             </html>
           `);
           printWindow.document.close();

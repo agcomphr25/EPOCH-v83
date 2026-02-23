@@ -69,7 +69,7 @@ export async function validateWithSmarty(address: AddressInput): Promise<DomainA
   const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
 
   if (!authId || !authToken) {
-    console.warn('⚠️ SmartyStreets credentials not configured — skipping validation');
+    console.error('[ADDRESS SERVICE] Smarty credentials not configured');
     return {
       street1: address.street1,
       street2: address.street2,
@@ -77,7 +77,8 @@ export async function validateWithSmarty(address: AddressInput): Promise<DomainA
       state: address.state,
       postalCode: address.postalCode,
       countryCode: address.countryCode || 'US',
-      status: 'raw',
+      status: 'invalid',
+      error: 'Address validation service not configured (missing Smarty credentials)',
     };
   }
 
@@ -204,6 +205,11 @@ export async function validateAndNormalize(input: AddressInput): Promise<Validat
 
   const result = await validateWithSmarty(normalized);
 
+  console.log('[ADDRESS VALIDATION RESULT]', {
+    input: normalized,
+    result
+  });
+
   if (result.status === 'validated') {
     return {
       success: true,
@@ -213,12 +219,12 @@ export async function validateAndNormalize(input: AddressInput): Promise<Validat
 
   if (result.status === 'raw') {
     return {
-      success: true,
+      success: false,
       address: {
         ...result,
-        status: 'standardized',
+        status: 'invalid',
       },
-      message: 'Address was normalized but could not be validated (Smarty credentials not configured)',
+      message: 'Address validation did not execute',
     };
   }
 

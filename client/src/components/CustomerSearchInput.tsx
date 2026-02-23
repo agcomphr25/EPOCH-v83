@@ -43,6 +43,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
 import AddressInput from '@/components/AddressInput';
+import AddressValidationModal from '@/components/AddressValidationModal';
 import type { AddressData } from '@/utils/addressUtils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -77,6 +78,7 @@ export default function CustomerSearchInput({
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editCustomer, setEditCustomer] = useState<any>(null);
+  const [validationError, setValidationError] = useState<any>(null);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
@@ -181,8 +183,12 @@ export default function CustomerSearchInput({
               isDefault: true,
             }),
           });
-        } catch (error) {
-          console.error('Failed to create customer address:', error);
+        } catch (error: any) {
+          if (error?.responseData && error?.status === 400) {
+            setValidationError(error.responseData);
+          } else {
+            console.error('Failed to create customer address:', error);
+          }
         }
       }
 
@@ -828,6 +834,32 @@ export default function CustomerSearchInput({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AddressValidationModal
+        open={!!validationError}
+        onOpenChange={(open) => { if (!open) setValidationError(null); }}
+        validationError={validationError}
+        onUseSuggested={(suggested) => {
+          setNewCustomer((prev) => ({
+            ...prev,
+            address: {
+              ...prev.address,
+              street: suggested.street,
+              city: suggested.city,
+              state: suggested.state,
+              zipCode: suggested.zipCode,
+            },
+          }));
+          setValidationError(null);
+        }}
+        onOverride={(reason) => {
+          console.log('Address override accepted with reason:', reason);
+          setValidationError(null);
+        }}
+        onEdit={() => {
+          setValidationError(null);
+        }}
+      />
     </div>
   );
 }

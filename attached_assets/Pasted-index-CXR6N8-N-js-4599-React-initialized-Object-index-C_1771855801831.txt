@@ -1,0 +1,37 @@
+index-CXR6N8-N.js:4599 React initialized: Object
+index-CXR6N8-N.js:4599 React hooks: Object
+index-CXR6N8-N.js:4596 App component is rendering...
+index-CXR6N8-N.js:4596 Environment: production
+index-CXR6N8-N.js:4596 Base URL: /
+agcompepoch.xyz/:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CXR6N8-N.js:4599 Failed to fetch session for redirect: Error: Not authenticated
+    at index-CXR6N8-N.js:4596:167643
+console.error @ index-CXR6N8-N.js:4599
+index-CXR6N8-N.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-CXR6N8-N.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-CXR6N8-N.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-CXR6N8-N.js:1831 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CXR6N8-N.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-CXR6N8-N.js:1831 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CXR6N8-N.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-CXR6N8-N.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-CXR6N8-N.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-CXR6N8-N.js:235 🌐 API Request to /api/po-orders/process-shipment (timeout: 15000ms, deployment: true)
+index-CXR6N8-N.js:235 ✅ API Response from /api/po-orders/process-shipment: 200
+index-CXR6N8-N.js:3681 📦 handleShipmentDocuments called with: Object
+index-CXR6N8-N.js:3681 📄 Documents data prepared: Object
+index-CXR6N8-N.js:1469 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-CXR6N8-N.js:1469
+qc-shipping:1 Blocked aria-hidden on an element because its descendant retained focus. The focus must not be hidden from assistive technology users. Avoid using aria-hidden on a focused element or its ancestor. Consider using the inert attribute instead, which will also prevent focus. For more details, see the aria-hidden section of the WAI-ARIA specification at https://w3c.github.io/aria/#aria-hidden.
+Element with focus: <button.inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2>
+Ancestor with aria-hidden: <div.fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-w-4xl max-h-[90vh] overflow-y-auto#radix-:r2b:> <div role=​"dialog" id=​"radix-:​r2b:​" aria-describedby=​"radix-:​r2d:​" aria-labelledby=​"radix-:​r2c:​" data-state=​"open" class=​"fixed left-[50%]​ top-[50%]​ z-50 grid w-full translate-x-[-50%]​ translate-y-[-50%]​ gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]​:​animate-in data-[state=closed]​:​animate-out data-[state=closed]​:​fade-out-0 data-[state=open]​:​fade-in-0 data-[state=closed]​:​zoom-out-95 data-[state=open]​:​zoom-in-95 data-[state=closed]​:​slide-out-to-left-1/​2 data-[state=closed]​:​slide-out-to-top-[48%]​ data-[state=open]​:​slide-in-from-left-1/​2 data-[state=open]​:​slide-in-from-top-[48%]​ sm:​rounded-lg max-w-4xl max-h-[90vh]​ overflow-y-auto" tabindex=​"-1" data-aria-hidden=​"true" aria-hidden=​"true" style=​"pointer-events:​ auto;​">​…​</div>​grid

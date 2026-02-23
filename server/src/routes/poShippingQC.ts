@@ -1661,18 +1661,6 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       })
     );
 
-    // TEMPORARY DEBUG: Return order details for inspection
-    return res.status(200).json({
-      debugOrderDetails: orderDetails.map(d => ({
-        order: d.order,
-        orderKeys: Object.keys(d.order),
-        customerId: d.order.customerId,
-        customer: d.customer,
-        poCustomerId: d.po.customerId,
-        poCustomerName: d.po.customerName,
-      })),
-    });
-
     // 2. VALIDATE: Ensure all orders from same customer (by normalized name, since same customer can have multiple IDs/name variations)
     const customerNames = orderDetails.map(d => d.customer?.name || d.po.customerName);
     const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));

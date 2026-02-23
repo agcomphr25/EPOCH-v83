@@ -448,7 +448,7 @@ export default function TravelerExecution() {
     mutationFn: ({ stepId, badge, techName }: { stepId: string; badge: string; techName: string }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: badge || 'operator', badgeScan: badge }),
+        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (_data, variables) => {
@@ -1067,7 +1067,7 @@ export default function TravelerExecution() {
                     <CardDescription>
                       {currentStep.status === 'NOT_STARTED' && 'Not yet started'}
                       {currentStep.status === 'IN_PROGRESS' &&
-                        `Started by ${currentStep.startedBy}`}
+                        `Started by ${activeTechName || currentStep.startedBy}`}
                       {currentStep.status === 'COMPLETED' &&
                         `Completed by ${currentStep.completedBy}`}
                     </CardDescription>

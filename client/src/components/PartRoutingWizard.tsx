@@ -790,10 +790,35 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
+  const createCelloWrapDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Outer Layer of Poly is Removed',
+        instructions: 'Verify the outer layer of poly has been fully removed before beginning cello wrap.',
+        required: true,
+        taskType: 'CHECK' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     if (departmentConfig[dept]) return departmentConfig[dept];
     if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
     if (dept === 'Mold Prep') return createMoldPrepDefaultConfig();
+    if (dept === 'Cello Wrap') return createCelloWrapDefaultConfig();
     return createDefaultDeptConfig();
   };
 

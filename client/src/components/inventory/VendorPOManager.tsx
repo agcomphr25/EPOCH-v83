@@ -776,6 +776,7 @@ function VendorPOForm({
     'USPS',
     'Freight',
     'Will Call',
+    'Prepaid & Add – Best Way',
     'Other',
   ];
 
@@ -1056,9 +1057,12 @@ export default function VendorPOManager() {
       } else {
         toast.error(data.message || 'PO issued but email failed to send');
       }
-      // Update the selected PO if viewing details
       if (selectedVendorPO) {
-        setSelectedVendorPO({ ...selectedVendorPO, status: 'Sent' });
+        setSelectedVendorPO({
+          ...selectedVendorPO,
+          status: 'Sent',
+          poNumber: data.po_number || data.poNumber || selectedVendorPO.poNumber,
+        });
       }
     },
     onError: (error: any) => {
@@ -1256,7 +1260,7 @@ export default function VendorPOManager() {
 <html>
 <head>
   <title>${isRFQ ? 'Request for Quote' : 'Purchase Order'} - ${po.poNumber || 'Draft #' + po.id}</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -1358,9 +1362,7 @@ export default function VendorPOManager() {
     .meta-label { color: #666; font-weight: 500; }
     .meta-value { font-weight: 600; color: #1a1a1a; text-align: right; }
     .meta-divider { border-top: 1px solid #e5e5e5; margin: 6px 0; }
-    .barcode-container { text-align: center; padding: 6px 0 2px 0; }
-    .barcode-container svg { max-width: 100%; height: auto; }
-    .barcode-fallback { font-family: monospace; font-size: 11px; color: #888; letter-spacing: 1px; }
+    
 
     /* ── Divider ── */
     .section-divider {
@@ -1447,7 +1449,7 @@ export default function VendorPOManager() {
       font-weight: 500;
     }
     .totals-inner .total-amount {
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 700;
       color: #1a1a1a;
       margin-top: 2px;
@@ -1546,7 +1548,7 @@ export default function VendorPOManager() {
     <div class="company-block">
       ${settings.companyName ? '<h1>' + settings.companyName + '</h1>' : ''}
       ${settings.companyAddress ? '<p style="white-space:pre-wrap;">' + settings.companyAddress + '</p>' : ''}
-      ${settings.companyPhone || settings.companyEmail ? '<p>' + (settings.companyPhone || '') + (settings.companyPhone && settings.companyEmail ? ' | ' : '') + (settings.companyEmail || '') + '</p>' : ''}
+      ${settings.companyPhone ? '<p>' + settings.companyPhone + '</p>' : ''}
       ${settings.companyWebsite ? '<p>' + settings.companyWebsite + '</p>' : ''}
     </div>
     <div class="meta-panel">
@@ -1560,7 +1562,6 @@ export default function VendorPOManager() {
         <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">${deliveryDate}</span></div>
         <div class="meta-row"><span class="meta-label">Ship Via</span><span class="meta-value">${po.shipVia || 'N/A'}</span></div>
         <div class="meta-row"><span class="meta-label">Status</span><span class="meta-value">${po.status}</span></div>
-        ${po.barcode ? '<div class="meta-divider"></div><div class="barcode-container"><svg id="barcode"></svg><div class="barcode-fallback" id="barcode-fallback" style="display:none;">' + po.barcode + '</div></div>' : ''}
       </div>
     </div>
   </div>
@@ -1576,8 +1577,8 @@ export default function VendorPOManager() {
       <div class="panel-header">Vendor</div>
       <div class="panel-body">
         <strong>${po.vendorName || 'Vendor ID: ' + po.vendorId}</strong>
-        ${vendor?.address ? '<br/>' + vendor.address : ''}
-        ${vendor?.city || vendor?.state || vendor?.zip ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip ? ' ' + vendor.zip : '') : ''}
+        ${vendor?.street ? '<br/>' + vendor.street : (vendor?.address ? '<br/>' + vendor.address : '')}
+        ${vendor?.city || vendor?.state || vendor?.zip_code ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip_code ? ' ' + vendor.zip_code : '') : ''}
         ${vendor?.phone ? '<br/>Ph: ' + vendor.phone : ''}
         ${vendor?.email ? '<br/>' + vendor.email : ''}
         ${vendor?.contactPerson ? '<br/>Attn: ' + vendor.contactPerson : ''}
@@ -1649,26 +1650,7 @@ export default function VendorPOManager() {
     '</div>' : '') +
   '</div>' : ''}
 
-  <script>
-    try {
-      if (typeof JsBarcode !== 'undefined' && document.getElementById('barcode')) {
-        JsBarcode('#barcode', '${po.barcode || ''}', {
-          format: 'CODE128',
-          width: 1.5,
-          height: 40,
-          displayValue: true,
-          fontSize: 11,
-          margin: 4,
-          font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
-        });
-      }
-    } catch(e) {
-      var fb = document.getElementById('barcode-fallback');
-      var bc = document.getElementById('barcode');
-      if (fb) fb.style.display = 'block';
-      if (bc) bc.style.display = 'none';
-    }
-  <\/script>
+  
 </body>
 </html>
       `;

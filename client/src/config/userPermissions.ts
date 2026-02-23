@@ -99,7 +99,6 @@ export const VALID_NAVBAR_ROUTES = [
   '/product-labels',
   '/production-tracking',
   '/production-forecast',
-  '/production-forecast/weekly',
   '/purchase-orders',
   '/qc',
   '/refund-queue',
@@ -140,6 +139,10 @@ export const VALID_NAVBAR_ROUTES = [
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   // Admin users with full navigation access
+  admin: {
+    routes: [],
+    fullAccess: true,
+  },
   glennj: {
     routes: [],
     fullAccess: true,
@@ -322,6 +325,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/vendor-pos',
       '/inventory/receiving',
       '/master-document-register',
+      '/inventory/parts-request',
     ],
   },
 

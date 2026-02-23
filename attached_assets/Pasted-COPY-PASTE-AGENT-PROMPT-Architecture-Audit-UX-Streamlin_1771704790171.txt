@@ -1,0 +1,110 @@
+COPY-PASTE AGENT PROMPT
+
+(Architecture Audit + UX Streamlining Refactor)
+
+Paste this into Replit:
+
+We need to clean up Inventory Receiving UX after recent architectural separation.
+
+Current issue:
+Under /inventory/receiving we now have:
+- Receive Items
+- Pending Receipts
+- Order Batches
+- Receiving History
+
+This is redundant and confusing.
+
+ARCHITECTURAL RULE:
+Receiving must be driven exclusively by Order Batches.
+However, the UX should NOT expose Order Batches as a separate tab.
+Order Batches are a data model, not a user workflow.
+
+GOAL:
+1) Audit current receiving implementation.
+2) Identify how Pending Receipts and Order Batches differ.
+3) Merge Order Batches functionality into Pending Receipts.
+4) Remove Order Batches tab entirely.
+5) Preserve clean domain separation from Parts Requests.
+
+========================================
+PHASE 1 — ANALYZE
+========================================
+
+Before making changes:
+- List all receiving-related routes.
+- List all components under /inventory/receiving.
+- Identify which routes query parts_order_batch.
+- Identify whether Pending Receipts already uses order_batch data.
+
+Provide a summary before refactoring.
+
+========================================
+PHASE 2 — DESIGN TARGET UX
+========================================
+
+Target receiving tabs:
+
+- Receive Items (manual entry)
+- Pending Receipts (Order Batches where status != RECEIVED)
+- Receiving History (Order Batches where status = RECEIVED)
+
+Pending Receipts must:
+- Group by ordered_from_vendor
+- Display parts_order_line
+- Show qty_ordered, qty_received, remaining
+- Provide Receive action
+
+No separate Order Batches tab.
+
+========================================
+PHASE 3 — REFACTOR
+========================================
+
+1) Remove Order Batches tab.
+2) Ensure Pending Receipts queries:
+   parts_order_batch
+   parts_order_line
+   parts_order_allocation (if needed)
+3) Ensure Receiving History queries only order batches marked RECEIVED.
+4) Confirm no direct dependency on parts_request tables.
+5) Remove any UI that exposes raw order_batch as separate concept.
+
+========================================
+PHASE 4 — HARDEN
+========================================
+
+Search repo for:
+- "Order Batches" label in receiving
+- duplicate queries between Pending Receipts and Order Batches
+- parts_request references in receiving module
+
+Eliminate duplication.
+
+========================================
+PHASE 5 — VALIDATE FLOW
+========================================
+
+Test:
+
+1) Create request
+2) Create order batch
+3) Confirm it appears in Pending Receipts
+4) Receive partially
+5) Confirm:
+   - Batch still visible in Pending Receipts
+   - Moves to Receiving History when complete
+6) Confirm no "Order Batches" tab remains
+
+========================================
+OUTPUT
+========================================
+
+Provide:
+- Summary of receiving module before cleanup
+- Files modified
+- Tabs removed
+- Queries consolidated
+- Confirmation that:
+    Receiving = Order Batches abstraction
+    Requests are not referenced directly

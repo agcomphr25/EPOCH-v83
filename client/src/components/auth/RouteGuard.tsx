@@ -31,6 +31,7 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/travelers/',  // Traveler execution - production floor access via barcode scan
   '/employee-portal/', // Employee portal with portalId - public access for employees
   '/app/production/stations', // Timer Station - public access for production floor
+  '/tv-display', // TV Display - public access for production floor screens
   '/app/production/timer-history', // Timer History - public access for production floor
   '/app/production/timer-programs', // Timer Programs - public access for production floor
   '/fill-and-sign/', // Fill and sign PDF forms - public access for customers

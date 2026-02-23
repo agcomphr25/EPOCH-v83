@@ -142,6 +142,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     items: typeof selectedItems;
     customerName: string;
     poNumbers: string[];
+    shippingLabel?: { format: string; data: string } | null;
+    packingSlips?: Array<{ poNumber: string; filename: string; data: string }>;
   } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -170,6 +172,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         items: [...selectedItems],
         customerName,
         poNumbers,
+        shippingLabel: data.shippingLabel || null,
+        packingSlips: data.packingSlips || [],
       });
       
       if (onSuccess) {
@@ -398,6 +402,8 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         customerName={printPopup.customerName}
         poNumbers={printPopup.poNumbers}
         items={printPopup.items}
+        shippingLabel={printPopup.shippingLabel}
+        packingSlips={printPopup.packingSlips}
         onClose={() => {
           setPrintPopup(null);
           onClose();
@@ -753,6 +759,8 @@ function PrintShipmentPopup({
   customerName,
   poNumbers,
   items,
+  shippingLabel,
+  packingSlips,
   onClose,
 }: {
   trackingNumber: string;
@@ -765,6 +773,8 @@ function PrintShipmentPopup({
     description: string;
     poNumber?: string;
   }>;
+  shippingLabel?: { format: string; data: string } | null;
+  packingSlips?: Array<{ poNumber: string; filename: string; data: string }>;
   onClose: () => void;
 }) {
   const { toast } = useToast();
@@ -896,57 +906,77 @@ function PrintShipmentPopup({
   };
 
   const handlePrintShippingLabel = () => {
-    const printWindow = window.open('', '_blank', 'width=600,height=400');
+    const labelData = shippingLabel?.data;
+    const labelFormat = shippingLabel?.format || 'GIF';
+
+    if (!labelData) {
+      alert('No shipping label available. The UPS label was not returned.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=500,height=700');
     if (!printWindow) {
       alert('Please allow popups for this site to print');
       return;
     }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Shipping Label - ${trackingNumber}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 30px; max-width: 400px; margin: 0 auto; }
-          .label-box { border: 3px solid #000; padding: 20px; }
-          .from, .to { margin-bottom: 20px; }
-          .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-          .address { font-size: 14px; line-height: 1.5; }
-          .to .address { font-size: 18px; font-weight: bold; }
-          .tracking { margin-top: 20px; padding-top: 20px; border-top: 2px dashed #000; text-align: center; }
-          .tracking-label { font-size: 12px; color: #666; }
-          .tracking-number { font-size: 20px; font-weight: bold; font-family: monospace; letter-spacing: 2px; margin-top: 5px; }
-          .barcode-placeholder { margin-top: 15px; padding: 10px; background: repeating-linear-gradient(90deg, #000 0px, #000 3px, #fff 3px, #fff 6px); height: 50px; }
-          @media print { body { padding: 10px; } }
-        </style>
-      </head>
-      <body>
-        <div class="label-box">
-          <div class="from">
-            <div class="label">From:</div>
-            <div class="address">
-              AG Composites<br>
-              123 Manufacturing Way<br>
-              Huntsville, AL 35801
-            </div>
-          </div>
-          <div class="to">
-            <div class="label">To:</div>
-            <div class="address">${customerName}</div>
-          </div>
-          <div class="tracking">
-            <div class="tracking-label">Tracking Number</div>
-            <div class="tracking-number">${trackingNumber}</div>
-            <div class="barcode-placeholder"></div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `);
+    const mimeType = labelFormat === 'ZPL' ? 'text/plain' : 'image/gif';
+
+    if (labelFormat === 'ZPL') {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Shipping Label - ${trackingNumber}</title>
+          <style>
+            body { font-family: monospace; padding: 20px; white-space: pre-wrap; font-size: 10px; }
+            @media print { body { padding: 0; margin: 0; } }
+          </style>
+        </head>
+        <body>${atob(labelData)}</body>
+        </html>
+      `);
+    } else {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Shipping Label - ${trackingNumber}</title>
+          <style>
+            @page {
+              size: 4in 6in;
+              margin: 0;
+            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              width: 4in;
+              height: 6in;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #fff;
+            }
+            img {
+              width: 4in;
+              height: 6in;
+              object-fit: contain;
+            }
+            @media print {
+              body { width: 4in; height: 6in; }
+              img { width: 4in; height: 6in; }
+            }
+          </style>
+        </head>
+        <body>
+          <img src="data:${mimeType};base64,${labelData}" alt="UPS Shipping Label" />
+        </body>
+        </html>
+      `);
+    }
+
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
+    setTimeout(() => printWindow.print(), 500);
   };
 
   return (

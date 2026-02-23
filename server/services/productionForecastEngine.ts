@@ -412,12 +412,14 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
 
 export async function generateDashboardForecast(): Promise<DashboardForecastItem[]> {
   const activeOrders = await pgPool.query(
-    `SELECT order_id, model_id, current_department, order_date, due_date
-     FROM all_orders
-     WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
-       AND current_department IS NOT NULL
-       AND current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
-     ORDER BY created_at ASC
+    `SELECT ao.order_id, ao.model_id, ao.current_department, ao.order_date, ao.due_date,
+            sm.display_name AS model_display_name
+     FROM all_orders ao
+     LEFT JOIN stock_models sm ON ao.model_id = sm.name
+     WHERE ao.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+       AND ao.current_department IS NOT NULL
+       AND ao.current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
+     ORDER BY ao.created_at ASC
      LIMIT 500`
   );
 
@@ -443,7 +445,7 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
 
     results.push({
       orderId: order.order_id,
-      model: order.model_id,
+      model: order.model_display_name || order.model_id,
       actualDepartment: currentDept,
       expectedDepartment,
       estimatedShipDate: forecast.estimatedShipDate,

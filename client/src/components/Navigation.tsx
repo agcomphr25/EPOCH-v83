@@ -417,6 +417,12 @@ export default function Navigation() {
       description: 'Submit and track requests for parts and materials',
     },
     {
+      path: '/inventory/consolidated-needs',
+      label: 'Consolidated Needs',
+      icon: ClipboardList,
+      description: 'Admin view of all pending parts requests by vendor',
+    },
+    {
       path: '/vendors',
       label: 'Vendor Management',
       icon: Users,
@@ -1044,12 +1050,6 @@ export default function Navigation() {
       label: 'Production Forecast',
       icon: BarChart3,
       description: 'Estimated department progression and ship dates',
-    },
-    {
-      path: '/production-forecast/weekly',
-      label: 'Weekly Forecast',
-      icon: CalendarDays,
-      description: 'Weekly production forecast with verification',
     },
     {
       path: '/projects',

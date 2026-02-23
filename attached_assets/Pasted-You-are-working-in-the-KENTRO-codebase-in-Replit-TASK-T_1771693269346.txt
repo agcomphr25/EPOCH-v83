@@ -1,0 +1,233 @@
+You are working in the KENTRO codebase in Replit.
+
+TASK TYPE: IMPLEMENTATION
+Integrate a new Tournament “Operations / SOP” module into the EXISTING Tournament Control Center pages, using the audit report facts as ground truth. Follow existing repo patterns (TanStack Query, shadcn/ui, Tailwind, drizzle-zod).
+
+HARD REQUIREMENTS (IMPORTANT CHANGES)
+1) SOP instances are MANUAL:
+   - Do NOT auto-generate any SOP checklist when a tournament is created.
+   - A tournament can exist and run without any SOP instance.
+   - SOP instance is created ONLY when an authorized user clicks “Create Checklist for this Tournament”.
+2) Visibility is ADMIN + MANAGER ONLY:
+   - The “Operations / SOP” tab/panel must be hidden entirely unless the user has role admin or manager.
+   - Server-side authorization must also enforce all SOP reads/mutations.
+3) Admin-only reassignment:
+   - Only admin can reassign tasks, and reassignment must require a reason and produce an audit event.
+
+AUDIT FACTS (GROUND TRUTH)
+- Tournament pages:
+  - /tournaments (TournamentList.tsx)
+  - /tournaments/:id/setup (TournamentSetupPage.tsx)
+  - /tournaments/:id/live (TournamentLivePage.tsx)
+  - /tournaments/:id/archive (TournamentArchivePage.tsx)
+- Backend routers registered in server/routes.ts:
+  app.use("/api/tournaments", tournamentRouter);
+  app.use("/api/tournament-matches", matchRouter);
+  app.use("/api/tournament-standings", standingsRouter);
+  app.use("/api/tournament-financials", financialRouter);
+- Tournament schema in shared/schema.ts: tournaments, divisions, teams, pools, matches.
+- No tournament-specific audit table exists. Reuse the “document_audit_logs” style pattern (action enum + userId + JSON details + createdAt).
+- NOTE: Tournament routes currently have NO auth middleware. requireRole() exists in server/utils/roleAuth.ts.
+
+FEATURE GOAL
+Add an “Operations / SOP” module that supports a full tournament lifecycle checklist (planning → setup → live → between-waves → teardown) with:
+- ONE master SOP template (versioned; edits apply to future tournaments only)
+- A tournament-specific SOP instance generated from the template (MANUAL trigger only)
+- Phases: T-14d, T-7d, T-2d, T-1d, T-60m, Between Waves, Post-event
+- Sections + task-level assignments:
+  - Section Owner (accountable) per section
+  - Assignee per task (required for execution; can differ from section owner)
+- Task status: Not Started / In Progress / Done
+- Completion: checkbox + timestamp + completed_by
+- Admin-only reassignment with required reason + audit log
+- Court config can be TBD/unknown:
+  - Generate tasks even if config unknown
+  - Config-dependent tasks show soft-block warnings until config is decided (allow override)
+  - Court config must allow selecting 1–3 of courts 5/6/7 for older-area usage
+  - If “5-court center” selected, HIDE normal courts 5–7 tasks
+- Offline-first:
+  - Allow marking tasks offline (localStorage-backed queue is acceptable)
+  - Sync later; on conflicts FIRST completion wins; later attempts ignored and logged
+- Printing:
+  - Quick Print + Detailed Print views (print-friendly pages using @media print)
+  - Printed docs must NOT show timestamps/signatures/audit records
+
+CONCESSIONS (OPTIONAL)
+- When creating the SOP instance (manual creation flow), user can toggle “Include Concessions SOP”.
+- If enabled, link a separate Concessions SOP checklist to this tournament (separate template/instance or separate module under the same instance).
+- Include “Purchase Needed Items” as a structured purchase list tied to the tournament.
+
+SECURITY REQUIREMENTS (CRITICAL)
+- Implement server-side auth for SOP endpoints:
+  - Only admin/manager can view SOP instance data
+  - Only admin/manager can update task status/completion
+  - Only admin can reassign
+- Use requireRole("admin","manager") and requireRole("admin") where appropriate.
+- Do not unintentionally break public tournament pages (e.g., /tournaments/:id/public). Keep public endpoints public if they must remain.
+
+IMPLEMENTATION PHASES (DO IN THIS ORDER)
+
+PHASE 0 — Auth Wiring Confirmation (quick)
+- Locate how req.user is populated (auth middleware) and how requireRole is used elsewhere.
+- Decide how to safely gate SOP endpoints without breaking existing public tournament view.
+
+PHASE 1 — DB Schema + Migration
+Add tables in shared/schema.ts (consistent naming). Provide a migration.
+
+Suggested tables:
+1) tournament_sop_templates
+   - id uuid PK
+   - key text (e.g., "tournament_lifecycle") UNIQUE
+   - version int NOT NULL
+   - name text NOT NULL
+   - isActive boolean NOT NULL default true
+   - createdAt timestamp defaultNow
+   - createdBy uuid nullable
+2) tournament_sop_template_sections
+   - id uuid PK
+   - templateId uuid FK
+   - phase text enum (t14, t7, t2, t1, t60, between_waves, post_event)
+   - title text
+   - displayOrder int
+3) tournament_sop_template_tasks
+   - id uuid PK
+   - templateId uuid FK
+   - sectionId uuid FK
+   - title text
+   - locationTag text nullable
+   - equipment jsonb nullable
+   - estMinutes int nullable
+   - condition jsonb nullable (config gates like { type, configKey, includeIf })
+   - dependencies jsonb nullable (array)
+   - required boolean default true
+   - displayOrder int
+4) tournament_sop_instances
+   - id uuid PK
+   - tournamentId uuid FK UNIQUE (0 or 1 instance per tournament; created manually)
+   - templateId uuid FK (specific version used)
+   - createdAt timestamp defaultNow
+   - createdBy uuid
+   - concessionsEnabled boolean default false
+   - courtConfig jsonb nullable
+5) tournament_sop_instance_sections
+   - id uuid PK
+   - instanceId uuid FK
+   - templateSectionId uuid FK
+   - sectionOwnerUserId uuid nullable
+6) tournament_sop_instance_tasks
+   - id uuid PK
+   - instanceId uuid FK
+   - templateTaskId uuid FK
+   - sectionInstanceId uuid FK
+   - assigneeUserId uuid nullable (UI should enforce assignment; allow null initially)
+   - status text enum (not_started, in_progress, done)
+   - completedAt timestamp nullable
+   - completedBy uuid nullable
+7) tournament_sop_audit_events
+   - id uuid PK
+   - tournamentId uuid FK
+   - instanceId uuid FK
+   - userId uuid nullable
+   - action text enum (task_completed, task_status_changed, task_reassigned, config_changed, offline_conflict_ignored, sop_instance_created, etc.)
+   - details jsonb
+   - createdAt timestamp defaultNow
+8) tournament_sop_purchase_items (for “Purchase Needed Items”)
+   - id uuid PK
+   - tournamentId uuid FK
+   - instanceId uuid FK
+   - itemName text
+   - qty integer nullable
+   - status text enum (needed, ordered, received) default needed
+   - assignedTo uuid nullable
+   - notes text nullable
+   - createdAt timestamp defaultNow
+
+Add indexes for tournamentId and instanceId lookups.
+
+PHASE 2 — Backend API (SOP)
+Create SOP endpoints under tournamentRouter, e.g. /api/tournaments/:id/sop/*
+
+Endpoints:
+- GET /api/tournaments/:id/sop
+  - If no instance exists, return 404 or { exists:false } (DO NOT auto-create)
+- POST /api/tournaments/:id/sop/create
+  - MANUAL create: creates instance from latest active template version, creates section/task instances
+  - Accepts options: courtConfig nullable, concessionsEnabled boolean
+  - Logs sop_instance_created
+- PATCH /api/tournaments/:id/sop/config
+  - Updates courtConfig and concessionsEnabled
+  - Logs config_changed
+- PATCH /api/tournaments/:id/sop/tasks/:taskInstanceId
+  - Update status and/or mark complete
+  - Server sets completedAt/completedBy
+  - FIRST completion wins: if already completedAt exists, ignore subsequent completion and log offline_conflict_ignored
+  - Soft-block: return warnings but allow override completion
+- PATCH /api/tournaments/:id/sop/tasks/:taskInstanceId/reassign
+  - ADMIN ONLY
+  - Requires reason
+  - Updates assigneeUserId and logs task_reassigned with reason
+
+Purchase endpoints:
+- GET /api/tournaments/:id/sop/purchase-items
+- POST /api/tournaments/:id/sop/purchase-items
+- PATCH /api/tournaments/:id/sop/purchase-items/:itemId
+
+Template endpoints (Admin/Manager view; Admin edit):
+- GET /api/tournaments/sop-templates/latest?key=tournament_lifecycle
+- POST /api/tournaments/sop-templates (ADMIN ONLY) create new version
+- PATCH /api/tournaments/sop-templates/:id (ADMIN ONLY) must CREATE a NEW version; do not mutate old
+
+PHASE 3 — UI Integration (Admin/Manager Only)
+Add a new “Operations / SOP” tab/panel in:
+A) TournamentSetupPage.tsx (/tournaments/:id/setup)
+B) TournamentLivePage.tsx (/tournaments/:id/live)
+
+UI rules:
+- If user is not admin/manager: do not render the tab/panel at all.
+- If SOP instance does not exist:
+  - Show a calm empty state:
+    Title: “No checklist yet for this tournament”
+    Button: “Create Checklist for this Tournament”
+    Small note: “Creates a copy of the Tournament Lifecycle checklist so tasks can be assigned and checked off.”
+  - Clicking button calls POST /api/tournaments/:id/sop/create
+- Once exists:
+  - Phase selector + progress
+  - Sections (collapsible) with section owner assignment
+  - Tasks list with:
+    status select (Not Started / In Progress / Done)
+    complete checkbox
+    assignee select
+    soft-block warnings
+  - Court configuration selector (can be TBD). When 5-court center selected, hide 5–7 normal tasks.
+  - Print buttons: Quick / Detailed (client print page)
+
+PHASE 4 — Offline Queue (Minimal)
+- Implement a localStorage-backed action queue for SOP task updates.
+- When offline, queue mutations and update UI optimistically.
+- When online, replay queued actions in order.
+- Show a banner: “Offline mode: X actions queued” and “Syncing…” when replaying.
+
+PHASE 5 — Print Views
+- Add client route: /tournaments/:id/sop/print?mode=quick|detailed
+- Use @media print CSS.
+- Printed output includes tasks + responsibilities + equipment + diagrams/dependency notes.
+- Do NOT show timestamps, signatures, audit logs.
+
+DELIVERABLES
+- List of files changed
+- Migration + how to run it
+- Quick verification steps:
+  1) Create tournament normally (no SOP created)
+  2) As admin/manager open Operations tab and create SOP instance
+  3) Assign tasks, complete tasks, test offline queue, verify first completion wins behavior
+  4) Print quick/detailed output
+
+BEGIN
+1) Confirm auth wiring (req.user) and add proper requireRole middleware on SOP endpoints.
+2) Implement schema + migration.
+3) Implement SOP backend endpoints.
+4) Implement SOP UI in setup/live pages with manual creation empty state.
+5) Add offline queue.
+6) Add print pages + CSS.
+
+Do not ask questions unless blocked by missing repo primitives.

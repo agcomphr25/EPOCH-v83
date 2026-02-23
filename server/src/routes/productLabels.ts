@@ -11,22 +11,23 @@ const POINTS_PER_INCH = 72;
 const PAGE_WIDTH = 8.5 * POINTS_PER_INCH;
 const PAGE_HEIGHT = 11 * POINTS_PER_INCH;
 
-const LABEL_WIDTH = 4 * POINTS_PER_INCH;
+const LABEL_WIDTH = 4.0 * POINTS_PER_INCH;
 const LABEL_HEIGHT = (4 / 3) * POINTS_PER_INCH;
 
 const COLUMNS = 2;
 const ROWS = 7;
 const LABELS_PER_PAGE = COLUMNS * ROWS;
 
-const LEFT_MARGIN = 0.15625 * POINTS_PER_INCH;
-const TOP_MARGIN = 0.5 * POINTS_PER_INCH;
-const H_GAP = 0.1875 * POINTS_PER_INCH;
+const LEFT_MARGIN = 0.156 * POINTS_PER_INCH;
+const TOP_MARGIN = 0.833 * POINTS_PER_INCH;
+const H_GAP = 0.188 * POINTS_PER_INCH;
+const V_GAP = 0;
 
 function getLabelPosition(index: number): { x: number; y: number } {
   const col = index % COLUMNS;
   const row = Math.floor(index % (COLUMNS * ROWS) / COLUMNS);
   const x = LEFT_MARGIN + col * (LABEL_WIDTH + H_GAP);
-  const y = PAGE_HEIGHT - TOP_MARGIN - (row + 1) * LABEL_HEIGHT;
+  const y = PAGE_HEIGHT - TOP_MARGIN - (row + 1) * LABEL_HEIGHT - row * V_GAP;
   return { x, y };
 }
 
@@ -53,10 +54,13 @@ async function generateBarcodePng(value: string): Promise<Buffer> {
   const pngBuffer = await bwipjs.toBuffer({
     bcid: 'code128',
     text: value,
-    scale: 3,
-    height: 12,
+    scale: 5,
+    height: 15,
     includetext: false,
-    padding: 2,
+    paddingleft: 10,
+    paddingright: 10,
+    paddingtop: 2,
+    paddingbottom: 2,
   });
   return pngBuffer as Buffer;
 }
@@ -64,10 +68,7 @@ async function generateBarcodePng(value: string): Promise<Buffer> {
 router.get('/products', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { customerName } = req.query;
-    let query = `SELECT id, customer_name, product_name, product_type, barcode, customer_product_number, 
-                        material, handedness, action_length, action_inlet, bottom_metal, barrel_inlet, notes
-
-                 FROM po_products WHERE (barcode IS NOT NULL AND barcode != '') OR (customer_product_number IS NOT NULL AND customer_product_number != '')`;
+    let query = `SELECT id, customer_name, product_name, product_type, barcode, customer_product_number, material, handedness, action_length, action_inlet, bottom_metal, barrel_inlet, notes FROM po_products WHERE customer_name IS NOT NULL AND customer_name != ''`;
 
     const params: string[] = [];
     
@@ -178,10 +179,10 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             const pngBuffer = await generateBarcodePng(item.barcodeValue);
             const barcodeImage = await pdfDoc.embedPng(pngBuffer);
 
-            const barcodeDisplayWidth = Math.min(labelInnerWidth - 20, 220);
-            const barcodeDisplayHeight = 36;
+            const barcodeDisplayWidth = Math.min(labelInnerWidth - 10, 250);
+            const barcodeDisplayHeight = 44;
             const barcodeX = centerX - barcodeDisplayWidth / 2;
-            const barcodeY = y + LABEL_HEIGHT - 60;
+            const barcodeY = y + LABEL_HEIGHT - 62;
 
             page.drawImage(barcodeImage, {
               x: barcodeX,

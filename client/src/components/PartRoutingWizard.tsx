@@ -704,8 +704,122 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
+  const createOvenCureDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      {
+        title: 'Place Roll Mandrel on Trolley into Preheated Oven',
+        instructions: 'Verify oven is preheated to target temperature. Place roll mandrel on trolley and load into oven.',
+        required: true,
+        taskType: 'CHECK',
+        timePolicy: 'AUTO_ON_START',
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    startQcStandards: [
+      {
+        standard: 'Oven Temperature',
+        tolerance: '+/- 15°F',
+        requirement: 'Record oven temperature at start',
+      },
+    ],
+    timerConfig: {
+      enabled: true,
+    },
+    finishChecks: [
+      {
+        title: 'Remove Trolley from Oven (105 min)',
+        instructions: 'After 105-minute cure cycle, remove trolley from oven.',
+        required: true,
+        taskType: 'CHECK',
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishQcStandards: [
+      {
+        standard: 'Oven Temperature',
+        tolerance: '+/- 14°F',
+        requirement: 'Record oven temperature at finish',
+      },
+      {
+        standard: 'Surface Rating',
+        tolerance: '1-5',
+        requirement: 'QC surface quality rating (1-5 scale)',
+      },
+    ],
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
+  const createMoldPrepDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Working Temp of Mandrel is b/t 70-80°F',
+        instructions: 'Verify mandrel surface temperature is between 70°F and 80°F before beginning mold prep.',
+        required: true,
+        taskType: 'QC' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    startQcStandards: [
+      {
+        standard: 'Mandrel Working Temperature',
+        tolerance: '70-80°F',
+        requirement: 'Record mandrel temperature (must be between 70-80°F)',
+      },
+    ],
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
+  const createCelloWrapDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      ...DEFAULT_START_CHECKS.map(c => ({ ...c })),
+      {
+        title: 'Ensure Outer Layer of Poly is Removed',
+        instructions: 'Verify the outer layer of poly has been fully removed before beginning cello wrap.',
+        required: true,
+        taskType: 'CHECK' as const,
+        timePolicy: 'AUTO_ON_START' as const,
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })),
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
-    return departmentConfig[dept] || createDefaultDeptConfig();
+    if (departmentConfig[dept]) return departmentConfig[dept];
+    if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
+    if (dept === 'Mold Prep') return createMoldPrepDefaultConfig();
+    if (dept === 'Cello Wrap') return createCelloWrapDefaultConfig();
+    return createDefaultDeptConfig();
   };
 
   const addMaterialToDepartment = (dept: string, item: InventoryItem) => {
@@ -1530,7 +1644,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       if (!departmentConfig[dept]) {
         setDepartmentConfig({
           ...departmentConfig,
-          [dept]: createDefaultDeptConfig(),
+          [dept]: getOrCreateDeptConfig(dept),
         });
       }
     }

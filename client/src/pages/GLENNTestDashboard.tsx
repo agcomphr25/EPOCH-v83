@@ -219,6 +219,11 @@ export default function GLENNTestDashboard() {
                 <span>Receiving</span>
                 <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
               </Link>
+              <Link href="/inventory/parts-request" className="depth-card-link">
+                <ClipboardList className="depth-card-link-icon" />
+                <span>Parts Requests</span>
+                <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
+              </Link>
             </div>
           </div>
 
@@ -502,6 +507,7 @@ function LightModeDashboard({
     { path: '/inventory/scanner', label: 'Scanner', icon: Scan, description: 'Scan inventory items' },
     { path: '/inventory/manager', label: 'Manager', icon: Package, description: 'Manage inventory items' },
     { path: '/inventory/receiving', label: 'Receiving', icon: Receipt, description: 'Receive incoming inventory' },
+    { path: '/inventory/parts-request', label: 'Parts Requests', icon: ClipboardList, description: 'Department parts requests' },
   ];
 
   const qcMaintenanceItems = [

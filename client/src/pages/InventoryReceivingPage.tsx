@@ -154,6 +154,39 @@ function getItemTraceability(
   return { required: false, fields: [] };
 }
 
+type OrderLineForReceiving = {
+  orderLineId: number;
+  partNumber: string | null;
+  partName: string | null;
+  agPartNumber: string | null;
+  qtyOrdered: number;
+  qtyReceived: number;
+  remainingQty: number;
+  status: string;
+  allocations: Array<{
+    allocationId: number;
+    partsRequestId: number;
+    departmentId: number | null;
+    qtyAllocated: number;
+    qtyReceivedApplied: number;
+  }>;
+};
+
+type PendingBatchInfo = {
+  batchId: number;
+  batchStatus: string;
+  orderDate: string | null;
+  orderLines: OrderLineForReceiving[];
+};
+
+type PendingReceiptVendorGroup = {
+  vendorId: number | null;
+  vendorName: string;
+  batches: PendingBatchInfo[];
+  totalOrdered: number;
+  totalReceived: number;
+};
+
 export default function InventoryReceivingPage() {
   const [scanMode, setScanMode] = useState(false);
   const [scannedCode, setScannedCode] = useState('');
@@ -197,6 +230,83 @@ export default function InventoryReceivingPage() {
   const [allUnitsTraceabilityData, setAllUnitsTraceabilityData] = useState<Record<string, string>[]>([]);
 
   const queryClient = useQueryClient();
+
+  const { data: user } = useQuery<{ username: string; firstName: string; lastName: string }>({
+    queryKey: ['/api/auth/session'],
+  });
+
+  const [expandedBatchVendors, setExpandedBatchVendors] = useState<Set<string>>(new Set());
+  const [batchReceiveQuantities, setBatchReceiveQuantities] = useState<Record<number, number>>({});
+  const [isBatchReceiveDialogOpen, setIsBatchReceiveDialogOpen] = useState(false);
+  const [batchReceiveVendorGroup, setBatchReceiveVendorGroup] = useState<PendingReceiptVendorGroup | null>(null);
+  const [batchReceiveBatchId, setBatchReceiveBatchId] = useState<number | null>(null);
+  const [batchReceiveNotes, setBatchReceiveNotes] = useState('');
+
+  const { data: pendingBatchReceipts = [], isLoading: isLoadingBatchReceipts } = useQuery<PendingReceiptVendorGroup[]>({
+    queryKey: ['/api/inventory/parts-requests/pending-receipts'],
+  });
+
+  const batchReceiveMutation = useMutation({
+    mutationFn: async (data: {
+      batchId: number;
+      receivedBy: string;
+      notes?: string;
+      lines: Array<{ orderLineId: number; qtyReceived: number }>;
+    }) => {
+      return apiRequest('/api/inventory/parts-requests/receive', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/pending-receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/batches'] });
+      toast.success('Parts received successfully');
+      setIsBatchReceiveDialogOpen(false);
+      setBatchReceiveVendorGroup(null);
+      setBatchReceiveBatchId(null);
+      setBatchReceiveQuantities({});
+      setBatchReceiveNotes('');
+    },
+    onError: () => {
+      toast.error('Failed to receive parts');
+    },
+  });
+
+  const openBatchReceiveDialog = (group: PendingReceiptVendorGroup) => {
+    setBatchReceiveVendorGroup(group);
+    const lines = group.batches.flatMap(b => b.orderLines);
+    const defaultQty: Record<number, number> = {};
+    lines.forEach(l => {
+      defaultQty[l.orderLineId] = l.remainingQty;
+    });
+    setBatchReceiveQuantities(defaultQty);
+    const firstBatchId = group.batches[0]?.batchId || null;
+    setBatchReceiveBatchId(firstBatchId);
+    setIsBatchReceiveDialogOpen(true);
+  };
+
+  const handleBatchReceive = () => {
+    if (!user || !batchReceiveBatchId) return;
+    const lines = Object.entries(batchReceiveQuantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([id, qty]) => ({ orderLineId: parseInt(id), qtyReceived: qty }));
+
+    if (lines.length === 0) {
+      toast.error('Enter quantities for at least one item');
+      return;
+    }
+
+    batchReceiveMutation.mutate({
+      batchId: batchReceiveBatchId,
+      receivedBy: `${user.firstName} ${user.lastName}`,
+      notes: batchReceiveNotes || undefined,
+      lines,
+    });
+  };
+
+  const getAllBatchOrderLines = (group: PendingReceiptVendorGroup) => group.batches.flatMap(b => b.orderLines);
 
   // Mock data for demonstration - in real implementation, this would come from purchase orders or expected shipments
   const mockReceivingItems: ReceivingItem[] = [
@@ -1253,124 +1363,323 @@ export default function InventoryReceivingPage() {
         </TabsContent>
 
         <TabsContent value="pending">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Pending Receipts
-              </CardTitle>
-              <CardDescription>
-                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {groupedByVPO.length} POs)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {(isLoadingPOs || isLoadingItems) ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                  <span className="text-muted-foreground">Loading pending receipts...</span>
-                </div>
-              ) : groupedByVPO.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No pending receipts</p>
-                  <p className="text-sm">Issue a Purchase Order to see items here</p>
-                </div>
-              ) : (
-                <Accordion type="multiple" className="w-full" defaultValue={[]}>
-                  {groupedByVPO.map((group) => (
-                    <AccordionItem key={group.poNumber} value={group.poNumber} data-testid={`accordion-vpo-${group.poNumber}`}>
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex items-center gap-3 flex-1">
-                          <Badge variant="outline" className="font-mono text-sm font-semibold">
-                            {group.poNumber}
-                          </Badge>
-                          <span className="text-muted-foreground text-sm">
-                            {group.vendorName}
-                          </span>
-                          <div className="flex items-center gap-2 ml-auto mr-4">
-                            {group.pendingCount > 0 && (
-                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
-                                <Clock className="w-3 h-3 mr-1" />
-                                {group.pendingCount} pending
-                              </Badge>
-                            )}
-                            {group.partialCount > 0 && (
-                              <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
-                                <AlertCircle className="w-3 h-3 mr-1" />
-                                {group.partialCount} partial
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs">
-                              {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Vendor Purchase Orders
+                </CardTitle>
+                <CardDescription>
+                  Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {groupedByVPO.length} POs)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(isLoadingPOs || isLoadingItems) ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    <span className="text-muted-foreground">Loading pending receipts...</span>
+                  </div>
+                ) : groupedByVPO.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No pending vendor PO receipts</p>
+                    <p className="text-sm">Issue a Purchase Order to see items here</p>
+                  </div>
+                ) : (
+                  <Accordion type="multiple" className="w-full" defaultValue={[]}>
+                    {groupedByVPO.map((group) => (
+                      <AccordionItem key={group.poNumber} value={group.poNumber} data-testid={`accordion-vpo-${group.poNumber}`}>
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-3 flex-1">
+                            <Badge variant="outline" className="font-mono text-sm font-semibold">
+                              {group.poNumber}
                             </Badge>
+                            <span className="text-muted-foreground text-sm">
+                              {group.vendorName}
+                            </span>
+                            <div className="flex items-center gap-2 ml-auto mr-4">
+                              {group.pendingCount > 0 && (
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  {group.pendingCount} pending
+                                </Badge>
+                              )}
+                              {group.partialCount > 0 && (
+                                <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  {group.partialCount} partial
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs">
+                                {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                              </Badge>
+                            </div>
                           </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-3 pt-2">
-                          {group.items.map((item) => (
-                            <div
-                              key={`${item.poNumber}-${item.id}`}
-                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                              data-testid={`receipt-item-${item.id}`}
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium">
-                                    #{item.agPartNumber}
-                                  </span>
-                                  <span className="text-muted-foreground">-</span>
-                                  <span className="truncate max-w-[300px]">{item.name}</span>
-                                  {isP2Product(item) && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-orange-100 text-orange-800 text-xs"
-                                    >
-                                      <QrCode className="w-3 h-3 mr-1" />
-                                      P2
-                                    </Badge>
-                                  )}
-                                  {getItemTraceability(item.agPartNumber, inventoryItems as any[]).required && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-blue-100 text-blue-800 text-xs"
-                                    >
-                                      <ClipboardList className="w-3 h-3 mr-1" />
-                                      Traceable
-                                    </Badge>
-                                  )}
-                                  {getStatusBadge(item.status)}
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-3 pt-2">
+                            {group.items.map((item) => (
+                              <div
+                                key={`${item.poNumber}-${item.id}`}
+                                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                                data-testid={`receipt-item-${item.id}`}
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium">
+                                      #{item.agPartNumber}
+                                    </span>
+                                    <span className="text-muted-foreground">-</span>
+                                    <span className="truncate max-w-[300px]">{item.name}</span>
+                                    {isP2Product(item) && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="bg-orange-100 text-orange-800 text-xs"
+                                      >
+                                        <QrCode className="w-3 h-3 mr-1" />
+                                        P2
+                                      </Badge>
+                                    )}
+                                    {getItemTraceability(item.agPartNumber, inventoryItems as any[]).required && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="bg-blue-100 text-blue-800 text-xs"
+                                      >
+                                        <ClipboardList className="w-3 h-3 mr-1" />
+                                        Traceable
+                                      </Badge>
+                                    )}
+                                    {getStatusBadge(item.status)}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    Expected: {item.expectedQuantity} | Received:{' '}
+                                    {item.receivedQuantity}
+                                  </p>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Expected: {item.expectedQuantity} | Received:{' '}
-                                  {item.receivedQuantity}
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleReceiveFromPending(item)}
+                                  className={
+                                    isP2Product(item)
+                                      ? 'bg-orange-500 hover:bg-orange-600'
+                                      : ''
+                                  }
+                                  data-testid={`button-receive-${item.id}`}
+                                >
+                                  {isP2Product(item) && (
+                                    <QrCode className="w-4 h-4 mr-1" />
+                                  )}
+                                  Receive
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Parts Request Orders
+                </CardTitle>
+                <CardDescription>
+                  Ordered parts from department requests awaiting receipt
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBatchReceipts ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    <span className="text-muted-foreground">Loading pending receipts...</span>
+                  </div>
+                ) : pendingBatchReceipts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No pending parts request receipts</p>
+                    <p className="text-sm">Order batches created from parts requests will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingBatchReceipts.map((group) => {
+                      const vendorKey = `batch-vendor-${group.vendorId || 'unknown'}`;
+                      const isExpanded = expandedBatchVendors.has(vendorKey);
+                      const remainingTotal = group.totalOrdered - group.totalReceived;
+                      const lines = getAllBatchOrderLines(group);
+
+                      return (
+                        <div key={vendorKey} className="border rounded-lg">
+                          <div
+                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                            onClick={() => {
+                              setExpandedBatchVendors(prev => {
+                                const newSet = new Set(prev);
+                                if (newSet.has(vendorKey)) newSet.delete(vendorKey);
+                                else newSet.add(vendorKey);
+                                return newSet;
+                              });
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Package className="w-5 h-5 text-purple-500" />
+                              <div>
+                                <p className="font-medium">{group.vendorName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {lines.length} line items | {remainingTotal} units remaining
                                 </p>
                               </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
-                                onClick={() => handleReceiveFromPending(item)}
-                                className={
-                                  isP2Product(item)
-                                    ? 'bg-orange-500 hover:bg-orange-600'
-                                    : ''
-                                }
-                                data-testid={`button-receive-${item.id}`}
+                                onClick={(e) => { e.stopPropagation(); openBatchReceiveDialog(group); }}
                               >
-                                {isP2Product(item) && (
-                                  <QrCode className="w-4 h-4 mr-1" />
-                                )}
+                                <Check className="w-4 h-4 mr-1" />
                                 Receive
                               </Button>
+                              {isExpanded ? (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              )}
                             </div>
-                          ))}
+                          </div>
+
+                          {isExpanded && (
+                            <div className="border-t px-4 pb-4">
+                              {group.batches.map(batch => (
+                                <div key={batch.batchId} className="mt-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="secondary">{batch.batchStatus}</Badge>
+                                    {batch.orderDate && (
+                                      <span className="text-xs text-muted-foreground">
+                                        Ordered: {new Date(batch.orderDate).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <table className="w-full">
+                                    <thead>
+                                      <tr className="text-xs text-gray-500 uppercase">
+                                        <th className="text-left py-2">Part</th>
+                                        <th className="text-center py-2">Ordered</th>
+                                        <th className="text-center py-2">Received</th>
+                                        <th className="text-center py-2">Remaining</th>
+                                        <th className="text-left py-2">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                      {batch.orderLines.map(line => (
+                                        <tr key={line.orderLineId} className="text-sm">
+                                          <td className="py-2">
+                                            <div className="font-medium">{line.partName}</div>
+                                            <div className="text-xs text-gray-500">{line.partNumber}</div>
+                                          </td>
+                                          <td className="py-2 text-center">{line.qtyOrdered}</td>
+                                          <td className="py-2 text-center">{line.qtyReceived}</td>
+                                          <td className="py-2 text-center font-medium">{line.remainingQty}</td>
+                                          <td className="py-2">
+                                            <Badge variant={line.remainingQty === 0 ? 'default' : 'secondary'}>
+                                              {line.status.replace(/_/g, ' ')}
+                                            </Badge>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              )}
-            </CardContent>
-          </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Dialog open={isBatchReceiveDialogOpen} onOpenChange={setIsBatchReceiveDialogOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Receive Ordered Parts</DialogTitle>
+                <DialogDescription>
+                  {batchReceiveVendorGroup ? `Receive parts from ${batchReceiveVendorGroup.vendorName}. Enter quantities received per line item.` : ''}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-4">
+                {batchReceiveVendorGroup && (
+                  <>
+                    <div className="max-h-80 overflow-y-auto border rounded-lg">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Already Rcvd</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Remaining</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receive Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {getAllBatchOrderLines(batchReceiveVendorGroup).map(line => (
+                            <tr key={line.orderLineId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <td className="px-3 py-2">
+                                <div className="text-sm font-medium">{line.partName}</div>
+                                <div className="text-xs text-gray-500">{line.partNumber}</div>
+                              </td>
+                              <td className="px-3 py-2 text-center text-sm">{line.qtyOrdered}</td>
+                              <td className="px-3 py-2 text-center text-sm">{line.qtyReceived}</td>
+                              <td className="px-3 py-2 text-center text-sm">{line.remainingQty}</td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max={line.remainingQty}
+                                  value={batchReceiveQuantities[line.orderLineId] ?? 0}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    setBatchReceiveQuantities(prev => ({ ...prev, [line.orderLineId]: val }));
+                                  }}
+                                  className="w-20 text-center mx-auto"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div>
+                      <Label>Notes (optional)</Label>
+                      <Textarea
+                        value={batchReceiveNotes}
+                        onChange={(e) => setBatchReceiveNotes(e.target.value)}
+                        placeholder="Receiving notes..."
+                        rows={2}
+                      />
+                    </div>
+
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsBatchReceiveDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleBatchReceive} disabled={batchReceiveMutation.isPending}>
+                        {batchReceiveMutation.isPending ? 'Receiving...' : 'Confirm Receipt'}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="history">

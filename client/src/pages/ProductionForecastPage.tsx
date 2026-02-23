@@ -23,7 +23,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function ProductionForecastPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('off_track');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [expectedDeptFilter, setExpectedDeptFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');
@@ -296,6 +296,7 @@ export default function ProductionForecastPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-muted-foreground">#</TableHead>
                     <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('orderId')}>
                       <div className="flex items-center">Order {getSortIcon('orderId')}</div>
                     </TableHead>
@@ -319,15 +320,16 @@ export default function ProductionForecastPage() {
                 <TableBody>
                   {filteredAndSortedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         {searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || expectedDeptFilter !== 'all' || modelFilter !== 'all'
                           ? 'No orders match your filters'
                           : 'No active orders found for forecasting'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredAndSortedData.map((item) => (
+                    filteredAndSortedData.map((item, index) => (
                       <TableRow key={item.orderId}>
+                        <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
                         <TableCell className="font-medium">{item.orderId}</TableCell>
                         <TableCell>{item.model || '—'}</TableCell>
                         <TableCell>{item.actualDepartment || '—'}</TableCell>

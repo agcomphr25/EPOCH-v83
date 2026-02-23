@@ -1,0 +1,79 @@
+Copy-paste Replit Agent prompt (implementation-ready)
+
+Paste this into your Replit agent as-is:
+
+You are working in the EPOCH codebase. Implement “Parts Request v2: vendor-based consolidation + receiving integration”.
+
+GOAL
+Enhance department parts requests and inventory management:
+1) Requesters can browse parts by department but can optionally “Show all parts”.
+2) If requester selects a part not assigned to the selected department, require a Reason/Where used and flag “catalog_fix_needed”.
+3) Requests are consolidated for Inventory Manager/Admin/Owner by vendor in a UI similar to department queue (accordion groups).
+4) Inventory Manager creates “Order Batches” (one ordered-from vendor per batch) from selected part cards, can partially order.
+5) Ordered items appear in Receiving → Pending Receipts grouped by ordered-from vendor.
+6) Receiving supports partial receipt and allocation to departments/request lines.
+7) Requesters see status updates in My Requests as a line-item list.
+8) Support cancel flow: if a requester cancels after ordered, status becomes CANCEL_REQUESTED pending IM review.
+9) Support rejection with reason and audit trail.
+
+REQUIREMENTS
+- Data model must support:
+  - multiple departments requesting same part (consolidate totals, expand per dept)
+  - partial ordering, split orders, and partial receiving
+  - receiving allocation to request lines
+- Receiving UI must be minimal: Vendor, Part, Qty (ordered/received). No confusion about preferred vendor vs ordered-from.
+- Maintain audit trail for status changes.
+
+DELIVERABLES
+A) DB migration + Drizzle schema additions:
+- parts_request (header)
+- parts_request_line (line items with department_id, qty_requested, notes, out_of_dept_reason, catalog_fix_needed, status enum, rejection_reason, cancel_reason)
+- parts_order_batch (ordered_from_vendor_id, created_by, status)
+- parts_order_line (order_batch_id, part_id, qty_ordered, qty_received)
+- parts_order_allocation (order_line_id, request_line_id nullable, department_id, qty_allocated, qty_received_applied)
+- status/audit table OR status_history table (entity_type, entity_id, from_status, to_status, changed_by, reason, timestamp)
+
+B) API routes:
+- POST /api/parts-requests (create header + lines)
+- GET /api/parts-requests/my (line item list with statuses, ordered/received progress)
+- GET /api/parts-needs/consolidated (returns grouped data by vendor and status with per-part totals and per-dept breakdown)
+- POST /api/parts-orders/batches (create order batch from selected parts, vendor chosen, qty ordered per part; auto-allocate FIFO to open request lines)
+- GET /api/receiving/pending-parts (grouped by ordered_from_vendor)
+- POST /api/receiving/receive-parts (apply qty received to order lines + allocations; update request line statuses)
+
+C) UI pages:
+- /inventory/parts-request
+  - department selector
+  - toggle “Show all parts”
+  - if out-of-dept part: require Reason/Where used
+  - show part row badges: Requested qty open, On-order qty (from open order allocations), Catalog Fix flag
+  - allow multi-line request with department per line
+- /inventory/consolidated-needs
+  - By Vendor accordion (vendors as groups, part cards inside)
+  - select cards → “Create Order Batch” modal
+    - choose ordered-from vendor (default primary; allow secondary/other)
+    - editable qty to order now per part
+- /receiving/pending-receipts (or existing tab)
+  - group by ordered-from vendor
+  - part rows/cards with qty ordered/received
+  - “Receive” action opens allocation UI to distribute received qty to request lines (default FIFO, editable)
+
+IMPLEMENTATION NOTES
+- Consolidation should group requested needs by part_id under preferred vendor until ordered; ordered/receiving views use ordered_from_vendor.
+- Allocation logic:
+  - When ordering: allocate qty ordered to oldest open request lines (FIFO) for that part.
+  - When receiving: apply received qty to allocations (FIFO) but allow user to edit distribution.
+- Status rules:
+  - REQUESTED
+  - ORDERED_PARTIAL / ORDERED
+  - RECEIVED_PARTIAL / RECEIVED
+  - REJECTED
+  - CANCEL_REQUESTED / CANCELED
+- Permissions:
+  - Consolidated needs and ordering actions: Inventory Manager, Admin, Owner.
+  - Request creation: users with responsibility for department(s).
+- Add indexes for performance on part_id, vendor_id, status.
+
+Deliver clean, minimal UI consistent with existing EPOCH styling (shadcn). Include tests or at least seed data helpers if the repo has patterns.
+
+Start by locating existing parts request and consolidated needs code, then implement migrations, routes, and UI changes with small commits.

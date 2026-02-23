@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +60,8 @@ import {
   CheckCircle,
   Check,
   ChevronsUpDown,
+  Paperclip,
+  ExternalLink,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -2655,18 +2658,55 @@ export default function OrderEntry() {
                   </p>
                 </div>
                 {isEditMode && orderId && (
-                  <OrderActionsDrawer
-                    orderId={orderId}
-                    orderStatus={orderStatus}
-                    currentDepartment={currentDepartment}
-                    isCancelled={isCancelled}
-                    urgency={urgency}
-                    onOrderUpdated={() => {
-                      if (orderId) {
-                        loadExistingOrder(orderId);
-                      }
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    {orderStatus && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs px-2 py-0.5 ${
+                          orderStatus === 'HOLDING' || orderStatus === 'DRAFT'
+                            ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                            : orderStatus === 'PENDING_SIGNATURE'
+                            ? 'bg-orange-100 text-orange-800 border-orange-300'
+                            : orderStatus === 'FINALIZED'
+                            ? 'bg-blue-100 text-blue-800 border-blue-300'
+                            : orderStatus === 'IN_PROGRESS'
+                            ? 'bg-purple-100 text-purple-800 border-purple-300'
+                            : orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED'
+                            ? 'bg-green-100 text-green-800 border-green-300'
+                            : orderStatus === 'CANCELLED'
+                            ? 'bg-red-100 text-red-800 border-red-300'
+                            : 'bg-gray-100 text-gray-800 border-gray-300'
+                        } ${(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? 'cursor-pointer hover:ring-2 hover:ring-green-400 hover:ring-offset-1 transition-all' : ''}`}
+                        onClick={(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? () => setLocation(`/shipping-tracker?search=${orderId}`) : undefined}
+                        title={(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') ? 'Click to view in Shipping Tracker' : undefined}
+                      >
+                        {orderStatus.replace(/_/g, ' ')}
+                        {(orderStatus === 'FULFILLED' || orderStatus === 'SHIPPED') && (
+                          <ExternalLink className="h-3 w-3 ml-1 inline" />
+                        )}
+                      </Badge>
+                    )}
+                    {currentDepartment && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 border-slate-300"
+                      >
+                        {currentDepartment.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
+                    <OrderActionsDrawer
+                      orderId={orderId}
+                      orderStatus={orderStatus}
+                      currentDepartment={currentDepartment}
+                      isCancelled={isCancelled}
+                      urgency={urgency}
+                      onOrderUpdated={() => {
+                        if (orderId) {
+                          loadExistingOrder(orderId);
+                        }
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </CardHeader>
@@ -5156,18 +5196,7 @@ export default function OrderEntry() {
 
                 {/* Order Attachments */}
                 {orderId && (
-                  <div className="mt-6">
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="attachments">
-                        <AccordionTrigger className="text-left">
-                          <span className="font-medium">Order Attachments</span>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <OrderAttachments orderId={orderId} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
+                  <OrderAttachmentsSection orderId={orderId} />
                 )}
               </form>
             </CardContent>
@@ -6281,6 +6310,40 @@ export default function OrderEntry() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function OrderAttachmentsSection({ orderId }: { orderId: string }) {
+  const { data: attachments = [] } = useQuery<any[]>({
+    queryKey: ['order-attachments', orderId],
+    queryFn: () => apiRequest(`/api/order-attachments/${orderId}`),
+    enabled: !!orderId,
+  });
+
+  const count = attachments.length;
+  const hasAttachments = count > 0;
+
+  return (
+    <div className="mt-6">
+      <Accordion type="single" collapsible defaultValue={hasAttachments ? 'attachments' : undefined} className="w-full">
+        <AccordionItem value="attachments" className={hasAttachments ? 'border-blue-300 bg-blue-50/50 rounded-lg' : ''}>
+          <AccordionTrigger className="text-left px-3">
+            <div className="flex items-center gap-2">
+              <Paperclip className={`h-4 w-4 ${hasAttachments ? 'text-blue-600' : 'text-gray-400'}`} />
+              <span className="font-medium">Order Attachments</span>
+              {hasAttachments && (
+                <Badge variant="default" className="bg-blue-600 hover:bg-blue-600 text-white text-xs px-2 py-0.5">
+                  {count} file{count !== 1 ? 's' : ''} attached
+                </Badge>
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-3">
+            <OrderAttachments orderId={orderId} />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

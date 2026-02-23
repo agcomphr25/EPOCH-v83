@@ -138,7 +138,11 @@ export default function ShippingTracker() {
   const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>('week');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3));
-  const [searchTerm, setSearchTerm] = useState('');
+  const initialSearchFromUrl = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('search') || '';
+  }, []);
+  const [searchTerm, setSearchTerm] = useState(initialSearchFromUrl);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editTrackingNumber, setEditTrackingNumber] = useState('');
@@ -298,7 +302,7 @@ export default function ShippingTracker() {
 
     let filtered = fulfilled;
 
-    if (isAdmin && dateRangeMode !== 'week' && getDateRangeForMode) {
+    if (isAdmin && dateRangeMode !== 'week' && getDateRangeForMode && !searchTerm) {
       const { start, end } = getDateRangeForMode;
       filtered = filtered.filter((order) => {
         const shippedDate = order.shippedDate ? new Date(order.shippedDate) : null;

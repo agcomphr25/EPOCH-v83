@@ -141,9 +141,50 @@ const InventoryForm = ({
   isTraceabilityModalOpen: boolean;
   onCloseTraceabilityModal: () => void;
   onSaveTraceabilityFields: (fields: string[]) => void;
-}) => (
+}) => {
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+  const checkDuplicate = useCallback(async (partNumber: string) => {
+    if (!partNumber.trim()) {
+      setDuplicateWarning(null);
+      return;
+    }
+    setIsCheckingDuplicate(true);
+    try {
+      const res = await fetch(`/api/inventory/items/check-part-number/${encodeURIComponent(partNumber.trim())}`);
+      const data = await res.json();
+      if (data.exists) {
+        setDuplicateWarning(`Part# ${partNumber} already exists: "${data.existingItem?.name}"`);
+      } else {
+        setDuplicateWarning(null);
+      }
+    } catch {
+      setDuplicateWarning(null);
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!editingItem && formData.agPartNumber) {
+      const timeout = setTimeout(() => checkDuplicate(formData.agPartNumber), 400);
+      return () => clearTimeout(timeout);
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [formData.agPartNumber, editingItem, checkDuplicate]);
+
+  return (
   <form
-    onSubmit={onSubmit}
+    onSubmit={(e) => {
+      if (duplicateWarning && !editingItem) {
+        e.preventDefault();
+        toast.error('Cannot create item: AG Part# already exists');
+        return;
+      }
+      onSubmit(e);
+    }}
     className="space-y-6 max-h-[70vh] overflow-y-auto pr-2"
   >
     {/* Basic Information Section */}
@@ -160,7 +201,14 @@ const InventoryForm = ({
             placeholder="Enter AG Part#"
             data-testid="input-agPartNumber"
             required
+            className={duplicateWarning ? 'border-red-500' : ''}
           />
+          {duplicateWarning && (
+            <p className="text-xs text-red-600 mt-1">{duplicateWarning}</p>
+          )}
+          {isCheckingDuplicate && (
+            <p className="text-xs text-gray-400 mt-1">Checking...</p>
+          )}
         </div>
         <div>
           <Label htmlFor="sku">SKU</Label>
@@ -909,7 +957,8 @@ const InventoryForm = ({
       initialFields={formData.traceabilityFields}
     />
   </form>
-);
+  );
+};
 
 interface InventoryItemsCardProps {
   initialSearchTerm?: string | null;
@@ -1100,6 +1149,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     queryFn: () => apiRequest('/api/inventory/items-groups-map'),
   });
 
+  const { data: balancesData } = useQuery<{ balances: Array<{ agPartNumber: string; quantityOnHand: number }> }>({
+    queryKey: ['/api/enhanced/inventory/balances'],
+  });
+
+  const balancesByPart = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    if (balancesData?.balances) {
+      for (const b of balancesData.balances) {
+        map[b.agPartNumber] = (map[b.agPartNumber] || 0) + b.quantityOnHand;
+      }
+    }
+    return map;
+  }, [balancesData]);
+
   // Sort handler function
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -1186,6 +1249,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             case 'costPer':
               aValue = a.costPer || 0;
               bValue = b.costPer || 0;
+              break;
+            case 'currentQty':
+              aValue = balancesByPart[a.agPartNumber] || 0;
+              bValue = balancesByPart[b.agPartNumber] || 0;
               break;
             default:
               return 0;
@@ -1829,7 +1896,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             Import CSV
           </Button>
 
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (open && !editingItem) {
+              fetch('/api/inventory/items/next-part-number')
+                .then(r => r.json())
+                .then(data => {
+                  if (data.nextPartNumber) {
+                    setFormData(prev => ({ ...prev, agPartNumber: data.nextPartNumber }));
+                  }
+                })
+                .catch(() => {});
+            }
+          }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-item">
                 <Plus className="h-4 w-4 mr-2" />
@@ -2174,6 +2253,34 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   </div>
                 </th>
                 <th
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('currentQty')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('currentQty')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={
+                    sortColumn === 'currentQty'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  data-testid="header-currentQty"
+                >
+                  <div className="flex items-center gap-2">
+                    Current Qty
+                    {sortColumn === 'currentQty' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                </th>
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('supplierPartNumber')}
                   onKeyDown={(e) =>
@@ -2269,6 +2376,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-right font-medium">
+                      {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.supplierPartNumber || '-'}

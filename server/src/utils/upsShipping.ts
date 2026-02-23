@@ -113,7 +113,7 @@ export async function createShipment(opts: {
         Shipper: {
           Name: process.env.SHIP_FROM_NAME,
           AttentionName: process.env.SHIP_FROM_ATTENTION,
-          ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
+          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim() || process.env.UPS_ACCOUNT_NUMBER || '',
           Phone: { Number: process.env.SHIP_FROM_PHONE },
           Address: {
             AddressLine: [process.env.SHIP_FROM_ADDRESS1],

@@ -1,0 +1,86 @@
+COPY-PASTE AGENT PROMPT (Fix Reason Validation Properly)
+
+Paste this:
+
+We need to fix Parts Request validation.
+
+Current issue:
+Submitting a parts request throws "Failed to submit parts request" even when Reason is filled.
+We also do NOT want Reason required for every request.
+
+GOAL:
+Reason should only be required if:
+- The requested part is NOT assigned to the selected department
+- OR Show All Parts mode is being used for an out-of-dept part
+
+Otherwise:
+- Reason must be optional.
+
+========================================
+PHASE 1 — INVESTIGATE
+========================================
+
+1) Locate the POST /api/parts-requests route.
+2) Identify the Zod validation schema.
+3) Check whether reason is defined as:
+   z.string().min(1)
+   OR required by default.
+4) Check DB schema:
+   Is reason column NOT NULL?
+
+Provide summary before modifying.
+
+========================================
+PHASE 2 — FIX BACKEND VALIDATION
+========================================
+
+Update logic so that:
+
+- reason is nullable in DB.
+- Zod schema allows:
+   reason: z.string().optional().nullable()
+
+Then implement conditional validation:
+
+If part.department_id !== request.department_id:
+   require reason to be non-empty
+Else:
+   allow reason to be empty or null
+
+Return clear error message:
+"Reason is required when requesting a part outside your department."
+
+========================================
+PHASE 3 — FIX FRONTEND
+========================================
+
+In Request Parts modal:
+
+- Only display "*" next to Reason if part is outside department.
+- Otherwise:
+    Label: "Reason (optional)"
+- Do NOT block submission on frontend unless condition requires it.
+
+========================================
+PHASE 4 — TEST
+========================================
+
+Test cases:
+
+1) In-department part:
+   - Submit with no reason → success.
+2) Out-of-department part:
+   - Submit with no reason → error.
+   - Submit with reason → success.
+3) Confirm no 500 error occurs.
+4) Confirm DB stores null when reason not provided.
+
+========================================
+OUTPUT
+========================================
+
+Provide:
+- Files modified
+- Schema changes (if migration needed)
+- Validation logic summary
+- Confirmation that reason is now conditionally required

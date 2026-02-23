@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
+import { auditService } from '../services/auditService';
 import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots } from '../../schema';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -429,7 +430,30 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
       await captureAccountingSnapshot(orderId);
     } catch (snapshotError) {
       console.error('[Accounting Prep] Error capturing snapshot:', snapshotError);
-      // Don't fail the shipment if snapshot capture fails
+    }
+
+    // Log audit event for shipped order
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: orderId,
+        action: 'ORDER_SHIPPED',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'System',
+          role: (req as any).user?.role || 'system',
+        },
+        reason: `Order shipped via ${shippingCarrier} ${shippingMethod}`,
+        meta: {
+          trackingNumber,
+          shippingCarrier,
+          shippingMethod,
+          estimatedDelivery: estimatedDelivery || null,
+          customerNotified: sendNotification,
+        },
+      });
+    } catch (auditError) {
+      console.error('Failed to log shipping audit event:', auditError);
     }
 
     res.json({
@@ -1032,6 +1056,29 @@ router.post('/create-label', async (req: Request, res: Response) => {
           );
           // Don't fail the entire request
         }
+      }
+
+      // Log audit event for label creation / shipped
+      try {
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: orderId,
+          action: 'ORDER_SHIPPED',
+          actor: {
+            id: (req as any).user?.id,
+            username: (req as any).user?.username || 'System',
+            role: (req as any).user?.role || 'system',
+          },
+          reason: `UPS shipping label created`,
+          meta: {
+            trackingNumber,
+            shippingCarrier: 'UPS',
+            shippingMethod: getServiceName(serviceType || '03'),
+            shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
+          },
+        });
+      } catch (auditError) {
+        console.error('Failed to log shipping audit event:', auditError);
       }
 
       res.json({
@@ -1925,6 +1972,32 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
           console.log(`  ✓ Updated RMA ${rma.orderId} (NCR #${rma.rmaId})`);
         } catch (updateError) {
           console.error(`  ✗ Failed to update RMA ${rma.rmaId}:`, updateError);
+        }
+      }
+
+      // Log audit events for all shipped orders in consolidated label
+      for (const item of shipmentItems) {
+        try {
+          await auditService.logEvent({
+            entityType: 'p1_order',
+            entityId: item.orderId,
+            action: 'ORDER_SHIPPED',
+            actor: {
+              id: (req as any).user?.id,
+              username: (req as any).user?.username || 'System',
+              role: (req as any).user?.role || 'system',
+            },
+            reason: `Shipped via consolidated UPS label with ${shipmentItems.length} items`,
+            meta: {
+              trackingNumber,
+              shippingCarrier: 'UPS',
+              shippingMethod: getServiceName(serviceCode || '03'),
+              consolidated: true,
+              consolidatedOrderIds: shipmentItems.map((i: any) => i.orderId),
+            },
+          });
+        } catch (auditError) {
+          console.error(`Failed to log shipping audit for ${item.orderId}:`, auditError);
         }
       }
 

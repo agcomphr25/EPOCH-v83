@@ -43,6 +43,7 @@ import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
 import ProductionStationDashboard from './pages/ProductionStationDashboard';
+import TVDisplayPage from './pages/TVDisplayPage';
 import ProductionTimerHistory from './pages/ProductionTimerHistory';
 import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
@@ -194,7 +195,6 @@ import AdminPanelPage from './pages/AdminPanelPage';
 import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
 import ProductionForecastPage from './pages/ProductionForecastPage';
 import ForecastSettings from './pages/ForecastSettings';
-import WeeklyProductionForecast from './pages/WeeklyProductionForecast';
 import AccountingPrepPage from './pages/AccountingPrepPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import CommunicationLogsPage from './pages/CommunicationLogsPage';
@@ -243,7 +243,8 @@ function ConditionalNavigation() {
     location === '/staciw-dashboard' ||
     location === '/login' ||
     location.startsWith('/sign-order') || // Hide navigation on customer sign order page
-    location.startsWith('/fill-and-sign'); // Hide navigation on customer fill-and-sign page
+    location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
+    location.startsWith('/tv-display'); // Hide navigation on TV display page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -430,7 +431,6 @@ function App() {
                   <Route path="/admin/qr-codes" component={QRCodeAdminPage} />
                   <Route path="/admin/checklist-management" component={AdminChecklistManagementPage} />
                   <Route path="/production-forecast" component={ProductionForecastPage} />
-                  <Route path="/production-forecast/weekly" component={WeeklyProductionForecast} />
                   <Route path="/production-forecast/settings" component={ForecastSettings} />
                   <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/qr-error" component={QRErrorPage} />
@@ -444,6 +444,7 @@ function App() {
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
+                  <Route path="/tv-display" component={TVDisplayPage} />
                   <Route path="/app/production/timer-history" component={ProductionTimerHistory} />
                   <Route path="/app/production/timer-programs" component={TimerProgramsPage} />
                   

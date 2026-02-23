@@ -1,0 +1,176 @@
+COPY-PASTE AGENT PROMPT
+You are refactoring EPOCH’s Inventory architecture to enforce clean separation between:
+
+1) Parts Requests (planning)
+2) Order Batches (purchasing intent)
+3) Receiving (physical intake)
+
+This refactor must eliminate any duplication or direct coupling between Receiving and Parts Requests.
+
+========================================
+ARCHITECTURAL RULE (NON-NEGOTIABLE)
+========================================
+
+Receiving MUST operate exclusively on Order Batches.
+
+Receiving must NOT:
+- Query parts_request tables directly
+- Derive pending receipts from request status
+- Display request records as primary entities
+- Update request lines directly without going through order allocations
+
+Requests represent planning.
+Order Batches represent purchasing intent.
+Receiving represents physical inventory arrival.
+
+Enforce this separation everywhere in the ERP.
+
+========================================
+PHASE 1 — REMOVE DUPLICATION
+========================================
+
+1. Remove the "Parts Requests" tab under /inventory/receiving.
+2. Remove any API routes that fetch parts requests for receiving purposes.
+3. Search the codebase for:
+   - references to parts_request in receiving routes
+   - any logic where request status = ORDERED triggers receiving visibility
+4. Delete or refactor those references so Receiving only queries:
+   - parts_order_batch
+   - parts_order_line
+   - parts_order_allocation
+
+========================================
+PHASE 2 — REDEFINE RECEIVING SOURCE OF TRUTH
+========================================
+
+Receiving → Pending Receipts must:
+
+Query only Order Batches where:
+  status IN ('ORDERED', 'PARTIALLY_RECEIVED')
+
+Group by:
+  ordered_from_vendor_id
+
+Display per order line:
+  part_id
+  qty_ordered
+  qty_received
+  remaining_qty
+
+No request fields should appear in primary receiving list.
+
+When receiving occurs:
+  - update parts_order_line.qty_received
+  - update parts_order_allocation.qty_received_applied
+  - update request_line.status only through allocation logic
+  - never update request_line directly from receiving
+
+========================================
+PHASE 3 — CONSOLIDATED NEEDS CORRECTION
+========================================
+
+Ensure Consolidated Needs page:
+
+- Shows REQUESTED items derived from parts_request_line
+- Shows ORDERED quantities derived from parts_order_line + allocations
+- Does NOT treat request lines as receipts
+- Does NOT infer receiving state from request status
+
+Requested → Ordered → Received must flow through:
+  Request Line → Order Batch → Allocation → Receiving
+
+========================================
+PHASE 4 — STATUS CLEANUP
+========================================
+
+Request Line statuses allowed:
+  REQUESTED
+  ORDERED_PARTIAL
+  ORDERED
+  RECEIVED_PARTIAL
+  RECEIVED
+  REJECTED
+  CANCEL_REQUESTED
+  CANCELED
+
+Order Batch statuses:
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+
+Receiving must update:
+  order_line.qty_received
+  allocation.qty_received_applied
+  then compute request line status from allocations
+
+Remove any legacy status logic where:
+  request.status = ORDERED implies receipt
+
+========================================
+PHASE 5 — UI CLEANUP
+========================================
+
+Under /inventory/receiving:
+Tabs should be:
+
+- Receive Items
+- Pending Receipts
+- Receiving History
+
+Remove:
+- Parts Requests tab
+
+Ensure Pending Receipts displays only Order Batches grouped by ordered_from_vendor.
+
+If needed:
+Add small link on receipt item:
+  "View Related Requests"
+That opens a drawer showing allocations.
+
+========================================
+PHASE 6 — GLOBAL SEARCH & HARDEN
+========================================
+
+Search entire repo for:
+  "parts_request" inside receiving module
+  "ORDERED" status used to drive receiving
+  joins between request tables and receiving routes
+
+Refactor to enforce:
+
+Receiving depends ONLY on Order Batches.
+
+========================================
+PHASE 7 — VALIDATION
+========================================
+
+After refactor:
+
+Test flow:
+
+1) Create request
+2) Confirm it appears in Consolidated Needs
+3) Create Order Batch from request
+4) Confirm it appears in Pending Receipts
+5) Receive partially
+6) Confirm:
+   - Order Line updated
+   - Allocations updated
+   - Request Line status updated correctly
+7) Confirm Receiving page never queries request tables directly
+
+========================================
+OUTPUT
+========================================
+
+Provide:
+- Summary of files modified
+- Routes removed
+- Status logic corrected
+- Confirmation that receiving is now isolated to Order Batches
+- Any legacy code removed
+
+Do NOT change business logic beyond enforcing this separation.
+
+Focus on architectural cleanliness and preventing future duplication.

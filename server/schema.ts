@@ -706,12 +706,94 @@ export const partsRequests = pgTable('parts_requests', {
   vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id), // Link to vendor PO if ordered
   vendorId: integer('vendor_id').references(() => vendors.id), // Assigned vendor for ordering
   orderMethod: text('order_method'), // 'PO' for purchase order or 'WEBSITE' for online orders (McMaster-Carr, Amazon, etc.)
-  vendorPartNumber: text('vendor_part_number'), // Vendor's SKU or part number for easy ordering
-  productUrl: text('product_url'), // Direct link to product page for website orders
+  vendorPartNumber: text('vendor_part_number'),
+  productUrl: text('product_url'),
   notes: text('notes'),
   isActive: boolean('is_active').default(true),
+  catalogFixNeeded: boolean('catalog_fix_needed').default(false),
+  outOfDeptReason: text('out_of_dept_reason'),
+  cancelReason: text('cancel_reason'),
+  cancelRequestedAt: timestamp('cancel_requested_at'),
+  cancelRequestedBy: text('cancel_requested_by'),
+  rejectionReason: text('rejection_reason'),
+  rejectedBy: text('rejected_by'),
+  rejectedAt: timestamp('rejected_at'),
+  batchId: integer('batch_id'),
+  qtyOrdered: integer('qty_ordered').default(0),
+  qtyReceived: integer('qty_received').default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const partsRequestBatches = pgTable('parts_request_batches', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').references(() => vendors.id),
+  vendorName: text('vendor_name'),
+  orderMethod: text('order_method'),
+  status: text('status').default('CREATED').notNull(),
+  createdBy: text('created_by').notNull(),
+  notes: text('notes'),
+  orderDate: timestamp('order_date'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const partsRequestOrderLines = pgTable('parts_request_order_lines', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => partsRequestBatches.id).notNull(),
+  vendorId: integer('vendor_id').references(() => vendors.id),
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  agPartNumber: text('ag_part_number'),
+  qtyOrdered: integer('qty_ordered').notNull().default(0),
+  qtyReceived: integer('qty_received').notNull().default(0),
+  unitCost: real('unit_cost'),
+  status: text('status').default('ORDERED').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const partsRequestOrderAllocations = pgTable('parts_request_order_allocations', {
+  id: serial('id').primaryKey(),
+  orderLineId: integer('order_line_id').references(() => partsRequestOrderLines.id).notNull(),
+  partsRequestId: integer('parts_request_id').references(() => partsRequests.id).notNull(),
+  qtyAllocated: integer('qty_allocated').notNull().default(0),
+  qtyReceivedApplied: integer('qty_received_applied').notNull().default(0),
+  departmentId: integer('department_id').references(() => departments.id),
+  status: text('status').default('ALLOCATED').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const partsRequestReceipts = pgTable('parts_request_receipts', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => partsRequestBatches.id),
+  vendorId: integer('vendor_id').references(() => vendors.id),
+  receivedBy: text('received_by').notNull(),
+  receivedAt: timestamp('received_at').defaultNow().notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const partsRequestReceiptLines = pgTable('parts_request_receipt_lines', {
+  id: serial('id').primaryKey(),
+  receiptId: integer('receipt_id').references(() => partsRequestReceipts.id),
+  orderLineId: integer('order_line_id').references(() => partsRequestOrderLines.id),
+  partsRequestId: integer('parts_request_id').references(() => partsRequests.id),
+  qtyReceived: integer('qty_received').notNull(),
+  allocatedDepartmentId: integer('allocated_department_id').references(() => departments.id),
+  allocationNotes: text('allocation_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const partsRequestStatusHistory = pgTable('parts_request_status_history', {
+  id: serial('id').primaryKey(),
+  partsRequestId: integer('parts_request_id').references(() => partsRequests.id),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  changedBy: text('changed_by').notNull(),
+  reason: text('reason'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Ready to Ship (RTS) Inventory - Finished products on hand
@@ -2592,7 +2674,7 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     estimatedCost: z.number().min(0).optional().nullable(),
     reason: z.string().optional().nullable(),
     status: z
-      .enum(['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED', 'DELIVERED_TO_DEPT', 'REJECTED'])
+      .enum(['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELED'])
       .default('PENDING'),
     approvedBy: z.string().optional().nullable(),
     approvedDate: z.coerce.date().optional().nullable(),
@@ -2608,6 +2690,13 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     productUrl: z.string().url().optional().nullable(),
     notes: z.string().optional().nullable(),
     isActive: z.boolean().default(true),
+    catalogFixNeeded: z.boolean().default(false),
+    outOfDeptReason: z.string().optional().nullable(),
+    cancelReason: z.string().optional().nullable(),
+    rejectionReason: z.string().optional().nullable(),
+    batchId: z.number().optional().nullable(),
+    qtyOrdered: z.number().default(0).optional(),
+    qtyReceived: z.number().default(0).optional(),
   });
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -2800,6 +2889,12 @@ export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
+export type PartsRequestBatch = typeof partsRequestBatches.$inferSelect;
+export type PartsRequestOrderLine = typeof partsRequestOrderLines.$inferSelect;
+export type PartsRequestOrderAllocation = typeof partsRequestOrderAllocations.$inferSelect;
+export type PartsRequestReceipt = typeof partsRequestReceipts.$inferSelect;
+export type PartsRequestReceiptLine = typeof partsRequestReceiptLines.$inferSelect;
+export type PartsRequestStatusHistory = typeof partsRequestStatusHistory.$inferSelect;
 
 // Purchase Review Checklist Table
 export const purchaseReviewChecklists = pgTable('purchase_review_checklists', {

@@ -283,7 +283,7 @@ export default function BarcodeQueuePage() {
 
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
-    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
+    const model = (stockModels as any[]).find((m: any) => m.slug === modelId);
     return model?.displayName || model?.name || modelId;
   };
 

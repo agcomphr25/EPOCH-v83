@@ -1,0 +1,101 @@
+COPY-PASTE AGENT PROMPT
+
+(Inventory On-Hand Audit + Stabilization)
+
+Paste this into Replit exactly as written:
+
+We need to audit and stabilize Inventory On-Hand logic in EPOCH.
+
+Current situation:
+- Inventory item list now displays an "On Hand" quantity.
+- There is no clear workflow for updating this quantity.
+- Receiving was recently refactored to use Order Batches.
+- We must determine the true source of inventory truth before making changes.
+
+DO NOT modify logic yet.
+First perform an architectural audit.
+
+========================================
+PHASE 1 — INVENTORY DATA MODEL AUDIT
+========================================
+
+1) Identify where on-hand quantity is stored.
+   - Is there a column like qty_on_hand on items?
+   - Or is on-hand derived from a transactions table?
+   - Or is it derived from order/receipt tables?
+
+2) List all tables related to inventory quantities.
+   Likely candidates:
+   - items
+   - inventory_items
+   - inventory_transactions
+   - parts_order_line
+   - parts_order_allocation
+   - receiving tables
+
+3) Search the codebase for:
+   - "onHand"
+   - "qty_on_hand"
+   - "quantityOnHand"
+   - any computed inventory fields
+
+Provide:
+- Table name
+- Field name
+- Where it is updated
+- Where it is displayed
+- Whether it is derived or stored
+
+========================================
+PHASE 2 — RECEIVING IMPACT
+========================================
+
+Determine:
+
+1) When parts are received (in Receiving module):
+   - What code updates inventory quantities?
+   - Does receiving update items.qty_on_hand directly?
+   - Or does it insert into a transaction table?
+
+2) If no inventory quantity is updated during receiving,
+   explain what currently changes on receipt.
+
+========================================
+PHASE 3 — MANUAL ADJUSTMENT WORKFLOW
+========================================
+
+Determine whether a manual stock adjustment feature exists:
+- Search for routes containing:
+   adjust
+   stock
+   inventory-adjust
+   cycle count
+- If none exists, confirm that there is currently no supported way to adjust on-hand manually.
+
+========================================
+PHASE 4 — ARCHITECTURAL CLASSIFICATION
+========================================
+
+Based on findings, classify the inventory system as one of:
+
+A) Simple counter model (items.qty_on_hand is authoritative)
+B) Transaction ledger model (inventory_transactions drive on-hand)
+C) Hybrid or inconsistent model
+
+Explain clearly which model we are using.
+
+========================================
+OUTPUT REQUIRED
+========================================
+
+Provide:
+
+1) Where on-hand lives (exact table + column)
+2) How it gets updated today
+3) Whether receiving updates it
+4) Whether production usage updates it
+5) Whether there is risk of drift
+6) Recommendation for stabilizing on-hand updates
+
+Do NOT refactor yet.
+We are auditing before making changes.

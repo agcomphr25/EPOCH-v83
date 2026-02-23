@@ -705,6 +705,28 @@ export default function P2TravelerPage() {
     const updated = [...traceabilityData];
     updated[index].value = value;
     setTraceabilityData(updated);
+
+    const item = updated[index];
+    if (item.type === 'material_lot' && value.trim()) {
+      const icn = value.trim();
+      fetch(`/api/material-lots/by-icn/${encodeURIComponent(icn)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(lot => {
+          if (lot) {
+            setTraceabilityData(prev => {
+              const next = [...prev];
+              const expirationField = next.find(
+                f => f.materialIndex === item.materialIndex && f.type === 'material_expiration_date'
+              );
+              if (expirationField && lot.expirationDate) {
+                expirationField.value = new Date(lot.expirationDate).toLocaleDateString();
+              }
+              return next;
+            });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // Add another material traceability entry

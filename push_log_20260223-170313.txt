@@ -1,0 +1,43 @@
+Your branch is behind 'origin/main' by 18 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 253ea963..a2aff355
+Fast-forward
+ .autosave-20260223-160446                          |   0
+ .autosave-20260223-170012                          |   0
+ ...ALIDATION-FORENSIC-AUDIT-You-_1771860460181.txt | 168 +++++++++++++
+ ...CE-IMPLEMENTATION-MASTER-PROM_1771860992852.txt | 250 +++++++++++++++++++
+ ...O-END-WIRING-AUDIT-PROMPT-Pas_1771862345776.txt | 185 ++++++++++++++
+ ...TY-CREDENTIALS-MISSING-This-f_1771865446428.txt |  86 +++++++
+ client/src/components/AddressValidationModal.tsx   | 182 ++++++++++++++
+ client/src/components/CustomerSearchInput.tsx      |  36 ++-
+ client/src/components/OrderEntry.tsx               | 149 ++++++++++++
+ client/src/hooks/useFormDraft.ts                   |  96 ++++++++
+ client/src/hooks/useUnsavedChangesWarning.ts       |  15 ++
+ client/src/lib/queryClient.ts                      |   7 +-
+ client/src/pages/CustomerManagement.tsx            | 107 ++++++--
+ client/src/pages/VendorManagement.tsx              | 181 ++++++++++----
+ push_log_20260223-160434.txt                       |   3 +
+ replit.md                                          |  43 +---
+ server/index.ts                                    |  18 ++
+ server/schema.ts                                   |  10 +
+ server/scripts/backfillAddressValidation.ts        | 103 ++++++++
+ server/src/domain/address/addressService.ts        | 270 +++++++++++++++++++++
+ server/src/domain/address/types.ts                 |  42 ++++
+ server/src/routes/customers.ts                     |  66 ++++-
+ server/src/routes/index.ts                         | 116 ++++++++-
+ server/src/routes/shipping.ts                      |  25 ++
+ server/src/routes/vendors.ts                       | 113 ++++++++-
+ 25 files changed, 2162 insertions(+), 109 deletions(-)
+ create mode 100644 .autosave-20260223-160446
+ create mode 100644 .autosave-20260223-170012
+ create mode 100644 attached_assets/Pasted-COPY-PASTE-EPOCH-ADDRESS-VALIDATION-FORENSIC-AUDIT-You-_1771860460181.txt
+ create mode 100644 attached_assets/Pasted-EPOCH-ADDRESS-DOMAIN-SERVICE-IMPLEMENTATION-MASTER-PROM_1771860992852.txt
+ create mode 100644 attached_assets/Pasted-EPOCH-ADDRESS-SYSTEM-END-TO-END-WIRING-AUDIT-PROMPT-Pas_1771862345776.txt
+ create mode 100644 attached_assets/Pasted-PROMPT-1-HARD-FAIL-IF-SMARTY-CREDENTIALS-MISSING-This-f_1771865446428.txt
+ create mode 100644 client/src/components/AddressValidationModal.tsx
+ create mode 100644 client/src/hooks/useFormDraft.ts
+ create mode 100644 client/src/hooks/useUnsavedChangesWarning.ts
+ create mode 100644 push_log_20260223-160434.txt
+ create mode 100644 server/scripts/backfillAddressValidation.ts
+ create mode 100644 server/src/domain/address/addressService.ts
+ create mode 100644 server/src/domain/address/types.ts

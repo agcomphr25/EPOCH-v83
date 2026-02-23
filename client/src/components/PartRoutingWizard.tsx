@@ -704,8 +704,65 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     },
   });
 
+  const createOvenCureDefaultConfig = (): DepartmentConfiguration => ({
+    materials: [],
+    assignedTechnicianId: null,
+    qcStandards: [],
+    startChecks: [
+      {
+        title: 'Place Roll Mandrel on Trolley into Preheated Oven',
+        instructions: 'Verify oven is preheated to target temperature. Place roll mandrel on trolley and load into oven.',
+        required: true,
+        taskType: 'CHECK',
+        timePolicy: 'AUTO_ON_START',
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    startQcStandards: [
+      {
+        standard: 'Oven Temperature',
+        tolerance: '+/- 15°F',
+        requirement: 'Record oven temperature at start',
+      },
+    ],
+    timerConfig: {
+      enabled: true,
+    },
+    finishChecks: [
+      {
+        title: 'Remove Trolley from Oven (105 min)',
+        instructions: 'After 105-minute cure cycle, remove trolley from oven.',
+        required: true,
+        taskType: 'CHECK',
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: false,
+        requiresCertification: false,
+      },
+    ],
+    finishQcStandards: [
+      {
+        standard: 'Oven Temperature',
+        tolerance: '+/- 14°F',
+        requirement: 'Record oven temperature at finish',
+      },
+      {
+        standard: 'Surface Rating',
+        tolerance: '1-5',
+        requirement: 'QC surface quality rating (1-5 scale)',
+      },
+    ],
+    signatureConfig: {
+      startRequiresSignature: false,
+      finishRequiresSignature: true,
+      requiredSignatures: ['LEAD'],
+    },
+  });
+
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
-    return departmentConfig[dept] || createDefaultDeptConfig();
+    if (departmentConfig[dept]) return departmentConfig[dept];
+    if (dept === 'Oven/Cure') return createOvenCureDefaultConfig();
+    return createDefaultDeptConfig();
   };
 
   const addMaterialToDepartment = (dept: string, item: InventoryItem) => {
@@ -1530,7 +1587,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       if (!departmentConfig[dept]) {
         setDepartmentConfig({
           ...departmentConfig,
-          [dept]: createDefaultDeptConfig(),
+          [dept]: getOrCreateDeptConfig(dept),
         });
       }
     }

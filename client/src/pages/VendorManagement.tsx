@@ -79,6 +79,8 @@ import type { AddressData } from '@/utils/addressUtils';
 import VendorScopeSelector from '@/components/VendorScopeSelector';
 import MediaLibraryPicker from '@/components/MediaLibraryPicker';
 import { FolderOpen } from 'lucide-react';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -194,6 +196,26 @@ export default function VendorManagement() {
     },
   });
 
+  const isCreateMode = isModalOpen && !editingVendor;
+
+  const { hasDraft, restoreDraft, clearDraft } = useFormDraft<{
+    formValues: VendorFormData;
+    vendorAddress: AddressData;
+    pendingContacts: PendingContact[];
+  }>({
+    storageKey: 'vendor-draft',
+    getValues: () => ({
+      formValues: form.getValues(),
+      vendorAddress,
+      pendingContacts,
+    }),
+    enabled: isCreateMode,
+  });
+
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+
+  useUnsavedChangesWarning(isModalOpen && form.formState.isDirty);
+
   // Auto-update evaluated field based on scores
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -299,6 +321,7 @@ export default function VendorManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       toast({ title: 'Vendor created successfully' });
+      clearDraft();
       setIsModalOpen(false);
       setPendingContacts([]);
       form.reset();
@@ -567,6 +590,7 @@ export default function VendorManagement() {
         zipCode: '',
         country: 'United States',
       });
+      setShowDraftBanner(hasDraft);
     }
     setIsModalOpen(true);
   };
@@ -575,6 +599,7 @@ export default function VendorManagement() {
     setIsModalOpen(false);
     setEditingVendor(null);
     setPendingContacts([]);
+    setShowDraftBanner(false);
     form.reset();
     setVendorAddress({
       street: '',
@@ -975,6 +1000,40 @@ export default function VendorManagement() {
                 {editingVendor ? `Edit Vendor: ${editingVendor.name}` : 'New Vendor'}
               </DialogTitle>
             </DialogHeader>
+
+            {showDraftBanner && !editingVendor && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md p-3 text-sm">
+                <span className="text-blue-800 dark:text-blue-200">You have a previous unsaved draft. Would you like to restore it?</span>
+                <div className="flex gap-2 ml-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const draft = restoreDraft();
+                      if (draft) {
+                        form.reset(draft.formValues);
+                        setVendorAddress(draft.vendorAddress);
+                        setPendingContacts(draft.pendingContacts || []);
+                        toast({ title: 'Draft restored' });
+                      }
+                      setShowDraftBanner(false);
+                    }}
+                  >
+                    Restore
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      clearDraft();
+                      setShowDraftBanner(false);
+                    }}
+                  >
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-4">

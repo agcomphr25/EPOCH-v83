@@ -1109,7 +1109,12 @@ router.post('/:id/addresses', async (req: Request, res: Response) => {
       customerId,
     });
 
-    if (skipValidation) {
+    const validationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
+
+    if (skipValidation || !validationEnabled) {
+      if (!validationEnabled) {
+        console.log('🔧 Address validation PAUSED (ADDRESS_VALIDATION_ENABLED=false) — saving raw via customers route');
+      }
       const newAddress = await storage.createCustomerAddress(addressData);
       return res.status(201).json(newAddress);
     }

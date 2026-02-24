@@ -1,0 +1,146 @@
+EPOCH — ADDRESS SAVE FAILURE + VALIDATION PAUSE AUDIT
+
+Paste this into a fresh agent thread:
+
+You are performing a PRODUCTION STABILIZATION AUDIT.
+
+DO NOT refactor architecture.
+DO NOT implement EasyPost.
+DO NOT redesign validation.
+
+OBJECTIVE:
+1) Determine why customer addresses are not saving.
+2) Identify exactly where validation is blocking persistence.
+3) Prepare the system to temporarily disable validation safely.
+4) Ensure addresses save correctly even with validation disabled.
+
+We are PAUSING validation — not removing it.
+
+===========================================
+STEP 1 — TRACE CUSTOMER ADDRESS SAVE FLOW
+===========================================
+
+Trace full execution path when creating or updating a customer address:
+
+Frontend:
+- CustomerSearchInput
+- CustomerManagement
+- apiRequest
+- Mutation handlers
+
+Backend:
+- POST /api/addresses
+- POST /api/customers/:id/addresses
+- addressService.validateAndNormalize
+
+For each layer:
+- Show exact code path
+- Identify where save might be blocked
+- Identify all return 400 paths
+- Identify where responseData is used
+
+Return execution trace in ordered steps.
+
+===========================================
+STEP 2 — IDENTIFY VALIDATION BLOCKERS
+===========================================
+
+In backend routes:
+
+Find all places that:
+- return res.status(400)
+- throw errors
+- short-circuit before database write
+
+Specifically inspect:
+
+- validateAndNormalize
+- Any hasAddress guards
+- Any required field logic
+- Any override requirements
+
+Return all blocking conditions.
+
+===========================================
+STEP 3 — CONFIRM DATABASE WRITE EXECUTION
+===========================================
+
+For the failing save case:
+
+Locate the actual INSERT or UPDATE call in:
+
+- storage layer
+- repository
+- db client
+
+Confirm:
+- Does execution reach this line?
+- Is it inside try/catch?
+- Is transaction committed?
+- Could error be swallowed?
+
+Return the exact insert/update block.
+
+===========================================
+STEP 4 — FRONTEND FAILURE ANALYSIS
+===========================================
+
+Inspect frontend code:
+
+If backend returns 400:
+- Does UI clear form?
+- Does it silently fail?
+- Does it swallow the error?
+- Does it still show success toast?
+
+Identify mismatch between UI state and backend result.
+
+Return findings.
+
+===========================================
+STEP 5 — TEMPORARY VALIDATION PAUSE PLAN
+===========================================
+
+Without deleting validation code, propose the safest temporary disable mechanism:
+
+Option A: Feature flag (process.env.ADDRESS_VALIDATION_ENABLED)
+Option B: Early return in addressService
+Option C: Route-level bypass
+Option D: Shipping-gate-only enforcement disabled
+
+For each option:
+- Where change would occur
+- Risk level
+- Scope of impact
+
+Do NOT implement yet.
+Only analyze.
+
+===========================================
+STEP 6 — ROOT CAUSE HYPOTHESIS
+===========================================
+
+Based on findings, determine:
+
+1. Why address is not saving
+2. Whether it is frontend state issue or backend 400
+3. Whether validation is causing silent rejection
+4. Whether database insert is being skipped
+
+Rank likely causes by probability.
+
+===========================================
+DELIVERABLE
+===========================================
+
+Return:
+
+1. Full save execution trace
+2. All blocking conditions
+3. Confirmation whether DB write is executed
+4. Frontend error handling gaps
+5. Recommended safest temporary disable strategy
+6. Clear next action plan (step-by-step)
+
+DO NOT implement changes.
+Return only audit findings.

@@ -250,7 +250,7 @@ const InventoryForm = ({
         </div>
         {formData.type === 'Manufactured' && (
           <div>
-            <Label htmlFor="manufacturingDepartment">Manufacturing Department *</Label>
+            <Label htmlFor="manufacturingDepartment">Manufacturing Department</Label>
             <Select
               value={formData.manufacturingDepartment}
               onValueChange={(value) => onSelectChange('manufacturingDepartment', value)}
@@ -1578,11 +1578,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
       if (!formData.agPartNumber || !formData.name) {
         toast.error('Please fill in AG Part# and Name (required fields)');
-        return;
-      }
-
-      if (formData.type === 'Manufactured' && !formData.manufacturingDepartment) {
-        toast.error('Please select a Manufacturing Department for manufactured items');
         return;
       }
 

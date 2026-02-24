@@ -849,8 +849,21 @@ router.post('/create-label', async (req: Request, res: Response) => {
       isResidential,
     };
 
+    // Get order details for reference (must come before the shipping gate check)
+    let order;
+    try {
+      order = await storage.getFinalizedOrderById(orderId);
+      if (!order) {
+        order = await storage.getOrderDraft(orderId);
+      }
+    } catch (error) {
+      console.log('Could not fetch order details:', error);
+    }
+
     // Shipping gate: check if ship-to address has been validated
-    if (order && order.customerId) {
+    // Only run when address validation is enabled
+    const addressValidationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
+    if (addressValidationEnabled && order && order.customerId) {
       try {
         const customerAddresses = await storage.getCustomerAddresses(order.customerId);
         const shipToStreet = finalShipToAddress?.street || '';
@@ -888,17 +901,6 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     // Quick credential validation (optimized logging)
     console.log('⚡ UPS credentials:', upsClientId ? 'OK' : 'MISSING');
-
-    // Get order details for reference
-    let order;
-    try {
-      order = await storage.getFinalizedOrderById(orderId);
-      if (!order) {
-        order = await storage.getOrderDraft(orderId);
-      }
-    } catch (error) {
-      console.log('Could not fetch order details:', error);
-    }
 
     // Step 1: Get OAuth Token from UPS (2024+ API requirement) - FAST CACHED VERSION
     console.log('⚡ Getting cached UPS OAuth token...');

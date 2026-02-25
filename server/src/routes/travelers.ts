@@ -41,7 +41,8 @@ const DEPT_ALIASES: Record<string, string> = {
 };
 
 function normalizeDept(d: string): string {
-  const lower = d.toLowerCase().trim();
+  let lower = d.toLowerCase().trim();
+  lower = lower.replace(/^pending\s+/i, '');
   if (DEPT_ALIASES[lower]) return DEPT_ALIASES[lower];
   const stripped = lower.replace(/[^a-z0-9]/g, '');
   return DEPT_ALIASES[stripped] || stripped;
@@ -77,14 +78,6 @@ async function syncP2SerializedItemOnStepComplete(
 
     if (!serializedItem) return;
 
-    const stepDept = completedStep.departmentName;
-    const itemDept = serializedItem.currentDepartment;
-
-    if (normalizeDept(stepDept) !== normalizeDept(itemDept)) {
-      console.log(`[P2 Sync] Step dept "${stepDept}" ≠ item dept "${itemDept}" — skipping`);
-      return;
-    }
-
     let routing = serializedItem.partRoutingId
       ? await db.query.partRoutings.findFirst({
           where: eq(partRoutings.id, serializedItem.partRoutingId),
@@ -104,9 +97,26 @@ async function syncP2SerializedItemOnStepComplete(
       ? (routing.departmentSequence as string[])
       : [...P2_DEPARTMENT_STAGES];
 
+    const stepDept = completedStep.departmentName;
+    const itemDept = serializedItem.currentDepartment;
     const currentIndex = serializedItem.currentStageIndex || 0;
-    const nextIndex = currentIndex + 1;
-    const nextDepartment = departmentSequence[nextIndex];
+
+    const normalizedStepDept = normalizeDept(stepDept);
+    const normalizedItemDept = normalizeDept(itemDept);
+
+    const stepDeptIndex = departmentSequence.findIndex(d => normalizeDept(d) === normalizedStepDept);
+
+    if (normalizedStepDept !== normalizedItemDept) {
+      if (stepDeptIndex < 0 || stepDeptIndex < currentIndex) {
+        console.log(`[P2 Sync] Step dept "${stepDept}" is behind or unknown vs item dept "${itemDept}" — skipping`);
+        return;
+      }
+
+      console.log(`[P2 Sync] Step dept "${stepDept}" is ahead of item dept "${itemDept}" — catching up`);
+    }
+
+    const targetIndex = stepDeptIndex >= 0 ? stepDeptIndex + 1 : currentIndex + 1;
+    const nextDepartment = departmentSequence[targetIndex];
 
     const updates: any = { updatedAt: new Date() };
 
@@ -115,9 +125,16 @@ async function syncP2SerializedItemOnStepComplete(
       updates[tsField] = new Date();
     }
 
-    if (nextIndex < departmentSequence.length) {
+    for (let i = currentIndex; i < targetIndex && i < departmentSequence.length; i++) {
+      const intermediateTsField = getDeptTimestampField(departmentSequence[i]);
+      if (intermediateTsField && !updates[intermediateTsField]) {
+        updates[intermediateTsField] = new Date();
+      }
+    }
+
+    if (targetIndex < departmentSequence.length) {
       updates.currentDepartment = nextDepartment;
-      updates.currentStageIndex = nextIndex;
+      updates.currentStageIndex = targetIndex;
     } else {
       updates.status = 'COMPLETED';
       updates.completedAt = new Date();
@@ -125,14 +142,11 @@ async function syncP2SerializedItemOnStepComplete(
 
     const result = await db.update(p2SerializedItems)
       .set(updates)
-      .where(and(
-        eq(p2SerializedItems.id, serializedItem.id),
-        eq(p2SerializedItems.currentStageIndex, currentIndex)
-      ))
+      .where(eq(p2SerializedItems.id, serializedItem.id))
       .returning({ id: p2SerializedItems.id });
 
     if (!result.length) {
-      console.log(`[P2 Sync] Skipped "${serializedItem.barcode}" — already advanced (race guard)`);
+      console.log(`[P2 Sync] Skipped "${serializedItem.barcode}" — update failed`);
       return;
     }
 
@@ -143,7 +157,7 @@ async function syncP2SerializedItemOnStepComplete(
       fromDepartment: itemDept,
       toDepartment: nextDepartment || 'COMPLETED',
       fromStageIndex: currentIndex,
-      toStageIndex: nextIndex < departmentSequence.length ? nextIndex : null,
+      toStageIndex: targetIndex < departmentSequence.length ? targetIndex : null,
       performedBy,
       notes: `Synced from traveler step completion (${traveler.id}, step ${completedStep.stepNumber})`,
     });
@@ -461,6 +475,18 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       action: 'STATUS_CHANGED',
       details: { from: 'IN_PROGRESS', to: 'COMPLETED' },
     });
+
+    const lastStep = steps
+      .slice()
+      .sort((a, b) => a.stepNumber - b.stepNumber)
+      .pop();
+    if (lastStep) {
+      await syncP2SerializedItemOnStepComplete(
+        traveler,
+        { departmentName: lastStep.departmentName, stepNumber: lastStep.stepNumber },
+        completedBy || 'system'
+      );
+    }
 
     res.json(updatedTraveler);
   } catch (error: any) {

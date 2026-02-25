@@ -3767,11 +3767,11 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
     description: z.string().optional().nullable(),
     // Purchase unit fields (what user enters)
     purchaseQty: z.number().positive().optional().nullable(),
-    purchaseUnitPrice: z.number().positive().optional().nullable(),
+    purchaseUnitPrice: z.number().min(0).optional().nullable(),
     purchaseUnit: z.string().optional().nullable(),
     // Vendor unit fields (what shows on PO)
     quantity: z.number().positive('Quantity must be greater than 0'),
-    unitPrice: z.number().positive('Unit price must be greater than 0'),
+    unitPrice: z.number().min(0, 'Unit price must be 0 or greater'),
     vendorUnit: z.string().optional().nullable(),
     conversionFactor: z.number().positive().optional().nullable(),
     lineTotal: z.number(),

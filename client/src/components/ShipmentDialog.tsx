@@ -151,6 +151,7 @@ type SerializedUnit = {
   sku: string | null;
   drawingName: string | null;
   customerSerialNumber: string | null;
+  completedAt: string | null;
   finalizedAt: string | null;
   finalizedBy: string | null;
 };
@@ -168,6 +169,10 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [serverMissing, setServerMissing] = useState<{
+    poItemId?: number;
+    missing?: Array<{ id: string; barcode: string; serialNumber: string }>;
+  } | null>(null);
 
   const uniquePoItemIds = useMemo(() => {
     return Array.from(new Set(selectedItems.map(i => i.poItemId).filter(Boolean)));
@@ -198,18 +203,28 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     })();
   }, [open, uniquePoItemIds.join(',')]);
 
-  const hasP2Units = useMemo(() => {
-    return Object.values(unitsByPoItemId).some(units => units.length > 0);
+  const p2PoItemIds = useMemo(() => {
+    return Object.entries(unitsByPoItemId)
+      .filter(([, units]) => (units?.length ?? 0) > 0)
+      .map(([poItemId]) => Number(poItemId));
   }, [unitsByPoItemId]);
 
-  const poItemIdsNeedingFinalization = useMemo(() => {
-    return uniquePoItemIds.filter((poItemId) => {
-      const units = unitsByPoItemId[poItemId] || [];
-      return units.some(u => !u.finalizedAt || !u.sku || !u.drawingName);
-    });
-  }, [uniquePoItemIds, unitsByPoItemId]);
+  const hasP2Units = p2PoItemIds.length > 0;
 
-  const allFinalized = poItemIdsNeedingFinalization.length === 0;
+  const poItemIdsNeedingFinalization = useMemo(() => {
+    return p2PoItemIds.filter((poItemId) => {
+      const units = unitsByPoItemId[poItemId] || [];
+      const completedUnits = units.filter(u => !!u.completedAt);
+      return completedUnits.some(u => !u.finalizedAt || !u.sku || !u.drawingName);
+    });
+  }, [p2PoItemIds, unitsByPoItemId]);
+
+  const allFinalized = p2PoItemIds.every((poItemId) => {
+    const units = unitsByPoItemId[poItemId] || [];
+    const completedUnits = units.filter(u => !!u.completedAt);
+    if (completedUnits.length === 0) return true;
+    return completedUnits.every(u => !!u.finalizedAt && !!u.sku && !!u.drawingName);
+  });
 
   const processShipmentMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -247,10 +262,22 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     },
     onError: (error: any) => {
       const msg = error.message || 'Failed to create shipment';
-      if (msg.includes('FINALIZATION_REQUIRED') || error?.guard === 'FINALIZATION_REQUIRED') {
+      const rd = error?.responseData;
+      const guard = rd?.guard || error?.guard;
+      const isFinalizationError = msg.includes('FINALIZATION_REQUIRED') || guard === 'FINALIZATION_REQUIRED';
+
+      if (isFinalizationError) {
+        const missingArr = rd?.missing || error?.missing || [];
+        const missingBarcodes = missingArr.map((m: any) => m.barcode).filter(Boolean);
+        setServerMissing({
+          poItemId: rd?.poItemId || error?.poItemId,
+          missing: missingArr,
+        });
         toast({
           title: 'Finalization Required',
-          description: 'Some units still need SKU/Drawing assignment. Go back to Step 0.',
+          description: missingBarcodes.length > 0
+            ? `Units missing SKU/Drawing: ${missingBarcodes.join(', ')}`
+            : 'Some units still need SKU/Drawing assignment.',
           variant: 'destructive',
         });
         dispatch({ type: 'SET_STEP', step: 0 });
@@ -268,6 +295,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     if (!open) {
       dispatch({ type: 'RESET' });
       setUnitsByPoItemId({});
+      setServerMissing(null);
     }
   }, [open]);
 
@@ -416,9 +444,11 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
               unitsByPoItemId={unitsByPoItemId}
               poItemIdsNeedingFinalization={poItemIdsNeedingFinalization}
               allFinalized={allFinalized}
-              onUnitsUpdated={(poItemId, units) =>
-                setUnitsByPoItemId(prev => ({ ...prev, [poItemId]: units }))
-              }
+              serverMissing={serverMissing}
+              onUnitsUpdated={(poItemId, units) => {
+                setUnitsByPoItemId(prev => ({ ...prev, [poItemId]: units }));
+                setServerMissing(null);
+              }}
             />
           )
         )}
@@ -529,12 +559,14 @@ function StepFinalizeP2Units({
   unitsByPoItemId,
   poItemIdsNeedingFinalization,
   allFinalized,
+  serverMissing,
   onUnitsUpdated,
 }: {
   selectedItems: Array<{ poItemId: number; orderId: string; description: string; poNumber: string }>;
   unitsByPoItemId: Record<number, SerializedUnit[]>;
   poItemIdsNeedingFinalization: number[];
   allFinalized: boolean;
+  serverMissing: { poItemId?: number; missing?: Array<{ id: string; barcode: string; serialNumber: string }> } | null;
   onUnitsUpdated: (poItemId: number, units: SerializedUnit[]) => void;
 }) {
   const { toast } = useToast();
@@ -544,10 +576,16 @@ function StepFinalizeP2Units({
   const [finalizing, setFinalizing] = useState(false);
 
   const allUnits = useMemo(() => Object.values(unitsByPoItemId).flat(), [unitsByPoItemId]);
+  const completedUnits = useMemo(() => allUnits.filter(u => !!u.completedAt), [allUnits]);
   const totalUnfinalized = useMemo(
-    () => allUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName),
-    [allUnits]
+    () => completedUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName),
+    [completedUnits]
   );
+
+  const serverMissingIds = useMemo(() => {
+    if (!serverMissing?.missing) return new Set<string>();
+    return new Set(serverMissing.missing.map(m => m.id));
+  }, [serverMissing]);
 
   useEffect(() => {
     if (!selectedPoItemId) {
@@ -636,11 +674,26 @@ function StepFinalizeP2Units({
   }
 
   if (allFinalized) {
+    const inProductionCount = allUnits.filter(u => !u.completedAt && u.status === 'ACTIVE').length;
     return (
       <div className="py-8 text-center">
         <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
-        <p className="font-medium text-green-700 dark:text-green-400">All {allUnits.length} unit(s) finalized</p>
-        <p className="text-sm text-muted-foreground mt-1">SKU and drawing assigned. Ready to ship.</p>
+        {completedUnits.length > 0 ? (
+          <>
+            <p className="font-medium text-green-700 dark:text-green-400">All {completedUnits.length} completed unit(s) finalized</p>
+            <p className="text-sm text-muted-foreground mt-1">SKU and drawing assigned. Ready to ship.</p>
+          </>
+        ) : (
+          <>
+            <p className="font-medium text-muted-foreground">No completed units yet</p>
+            <p className="text-sm text-muted-foreground mt-1">All {allUnits.length} unit(s) are still in production. Nothing to finalize.</p>
+          </>
+        )}
+        {inProductionCount > 0 && completedUnits.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            {inProductionCount} unit(s) still in production — they will not be included in this shipment.
+          </p>
+        )}
       </div>
     );
   }
@@ -663,6 +716,20 @@ function StepFinalizeP2Units({
           {totalUnfinalized.length} unit(s) need finalization before shipping
         </span>
       </div>
+
+      {serverMissing && serverMissing.missing && serverMissing.missing.length > 0 && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm font-medium mb-1">
+            <AlertTriangle className="w-4 h-4" />
+            Server rejected shipment — these units are missing SKU/Drawing:
+          </div>
+          <div className="text-xs text-red-600 dark:text-red-300 font-mono space-y-0.5">
+            {serverMissing.missing.map(m => (
+              <div key={m.id}>{m.barcode} ({m.serialNumber})</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
@@ -735,19 +802,27 @@ function StepFinalizeP2Units({
           <tbody className="divide-y">
             {currentUnits.map((unit) => {
               const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
+              const isServerFlagged = serverMissingIds.has(unit.id);
               return (
-                <tr key={unit.id} className={isFinalized ? 'bg-green-50/50 dark:bg-green-900/10' : 'bg-amber-50/50 dark:bg-amber-900/10'}>
+                <tr key={unit.id} className={
+                  isServerFlagged ? 'bg-red-50 dark:bg-red-900/20 ring-1 ring-red-300 dark:ring-red-700' :
+                  isFinalized ? 'bg-green-50/50 dark:bg-green-900/10' :
+                  'bg-amber-50/50 dark:bg-amber-900/10'
+                }>
                   <td className="px-3 py-2 font-mono text-xs">{unit.barcode}</td>
                   <td className="px-3 py-2 text-xs">{unit.currentDepartment}</td>
                   <td className="px-3 py-2">
                     <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      unit.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                      unit.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                      unit.completedAt ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
                       unit.status === 'HOLD' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                      unit.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                       'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                     }`}>
-                      {unit.status}
+                      {unit.completedAt ? 'COMPLETED' : unit.status}
                     </span>
+                    {!unit.completedAt && unit.status === 'ACTIVE' && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">(in production)</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs">{unit.sku || <span className="text-muted-foreground italic">—</span>}</td>
                   <td className="px-3 py-2 text-xs">{unit.drawingName || <span className="text-muted-foreground italic">—</span>}</td>

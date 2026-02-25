@@ -27,6 +27,27 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/shipping-queue', async (req, res) => {
+  try {
+    const SHIPPING_PIPELINE_DEPTS = ['Final QC', 'Shipping QC', 'Shipping'];
+
+    const units = await db.query.p2SerializedItems.findMany({
+      where: or(
+        and(
+          or(...SHIPPING_PIPELINE_DEPTS.map(d => eq(p2SerializedItems.currentDepartment, d))),
+          eq(p2SerializedItems.status, 'ACTIVE')
+        ),
+        eq(p2SerializedItems.status, 'COMPLETED')
+      ),
+      orderBy: (t, { asc }) => [asc(t.poNumber), asc(t.sequenceNumber)],
+    });
+
+    res.json(units);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to fetch shipping queue' });
+  }
+});
+
 router.get('/scan/:barcode', async (req, res) => {
   try {
     const { barcode } = req.params;

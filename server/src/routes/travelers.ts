@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, and, asc, ilike } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import {
@@ -10,7 +10,163 @@ import {
   insertTravelerTaskFieldSchema,
   insertTravelerSignatureSchema,
   employees,
+  p2SerializedItems,
+  p2SerializedItemEvents,
+  travelers,
+  travelerSteps,
+  partRoutings,
 } from '../../schema';
+
+const P2_DEPARTMENT_STAGES = [
+  'Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC', 'Shipping'
+];
+
+const DEPT_ALIASES: Record<string, string> = {
+  'layup': 'layup',
+  'layupplugging': 'layup',
+  'layup/plugging': 'layup',
+  'assembledisassembly': 'assembledisassembly',
+  'assemble/disassembly': 'assembledisassembly',
+  'assembly/disassembly': 'assembledisassembly',
+  'assembly': 'assembledisassembly',
+  'cnc': 'cnc',
+  'finish': 'finish',
+  'finishing': 'finish',
+  'paint': 'paint',
+  'painting': 'paint',
+  'finalqc': 'finalqc',
+  'final qc': 'finalqc',
+  'final_qc': 'finalqc',
+  'shipping': 'shipping',
+};
+
+function normalizeDept(d: string): string {
+  let lower = d.toLowerCase().trim();
+  lower = lower.replace(/^pending\s+/i, '');
+  if (DEPT_ALIASES[lower]) return DEPT_ALIASES[lower];
+  const stripped = lower.replace(/[^a-z0-9]/g, '');
+  return DEPT_ALIASES[stripped] || stripped;
+}
+
+function getDeptTimestampField(dept: string): string | null {
+  const key = normalizeDept(dept);
+  const map: Record<string, string> = {
+    'layup': 'layupCompletedAt',
+    'assembledisassembly': 'assembleDisassemblyCompletedAt',
+    'cnc': 'cncCompletedAt',
+    'finish': 'finishCompletedAt',
+    'paint': 'paintCompletedAt',
+    'finalqc': 'finalQcCompletedAt',
+  };
+  return map[key] || null;
+}
+
+async function syncP2SerializedItemOnStepComplete(
+  traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
+  completedStep: { departmentName: string; stepNumber: number },
+  performedBy: string
+): Promise<void> {
+  try {
+    if (!traveler.serialNumber) return;
+
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: and(
+        ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
+        eq(p2SerializedItems.status, 'ACTIVE')
+      ),
+    });
+
+    if (!serializedItem) return;
+
+    let routing = serializedItem.partRoutingId
+      ? await db.query.partRoutings.findFirst({
+          where: eq(partRoutings.id, serializedItem.partRoutingId),
+        })
+      : null;
+
+    if (!routing && serializedItem.partNumber) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.partNumber, serializedItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
+      : [...P2_DEPARTMENT_STAGES];
+
+    const stepDept = completedStep.departmentName;
+    const itemDept = serializedItem.currentDepartment;
+    const currentIndex = serializedItem.currentStageIndex || 0;
+
+    const normalizedStepDept = normalizeDept(stepDept);
+    const normalizedItemDept = normalizeDept(itemDept);
+
+    const stepDeptIndex = departmentSequence.findIndex(d => normalizeDept(d) === normalizedStepDept);
+
+    if (normalizedStepDept !== normalizedItemDept) {
+      if (stepDeptIndex < 0 || stepDeptIndex < currentIndex) {
+        console.log(`[P2 Sync] Step dept "${stepDept}" is behind or unknown vs item dept "${itemDept}" — skipping`);
+        return;
+      }
+
+      console.log(`[P2 Sync] Step dept "${stepDept}" is ahead of item dept "${itemDept}" — catching up`);
+    }
+
+    const targetIndex = stepDeptIndex >= 0 ? stepDeptIndex + 1 : currentIndex + 1;
+    const nextDepartment = departmentSequence[targetIndex];
+
+    const updates: any = { updatedAt: new Date() };
+
+    const tsField = getDeptTimestampField(stepDept);
+    if (tsField) {
+      updates[tsField] = new Date();
+    }
+
+    for (let i = currentIndex; i < targetIndex && i < departmentSequence.length; i++) {
+      const intermediateTsField = getDeptTimestampField(departmentSequence[i]);
+      if (intermediateTsField && !updates[intermediateTsField]) {
+        updates[intermediateTsField] = new Date();
+      }
+    }
+
+    if (targetIndex < departmentSequence.length) {
+      updates.currentDepartment = nextDepartment;
+      updates.currentStageIndex = targetIndex;
+    } else {
+      updates.status = 'COMPLETED';
+      updates.completedAt = new Date();
+    }
+
+    const result = await db.update(p2SerializedItems)
+      .set(updates)
+      .where(eq(p2SerializedItems.id, serializedItem.id))
+      .returning({ id: p2SerializedItems.id });
+
+    if (!result.length) {
+      console.log(`[P2 Sync] Skipped "${serializedItem.barcode}" — update failed`);
+      return;
+    }
+
+    await db.insert(p2SerializedItemEvents).values({
+      serializedItemId: serializedItem.id,
+      barcode: serializedItem.barcode,
+      eventType: 'TRANSITION',
+      fromDepartment: itemDept,
+      toDepartment: nextDepartment || 'COMPLETED',
+      fromStageIndex: currentIndex,
+      toStageIndex: targetIndex < departmentSequence.length ? targetIndex : null,
+      performedBy,
+      notes: `Synced from traveler step completion (${traveler.id}, step ${completedStep.stepNumber})`,
+    });
+
+    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${nextDepartment || 'COMPLETED'}"`);
+  } catch (err: any) {
+    console.error('[P2 Sync] Failed to sync serialized item on step complete:', err?.message);
+  }
+}
 
 const router = Router();
 
@@ -59,6 +215,29 @@ router.get('/by-number/:travelerNumber', async (req: Request, res: Response) => 
   } catch (error: any) {
     console.error('Error fetching traveler by number:', error);
     res.status(500).json({ error: 'Failed to fetch traveler', message: error.message });
+  }
+});
+
+router.get('/by-serial/:serialNumber', async (req: Request, res: Response) => {
+  try {
+    const serialNumber = decodeURIComponent(req.params.serialNumber).trim();
+    const allTravelers = await storage.getTravelers();
+    const matched = allTravelers.filter(t =>
+      t.serialNumber && t.serialNumber.toLowerCase() === serialNumber.toLowerCase()
+    );
+
+    if (matched.length === 0) {
+      return res.status(404).json({ error: 'No travelers found for this serial number' });
+    }
+
+    const results = await Promise.all(
+      matched.map(t => storage.getTravelerWithDetails(t.id))
+    );
+
+    res.json(results.filter(Boolean));
+  } catch (error: any) {
+    console.error('Error fetching travelers by serial number:', error);
+    res.status(500).json({ error: 'Failed to fetch travelers', message: error.message });
   }
 });
 
@@ -296,6 +475,18 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       action: 'STATUS_CHANGED',
       details: { from: 'IN_PROGRESS', to: 'COMPLETED' },
     });
+
+    const lastStep = steps
+      .slice()
+      .sort((a, b) => a.stepNumber - b.stepNumber)
+      .pop();
+    if (lastStep) {
+      await syncP2SerializedItemOnStepComplete(
+        traveler,
+        { departmentName: lastStep.departmentName, stepNumber: lastStep.stepNumber },
+        completedBy || 'system'
+      );
+    }
 
     res.json(updatedTraveler);
   } catch (error: any) {
@@ -701,12 +892,19 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       .every((t) => t.status === 'COMPLETED');
 
     let updatedStep = step;
-    if (allGatesComplete && allTasksDone) {
+    const stepCompleted = allGatesComplete && allTasksDone;
+    if (stepCompleted) {
       updatedStep = await storage.updateTravelerStep(stepId, {
         status: 'COMPLETED',
         completedAt: new Date(),
         completedBy: signedBy,
       });
+
+      await syncP2SerializedItemOnStepComplete(
+        traveler,
+        { departmentName: step.departmentName, stepNumber: step.stepNumber },
+        signedBy
+      );
     }
 
     await storage.createTravelerEvent({
@@ -722,11 +920,11 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
         signatureId: signature.id,
         signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
         taskId: matchedGateTask?.id || null,
-        stepCompleted: allGatesComplete && allTasksDone,
+        stepCompleted,
       },
     });
 
-    res.json({ step: updatedStep, signature, stepCompleted: allGatesComplete && allTasksDone });
+    res.json({ step: updatedStep, signature, stepCompleted });
   } catch (error: any) {
     console.error('Error signing step:', error);
     res.status(500).json({ error: 'Failed to sign step', message: error.message });
@@ -1279,6 +1477,12 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
       notes: `Force-signed by admin. Reason: ${reason}`,
       signatureData: null,
     });
+
+    await syncP2SerializedItemOnStepComplete(
+      traveler,
+      { departmentName: step.departmentName, stepNumber: step.stepNumber },
+      signedBy
+    );
 
     await storage.createTravelerEvent({
       travelerId,

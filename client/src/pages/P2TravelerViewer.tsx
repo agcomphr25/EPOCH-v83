@@ -34,8 +34,10 @@ import {
   Layers,
   Download,
   Plus,
+  ScrollText,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
 
 interface TravelerData {
   serializedItem: any;
@@ -346,8 +348,12 @@ export default function P2TravelerViewer() {
             </Card>
           </div>
 
-          <Tabs defaultValue="technicians" className="w-full">
+          <Tabs defaultValue="captured-data" className="w-full">
             <TabsList className="w-full justify-start">
+              <TabsTrigger value="captured-data" data-testid="tab-captured-data">
+                <ScrollText className="h-4 w-4 mr-2" />
+                Captured Data
+              </TabsTrigger>
               <TabsTrigger value="technicians" data-testid="tab-technicians">
                 <User className="h-4 w-4 mr-2" />
                 Technicians
@@ -381,6 +387,23 @@ export default function P2TravelerViewer() {
                 Documents
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="captured-data" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ScrollText className="h-5 w-5" />
+                    Production Traveler Data
+                  </CardTitle>
+                  <CardDescription>
+                    Complete step-by-step captured data from production travelers linked to this serialized item
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <TravelerCapturedDataBySerial serialNumber={travelerData.serializedItem.serialNumber} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="technicians" className="mt-4">
               <Card>

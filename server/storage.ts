@@ -16,6 +16,8 @@ import {
   forms,
   formSubmissions,
   inventoryItems,
+  inventoryDepartments,
+  inventoryItemDepartments,
   inventoryItemCostHistory,
   inventoryScans,
   itemGroups,
@@ -5813,23 +5815,26 @@ export class DatabaseStorage implements IStorage {
 
   // Department-filtered Inventory
   async getInventoryItemsByDepartment(departmentName: string, isAdmin: boolean = false): Promise<InventoryItem[]> {
-    // Include items where isActive is true OR isActive is null (treat null as active)
-    const items = await db
-      .select()
-      .from(inventoryItems)
-      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)));
-    
     // Admin users can see all items when "all" is selected
     if (departmentName === 'all' && isAdmin) {
-      return items;
+      return await db
+        .select()
+        .from(inventoryItems)
+        .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)));
     }
     
-    // Filter items that have this department in their assignedDepartments array
-    // This applies to both regular users AND admin users when a specific department is selected
-    return items.filter(item => {
-      const assignedDepts = item.assignedDepartments as string[] | null;
-      return assignedDepts && assignedDepts.includes(departmentName);
-    });
+    // Use join table for ID-based filtering
+    const results = await db
+      .selectDistinctOn([inventoryItems.id])
+      .from(inventoryItems)
+      .innerJoin(inventoryItemDepartments, eq(inventoryItemDepartments.itemId, inventoryItems.id))
+      .innerJoin(inventoryDepartments, eq(inventoryDepartments.id, inventoryItemDepartments.departmentId))
+      .where(and(
+        eq(inventoryDepartments.name, departmentName),
+        or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive))
+      ));
+    
+    return results.map(r => r.inventory_items);
   }
 
   // Outstanding Orders

@@ -1,0 +1,121 @@
+COPY-PASTE AUDIT PROMPT
+
+(Paste this exactly as written)
+
+We need to audit and diagnose issues in /inventory/parts-request.
+
+DO NOT implement fixes yet.
+First perform a full code audit and explain the current behavior.
+
+There are three issues:
+
+========================================
+ISSUE 1 — Show All Parts Toggle Behavior
+========================================
+
+Expected:
+When "Show all parts" is enabled,
+all inventory items should be visible regardless of department assignment.
+Parts not assigned to the selected department should be flagged but still visible.
+
+Actual:
+- In CNC, it appears to display parts as if they are assigned to CNC.
+- In Finish QC, it removes all parts entirely.
+- Behavior is inconsistent and incorrect.
+
+Audit requirements:
+
+1) Identify the frontend component responsible for parts list rendering.
+2) Identify how department filtering is applied.
+3) Identify how "Show all parts" toggle modifies the query.
+4) Determine whether filtering happens:
+   - Frontend only
+   - Backend only
+   - Both
+5) Provide the exact query used to fetch parts.
+6) Explain why Finish QC returns no parts.
+7) Identify whether department assignments are stored in:
+   - inventory_items
+   - a join table
+   - hardcoded mapping
+8) Determine if the filter logic is inverted or incorrectly scoped.
+
+Provide a clear explanation of current filtering logic.
+
+========================================
+ISSUE 2 — Department Dropdown Values
+========================================
+
+Expected:
+Dropdown should show:
+- CNC
+- Finish QC
+- Paint
+- Office
+(and any valid active departments)
+
+Should NOT show:
+- Production Queue
+- Shipping QC
+
+Audit requirements:
+
+1) Identify where department dropdown values come from:
+   - Hardcoded array?
+   - API call?
+   - departments table?
+2) List all departments currently returned.
+3) Identify where Production Queue and Shipping QC are defined.
+4) Determine how to:
+   - Remove Production Queue
+   - Remove Shipping QC
+   - Add Paint
+   - Add Office
+
+Do not modify yet. Just explain current source and structure.
+
+========================================
+ISSUE 3 — My Requests Not Displaying
+========================================
+
+Expected:
+After clicking "Request",
+the submitted request line(s) should appear under "My Requests" immediately.
+
+Actual:
+Nothing appears.
+
+Audit requirements:
+
+1) Identify the POST route used when clicking Request.
+2) Confirm whether:
+   - parts_request header is created
+   - parts_request_line is created
+3) Identify the GET route used by My Requests.
+4) Determine whether:
+   - The POST is failing silently
+   - The GET query is filtering incorrectly
+   - The request is created but not associated with the current user
+   - The status defaults prevent display
+5) Provide SQL or Drizzle query used to retrieve My Requests.
+6) Confirm whether My Requests filters by:
+   - created_by_user_id
+   - department_id
+   - status
+   - or something else
+
+========================================
+OUTPUT FORMAT
+========================================
+
+Provide:
+
+1) Filtering Logic Summary (Show All Parts)
+2) Department Source Summary
+3) Request Creation Flow
+4) My Requests Retrieval Flow
+5) Root Cause Hypothesis for each issue
+6) Minimal correction path for each issue
+
+DO NOT implement fixes yet.
+This is a full diagnostic audit only.

@@ -1,0 +1,122 @@
+Let me find all three pieces for you.
+
+Now let me get the key files:
+
+Now let me read the ShipmentDialog to see how items are built and passed to /process-shipment:
+
+Now let me find the parent component that builds the selectedItems array and opens the ShipmentDialog:
+
+Now let me see where items get selected (checkbox logic) and the ShipmentDialog mount:
+
+Now let me check if SKUs are currently shown or selected anywhere in the shipping UI:
+
+Here's the full paste of all three pieces:
+
+A) Shipping QC Frontend — ShipmentDialog.tsx
+File: client/src/components/ShipmentDialog.tsx (1060 lines)
+
+Props — how items are passed in (lines 123–135):
+
+interface ShipmentDialogProps {
+  open: boolean;
+  onClose: () => void;
+  selectedItems: Array<{
+    poItemId: number;
+    orderId: string;
+    quantity: number;
+    description: string;
+    customerName: string;
+    poNumber: string;
+  }>;
+  onSuccess?: (data: any) => void;
+}
+Payload build — how items array is sent to /process-shipment (lines 257–283):
+
+const handleSubmit = async () => {
+  const payload: any = {
+    items: selectedItems.map((item) => ({
+      poItemId: item.poItemId,
+      orderId: item.orderId,
+      quantity: item.quantity,
+    })),
+    serviceCode: state.serviceCode,
+    billingOption: state.billingOption,
+    thirdPartyAccountNumber: state.thirdPartyAccountNumber || undefined,
+    thirdPartyPostalCode: state.thirdPartyPostalCode || undefined,
+    thirdPartyCountryCode: state.thirdPartyCountryCode || undefined,
+    weightLbs: parseFloat(state.weightLbs) || 5,
+    boxSize: state.boxSize || 'medium',
+  };
+  processShipmentMutation.mutate(payload);
+};
+Item selection — how selectedItems is built in the parent (QCShippingQueuePage.tsx lines 212–279):
+
+const transformedShipmentItems = useMemo(() => {
+  // Builds lookup maps from poOrders data (customer → PO → items)
+  const orderIdMap = new Map<string, any>();
+  const compositeKeyMap = new Map<string, any>();
+  (poOrders as any[]).forEach((customer: any) => {
+    customer.pos?.forEach((po: any) => {
+      po.items?.forEach((item: any) => {
+        const metadata = { item, customerName: customer.customerName, poNumber: po.poNumber };
+        if (item.orderId) orderIdMap.set(item.orderId, metadata);
+        const compositeKey = `${item.poItemId}-${item.unitNumber}`;
+        compositeKeyMap.set(compositeKey, metadata);
+      });
+    });
+  });
+  // Transform selected checkbox keys into ShipmentDialog format
+  const items = [];
+  selectedPOItems.forEach((key) => {
+    const metadata = orderIdMap.get(key) || compositeKeyMap.get(key);
+    if (metadata) {
+      const { item, customerName, poNumber } = metadata;
+      items.push({
+        poItemId: item.poItemId,
+        orderId: item.orderId || `PO-${item.poItemId}-${item.unitNumber}`,
+        quantity: item.quantity ?? 1,
+        description: item.description || item.itemName || item.stockModelName || 'Unknown Item',
+        customerName,
+        poNumber,
+      });
+    }
+  });
+  return items.sort(...);
+}, [selectedPOItems, poOrders]);
+ShipmentDialog mount (QCShippingQueuePage.tsx lines 2258–2276):
+
+<ShipmentDialog
+  open={showShipmentDialog}
+  onClose={() => setShowShipmentDialog(false)}
+  selectedItems={transformedShipmentItems}
+  onSuccess={(data) => {
+    queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+    handleShipmentDocuments(data);
+    setSelectedPOItems(new Set());
+    setSelectedCustomer(null);
+  }}
+/>
+Key takeaway: Items are selected via checkboxes on the QCShippingQueuePage, keyed by orderId or composite poItemId-unitNumber. The ShipmentDialog is a 3-step wizard (Review Items → Service/Billing → Review/Submit). No barcode scanning is involved in the current shipping flow.
+
+B) Existing Barcode Scanner Hook
+File: client/src/hooks/useBarcodeInput.ts (146 lines)
+
+export function useBarcodeInput(): BarcodeInputState & BarcodeInputActions {
+  // State: barcode, scannedBarcode, isValidBarcode, barcodeType
+  // Handles:
+  //   - Manual text input → setBarcode()
+  //   - handleScan() → validates and sets scannedBarcode
+  //   - handleBarcodeDetected() → auto-detect from scanner hardware
+  //   - clearScan() → reset
+  //   - Global keypress listener for physical barcode scanners
+  //     (buffers keystrokes, auto-submits after 100ms idle, fires on Enter)
+  // Recognizes: P1_PO, P2_PO, P1_ORDER, P2_ORDER, AG_ORDER, PO_ORDER, INVENTORY, UNKNOWN
+  // Pattern: accepts any alphanumeric-with-dashes as UNKNOWN type
+}
+This hook is used in P2TravelerPage.tsx for the tablet traveler workflow. It handles both manual typing and hardware scanner input. It does not currently recognize the new {PO}-UNIT-{seq4} barcode format — that would need a pattern addition, or it just falls through to UNKNOWN which still works.
+
+C) SKU Display/Selection — Currently None in Shipping
+There is no SKU picker or display anywhere in the current shipping flow. The QCShippingQueuePage.tsx shows stockModel names for display purposes (line 1750: item.stockModel || 'Unknown') but these are P1 stock model names, not P2 product SKUs. The ShipmentDialog shows description text only.
+
+The finalization UX (scan → pick SKU/drawing → finalize → ship) would be entirely new UI, either as a pre-step before opening the ShipmentDialog, or as a new Step 0 inside it.

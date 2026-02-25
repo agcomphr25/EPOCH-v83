@@ -406,6 +406,8 @@ const InventoryForm = ({
               <SelectItem value="FT">FT</SelectItem>
               <SelectItem value="M">M</SelectItem>
               <SelectItem value="SQM">SQM</SelectItem>
+              <SelectItem value="HR">HR</SelectItem>
+              <SelectItem value="MIN">MIN</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">
@@ -422,6 +424,8 @@ const InventoryForm = ({
               <SelectValue placeholder="Select unit" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="hr">hr (hour)</SelectItem>
+              <SelectItem value="min">min (minute)</SelectItem>
               <SelectItem value="oz">oz (ounce)</SelectItem>
               <SelectItem value="lb">lb (pound)</SelectItem>
               <SelectItem value="g">g (gram)</SelectItem>
@@ -488,6 +492,8 @@ const InventoryForm = ({
               <SelectValue placeholder="Select unit" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="hr">hr (hour)</SelectItem>
+              <SelectItem value="min">min (minute)</SelectItem>
               <SelectItem value="oz">oz (ounce)</SelectItem>
               <SelectItem value="lb">lb (pound)</SelectItem>
               <SelectItem value="g">g (gram)</SelectItem>
@@ -1595,7 +1601,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         supplierPartNumber: formData.supplierPartNumber || null,
         secondarySupplierPartNumber:
           formData.secondarySupplierPartNumber || null,
-        costPer: formData.costPer ? parseFloat(formData.costPer) : null,
+        costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
         vendorUnit: formData.vendorUnit || null,
         purchaseUnitLabel: formData.purchaseUnitLabel || null,
         purchaseUnit: formData.purchaseUnit || null,
@@ -1606,7 +1612,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           ? parseFloat(formData.consumptionRate)
           : null,
         usageUnit: formData.usageUnit || null,
-        cogsPerUnit: formData.cogsPerUnit
+        cogsPerUnit: formData.cogsPerUnit !== ''
           ? parseFloat(formData.cogsPerUnit)
           : null,
         orderDate: formData.orderDate || null,
@@ -1652,7 +1658,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
-      costPer: item.costPer ? item.costPer.toString() : '',
+      costPer: item.costPer != null ? item.costPer.toString() : '',
       vendorUnit: item.vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
       purchaseUnit: item.purchaseUnit || '',
@@ -1663,7 +1669,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         ? item.consumptionRate.toString()
         : '',
       usageUnit: item.usageUnit || '',
-      cogsPerUnit: item.cogsPerUnit ? item.cogsPerUnit.toString() : '',
+      cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
         ? new Date(item.orderDate).toISOString().split('T')[0]
         : '',

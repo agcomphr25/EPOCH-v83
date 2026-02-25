@@ -432,7 +432,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     let itemData: any;
     
     if (hasUnitConversion && newItem.purchaseQty > 0) {
-      if (newItem.purchaseUnitPrice <= 0) {
+      if (newItem.purchaseUnitPrice < 0) {
         toast.error('Please enter a valid purchase unit price');
         return;
       }
@@ -452,7 +452,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         otherIdentifier: newItem.otherIdentifier || null,
       };
     } else {
-      if (newItem.quantity <= 0 || newItem.unitPrice <= 0) {
+      if (newItem.quantity <= 0 || newItem.unitPrice < 0) {
         toast.error('Please enter valid quantity and unit price');
         return;
       }
@@ -669,8 +669,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     id="unitPrice"
                     type="number"
                     step="0.01"
-                    value={newItem.unitPrice || ''}
-                    onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    value={newItem.unitPrice != null ? newItem.unitPrice : ''}
+                    onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     data-testid="input-unit-price"
                   />
                 </div>

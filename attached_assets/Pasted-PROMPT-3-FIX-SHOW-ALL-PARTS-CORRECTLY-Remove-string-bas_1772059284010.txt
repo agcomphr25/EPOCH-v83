@@ -1,0 +1,85 @@
+PROMPT 3 — FIX “SHOW ALL PARTS” CORRECTLY
+
+(Remove string-based matching and normalize by ID)
+
+This is the proper architectural fix.
+
+Paste after Prompt 2 is complete.
+
+We are fixing department filtering in /inventory/parts-request.
+
+Current problem:
+Filtering uses:
+  assignedDepartments.includes(departmentName)
+This is string-based and fragile.
+
+We are moving to ID-based filtering.
+
+========================================
+PHASE 1 — AUDIT
+========================================
+
+1) Identify where inventory item department assignments are stored.
+2) Confirm whether assignedDepartments is:
+   - JSON array
+   - text array
+   - string column
+3) Identify all code performing:
+   assignedDepartments.includes(...)
+
+========================================
+PHASE 2 — IMPLEMENT JOIN TABLE
+========================================
+
+Create table:
+inventory_item_departments
+- id
+- item_id (FK inventory_items)
+- department_id (FK inventory_departments)
+
+Migrate existing assignedDepartments string data into this table.
+
+Remove reliance on assignedDepartments string matching.
+
+========================================
+PHASE 3 — UPDATE FILTER LOGIC
+========================================
+
+Modify department filter query:
+
+Instead of filtering in JS:
+  assignedDepartments.includes(departmentName)
+
+Use SQL join:
+
+SELECT items.*
+FROM inventory_items items
+JOIN inventory_item_departments iid
+  ON iid.item_id = items.id
+WHERE iid.department_id = :departmentId
+
+For Show All toggle:
+- Return all active items.
+- Flag items not linked to selected department via join check.
+
+========================================
+PHASE 4 — VALIDATE
+========================================
+
+Test:
+
+1) CNC → shows CNC items
+2) Finish QC → shows correct items
+3) Show All ON → shows all items
+4) Items not assigned show "Out of Department" badge
+5) No string comparison remains
+
+========================================
+OUTPUT
+========================================
+
+Provide:
+- Migration file
+- Updated query
+- Confirmation string matching removed
+- Confirmation filtering now ID-based

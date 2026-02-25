@@ -64,6 +64,12 @@ export default function RefundQueue() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showActionDialog, setShowActionDialog] = useState(false);
 
+  const { data: session } = useQuery<{ username: string } | null>({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => apiRequest('/api/auth/session'),
+  });
+  const canApprove = session?.username !== 'darleneb';
+
   // Fetch refund requests
   const {
     data: refundRequests = [],
@@ -391,15 +397,17 @@ export default function RefundQueue() {
                         {formatCurrency(request.refundAmount)}
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(request, 'approve')}
-                          className="bg-green-600 hover:bg-green-700"
-                          data-testid={`approve-button-${request.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
+                        {canApprove && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleAction(request, 'approve')}
+                            className="bg-green-600 hover:bg-green-700"
+                            data-testid={`approve-button-${request.id}`}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="destructive"

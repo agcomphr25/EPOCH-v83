@@ -214,15 +214,25 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Part not found' });
     }
 
-    const routing = await db.query.partRoutings.findFirst({
-      where: and(
-        eq(partRoutings.partNumber, serializedItem.partNumber),
-        eq(partRoutings.isActive, true)
-      ),
-    });
+    let routing = null as any;
 
-    const departmentSequence: string[] = routing?.departmentSequence 
-      ? (routing.departmentSequence as string[]) 
+    if ((serializedItem as any).partRoutingId) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.id, (serializedItem as any).partRoutingId),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    if (!routing) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
       : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
     const nextDepartment = currentIndex < departmentSequence.length ? departmentSequence[currentIndex] : null;
@@ -464,13 +474,22 @@ router.post('/start-task', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Part not found' });
     }
 
-    // Get part routing to verify department and check multi-task settings
-    const routing = await db.query.partRoutings.findFirst({
-      where: and(
-        eq(partRoutings.partNumber, serializedItem.partNumber),
-        eq(partRoutings.isActive, true)
-      ),
-    });
+    let routing = null as any;
+
+    if ((serializedItem as any).partRoutingId) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.id, (serializedItem as any).partRoutingId),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    if (!routing) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
 
     const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[department] || {};
@@ -709,15 +728,25 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Serialized item not found' });
     }
 
-    const routing = await db.query.partRoutings.findFirst({
-      where: and(
-        eq(partRoutings.partNumber, serializedItem.partNumber),
-        eq(partRoutings.isActive, true)
-      ),
-    });
+    let routing = null as any;
 
-    const departmentSequence: string[] = routing?.departmentSequence 
-      ? (routing.departmentSequence as string[]) 
+    if ((serializedItem as any).partRoutingId) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.id, (serializedItem as any).partRoutingId),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+
+    if (!routing) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
       : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
     

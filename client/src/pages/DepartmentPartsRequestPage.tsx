@@ -257,7 +257,7 @@ export default function DepartmentPartsRequestPage() {
       reason: requestForm.reason.trim() || null,
       requestedBy: user.username,
       department: effectiveDepartment,
-      departmentId: null,
+      departmentId: effectiveDepartmentId,
       catalogFixNeeded: outOfDept,
       outOfDeptReason: outOfDept ? requestForm.outOfDeptReason : null,
     });

@@ -285,6 +285,8 @@ export default function P2ProductionQueue() {
       return;
     }
 
+    const labelsPerSheet = 30;
+
     const generateLabelContent = (item: QueueItem, index: number) => {
       return `
         <div class="avery-label">
@@ -301,31 +303,54 @@ export default function P2ProductionQueue() {
       `;
     };
 
+    const sheets: string[] = [];
+    for (let i = 0; i < items.length; i += labelsPerSheet) {
+      const sheetItems = items.slice(i, i + labelsPerSheet);
+      sheets.push(`
+        <div class="labels-sheet">
+          ${sheetItems.map((item, j) => generateLabelContent(item, i + j)).join('')}
+        </div>
+      `);
+    }
+
     printWindow.document.write(`
       <html>
         <head>
           <title>${title}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; }
-            .labels-container {
+            body {
+              font-family: Arial, sans-serif;
               width: 8.5in;
-              padding: 0.5in 0.1875in;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .labels-sheet {
+              width: 8.125in;
+              height: 10in;
+              margin: 0 auto;
+              display: grid;
+              grid-template-columns: 2.625in 2.625in 2.625in;
+              grid-template-rows: repeat(10, 1in);
+              column-gap: 0.125in;
+              row-gap: 0in;
+              align-content: start;
+              page-break-after: always;
+            }
+            .labels-sheet:last-child {
+              page-break-after: auto;
             }
             .avery-label {
               width: 2.625in;
               height: 1in;
-              border: 1px solid #ddd;
-              display: inline-block;
-              vertical-align: top;
+              border: 1px solid #ccc;
               overflow: hidden;
-              page-break-inside: avoid;
               background: white;
             }
             .label-content {
               width: 100%;
               height: 100%;
-              padding: 3px 5px;
+              padding: 2px 4px;
               display: flex;
               flex-direction: column;
               justify-content: space-between;
@@ -336,17 +361,22 @@ export default function P2ProductionQueue() {
             .line3 { font-size: 6pt; color: #000; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.1; }
             .line4 { font-size: 5pt; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.1; }
             .line5 { height: 20px; display: flex; justify-content: center; align-items: center; }
-            .line5 canvas { max-width: 100%; height: 20px !important; }
+            .line5 canvas { max-width: 100%; height: 18px !important; }
+            @media screen {
+              body { padding: 0.5in 0.1875in; }
+            }
             @media print {
+              html, body { width: 8.5in; height: 11in; }
               .avery-label { border: none; }
-              @page { size: 8.5in 11in; margin: 0.5in 0.1875in; }
+              @page {
+                size: 8.5in 11in;
+                margin: 0.5in 0.1875in 0.5in 0.1875in;
+              }
             }
           </style>
         </head>
         <body>
-          <div class="labels-container">
-            ${items.map((item, i) => generateLabelContent(item, i)).join('')}
-          </div>
+          ${sheets.join('')}
         </body>
       </html>
     `);

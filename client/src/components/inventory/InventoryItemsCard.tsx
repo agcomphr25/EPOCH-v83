@@ -406,6 +406,8 @@ const InventoryForm = ({
               <SelectItem value="FT">FT</SelectItem>
               <SelectItem value="M">M</SelectItem>
               <SelectItem value="SQM">SQM</SelectItem>
+              <SelectItem value="HR">HR</SelectItem>
+              <SelectItem value="MIN">MIN</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">

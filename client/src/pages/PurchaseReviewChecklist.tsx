@@ -1874,10 +1874,12 @@ export default function PurchaseReviewChecklist() {
                   <SignatureCanvas
                     ref={signatureCanvasRef}
                     penColor="black"
+                    clearOnResize={false}
                     canvasProps={{
                       width: 700,
                       height: 200,
                       className: 'signature-canvas border rounded w-full',
+                      style: { touchAction: 'none' },
                     }}
                     onEnd={saveSignature}
                   />

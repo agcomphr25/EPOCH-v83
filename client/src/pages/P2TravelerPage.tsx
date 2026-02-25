@@ -53,6 +53,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 
+const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'GENERATING_TRAVELER' | 'TASK_ACTIVE';
 
 interface Employee {
@@ -838,7 +840,7 @@ export default function P2TravelerPage() {
                     value={badgeInput}
                     onChange={(e) => setBadgeInput(e.target.value)}
                     placeholder="Scan or enter badge code..."
-                    autoFocus
+                    autoFocus={!isTouchDevice()}
                     autoComplete="off"
                     className="flex-1"
                     data-testid="input-badge-code"
@@ -885,7 +887,7 @@ export default function P2TravelerPage() {
                       value={partInput}
                       onChange={(e) => setPartInput(e.target.value)}
                       placeholder="Scan or enter part barcode..."
-                      autoFocus
+                      autoFocus={!isTouchDevice()}
                       autoComplete="off"
                       className="flex-1"
                       data-testid="input-part-barcode"
@@ -1645,7 +1647,7 @@ export default function P2TravelerPage() {
                     value={badgeInput}
                     onChange={(e) => setBadgeInput(e.target.value)}
                     placeholder="Scan badge to verify..."
-                    autoFocus
+                    autoFocus={!isTouchDevice()}
                     autoComplete="off"
                     data-testid="input-complete-badge"
                   />

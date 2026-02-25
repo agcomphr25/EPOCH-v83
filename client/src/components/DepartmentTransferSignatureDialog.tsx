@@ -247,9 +247,10 @@ export default function DepartmentTransferSignatureDialog({
               <SignatureCanvas
                 ref={signatureRef}
                 penColor="black"
+                clearOnResize={false}
                 canvasProps={{
                   className: 'w-full h-40 cursor-crosshair',
-                  style: { width: '100%', height: '160px' }
+                  style: { width: '100%', height: '160px', touchAction: 'none' }
                 }}
                 onEnd={handleSignatureEnd}
                 data-testid="canvas-signature"

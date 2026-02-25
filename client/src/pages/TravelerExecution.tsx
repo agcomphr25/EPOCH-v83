@@ -2034,9 +2034,10 @@ export default function TravelerExecution() {
               <div className={`border-2 rounded-lg overflow-hidden ${signatureData.signatureData ? 'border-green-500' : 'border-dashed border-muted-foreground/30'}`}>
                 <SignatureCanvas
                   ref={sigPadRef}
+                  clearOnResize={false}
                   canvasProps={{
                     className: 'w-full h-[150px] bg-white cursor-crosshair',
-                    style: { width: '100%', height: '150px' },
+                    style: { width: '100%', height: '150px', touchAction: 'none' },
                   }}
                   penColor="black"
                   onEnd={() => {

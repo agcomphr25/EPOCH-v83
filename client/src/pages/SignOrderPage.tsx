@@ -457,8 +457,10 @@ export default function SignOrderPage() {
                 <SignatureCanvas
                   ref={signatureRef}
                   penColor="black"
+                  clearOnResize={false}
                   canvasProps={{
-                    className: 'w-full h-48 cursor-crosshair'
+                    className: 'w-full h-48 cursor-crosshair',
+                    style: { touchAction: 'none' }
                   }}
                   onEnd={handleSignatureEnd}
                   data-testid="canvas-signature"

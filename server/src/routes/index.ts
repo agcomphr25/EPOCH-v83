@@ -84,6 +84,7 @@ import websiteOrderImportRoutes from './websiteOrderImport';
 import p2TravelerRoutes from './p2Traveler';
 import p2TravelerViewerRoutes from './p2TravelerViewer';
 import p2ProductionQueueRoutes from './p2ProductionQueue';
+import p2SerializedItemsRoutes from './p2SerializedItems';
 import partRoutingsRoutes from './partRoutings';
 import travelersRoutes from './travelers';
 import materialLotsRoutes from './materialLots';
@@ -289,6 +290,9 @@ export function registerRoutes(app: Express): Server {
   
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
+  
+  // P2 Serialized Items routes (finalize, batch assign SKU/drawing)
+  app.use('/api/p2/serialized-items', p2SerializedItemsRoutes);
   
   // Part routing management routes
   app.use('/api/part-routings', partRoutingsRoutes);

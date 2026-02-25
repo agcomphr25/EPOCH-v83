@@ -1,0 +1,79 @@
+2) Add a finalize endpoint (batch assign SKU/drawing/customer serial)
+
+Create a new route file (or add to p2Traveler.ts since it already handles serialized items):
+
+✅ Copy/paste: server/src/routes/p2SerializedItems.ts (or append inside p2Traveler.ts)
+import { Router } from 'express';
+import { z } from 'zod';
+import { db } from '../../db';
+import { p2SerializedItems, p2SerializedItemEvents } from '../../schema';
+import { and, eq, inArray } from 'drizzle-orm';
+
+const router = Router();
+
+const finalizeSchema = z.object({
+  serializedItemIds: z.array(z.string().uuid()).min(1),
+  sku: z.string().min(1),
+  drawingName: z.string().min(1),
+  customerSerialNumber: z.string().min(1).optional(),
+  performedBy: z.string().min(1), // employeeCode or username
+});
+
+router.post('/finalize', async (req, res) => {
+  try {
+    const input = finalizeSchema.parse(req.body);
+
+    const items = await db.query.p2SerializedItems.findMany({
+      where: inArray(p2SerializedItems.id, input.serializedItemIds),
+    });
+
+    if (items.length !== input.serializedItemIds.length) {
+      return res.status(404).json({ error: 'One or more serialized items not found' });
+    }
+
+    // Update all selected units
+    await db
+      .update(p2SerializedItems)
+      .set({
+        sku: input.sku,
+        drawingName: input.drawingName,
+        customerSerialNumber: input.customerSerialNumber ?? null,
+        customerSerialAssignedAt: input.customerSerialNumber ? new Date() : null,
+        customerSerialAssignedBy: input.customerSerialNumber ? input.performedBy : null,
+        finalizedAt: new Date(),
+        finalizedBy: input.performedBy,
+        updatedAt: new Date(),
+      })
+      .where(inArray(p2SerializedItems.id, input.serializedItemIds));
+
+    // Audit events (one per unit)
+    for (const item of items) {
+      await db.insert(p2SerializedItemEvents).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        eventType: 'NOTE',
+        performedBy: input.performedBy,
+        notes: `Finalized identity for shipment`,
+        metadata: {
+          sku: input.sku,
+          drawingName: input.drawingName,
+          customerSerialNumber: input.customerSerialNumber ?? null,
+        },
+      });
+    }
+
+    return res.json({ success: true, updatedCount: items.length });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'Failed to finalize serialized items' });
+  }
+});
+
+export default router;
+✅ Then mount it (server/src/routes/index.ts)
+
+Add:
+
+import p2SerializedItemsRoutes from './p2SerializedItems';
+app.use('/api/p2/serialized-items', p2SerializedItemsRoutes);
+
+Now Shipping QC can finalize any scanned set of units.

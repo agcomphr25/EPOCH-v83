@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { pool } from '../../db';
+import { pool, db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
 
@@ -1689,6 +1689,48 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // Log warning if same customer has multiple IDs or name variations
     if (uniqueCustomerIds.size > 1 || uniqueCustomerNames.size > 1) {
       console.warn(`⚠️ Customer has variations - Names: ${Array.from(uniqueCustomerNames).join(', ')}, IDs: ${Array.from(uniqueCustomerIds).join(', ')}`);
+    }
+
+    // 2b. FINALIZATION GATE — block shipment if any serialized units missing SKU/drawing
+    {
+      const { p2SerializedItems } = await import('../../schema');
+      const { and: andOp, eq: eqOp } = await import('drizzle-orm');
+
+      for (const detail of orderDetails) {
+        const poId = detail.order?.poId ?? (detail.order as any)?.po_id;
+        const poItemId = detail.order?.poItemId ?? (detail.order as any)?.po_item_id;
+
+        if (!poId || !poItemId) continue;
+
+        const units = await db.query.p2SerializedItems.findMany({
+          where: andOp(
+            eqOp(p2SerializedItems.poId, poId),
+            eqOp(p2SerializedItems.poItemId, poItemId),
+            eqOp(p2SerializedItems.status, 'ACTIVE')
+          ),
+        });
+
+        if (units.length === 0) continue;
+
+        const notFinalized = units.filter(u => !(u as any).finalizedAt || !(u as any).sku || !(u as any).drawingName);
+
+        if (notFinalized.length > 0) {
+          return res.status(403).json({
+            error: 'Cannot ship: some units are not finalized (SKU/Drawing required)',
+            guard: 'FINALIZATION_REQUIRED',
+            poId,
+            poItemId,
+            missing: notFinalized.map(u => ({
+              id: u.id,
+              barcode: u.barcode,
+              serialNumber: u.serialNumber,
+              sku: (u as any).sku ?? null,
+              drawingName: (u as any).drawingName ?? null,
+              finalizedAt: (u as any).finalizedAt ?? null,
+            })),
+          });
+        }
+      }
     }
 
     // 3. GROUP BY PO NUMBER

@@ -16,6 +16,7 @@ import {
   insertP2SerializedItemEventSchema,
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
+  P2_DEPARTMENT_STAGES,
 } from '../../schema';
 import { eq, and, desc, or, ilike, inArray, asc } from 'drizzle-orm';
 import { storage } from '../../storage';
@@ -135,12 +136,9 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       }
     }
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    // Determine next department based on routing sequence
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
     
     if (currentIndex >= departmentSequence.length) {
@@ -149,7 +147,6 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const nextDepartment = departmentSequence[currentIndex];
 
-    // Check if employee is certified for this department and part (handle department name variants)
     const deptVariants = getDepartmentVariants(nextDepartment);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
@@ -164,8 +161,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const isCertified = !!certification;
 
-    // Get department configuration from routing
-    const departmentConfig = routing.departmentConfig as any;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[nextDepartment] || {};
 
     return res.json({
@@ -185,14 +181,15 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
         status: serializedItem.status,
       },
       routing: {
-        id: routing.id,
+        id: routing?.id || null,
         departmentSequence,
         currentStageIndex: currentIndex,
       },
       nextDepartment,
       isCertified,
       departmentConfig: config,
-      traceabilityRequirements: (routing.traceabilityConfig as any)?.[nextDepartment] || [],
+      traceabilityRequirements: routing ? ((routing.traceabilityConfig as any)?.[nextDepartment] || []) : [],
+      hasRouting: !!routing,
     });
   } catch (error: any) {
     console.error('Error verifying certification:', error);
@@ -224,15 +221,13 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
-    const nextDepartment = departmentSequence[currentIndex];
-    const departmentConfig = routing.departmentConfig as any;
-    const config = departmentConfig?.[nextDepartment] || {};
+    const nextDepartment = currentIndex < departmentSequence.length ? departmentSequence[currentIndex] : null;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
+    const config = nextDepartment ? (departmentConfig?.[nextDepartment] || {}) : {};
 
     return res.json({
       serializedItem: {
@@ -247,12 +242,13 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
         status: serializedItem.status,
       },
       routing: {
-        id: routing.id,
+        id: routing?.id || null,
         departmentSequence,
       },
       nextDepartment,
       departmentConfig: config,
-      traceabilityRequirements: (routing.traceabilityConfig as any)?.[nextDepartment] || [],
+      traceabilityRequirements: routing && nextDepartment ? ((routing.traceabilityConfig as any)?.[nextDepartment] || []) : [],
+      hasRouting: !!routing,
     });
   } catch (error: any) {
     console.error('Error getting part info:', error);
@@ -476,11 +472,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    const departmentConfig = routing.departmentConfig as any;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
@@ -724,13 +716,16 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'Routing not found' });
-    }
-
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
-    const currentDepartment = departmentSequence[currentIndex];
+    
+    if (currentIndex >= departmentSequence.length) {
+      return res.status(400).json({ error: 'Part has already completed all departments in the sequence' });
+    }
+    
+    const currentDepartment = departmentSequence[currentIndex] || serializedItem.currentDepartment || 'Layup';
     const nextIndex = currentIndex + 1;
     const nextDepartment = departmentSequence[nextIndex];
 

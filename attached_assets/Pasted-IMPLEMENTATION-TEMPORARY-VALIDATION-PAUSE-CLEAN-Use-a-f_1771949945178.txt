@@ -1,0 +1,92 @@
+IMPLEMENTATION — TEMPORARY VALIDATION PAUSE (CLEAN)
+
+Use a feature flag.
+
+This is the safest approach.
+
+🔧 Copy-Paste Prompt — Pause Validation Safely
+
+Run this in a fresh agent thread:
+
+You are implementing a TEMPORARY VALIDATION PAUSE for production stabilization.
+
+DO NOT delete validation code.
+DO NOT remove addressService.
+DO NOT modify schema.
+DO NOT refactor frontend.
+
+OBJECTIVE:
+Allow all addresses to save without validation while preserving the ability to re-enable validation later.
+
+================================================
+STEP 1 — Add Feature Flag Check
+================================================
+
+Open:
+server/src/routes/index.ts
+
+Locate POST /api/addresses.
+
+Find:
+
+if (hasAddress && !skipValidation) {
+   // validation logic
+}
+
+Modify it to:
+
+const validationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
+
+if (validationEnabled && hasAddress && !skipValidation) {
+   // existing validation logic
+}
+
+================================================
+STEP 2 — Repeat for customers.ts
+================================================
+
+Open:
+server/src/routes/customers.ts
+
+Locate POST /api/customers/:id/addresses.
+
+Wrap its validation block with:
+
+const validationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
+
+if (validationEnabled && hasAddress && !skipValidation) {
+   // validation logic
+}
+
+================================================
+STEP 3 — Set Default Behavior
+================================================
+
+Do NOT change behavior if env var is missing.
+
+Validation should remain enabled unless explicitly disabled.
+
+================================================
+STEP 4 — Confirm Raw Save Path
+================================================
+
+Ensure that when validationEnabled === false:
+
+- Address is saved directly via storage.createCustomerAddress()
+- No 400 is returned
+- validation_status is set to NULL or 'raw'
+- No dpv fields are written
+
+================================================
+DELIVERABLE
+================================================
+
+Return:
+1. Updated route snippets
+2. Confirmation validation is bypassed when env var is false
+3. Confirmation DB write still executes
+4. Diff summary
+🔧 Then Set This In Environment:
+ADDRESS_VALIDATION_ENABLED=false
+
+Restart backend.

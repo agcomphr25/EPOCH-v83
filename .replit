@@ -56,6 +56,7 @@ PRODUCTION_DOMAIN = "agcompepoch.xyz"
 PAUSE_ORDER_REMINDERS = "true"
 UPS_ENV = "production"
 PAUSE_ORDER_CONFIRMATION_EMAILS = "true"
+ADDRESS_VALIDATION_ENABLED = "false"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"

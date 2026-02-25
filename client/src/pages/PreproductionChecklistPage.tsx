@@ -1262,9 +1262,10 @@ function ChecklistDetailView({
               <div className="border rounded-lg bg-white">
                 <SignatureCanvas
                   ref={sigRef}
+                  clearOnResize={false}
                   canvasProps={{
                     className: 'w-full h-32',
-                    style: { width: '100%', height: '128px' },
+                    style: { width: '100%', height: '128px', touchAction: 'none' },
                   }}
                 />
               </div>

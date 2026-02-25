@@ -338,6 +338,37 @@ router.get('/items', async (req: Request, res: Response) => {
   }
 });
 
+// Get all inventory items (for "Show all parts" feature) — must be before /items/:id
+router.get('/items/all-for-request', async (req: Request, res: Response) => {
+  try {
+    const { inventoryItems } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+
+    const items = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+        department: inventoryItems.department,
+        assignedDepartments: inventoryItems.assignedDepartments,
+        currentBalance: inventoryItems.currentBalance,
+        minStock: inventoryItems.minStock,
+        maxStock: inventoryItems.maxStock,
+        usageUnit: inventoryItems.usageUnit,
+        vendorId: inventoryItems.vendorId,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.isActive, true));
+
+    res.json(items);
+  } catch (error) {
+    console.error('Get all items for request error:', error);
+    res.status(500).json({ error: 'Failed to fetch items' });
+  }
+});
+
 router.get('/items/:id', async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
@@ -1315,36 +1346,6 @@ router.get('/parts-requests/:id/history', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Get status history error:', error);
     res.status(500).json({ error: 'Failed to fetch status history' });
-  }
-});
-
-// Get all inventory items (for "Show all parts" feature)
-router.get('/items/all-for-request', async (req: Request, res: Response) => {
-  try {
-    const { inventoryItems } = await import('../../schema');
-    const { db } = await import('../../db');
-    const { eq } = await import('drizzle-orm');
-
-    const items = await db
-      .select({
-        id: inventoryItems.id,
-        agPartNumber: inventoryItems.agPartNumber,
-        name: inventoryItems.name,
-        sku: inventoryItems.sku,
-        department: inventoryItems.department,
-        currentBalance: inventoryItems.currentBalance,
-        minStock: inventoryItems.minStock,
-        maxStock: inventoryItems.maxStock,
-        usageUnit: inventoryItems.usageUnit,
-        vendorId: inventoryItems.vendorId,
-      })
-      .from(inventoryItems)
-      .where(eq(inventoryItems.isActive, true));
-
-    res.json(items);
-  } catch (error) {
-    console.error('Get all items for request error:', error);
-    res.status(500).json({ error: 'Failed to fetch items' });
   }
 });
 

@@ -1,0 +1,160 @@
+COPY-PASTE FORENSIC AUDIT PROMPT
+
+Paste this directly into your agent.
+
+We are performing a READ-ONLY FORENSIC AUDIT of the shipping label creation flow.
+
+DO NOT MODIFY CODE.
+DO NOT APPLY FIXES.
+DO NOT REFACTOR.
+
+Goal:
+Map the complete execution path for generating a shipping label and identify:
+1) All variable declarations and usage order
+2) All address validation checks
+3) All shipping gate checks
+4) Any temporal dead zone risks
+5) Any dependency on ADDRESS_VALIDATION_ENABLED
+6) Any code paths that can produce:
+   - ReferenceError
+   - 400 blocks
+   - 500 crashes
+
+---------------------------------------
+STEP 1 — Identify Entry Point
+---------------------------------------
+
+Find the exact route handler for:
+
+POST /api/shipping/labels
+(or equivalent)
+
+Output:
+- File path
+- Line number
+- Full function body
+
+---------------------------------------
+STEP 2 — Variable Initialization Order
+---------------------------------------
+
+Inside that route:
+
+List all variables declared with:
+- let
+- const
+- var
+
+In exact order of appearance.
+
+Then list:
+- Every place each variable is referenced BEFORE declaration.
+
+Explicitly check for:
+- order
+- customer
+- address
+- validationStatus
+- shippingAddress
+- billingAddress
+
+---------------------------------------
+STEP 3 — Address Validation Flow
+---------------------------------------
+
+Trace:
+
+Where is validationStatus checked?
+Where is ADDRESS_VALIDATION_ENABLED read?
+Is the flag evaluated BEFORE or AFTER order fetch?
+Is there any conditional that assumes validationStatus exists?
+
+Map the full logical flow like this:
+
+Request
+→ Fetch order
+→ Fetch customer
+→ Fetch address
+→ Validation gate
+→ Shipping gate
+→ Label generation
+
+---------------------------------------
+STEP 4 — Shipping Gate Logic
+---------------------------------------
+
+Locate all logic that blocks label creation.
+
+List every condition that returns:
+- 400
+- 403
+- 500
+
+Output the exact condition blocks.
+
+---------------------------------------
+STEP 5 — Temporal Dead Zone Risk Scan
+---------------------------------------
+
+Search for:
+
+if (order && ...)
+if (customer && ...)
+if (address && ...)
+
+Before their declarations.
+
+Specifically check:
+- Any reference above `let order =`
+- Any reference above `const order =`
+- Any destructuring that uses order before assignment
+
+---------------------------------------
+STEP 6 — Dependency Graph
+---------------------------------------
+
+Map:
+
+Shipping label route depends on:
+- Which service?
+- Which storage function?
+- Which DB query?
+- Which address validation function?
+
+List function call chain.
+
+---------------------------------------
+STEP 7 — Console Error Reproduction
+---------------------------------------
+
+Simulate execution flow when:
+
+ADDRESS_VALIDATION_ENABLED=false
+
+And address has:
+validationStatus = null
+
+Describe what code path executes.
+Does it:
+- Bypass gate?
+- Hit undefined?
+- Throw?
+
+---------------------------------------
+STEP 8 — Report Format
+---------------------------------------
+
+Return output in this structure:
+
+1. ENTRY POINT
+2. VARIABLE ORDER TABLE
+3. VALIDATION FLOW MAP
+4. SHIPPING GATE CONDITIONS
+5. DEAD ZONE RISKS FOUND
+6. FLAG BEHAVIOR WHEN FALSE
+7. ROOT CAUSE HYPOTHESIS (NO FIXES)
+
+DO NOT APPLY CHANGES.
+DO NOT PATCH.
+DO NOT MOVE CODE.
+This is forensic only.

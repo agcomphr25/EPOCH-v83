@@ -230,11 +230,12 @@ export default function SignatureSigningInterface({
                   <div className="border-2 border-dashed rounded-lg bg-white">
                     <SignatureCanvas
                       ref={sigCanvasRef}
+                      clearOnResize={false}
                       canvasProps={{
                         width: 600,
                         height: 150,
                         className: 'signature-canvas',
-                        style: { width: '100%', height: '150px', backgroundColor: 'white' },
+                        style: { width: '100%', height: '150px', backgroundColor: 'white', touchAction: 'none' },
                       }}
                       penColor="black"
                     />

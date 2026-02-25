@@ -441,9 +441,10 @@ export function PDFSignatureCapture({
             <SignatureCanvas
               ref={signatureRef}
               penColor="black"
+              clearOnResize={false}
               canvasProps={{
                 className: 'w-full h-[150px]',
-                style: { width: '100%', height: '150px' }
+                style: { width: '100%', height: '150px', touchAction: 'none' }
               }}
               onEnd={handleSignatureEnd}
             />

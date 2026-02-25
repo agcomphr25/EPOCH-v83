@@ -134,7 +134,7 @@ export default function DepartmentPartsRequestPage() {
       reason: string | null;
       requestedBy: string;
       department: string;
-      departmentId: number;
+      departmentId: number | null;
       catalogFixNeeded: boolean;
       outOfDeptReason: string | null;
     }) => {
@@ -257,7 +257,7 @@ export default function DepartmentPartsRequestPage() {
       reason: requestForm.reason.trim() || null,
       requestedBy: user.username,
       department: effectiveDepartment,
-      departmentId: effectiveDepartmentId || 0,
+      departmentId: null,
       catalogFixNeeded: outOfDept,
       outOfDeptReason: outOfDept ? requestForm.outOfDeptReason : null,
     });

@@ -173,8 +173,10 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
               <div className="border rounded-lg p-4 bg-gray-50">
                 <SignatureCanvas
                   penColor="black"
+                  clearOnResize={false}
                   canvasProps={{
                     className: 'w-full h-48 bg-white border rounded',
+                    style: { touchAction: 'none' },
                   }}
                   ref={sigPadRef}
                 />

@@ -1,0 +1,59 @@
+index-DpU_COLS.js:4620 React initialized: Object
+index-DpU_COLS.js:4620 React hooks: Object
+index-DpU_COLS.js:4617 App component is rendering...
+index-DpU_COLS.js:4617 Environment: production
+index-DpU_COLS.js:4617 Base URL: /
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+/calendar:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/calendar/events:1  Failed to load resource: the server responded with a status of 403 ()
+/api/calendar/google-events:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+/api/calendar/events:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/calendar/events:1  Failed to load resource: the server responded with a status of 403 ()
+/api/calendar/google-events:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:3454 📅 Local events raw data: Array(0)
+index-DpU_COLS.js:3454 📅 Local events transformed: 0
+index-DpU_COLS.js:3454 📅 Local events raw data: Array(0)
+index-DpU_COLS.js:3454 📅 Local events transformed: 0
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+/api/calendar/google-events:1  Failed to load resource: the server responded with a status of 409 ()
+index-DpU_COLS.js:3454 📅 Local events raw data: Array(0)
+index-DpU_COLS.js:3454 📅 Local events transformed: 0
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:1472 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=bac8467a6da7b970dfc6e7a70a7344dd96821c854791abe00ef8ad76623880e6' failed: 
+(anonymous) @ index-DpU_COLS.js:1472
+index-DpU_COLS.js:3454 📅 Local events raw data: Array(0)
+index-DpU_COLS.js:3454 📅 Local events transformed: 0
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+/api/calendar/google-events:1  Failed to load resource: the server responded with a status of 409 ()
+index-DpU_COLS.js:3454 📅 Local events raw data: Array(0)
+index-DpU_COLS.js:3454 📅 Local events transformed: 0
+index-DpU_COLS.js:3454 📅 Calendar state: Object
+index-DpU_COLS.js:1830 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DpU_COLS.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DpU_COLS.js:235 ✅ API Response from /api/tickets/by-orders: 200
+/api/shipping/create-label:1  Failed to load resource: the server responded with a status of 500 ()
+index-DpU_COLS.js:4620 UPS API Error Details: Object
+console.error @ index-DpU_COLS.js:4620

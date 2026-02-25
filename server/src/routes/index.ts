@@ -4213,8 +4213,9 @@ export function registerRoutes(app: Express): Server {
       const addressData = bodyData;
 
       const hasAddress = addressData.street && addressData.city && addressData.state && addressData.zipCode;
+      const validationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
 
-      if (hasAddress && !skipValidation) {
+      if (validationEnabled && hasAddress && !skipValidation) {
         const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
         const addressInput = fromLegacyFields({
           street: addressData.street,
@@ -4272,6 +4273,9 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
+      if (!validationEnabled) {
+        console.log('🔧 Address validation PAUSED (ADDRESS_VALIDATION_ENABLED=false) — saving raw');
+      }
       const address = await storage.createCustomerAddress(addressData);
       console.log('🔧 Created address:', address.id);
       res.status(201).json(address);
@@ -4290,8 +4294,9 @@ export function registerRoutes(app: Express): Server {
       const addressData = bodyData;
 
       const hasAddress = addressData.street && addressData.city && addressData.state && addressData.zipCode;
+      const validationEnabled = process.env.ADDRESS_VALIDATION_ENABLED !== 'false';
 
-      if (hasAddress && !skipValidation) {
+      if (validationEnabled && hasAddress && !skipValidation) {
         const { validateAndNormalize, fromLegacyFields, toLegacyFields } = await import('../domain/address/addressService');
         const addressInput = fromLegacyFields({
           street: addressData.street,
@@ -4335,6 +4340,8 @@ export function registerRoutes(app: Express): Server {
             },
           });
         }
+      } else if (!validationEnabled) {
+        console.log('🔧 Address validation PAUSED (ADDRESS_VALIDATION_ENABLED=false) — updating raw');
       }
 
       const address = await storage.updateCustomerAddress(

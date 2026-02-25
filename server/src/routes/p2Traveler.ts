@@ -16,8 +16,9 @@ import {
   insertP2SerializedItemEventSchema,
   insertP2SerializedItemTraceabilitySchema,
   insertP2SerializedItemCustomDataSchema,
+  P2_DEPARTMENT_STAGES,
 } from '../../schema';
-import { eq, and, desc, or, ilike, inArray, asc } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, asc, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 
 const router = Router();
@@ -135,12 +136,9 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       }
     }
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    // Determine next department based on routing sequence
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
     
     if (currentIndex >= departmentSequence.length) {
@@ -149,7 +147,6 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const nextDepartment = departmentSequence[currentIndex];
 
-    // Check if employee is certified for this department and part (handle department name variants)
     const deptVariants = getDepartmentVariants(nextDepartment);
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
@@ -164,8 +161,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const isCertified = !!certification;
 
-    // Get department configuration from routing
-    const departmentConfig = routing.departmentConfig as any;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[nextDepartment] || {};
 
     return res.json({
@@ -185,14 +181,15 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
         status: serializedItem.status,
       },
       routing: {
-        id: routing.id,
+        id: routing?.id || null,
         departmentSequence,
         currentStageIndex: currentIndex,
       },
       nextDepartment,
       isCertified,
       departmentConfig: config,
-      traceabilityRequirements: (routing.traceabilityConfig as any)?.[nextDepartment] || [],
+      traceabilityRequirements: routing ? ((routing.traceabilityConfig as any)?.[nextDepartment] || []) : [],
+      hasRouting: !!routing,
     });
   } catch (error: any) {
     console.error('Error verifying certification:', error);
@@ -224,15 +221,13 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
-    const nextDepartment = departmentSequence[currentIndex];
-    const departmentConfig = routing.departmentConfig as any;
-    const config = departmentConfig?.[nextDepartment] || {};
+    const nextDepartment = currentIndex < departmentSequence.length ? departmentSequence[currentIndex] : null;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
+    const config = nextDepartment ? (departmentConfig?.[nextDepartment] || {}) : {};
 
     return res.json({
       serializedItem: {
@@ -247,12 +242,13 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
         status: serializedItem.status,
       },
       routing: {
-        id: routing.id,
+        id: routing?.id || null,
         departmentSequence,
       },
       nextDepartment,
       departmentConfig: config,
-      traceabilityRequirements: (routing.traceabilityConfig as any)?.[nextDepartment] || [],
+      traceabilityRequirements: routing && nextDepartment ? ((routing.traceabilityConfig as any)?.[nextDepartment] || []) : [],
+      hasRouting: !!routing,
     });
   } catch (error: any) {
     console.error('Error getting part info:', error);
@@ -476,11 +472,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'No routing configuration found for this part' });
-    }
-
-    const departmentConfig = routing.departmentConfig as any;
+    const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
@@ -724,13 +716,16 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       ),
     });
 
-    if (!routing) {
-      return res.status(404).json({ error: 'Routing not found' });
-    }
-
-    const departmentSequence = routing.departmentSequence as string[];
+    const departmentSequence: string[] = routing?.departmentSequence 
+      ? (routing.departmentSequence as string[]) 
+      : [...P2_DEPARTMENT_STAGES];
     const currentIndex = serializedItem.currentStageIndex || 0;
-    const currentDepartment = departmentSequence[currentIndex];
+    
+    if (currentIndex >= departmentSequence.length) {
+      return res.status(400).json({ error: 'Part has already completed all departments in the sequence' });
+    }
+    
+    const currentDepartment = departmentSequence[currentIndex] || serializedItem.currentDepartment || 'Layup';
     const nextIndex = currentIndex + 1;
     const nextDepartment = departmentSequence[nextIndex];
 
@@ -954,6 +949,264 @@ router.get('/traceability/:serializedItemId', async (req: Request, res: Response
   } catch (error: any) {
     console.error('Error getting traceability:', error);
     return res.status(500).json({ error: 'Failed to get traceability report' });
+  }
+});
+
+// PUT /api/p2-traveler/edit-department-data/:serializedItemId
+// Edit traceability, QC results, or custom data for a serialized item in a department
+// Technicians can edit while item is still in that department; only admin can edit after department is closed
+router.put('/edit-department-data/:serializedItemId', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId } = req.params;
+    const { department, traceabilityData: newTraceData, qcResults: newQcResults, customData: newCustomData, editedBy, editedByName, isAdmin } = req.body;
+
+    if (!department || !editedBy) {
+      return res.status(400).json({ error: 'department and editedBy are required' });
+    }
+
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, serializedItemId),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    const isCurrentDepartment = serializedItem.currentDepartment === department;
+
+    if (!isCurrentDepartment && !isAdmin) {
+      return res.status(403).json({ 
+        error: 'Only administrators can edit data for completed departments',
+        requiresAdmin: true,
+      });
+    }
+
+    const changes: string[] = [];
+
+    if (newTraceData && Array.isArray(newTraceData) && newTraceData.length > 0) {
+      await db.delete(p2SerializedItemTraceability)
+        .where(and(
+          eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+          eq(p2SerializedItemTraceability.department, department)
+        ));
+
+      const traceRecords = newTraceData.map((item: any) => ({
+        serializedItemId,
+        department,
+        inventoryPartId: item.inventoryPartId || null,
+        inventoryPartNumber: item.inventoryPartNumber || null,
+        traceabilityType: item.type,
+        traceabilityLabel: item.label,
+        traceabilityValue: item.value,
+        recordedBy: editedBy,
+      }));
+
+      await db.insert(p2SerializedItemTraceability).values(traceRecords);
+      changes.push('traceability data');
+    }
+
+    if (newCustomData && Object.keys(newCustomData).length > 0) {
+      const existingCustom = await db.query.p2SerializedItemCustomData.findFirst({
+        where: and(
+          eq(p2SerializedItemCustomData.serializedItemId, serializedItemId),
+          eq(p2SerializedItemCustomData.department, department)
+        ),
+      });
+
+      if (existingCustom) {
+        const merged = { ...(existingCustom.customData as any || {}), ...newCustomData };
+        if ((existingCustom.customData as any)?.qcResults) {
+          merged.qcResults = (existingCustom.customData as any).qcResults;
+        }
+        await db.update(p2SerializedItemCustomData)
+          .set({ customData: merged, recordedBy: editedBy })
+          .where(eq(p2SerializedItemCustomData.id, existingCustom.id));
+      } else {
+        await db.insert(p2SerializedItemCustomData).values({
+          serializedItemId,
+          department,
+          customData: newCustomData,
+          recordedBy: editedBy,
+        });
+      }
+      changes.push('custom data');
+    }
+
+    if (newQcResults && Array.isArray(newQcResults) && newQcResults.length > 0) {
+      const existingQc = await db.query.p2SerializedItemCustomData.findFirst({
+        where: and(
+          eq(p2SerializedItemCustomData.serializedItemId, serializedItemId),
+          eq(p2SerializedItemCustomData.department, department),
+          sql`(custom_data->>'qcResults') IS NOT NULL`
+        ),
+      });
+
+      if (existingQc) {
+        const merged = { ...(existingQc.customData as any || {}), qcResults: newQcResults };
+        await db.update(p2SerializedItemCustomData)
+          .set({ customData: merged, recordedBy: editedBy })
+          .where(eq(p2SerializedItemCustomData.id, existingQc.id));
+      } else {
+        await db.insert(p2SerializedItemCustomData).values({
+          serializedItemId,
+          department,
+          customData: { qcResults: newQcResults },
+          recordedBy: editedBy,
+        });
+      }
+      changes.push('QC results');
+    }
+
+    await db.insert(p2SerializedItemEvents).values({
+      serializedItemId,
+      barcode: serializedItem.barcode,
+      eventType: 'NOTE',
+      performedBy: editedBy,
+      notes: `${isAdmin && !isCurrentDepartment ? '[ADMIN EDIT]' : '[EDIT]'} Updated ${changes.join(', ')} in ${department}`,
+      metadata: { action: 'edit_department_data', department, isAdmin: isAdmin && !isCurrentDepartment, editedByName },
+    });
+
+    return res.json({
+      success: true,
+      message: `Updated ${changes.join(', ')} for ${department}`,
+      changes,
+    });
+  } catch (error: any) {
+    console.error('Error editing department data:', error);
+    return res.status(500).json({ error: error.message || 'Failed to edit department data' });
+  }
+});
+
+// GET /api/p2-traveler/department-data/:serializedItemId/:department
+// Get existing data for a specific department (for editing purposes)
+router.get('/department-data/:serializedItemId/:department', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId, department } = req.params;
+    const decodedDept = decodeURIComponent(department);
+
+    const traceRecords = await db.query.p2SerializedItemTraceability.findMany({
+      where: and(
+        eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+        eq(p2SerializedItemTraceability.department, decodedDept)
+      ),
+      orderBy: [desc(p2SerializedItemTraceability.createdAt)],
+    });
+
+    const customDataRecords = await db.query.p2SerializedItemCustomData.findMany({
+      where: and(
+        eq(p2SerializedItemCustomData.serializedItemId, serializedItemId),
+        eq(p2SerializedItemCustomData.department, decodedDept)
+      ),
+      orderBy: [desc(p2SerializedItemCustomData.createdAt)],
+    });
+
+    let customData: Record<string, string> = {};
+    let qcResults: any[] = [];
+    for (const record of customDataRecords) {
+      const data = record.customData as any;
+      if (data?.qcResults) {
+        qcResults = data.qcResults;
+      } else {
+        customData = { ...customData, ...data };
+      }
+    }
+
+    const workTasks = await db.query.p2WorkTasks.findMany({
+      where: and(
+        eq(p2WorkTasks.serializedItemId, serializedItemId),
+        eq(p2WorkTasks.department, decodedDept)
+      ),
+      orderBy: [desc(p2WorkTasks.startedAt)],
+    });
+
+    return res.json({
+      traceabilityData: traceRecords.map(r => ({
+        id: r.id,
+        type: r.traceabilityType,
+        label: r.traceabilityLabel,
+        value: r.traceabilityValue,
+        inventoryPartId: r.inventoryPartId,
+        inventoryPartNumber: r.inventoryPartNumber,
+      })),
+      customData,
+      qcResults,
+      workTasks: workTasks.map(t => ({
+        id: t.id,
+        department: t.department,
+        employeeName: t.employeeName,
+        status: t.status,
+        startedAt: t.startedAt,
+        completedAt: t.completedAt,
+        notes: t.notes,
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error getting department data:', error);
+    return res.status(500).json({ error: 'Failed to get department data' });
+  }
+});
+
+// POST /api/p2-traveler/add-note/:serializedItemId
+// Add a note to a serialized item at any time during the process
+router.post('/add-note/:serializedItemId', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId } = req.params;
+    const { note, department, addedBy, addedByName } = req.body;
+
+    if (!note || !note.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    if (!addedBy) {
+      return res.status(400).json({ error: 'addedBy is required' });
+    }
+
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, serializedItemId),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    await db.insert(p2SerializedItemEvents).values({
+      serializedItemId,
+      barcode: serializedItem.barcode,
+      eventType: 'NOTE',
+      fromDepartment: department || serializedItem.currentDepartment,
+      performedBy: addedBy,
+      notes: note.trim(),
+      metadata: { action: 'manual_note', department: department || serializedItem.currentDepartment, addedByName },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Note added successfully',
+    });
+  } catch (error: any) {
+    console.error('Error adding note:', error);
+    return res.status(500).json({ error: error.message || 'Failed to add note' });
+  }
+});
+
+// GET /api/p2-traveler/notes/:serializedItemId
+// Get all notes for a serialized item
+router.get('/notes/:serializedItemId', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId } = req.params;
+
+    const notes = await db.query.p2SerializedItemEvents.findMany({
+      where: and(
+        eq(p2SerializedItemEvents.serializedItemId, serializedItemId),
+        eq(p2SerializedItemEvents.eventType, 'NOTE')
+      ),
+      orderBy: [desc(p2SerializedItemEvents.createdAt)],
+    });
+
+    return res.json(notes);
+  } catch (error: any) {
+    console.error('Error getting notes:', error);
+    return res.status(500).json({ error: 'Failed to get notes' });
   }
 });
 

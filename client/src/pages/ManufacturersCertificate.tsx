@@ -616,11 +616,13 @@ export default function ManufacturersCertificate() {
                 <div className="border border-gray-300 rounded-lg p-4 bg-white">
                   <SignatureCanvas
                     ref={signatureCanvasRef}
+                    clearOnResize={false}
                     canvasProps={{
                       width: 400,
                       height: 150,
                       className:
                         'signature-canvas border border-gray-200 rounded',
+                      style: { touchAction: 'none' },
                     }}
                   />
                   <div className="flex gap-2 mt-2">

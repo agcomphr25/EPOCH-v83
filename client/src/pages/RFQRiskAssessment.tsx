@@ -1650,6 +1650,7 @@ export default function RFQRiskAssessment() {
                 <SignatureCanvas
                   ref={signatureCanvasRef}
                   penColor="black"
+                  clearOnResize={false}
                   canvasProps={{
                     width: 500,
                     height: 200,
@@ -1660,6 +1661,7 @@ export default function RFQRiskAssessment() {
                       borderRadius: '4px',
                       opacity: canEditSignature ? 1 : 0.5,
                       pointerEvents: canEditSignature ? 'auto' : 'none',
+                      touchAction: 'none',
                     },
                   }}
                 />

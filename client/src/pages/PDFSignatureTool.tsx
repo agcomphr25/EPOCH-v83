@@ -428,9 +428,10 @@ export default function PDFSignatureTool() {
                 <SignatureCanvas
                   ref={signatureRef}
                   penColor="black"
+                  clearOnResize={false}
                   canvasProps={{
                     className: 'w-full',
-                    style: { width: '100%', height: '120px' }
+                    style: { width: '100%', height: '120px', touchAction: 'none' }
                   }}
                   onEnd={handleSignatureEnd}
                 />

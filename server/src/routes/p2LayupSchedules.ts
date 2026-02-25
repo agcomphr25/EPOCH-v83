@@ -5,9 +5,10 @@ import {
   p2SerializedItems,
   p2PurchaseOrders,
   p2PurchaseOrderItems,
+  partRoutings,
   insertP2LayupScheduleSchema 
 } from '../../schema';
-import { eq, and, gte, lte, desc, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, inArray, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JsBarcode from 'jsbarcode';
@@ -653,17 +654,27 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
       });
     }
 
-    // Generate serialized items for the quantity specified in the PO item
+    let itemRouting = await db.query.partRoutings.findFirst({
+      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+    });
+    if (!itemRouting) {
+      itemRouting = await db.query.partRoutings.findFirst({
+        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+    const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
+    const familyKey = baseMatch ? baseMatch[1].trim() : poItem.partNumber;
+
     const itemsToCreate = [];
     for (let i = 1; i <= poItem.quantity; i++) {
-      const barcode = `${po.poNumber}-${poItem.partNumber}-${i.toString().padStart(4, '0')}`;
-      const serialNumber = `${po.poNumber}-${i.toString().padStart(4, '0')}`;
-      const travelerBarcode = `${po.poNumber}-${poItem.partNumber}-${i.toString().padStart(3, '0')}`;
+      const seq4 = i.toString().padStart(4, '0');
+      const barcode = `${po.poNumber}-UNIT-${seq4}`;
+      const serialNumber = barcode;
 
       itemsToCreate.push({
         serialNumber,
         barcode,
-        travelerBarcode,
+        travelerBarcode: barcode,
         poId: po.id,
         poItemId: poItem.id,
         poNumber: po.poNumber,
@@ -677,6 +688,9 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
         status: 'ACTIVE',
         departmentHistory: [],
         metadata: poItem.specifications ? { specifications: poItem.specifications } : null,
+        buildFamilyKey: familyKey,
+        partRoutingId: itemRouting?.id || null,
+        partRoutingRevision: itemRouting ? ((itemRouting as any).routingRevision || 1) : null,
       });
     }
 

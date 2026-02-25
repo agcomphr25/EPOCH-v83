@@ -2972,8 +2972,9 @@ export function registerRoutes(app: Express): Server {
               .where(eq(p2PurchaseOrders.id, poItem.poId));
             
             // Create serialized items for scheduling when BOM is complete
-            const { p2SerializedItems } = await import('../../schema');
+            const { p2SerializedItems, partRoutings: partRoutingsTable } = await import('../../schema');
             const { v4: uuidv4 } = await import('uuid');
+            const { and: andOp, eq: eqOp, ilike: ilikeOp } = await import('drizzle-orm');
             
             // Get the PO for additional info
             const [po] = await db
@@ -2993,11 +2994,22 @@ export function registerRoutes(app: Express): Server {
               console.log(`Creating serialized items for PO ${po?.poNumber} with ${allItems.length} line items`);
               
               for (const lineItem of allItems) {
-                // Create one serialized item per quantity
+                let itemRouting = await db.query.partRoutings.findFirst({
+                  where: andOp(eqOp(partRoutingsTable.partNumber, lineItem.partNumber), eqOp(partRoutingsTable.isActive, true)),
+                });
+                if (!itemRouting) {
+                  itemRouting = await db.query.partRoutings.findFirst({
+                    where: andOp(ilikeOp(partRoutingsTable.partNumber, lineItem.partNumber), eqOp(partRoutingsTable.isActive, true)),
+                  });
+                }
+                const baseMatch = lineItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
+                const familyKey = baseMatch ? baseMatch[1].trim() : lineItem.partNumber;
+
                 for (let i = 0; i < (lineItem.quantity || 1); i++) {
                   const sequenceNum = i + 1;
-                  const serialNumber = `${po?.poNumber || 'P2'}-${lineItem.partNumber}-${String(sequenceNum).padStart(3, '0')}`;
-                  const barcode = serialNumber; // Use same format for barcode
+                  const seq4 = String(sequenceNum).padStart(4, '0');
+                  const barcode = `${po?.poNumber || 'P2'}-UNIT-${seq4}`;
+                  const serialNumber = barcode;
                   
                   await db.insert(p2SerializedItems).values({
                     id: uuidv4(),
@@ -3011,6 +3023,10 @@ export function registerRoutes(app: Express): Server {
                     sequenceNumber: sequenceNum,
                     serialNumber,
                     barcode,
+                    travelerBarcode: barcode,
+                    buildFamilyKey: familyKey,
+                    partRoutingId: itemRouting?.id || null,
+                    partRoutingRevision: itemRouting ? ((itemRouting as any).routingRevision || 1) : null,
                     status: 'ACTIVE',
                     currentDepartment: 'Pending Layup',
                     currentStageIndex: 0,

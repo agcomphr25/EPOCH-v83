@@ -10,17 +10,26 @@ const FINALIZATION_DEPARTMENTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLE
 
 router.get('/', async (req, res) => {
   try {
-    const { poId, poItemId } = req.query;
+    const { poId, poItemId, status } = req.query;
 
-    if (!poId || !poItemId) {
-      return res.status(400).json({ error: 'poId and poItemId query parameters are required' });
+    if (!poItemId && !poId) {
+      return res.status(400).json({ error: 'At least poItemId or poId query parameter is required' });
     }
 
+    if (poId && isNaN(Number(poId))) {
+      return res.status(400).json({ error: 'poId must be a valid number' });
+    }
+    if (poItemId && isNaN(Number(poItemId))) {
+      return res.status(400).json({ error: 'poItemId must be a valid number' });
+    }
+
+    const conditions = [];
+    if (poId) conditions.push(eq(p2SerializedItems.poId, Number(poId)));
+    if (poItemId) conditions.push(eq(p2SerializedItems.poItemId, Number(poItemId)));
+    if (status) conditions.push(eq(p2SerializedItems.status, String(status)));
+
     const items = await db.query.p2SerializedItems.findMany({
-      where: and(
-        eq(p2SerializedItems.poId, Number(poId)),
-        eq(p2SerializedItems.poItemId, Number(poItemId))
-      ),
+      where: conditions.length > 1 ? and(...conditions) : conditions[0],
     });
 
     return res.json(items.map(item => ({

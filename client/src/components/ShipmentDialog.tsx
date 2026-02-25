@@ -1,5 +1,5 @@
-import { useState, useReducer, useEffect, useMemo, useCallback } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useReducer, useEffect, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -137,6 +137,24 @@ interface ShipmentDialogProps {
   onSuccess?: (data: any) => void;
 }
 
+type SerializedUnit = {
+  id: string;
+  barcode: string;
+  serialNumber: string;
+  sequenceNumber: number;
+  partNumber: string;
+  partName: string;
+  status: string;
+  currentDepartment: string;
+  currentStageIndex: number;
+  buildFamilyKey: string | null;
+  sku: string | null;
+  drawingName: string | null;
+  customerSerialNumber: string | null;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
+};
+
 export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: ShipmentDialogProps) {
   const [state, dispatch] = useReducer(shipmentReducer, initialState);
   const [printPopup, setPrintPopup] = useState<{
@@ -148,10 +166,51 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     shippingLabel?: { format: string; data: string } | null;
     packingSlips?: Array<{ poNumber: string; filename: string; data: string }>;
   } | null>(null);
-  const [hasP2Units, setHasP2Units] = useState<boolean | null>(null);
-  const [allFinalized, setAllFinalized] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const uniquePoItemIds = useMemo(() => {
+    return Array.from(new Set(selectedItems.map(i => i.poItemId).filter(Boolean)));
+  }, [selectedItems]);
+
+  const [unitsByPoItemId, setUnitsByPoItemId] = useState<Record<number, SerializedUnit[]>>({});
+  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [unitsRefreshKey, setUnitsRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    if (uniquePoItemIds.length === 0) {
+      setUnitsByPoItemId({});
+      return;
+    }
+    (async () => {
+      try {
+        setLoadingUnits(true);
+        const entries: Array<[number, SerializedUnit[]]> = [];
+        for (const poItemId of uniquePoItemIds) {
+          const r = await fetch(`/api/p2/serialized-items?poItemId=${poItemId}`);
+          const j = await r.json();
+          entries.push([poItemId, j.units || []]);
+        }
+        setUnitsByPoItemId(Object.fromEntries(entries));
+      } finally {
+        setLoadingUnits(false);
+      }
+    })();
+  }, [open, uniquePoItemIds.join(','), unitsRefreshKey]);
+
+  const hasP2Units = useMemo(() => {
+    return Object.values(unitsByPoItemId).some(units => units.length > 0);
+  }, [unitsByPoItemId]);
+
+  const poItemIdsNeedingFinalization = useMemo(() => {
+    return uniquePoItemIds.filter((poItemId) => {
+      const units = unitsByPoItemId[poItemId] || [];
+      return units.some(u => !u.finalizedAt || !u.sku || !u.drawingName);
+    });
+  }, [uniquePoItemIds, unitsByPoItemId]);
+
+  const allFinalized = poItemIdsNeedingFinalization.length === 0;
 
   const processShipmentMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -209,14 +268,9 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   useEffect(() => {
     if (!open) {
       dispatch({ type: 'RESET' });
-      setHasP2Units(null);
-      setAllFinalized(false);
+      setUnitsByPoItemId({});
     }
   }, [open]);
-
-  const uniquePoItemIds = useMemo(() => {
-    return Array.from(new Set(selectedItems.map(i => i.poItemId).filter(Boolean)));
-  }, [selectedItems]);
 
   const stepLabel = (step: number) => {
     if (step === 0) return 'Finalize P2 Units';
@@ -225,17 +279,17 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     return 'Review & Submit';
   };
 
-  const showP2Step = hasP2Units === true;
+  const showP2Step = hasP2Units && !loadingUnits;
   const minStep = showP2Step ? 0 : 1;
 
   const userStepNumber = showP2Step ? state.currentStep + 1 : state.currentStep;
   const userTotalSteps = showP2Step ? 4 : 3;
 
   useEffect(() => {
-    if (hasP2Units === false && state.currentStep === 0) {
+    if (!loadingUnits && !hasP2Units && state.currentStep === 0) {
       dispatch({ type: 'SET_STEP', step: 1 });
     }
-  }, [hasP2Units, state.currentStep]);
+  }, [loadingUnits, hasP2Units, state.currentStep]);
 
   const validateStep = (step: number): boolean => {
     const errors: Record<string, string> = {};
@@ -352,12 +406,20 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         </DialogHeader>
 
         {state.currentStep === 0 && (
-          <StepFinalizeP2Units
-            selectedItems={selectedItems}
-            poItemIds={uniquePoItemIds}
-            onP2UnitsDetected={(detected) => setHasP2Units(detected)}
-            onAllFinalized={(finalized) => setAllFinalized(finalized)}
-          />
+          loadingUnits ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span className="text-muted-foreground">Checking P2 serialized units...</span>
+            </div>
+          ) : (
+            <StepFinalizeP2Units
+              selectedItems={selectedItems}
+              unitsByPoItemId={unitsByPoItemId}
+              poItemIdsNeedingFinalization={poItemIdsNeedingFinalization}
+              allFinalized={allFinalized}
+              onRefresh={() => setUnitsRefreshKey(k => k + 1)}
+            />
+          )
         )}
 
         {state.currentStep === 1 && (
@@ -461,95 +523,38 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   );
 }
 
-interface SerializedUnit {
-  id: string;
-  barcode: string;
-  serialNumber: string;
-  sequenceNumber: number;
-  partNumber: string;
-  partName: string;
-  status: string;
-  currentDepartment: string;
-  currentStageIndex: number;
-  buildFamilyKey: string | null;
-  sku: string | null;
-  drawingName: string | null;
-  customerSerialNumber: string | null;
-  finalizedAt: string | null;
-  finalizedBy: string | null;
-}
-
 function StepFinalizeP2Units({
   selectedItems,
-  poItemIds,
-  onP2UnitsDetected,
-  onAllFinalized,
+  unitsByPoItemId,
+  poItemIdsNeedingFinalization,
+  allFinalized,
+  onRefresh,
 }: {
   selectedItems: Array<{ poItemId: number; orderId: string; description: string; poNumber: string }>;
-  poItemIds: number[];
-  onP2UnitsDetected: (detected: boolean) => void;
-  onAllFinalized: (finalized: boolean) => void;
+  unitsByPoItemId: Record<number, SerializedUnit[]>;
+  poItemIdsNeedingFinalization: number[];
+  allFinalized: boolean;
+  onRefresh: () => void;
 }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [sku, setSku] = useState('');
   const [drawingName, setDrawingName] = useState('');
   const [customerSerial, setCustomerSerial] = useState('');
   const [performedBy, setPerformedBy] = useState('');
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
-  const [unitData, setUnitData] = useState<Record<number, SerializedUnit[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchAllUnits = useCallback(async () => {
-    setLoading(true);
-    const results: Record<number, SerializedUnit[]> = {};
-    let foundAny = false;
+  const allUnits = useMemo(() => Object.values(unitsByPoItemId).flat(), [unitsByPoItemId]);
+  const totalUnfinalized = useMemo(
+    () => allUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName),
+    [allUnits]
+  );
 
-    for (const poItemId of poItemIds) {
-      try {
-        const url = `/api/p2/serialized-items?poItemId=${poItemId}`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const units: SerializedUnit[] = data.units || [];
-          if (units.length > 0) {
-            results[poItemId] = units;
-            foundAny = true;
-          }
-        }
-      } catch {
-      }
-    }
-
-    setUnitData(results);
-    onP2UnitsDetected(foundAny);
-    setLoading(false);
-
-    if (foundAny && !selectedPoItemId) {
-      const firstKey = Object.keys(results).map(Number)[0];
+  useEffect(() => {
+    if (!selectedPoItemId) {
+      const firstKey = Object.keys(unitsByPoItemId).map(Number).find(k => (unitsByPoItemId[k] || []).length > 0);
       if (firstKey) setSelectedPoItemId(firstKey);
     }
-  }, [poItemIds, onP2UnitsDetected]);
-
-  useEffect(() => {
-    if (poItemIds.length > 0) {
-      fetchAllUnits();
-    } else {
-      onP2UnitsDetected(false);
-      setLoading(false);
-    }
-  }, [poItemIds, refreshKey]);
-
-  useEffect(() => {
-    const allUnits = Object.values(unitData).flat();
-    if (allUnits.length === 0) {
-      onAllFinalized(true);
-      return;
-    }
-    const unfinalized = allUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
-    onAllFinalized(unfinalized.length === 0);
-  }, [unitData, onAllFinalized]);
+  }, [unitsByPoItemId, selectedPoItemId]);
 
   const finalizeMutation = useMutation({
     mutationFn: async (data: { serializedItemIds: string[]; sku: string; drawingName: string; customerSerialNumber?: string; performedBy: string }) => {
@@ -563,7 +568,7 @@ function StepFinalizeP2Units({
         title: 'Units Finalized',
         description: `${data.updatedCount} unit(s) finalized successfully.`,
       });
-      setRefreshKey(k => k + 1);
+      onRefresh();
     },
     onError: (error: any) => {
       toast({
@@ -575,7 +580,7 @@ function StepFinalizeP2Units({
   });
 
   const handleFinalizePoItem = (poItemId: number) => {
-    const units = unitData[poItemId] || [];
+    const units = unitsByPoItemId[poItemId] || [];
     const unfinalized = units.filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
 
     if (unfinalized.length === 0) {
@@ -606,8 +611,7 @@ function StepFinalizeP2Units({
   };
 
   const handleFinalizeAll = () => {
-    const allUnfinalized = Object.values(unitData).flat().filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
-    if (allUnfinalized.length === 0) {
+    if (totalUnfinalized.length === 0) {
       toast({ title: 'Already finalized', description: 'All units are finalized.' });
       return;
     }
@@ -616,25 +620,13 @@ function StepFinalizeP2Units({
       return;
     }
     finalizeMutation.mutate({
-      serializedItemIds: allUnfinalized.map(u => u.id),
+      serializedItemIds: totalUnfinalized.map(u => u.id),
       sku: sku.trim(),
       drawingName: drawingName.trim(),
       customerSerialNumber: customerSerial.trim() || undefined,
       performedBy: performedBy.trim(),
     });
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin mr-2" />
-        <span className="text-muted-foreground">Checking P2 serialized units...</span>
-      </div>
-    );
-  }
-
-  const allUnits = Object.values(unitData).flat();
-  const totalUnfinalized = allUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
 
   if (allUnits.length === 0) {
     return (
@@ -646,7 +638,7 @@ function StepFinalizeP2Units({
     );
   }
 
-  if (totalUnfinalized.length === 0) {
+  if (allFinalized) {
     return (
       <div className="py-8 text-center">
         <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
@@ -656,13 +648,15 @@ function StepFinalizeP2Units({
     );
   }
 
-  const poItemEntries = Object.entries(unitData).map(([poItemId, units]) => ({
-    poItemId: Number(poItemId),
-    units,
-    item: selectedItems.find(i => i.poItemId === Number(poItemId)),
-  }));
+  const poItemEntries = Object.entries(unitsByPoItemId)
+    .filter(([, units]) => units.length > 0)
+    .map(([poItemId, units]) => ({
+      poItemId: Number(poItemId),
+      units,
+      item: selectedItems.find(i => i.poItemId === Number(poItemId)),
+    }));
 
-  const currentUnits = selectedPoItemId ? (unitData[selectedPoItemId] || []) : [];
+  const currentUnits = selectedPoItemId ? (unitsByPoItemId[selectedPoItemId] || []) : allUnits;
 
   return (
     <div className="space-y-4">

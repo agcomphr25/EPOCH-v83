@@ -32,7 +32,8 @@ import {
   Phone,
   Building,
   FolderOpen,
-  FileWarning
+  FileWarning,
+  Truck
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -46,6 +47,7 @@ import RoutingDocumentManagement from './RoutingDocumentManagement';
 import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
+import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -378,7 +380,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-11">
+        <TabsList className="grid w-full grid-cols-12">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -402,6 +404,10 @@ export default function P2ControlCenter() {
           <TabsTrigger value="production" className="flex items-center gap-2" data-testid="tab-production">
             <Factory className="h-4 w-4" />
             Production
+          </TabsTrigger>
+          <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
+            <Truck className="h-4 w-4" />
+            Shipping
           </TabsTrigger>
           <TabsTrigger value="travelers" className="flex items-center gap-2" data-testid="tab-travelers">
             <ScrollText className="h-4 w-4" />
@@ -510,6 +516,10 @@ export default function P2ControlCenter() {
 
         <TabsContent value="production">
           <P2ProductionQueue />
+        </TabsContent>
+
+        <TabsContent value="shipping">
+          <P2ShippingTab />
         </TabsContent>
 
         <TabsContent value="travelers">

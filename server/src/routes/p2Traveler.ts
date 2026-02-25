@@ -801,6 +801,44 @@ router.post('/complete-task', async (req: Request, res: Response) => {
           }
         }
       }
+
+      const item = serializedItem as any;
+      const missingSku = !item.sku;
+      const missingDrawing = !item.drawingName;
+
+      const requiresCustomerSerial = false;
+      const missingCustomerSerial = requiresCustomerSerial && !item.customerSerialNumber;
+
+      if (missingSku || missingDrawing || missingCustomerSerial) {
+        return res.status(403).json({
+          error: 'Finalization required before leaving Final QC',
+          gatingFailed: true,
+          guard: 'FINALIZATION_REQUIRED',
+          missing: {
+            sku: missingSku,
+            drawingName: missingDrawing,
+            customerSerialNumber: missingCustomerSerial,
+          },
+          serializedItemId: serializedItem.id,
+        });
+      }
+
+      if (!item.finalizedAt) {
+        await db.update(p2SerializedItems).set({
+          finalizedAt: new Date(),
+          finalizedBy: employeeCode,
+          updatedAt: new Date(),
+        }).where(eq(p2SerializedItems.id, serializedItem.id));
+
+        await db.insert(p2SerializedItemEvents).values({
+          serializedItemId: serializedItem.id,
+          barcode: serializedItem.barcode,
+          eventType: 'NOTE',
+          performedBy: employeeCode,
+          notes: 'Finalized identity (SKU/drawing/customer serial)',
+          metadata: { sku: item.sku, drawingName: item.drawingName, customerSerialNumber: item.customerSerialNumber },
+        });
+      }
     }
 
     // Update department completion timestamp

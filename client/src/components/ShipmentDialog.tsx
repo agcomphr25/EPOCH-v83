@@ -1,4 +1,4 @@
-import { useState, useReducer, useEffect } from 'react';
+import { useState, useReducer, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck, Printer, FileText, X, CheckCircle } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, Package, CreditCard, FileCheck, Printer, FileText, X, CheckCircle, AlertTriangle, Shield, ScanBarcode } from 'lucide-react';
 import { z } from 'zod';
 
 type ShipmentDialogState = {
-  currentStep: 1 | 2 | 3;
+  currentStep: 0 | 1 | 2 | 3;
   serviceCode: string;
   billingOption: 'sender' | 'receiver' | 'third-party';
   thirdPartyAccountNumber: string;
@@ -34,6 +34,7 @@ type ShipmentDialogState = {
 type ShipmentDialogAction =
   | { type: 'NEXT_STEP' }
   | { type: 'PREV_STEP' }
+  | { type: 'SET_STEP'; step: 0 | 1 | 2 | 3 }
   | { type: 'SET_SERVICE_CODE'; value: string }
   | { type: 'SET_BILLING_OPTION'; value: 'sender' | 'receiver' | 'third-party' }
   | { type: 'SET_THIRD_PARTY_ACCOUNT'; value: string }
@@ -49,8 +50,8 @@ type ShipmentDialogAction =
   | { type: 'RESET' };
 
 const initialState: ShipmentDialogState = {
-  currentStep: 1,
-  serviceCode: '03', // Ground by default
+  currentStep: 0,
+  serviceCode: '03',
   billingOption: 'sender',
   thirdPartyAccountNumber: '',
   thirdPartyPostalCode: '',
@@ -67,9 +68,11 @@ const initialState: ShipmentDialogState = {
 function shipmentReducer(state: ShipmentDialogState, action: ShipmentDialogAction): ShipmentDialogState {
   switch (action.type) {
     case 'NEXT_STEP':
-      return { ...state, currentStep: Math.min(3, state.currentStep + 1) as 1 | 2 | 3 };
+      return { ...state, currentStep: Math.min(3, state.currentStep + 1) as 0 | 1 | 2 | 3 };
     case 'PREV_STEP':
-      return { ...state, currentStep: Math.max(1, state.currentStep - 1) as 1 | 2 | 3 };
+      return { ...state, currentStep: Math.max(0, state.currentStep - 1) as 0 | 1 | 2 | 3 };
+    case 'SET_STEP':
+      return { ...state, currentStep: action.step };
     case 'SET_SERVICE_CODE':
       return { ...state, serviceCode: action.value };
     case 'SET_BILLING_OPTION':
@@ -134,6 +137,24 @@ interface ShipmentDialogProps {
   onSuccess?: (data: any) => void;
 }
 
+type SerializedUnit = {
+  id: string;
+  barcode: string;
+  serialNumber: string;
+  sequenceNumber: number;
+  partNumber: string;
+  partName: string;
+  status: string;
+  currentDepartment: string;
+  currentStageIndex: number;
+  buildFamilyKey: string | null;
+  sku: string | null;
+  drawingName: string | null;
+  customerSerialNumber: string | null;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
+};
+
 export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: ShipmentDialogProps) {
   const [state, dispatch] = useReducer(shipmentReducer, initialState);
   const [printPopup, setPrintPopup] = useState<{
@@ -147,6 +168,48 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const uniquePoItemIds = useMemo(() => {
+    return Array.from(new Set(selectedItems.map(i => i.poItemId).filter(Boolean)));
+  }, [selectedItems]);
+
+  const [unitsByPoItemId, setUnitsByPoItemId] = useState<Record<number, SerializedUnit[]>>({});
+  const [loadingUnits, setLoadingUnits] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (uniquePoItemIds.length === 0) {
+      setUnitsByPoItemId({});
+      return;
+    }
+    (async () => {
+      try {
+        setLoadingUnits(true);
+        const entries: Array<[number, SerializedUnit[]]> = [];
+        for (const poItemId of uniquePoItemIds) {
+          const r = await fetch(`/api/p2/serialized-items?poItemId=${poItemId}`);
+          const j = await r.json();
+          entries.push([poItemId, j.units || []]);
+        }
+        setUnitsByPoItemId(Object.fromEntries(entries));
+      } finally {
+        setLoadingUnits(false);
+      }
+    })();
+  }, [open, uniquePoItemIds.join(',')]);
+
+  const hasP2Units = useMemo(() => {
+    return Object.values(unitsByPoItemId).some(units => units.length > 0);
+  }, [unitsByPoItemId]);
+
+  const poItemIdsNeedingFinalization = useMemo(() => {
+    return uniquePoItemIds.filter((poItemId) => {
+      const units = unitsByPoItemId[poItemId] || [];
+      return units.some(u => !u.finalizedAt || !u.sku || !u.drawingName);
+    });
+  }, [uniquePoItemIds, unitsByPoItemId]);
+
+  const allFinalized = poItemIdsNeedingFinalization.length === 0;
 
   const processShipmentMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -183,23 +246,58 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       dispatch({ type: 'RESET' });
     },
     onError: (error: any) => {
+      const msg = error.message || 'Failed to create shipment';
+      if (msg.includes('FINALIZATION_REQUIRED') || error?.guard === 'FINALIZATION_REQUIRED') {
+        toast({
+          title: 'Finalization Required',
+          description: 'Some units still need SKU/Drawing assignment. Go back to Step 0.',
+          variant: 'destructive',
+        });
+        dispatch({ type: 'SET_STEP', step: 0 });
+        return;
+      }
       toast({
         title: 'Shipment Failed',
-        description: error.message || 'Failed to create shipment',
+        description: msg,
         variant: 'destructive',
       });
     },
   });
 
-  // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
       dispatch({ type: 'RESET' });
+      setUnitsByPoItemId({});
     }
   }, [open]);
 
+  const stepLabel = (step: number) => {
+    if (step === 0) return 'Finalize P2 Units';
+    if (step === 1) return 'Review Selected Items';
+    if (step === 2) return 'Service & Billing Options';
+    return 'Review & Submit';
+  };
+
+  const showP2Step = hasP2Units && !loadingUnits;
+  const minStep = showP2Step ? 0 : 1;
+
+  const userStepNumber = showP2Step ? state.currentStep + 1 : state.currentStep;
+  const userTotalSteps = showP2Step ? 4 : 3;
+
+  useEffect(() => {
+    if (!loadingUnits && !hasP2Units && state.currentStep === 0) {
+      dispatch({ type: 'SET_STEP', step: 1 });
+    }
+  }, [loadingUnits, hasP2Units, state.currentStep]);
+
   const validateStep = (step: number): boolean => {
     const errors: Record<string, string> = {};
+
+    if (step === 0) {
+      if (hasP2Units && !allFinalized) {
+        errors.finalization = 'All P2 units must be finalized before proceeding';
+      }
+    }
 
     if (step === 1) {
       if (selectedItems.length === 0) {
@@ -251,6 +349,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   };
 
   const handleBack = () => {
+    if (state.currentStep <= minStep) return;
     dispatch({ type: 'PREV_STEP' });
   };
 
@@ -283,7 +382,6 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     processShipmentMutation.mutate(payload);
   };
 
-  // Group items by customer and PO
   const itemsByCustomer = selectedItems.reduce((acc, item) => {
     if (!acc[item.customerName]) {
       acc[item.customerName] = {};
@@ -302,15 +400,29 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         <DialogHeader>
           <DialogTitle>Create Shipment</DialogTitle>
           <DialogDescription>
-            Step {state.currentStep} of 3: {
-              state.currentStep === 1 ? 'Review Selected Items' :
-              state.currentStep === 2 ? 'Service & Billing Options' :
-              'Review & Submit'
-            }
+            Step {userStepNumber} of {userTotalSteps}: {stepLabel(state.currentStep)}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Selection Recap */}
+        {state.currentStep === 0 && (
+          loadingUnits ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span className="text-muted-foreground">Checking P2 serialized units...</span>
+            </div>
+          ) : (
+            <StepFinalizeP2Units
+              selectedItems={selectedItems}
+              unitsByPoItemId={unitsByPoItemId}
+              poItemIdsNeedingFinalization={poItemIdsNeedingFinalization}
+              allFinalized={allFinalized}
+              onUnitsUpdated={(poItemId, units) =>
+                setUnitsByPoItemId(prev => ({ ...prev, [poItemId]: units }))
+              }
+            />
+          )
+        )}
+
         {state.currentStep === 1 && (
           <StepSelectionRecap
             itemsByCustomer={itemsByCustomer}
@@ -321,7 +433,6 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
           />
         )}
 
-        {/* Step 2: Service & Billing */}
         {state.currentStep === 2 && (
           <StepServiceBilling
             state={state}
@@ -330,7 +441,6 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
           />
         )}
 
-        {/* Step 3: Review & Preview */}
         {state.currentStep === 3 && (
           <StepReviewPreview
             state={state}
@@ -339,10 +449,9 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
           />
         )}
 
-        {/* Dialog Actions */}
         <div className="flex justify-between items-center mt-6 pt-4 border-t">
           <div className="flex gap-2">
-            {state.currentStep > 1 && (
+            {state.currentStep > minStep && (
               <Button
                 onClick={handleBack}
                 variant="outline"
@@ -368,6 +477,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
             {state.currentStep < 3 && (
               <Button
                 onClick={handleNext}
+                disabled={state.currentStep === 0 && showP2Step && !allFinalized}
                 data-testid="button-shipment-next"
               >
                 Next
@@ -414,7 +524,263 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   );
 }
 
-// Step 1: Selection Recap Component
+function StepFinalizeP2Units({
+  selectedItems,
+  unitsByPoItemId,
+  poItemIdsNeedingFinalization,
+  allFinalized,
+  onUnitsUpdated,
+}: {
+  selectedItems: Array<{ poItemId: number; orderId: string; description: string; poNumber: string }>;
+  unitsByPoItemId: Record<number, SerializedUnit[]>;
+  poItemIdsNeedingFinalization: number[];
+  allFinalized: boolean;
+  onUnitsUpdated: (poItemId: number, units: SerializedUnit[]) => void;
+}) {
+  const { toast } = useToast();
+  const [sku, setSku] = useState('');
+  const [drawingName, setDrawingName] = useState('');
+  const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
+
+  const allUnits = useMemo(() => Object.values(unitsByPoItemId).flat(), [unitsByPoItemId]);
+  const totalUnfinalized = useMemo(
+    () => allUnits.filter(u => !u.finalizedAt || !u.sku || !u.drawingName),
+    [allUnits]
+  );
+
+  useEffect(() => {
+    if (!selectedPoItemId) {
+      const firstKey = Object.keys(unitsByPoItemId).map(Number).find(k => (unitsByPoItemId[k] || []).length > 0);
+      if (firstKey) setSelectedPoItemId(firstKey);
+    }
+  }, [unitsByPoItemId, selectedPoItemId]);
+
+  const finalizeForPoItem = async (poItemId: number, skuVal: string, drawingVal: string) => {
+    const units = unitsByPoItemId[poItemId] || [];
+    const missingIds = units
+      .filter(u => !u.finalizedAt || !u.sku || !u.drawingName)
+      .map(u => u.id);
+
+    if (missingIds.length === 0) return;
+
+    const resp = await fetch('/api/p2/serialized-items/finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serializedItemIds: missingIds,
+        sku: skuVal,
+        drawingName: drawingVal,
+        performedBy: 'shipping',
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error || 'Failed to finalize units');
+    }
+
+    const r = await fetch(`/api/p2/serialized-items?poItemId=${poItemId}`);
+    const j = await r.json();
+    onUnitsUpdated(poItemId, j.units || []);
+  };
+
+  const handleFinalizePoItem = async (poItemId: number) => {
+    if (!sku.trim()) {
+      toast({ title: 'SKU required', description: 'Enter a SKU before finalizing.', variant: 'destructive' });
+      return;
+    }
+    if (!drawingName.trim()) {
+      toast({ title: 'Drawing required', description: 'Enter a drawing name before finalizing.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setFinalizing(true);
+      await finalizeForPoItem(poItemId, sku.trim(), drawingName.trim());
+      toast({ title: 'Units Finalized', description: `Units for this item finalized successfully.` });
+    } catch (err: any) {
+      toast({ title: 'Finalization Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const handleFinalizeAll = async () => {
+    if (!sku.trim() || !drawingName.trim()) {
+      toast({ title: 'Missing fields', description: 'SKU and Drawing Name are required.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setFinalizing(true);
+      for (const poItemId of poItemIdsNeedingFinalization) {
+        await finalizeForPoItem(poItemId, sku.trim(), drawingName.trim());
+      }
+      toast({ title: 'All Units Finalized', description: `${totalUnfinalized.length} unit(s) finalized successfully.` });
+    } catch (err: any) {
+      toast({ title: 'Finalization Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  if (allUnits.length === 0) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+        <p>No P2 serialized units found for these items.</p>
+        <p className="text-sm">You can proceed to the next step.</p>
+      </div>
+    );
+  }
+
+  if (allFinalized) {
+    return (
+      <div className="py-8 text-center">
+        <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+        <p className="font-medium text-green-700 dark:text-green-400">All {allUnits.length} unit(s) finalized</p>
+        <p className="text-sm text-muted-foreground mt-1">SKU and drawing assigned. Ready to ship.</p>
+      </div>
+    );
+  }
+
+  const poItemEntries = Object.entries(unitsByPoItemId)
+    .filter(([, units]) => units.length > 0)
+    .map(([poItemId, units]) => ({
+      poItemId: Number(poItemId),
+      units,
+      item: selectedItems.find(i => i.poItemId === Number(poItemId)),
+    }));
+
+  const currentUnits = selectedPoItemId ? (unitsByPoItemId[selectedPoItemId] || []) : allUnits;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+        <Shield className="w-5 h-5" />
+        <span className="font-medium">
+          {totalUnfinalized.length} unit(s) need finalization before shipping
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="fin-sku" className="text-xs font-medium">SKU *</Label>
+          <Input
+            id="fin-sku"
+            value={sku}
+            onChange={(e) => setSku(e.target.value)}
+            placeholder="e.g. TUBE-12x98-RevN"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="fin-drawing" className="text-xs font-medium">Drawing Name *</Label>
+          <Input
+            id="fin-drawing"
+            value={drawingName}
+            onChange={(e) => setDrawingName(e.target.value)}
+            placeholder="e.g. DWG-4002P0001-N"
+          />
+        </div>
+      </div>
+
+      <Button
+        onClick={handleFinalizeAll}
+        disabled={finalizing || !sku.trim() || !drawingName.trim()}
+        className="w-full"
+      >
+        {finalizing ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finalizing...</>
+        ) : (
+          <><Shield className="w-4 h-4 mr-2" /> Finalize All Unfinalized Units ({totalUnfinalized.length})</>
+        )}
+      </Button>
+
+      {poItemEntries.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {poItemEntries.map(({ poItemId, units, item }) => {
+            const unfin = units.filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
+            return (
+              <Button
+                key={poItemId}
+                variant={selectedPoItemId === poItemId ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedPoItemId(poItemId)}
+              >
+                {item?.description || `Item ${poItemId}`}
+                {unfin.length > 0 ? (
+                  <span className="ml-2 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{unfin.length}</span>
+                ) : (
+                  <CheckCircle className="ml-2 w-3 h-3 text-green-500" />
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">Barcode</th>
+              <th className="px-3 py-2 text-left font-medium">Department</th>
+              <th className="px-3 py-2 text-left font-medium">Status</th>
+              <th className="px-3 py-2 text-left font-medium">SKU</th>
+              <th className="px-3 py-2 text-left font-medium">Drawing</th>
+              <th className="px-3 py-2 text-left font-medium">Finalized</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {currentUnits.map((unit) => {
+              const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
+              return (
+                <tr key={unit.id} className={isFinalized ? 'bg-green-50/50 dark:bg-green-900/10' : 'bg-amber-50/50 dark:bg-amber-900/10'}>
+                  <td className="px-3 py-2 font-mono text-xs">{unit.barcode}</td>
+                  <td className="px-3 py-2 text-xs">{unit.currentDepartment}</td>
+                  <td className="px-3 py-2">
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      unit.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                      unit.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                      unit.status === 'HOLD' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                    }`}>
+                      {unit.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-xs">{unit.sku || <span className="text-muted-foreground italic">—</span>}</td>
+                  <td className="px-3 py-2 text-xs">{unit.drawingName || <span className="text-muted-foreground italic">—</span>}</td>
+                  <td className="px-3 py-2">
+                    {isFinalized ? (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedPoItemId && poItemEntries.length > 1 && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleFinalizePoItem(selectedPoItemId)}
+            disabled={finalizing || !sku.trim() || !drawingName.trim()}
+          >
+            Finalize This Item Only
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepSelectionRecap({
   itemsByCustomer,
   selectedItems,
@@ -460,7 +826,6 @@ function StepSelectionRecap({
         ))}
       </div>
 
-      {/* Weight and Box Size Inputs */}
       <div className="border-t pt-4 space-y-4">
         <h4 className="font-semibold text-sm text-muted-foreground">Package Details</h4>
         
@@ -565,7 +930,6 @@ function StepSelectionRecap({
   );
 }
 
-// Step 2: Service & Billing Component
 function StepServiceBilling({
   state,
   dispatch,
@@ -577,7 +941,6 @@ function StepServiceBilling({
 }) {
   return (
     <div className="space-y-6">
-      {/* Service Level Selection */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-muted-foreground">
           <CreditCard className="w-5 h-5" />
@@ -603,7 +966,6 @@ function StepServiceBilling({
         )}
       </div>
 
-      {/* Billing Options */}
       <div className="space-y-3">
         <Label className="font-medium">Billing Option</Label>
         <RadioGroup
@@ -631,7 +993,6 @@ function StepServiceBilling({
         </RadioGroup>
       </div>
 
-      {/* Third-Party Fields (conditional) */}
       {state.billingOption === 'third-party' && (
         <div className="space-y-3 pl-6 border-l-2 border-muted">
           <div className="space-y-2">
@@ -676,7 +1037,6 @@ function StepServiceBilling({
   );
 }
 
-// Step 3: Review & Preview Component
 function StepReviewPreview({
   state,
   selectedItems,
@@ -707,7 +1067,6 @@ function StepReviewPreview({
         <span className="font-medium">Review Shipment Details</span>
       </div>
 
-      {/* Shipment Summary */}
       <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
         <div>
           <div className="text-sm text-muted-foreground">Service Level</div>
@@ -725,7 +1084,6 @@ function StepReviewPreview({
         )}
       </div>
 
-      {/* Items Summary */}
       <div className="space-y-3">
         <div className="text-sm font-medium">Items to Ship ({selectedItems.length})</div>
         <div className="max-h-48 overflow-y-auto space-y-2">

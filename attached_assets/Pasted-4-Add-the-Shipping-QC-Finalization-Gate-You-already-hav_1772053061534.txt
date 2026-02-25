@@ -1,0 +1,60 @@
+4) Add the Shipping QC “Finalization Gate”
+
+You already have a gate leaving Final QC (tolerance). Add one more:
+
+✅ Gate rule (recommended)
+
+When leaving Final QC (or before shipping):
+
+require sku and drawingName and (optionally) customerSerialNumber
+
+then set finalizedAt/by
+
+Copy/paste patch inside the if (currentDepartment === 'Final QC') { ... } block
+
+Add this BEFORE you allow the transition to next department:
+
+// IDENTITY FINALIZATION GATE: require SKU + drawing before leaving Final QC (or adjust dept as desired)
+const item = serializedItem as any;
+const missingSku = !item.sku;
+const missingDrawing = !item.drawingName;
+
+// customer serial optional: enforce only if you want
+const requiresCustomerSerial = false; // later: derive from PO/customer/product
+const missingCustomerSerial = requiresCustomerSerial && !item.customerSerialNumber;
+
+if (missingSku || missingDrawing || missingCustomerSerial) {
+  return res.status(403).json({
+    error: 'Finalization required before leaving Final QC',
+    gatingFailed: true,
+    guard: 'FINALIZATION_REQUIRED',
+    missing: {
+      sku: missingSku,
+      drawingName: missingDrawing,
+      customerSerialNumber: missingCustomerSerial,
+    },
+    serializedItemId: serializedItem.id,
+  });
+}
+
+// If not already finalized, finalize now (audit-grade)
+if (!item.finalizedAt) {
+  await db.update(p2SerializedItems).set({
+    finalizedAt: new Date(),
+    finalizedBy: employeeCode,
+    updatedAt: new Date(),
+  }).where(eq(p2SerializedItems.id, serializedItem.id));
+
+  await db.insert(p2SerializedItemEvents).values({
+    serializedItemId: serializedItem.id,
+    barcode: serializedItem.barcode,
+    eventType: 'NOTE',
+    performedBy: employeeCode,
+    notes: 'Finalized identity (SKU/drawing/customer serial)',
+    metadata: { sku: item.sku, drawingName: item.drawingName, customerSerialNumber: item.customerSerialNumber },
+  });
+}
+
+Now: tubes can stay interchangeable through production, but must be assigned before leaving Final QC (or wherever you choose).
+
+If you’d rather finalize at Shipping QC instead of Final QC, move this gate to the transition out of Shipping QC or to /process-shipment.

@@ -4336,6 +4336,17 @@ export const p2SerializedItems = pgTable('p2_serialized_items', {
   paintCompletedAt: timestamp('paint_completed_at'),
   finalQcCompletedAt: timestamp('final_qc_completed_at'),
   completedAt: timestamp('completed_at'), // When item finished all stages
+  // Build family + late finalization fields
+  buildFamilyKey: text('build_family_key'),
+  partRoutingId: varchar('part_routing_id', { length: 255 }),
+  partRoutingRevision: integer('part_routing_revision'),
+  sku: text('sku'),
+  drawingName: text('drawing_name'),
+  customerSerialNumber: text('customer_serial_number'),
+  customerSerialAssignedAt: timestamp('customer_serial_assigned_at'),
+  customerSerialAssignedBy: text('customer_serial_assigned_by'),
+  finalizedAt: timestamp('finalized_at'),
+  finalizedBy: text('finalized_by'),
   // Hold and scrap tracking
   travelerBarcode: text('traveler_barcode'), // Physical traveler barcode (e.g. SG022317-4002P0001 REV N-022)
   holdReason: text('hold_reason'),

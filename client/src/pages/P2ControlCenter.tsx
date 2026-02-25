@@ -33,7 +33,9 @@ import {
   Building,
   FolderOpen,
   FileWarning,
-  Truck
+  Truck,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -48,6 +50,7 @@ import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
+import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -597,6 +600,7 @@ function P2TravelersTab() {
   const [workOrderId, setWorkOrderId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedTravelerId, setExpandedTravelerId] = useState<string | null>(null);
 
   const { data: travelers = [], isLoading: travelersLoading } = useQuery<Traveler[]>({
     queryKey: ['/api/travelers'],
@@ -805,57 +809,82 @@ function P2TravelersTab() {
               </TableHeader>
               <TableBody>
                 {filteredTravelers.map((traveler) => (
-                  <TableRow key={traveler.id} data-testid={`row-traveler-${traveler.id}`}>
-                    <TableCell className="font-mono font-medium">{traveler.travelerNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <span className="font-medium">{traveler.partNumber}</span>
-                        {traveler.partName && (
-                          <div className="text-xs text-muted-foreground">{traveler.partName}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{traveler.workOrderId || '-'}</TableCell>
-                    <TableCell>
-                      {traveler.routingName ? (
+                  <>
+                    <TableRow
+                      key={traveler.id}
+                      data-testid={`row-traveler-${traveler.id}`}
+                      className={`cursor-pointer ${expandedTravelerId === traveler.id ? 'bg-muted/50' : 'hover:bg-muted/30'}`}
+                      onClick={() => setExpandedTravelerId(expandedTravelerId === traveler.id ? null : traveler.id)}
+                    >
+                      <TableCell className="font-mono font-medium">
+                        <div className="flex items-center gap-2">
+                          {expandedTravelerId === traveler.id ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {traveler.travelerNumber}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div>
-                          <span>{traveler.routingName}</span>
-                          {traveler.routingRevision && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              Rev {traveler.routingRevision}
-                            </Badge>
+                          <span className="font-medium">{traveler.partNumber}</span>
+                          {traveler.partName && (
+                            <div className="text-xs text-muted-foreground">{traveler.partName}</div>
                           )}
                         </div>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>{traveler.quantity}</TableCell>
-                    <TableCell>{getStatusBadge(traveler.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(traveler.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/travelers/${traveler.id}`)}
-                          data-testid={`button-view-traveler-${traveler.id}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {(traveler.status === 'DRAFT' || traveler.status === 'IN_PROGRESS') && (
+                      </TableCell>
+                      <TableCell>{traveler.workOrderId || '-'}</TableCell>
+                      <TableCell>
+                        {traveler.routingName ? (
+                          <div>
+                            <span>{traveler.routingName}</span>
+                            {traveler.routingRevision && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                Rev {traveler.routingRevision}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>{traveler.quantity}</TableCell>
+                      <TableCell>{getStatusBadge(traveler.status)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(traveler.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(`/travelers/${traveler.id}/execute`)}
-                            data-testid={`button-execute-traveler-${traveler.id}`}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/travelers/${traveler.id}`); }}
+                            data-testid={`button-view-traveler-${traveler.id}`}
                           >
-                            <Play className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          {(traveler.status === 'DRAFT' || traveler.status === 'IN_PROGRESS') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); navigate(`/travelers/${traveler.id}/execute`); }}
+                              data-testid={`button-execute-traveler-${traveler.id}`}
+                            >
+                              <Play className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expandedTravelerId === traveler.id && (
+                      <TableRow key={`${traveler.id}-details`}>
+                        <TableCell colSpan={8} className="p-0 border-b-2 border-primary/20">
+                          <div className="bg-muted/20 p-4">
+                            <TravelerCapturedDataById travelerId={traveler.id} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>

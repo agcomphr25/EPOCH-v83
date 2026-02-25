@@ -204,6 +204,29 @@ router.get('/by-number/:travelerNumber', async (req: Request, res: Response) => 
   }
 });
 
+router.get('/by-serial/:serialNumber', async (req: Request, res: Response) => {
+  try {
+    const serialNumber = decodeURIComponent(req.params.serialNumber).trim();
+    const allTravelers = await storage.getTravelers();
+    const matched = allTravelers.filter(t =>
+      t.serialNumber && t.serialNumber.toLowerCase() === serialNumber.toLowerCase()
+    );
+
+    if (matched.length === 0) {
+      return res.status(404).json({ error: 'No travelers found for this serial number' });
+    }
+
+    const results = await Promise.all(
+      matched.map(t => storage.getTravelerWithDetails(t.id))
+    );
+
+    res.json(results.filter(Boolean));
+  } catch (error: any) {
+    console.error('Error fetching travelers by serial number:', error);
+    res.status(500).json({ error: 'Failed to fetch travelers', message: error.message });
+  }
+});
+
 // Get traveler by ID with full details
 router.get('/:id', async (req: Request, res: Response) => {
   try {

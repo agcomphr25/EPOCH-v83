@@ -1,0 +1,488 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-02-25?replId=d477820d-cee2-46c3-abca-2925dd26088c&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-02-25?replId=d477820d-cee2-46c3-abca-2925dd26088c&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-02-25?replId=d477820d-cee2-46c3-abca-2925dd26088c&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+528d945cd5457113.js:14 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+528d945cd5457113.js:14 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+528d945cd5457113.js:14 [LaunchDarkly] LaunchDarkly client initialized
+528d945cd5457113.js:14 [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ 528d945cd5457113.js:14
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ Unrecognized feature: 'ambient-light-sensor'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'battery'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'execution-while-not-rendered'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'execution-while-out-of-viewport'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'layout-animations'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'legacy-image-formats'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'navigation-override'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'oversized-images'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'publickey-credentials'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'speaker-selection'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'unoptimized-images'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'unsized-media'.
+C @ 9954129c7dd6dc22.js:2
+ Unrecognized feature: 'pointer-lock'.
+C @ 9954129c7dd6dc22.js:2
+ Allow attribute will take precedence over 'allowfullscreen'.
+C @ 9954129c7dd6dc22.js:2
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+C @ 9954129c7dd6dc22.js:2
+528d945cd5457113.js:14 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:1d8c3666-11a9-442d-af9f-ffcf9d1f1e51"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:1d8c3666-11a9-442d-af9f-ffcf9d1f1e51"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 Cache data may be lost when replacing the currentUserReplAgentStatuses field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), define a custom merge function for the Subscription.currentUserReplAgentStatuses field, so InMemoryCache can safely merge these objects:
+
+  existing: [{"__typename":"AgentStatusUpdate","replId":"0ce1429f-ab65-4d48-bef3-611aab96e0df","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-02-24T19:18:09.153Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/0ce1429f-ab65-4d48-bef3-611aab96e0df/17ed13ad-7477-4508-94aa-97b16f35e68a/vPY9LSd"},{"__typename":"AgentStatusUpdate","replId":"d477820d-cee2-46c3-abca-2925dd26088c","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-02-25T17:04:12.941Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/d477820d-cee2-46c3-abca-2925dd26088c/ead070b8-d039-42a1-94cf-833381f50765/uvvB1qj"}]
+  incoming: [{"__typename":"AgentStatusUpdate","replId":"d477820d-cee2-46c3-abca-2925dd26088c","statusV2":"PAUSED","label":"Waiting for you","updatedAt":"2026-02-25T17:04:12.941Z","appImageUrl":"https://storage.googleapis.com/screenshot-production-us-central1/d477820d-cee2-46c3-abca-2925dd26088c/ead070b8-d039-42a1-94cf-833381f50765/uvvB1qj"}]
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 528d945cd5457113.js:14
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+ WebSocket connection to 'wss://eval.worf.platform.replit.com/wsv2/v2.public.Q2dZSThwUDl6QVlTQmdpUnNQM01CaUlFZDI5eVpqQUFPdnNCQ2lSa05EYzNPREl3WkMxalpXVXlMVFEyWXpNdFlXSmpZUzB5T1RJMVpHUXlOakE0T0dNU0EyNXBlQm9XY21Wd2JHbDBMWEpsY0d3dFptbHNaWE10ZDI5eVppSU9ZV2RqYjIxd2FISXRNREl0TWpVcUNHRm5ZMjl0Y0doeVFrNEtGM0psY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTEzYjNKbUVoVnlaWEJzYVhRdGNtVndiQzF0WlhSaExYZHZjbVlhSEhKbGNHeHBkQzF0WVhKbllYSnBibVV0WW14dlkydHpMWGR2Y21aS0J3amVtdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFDQ0FSVmpiMjV1WldOMGIzSnpMbkpsY0d4cGRDNWpiMjJLQVJnS0VFUlBYMU5GUTFWU1NWUlpYMU5EUVU0U0JIUnlkV1ZTSlFnQkVJQ0FnSUJBR1FBQUFBQUFBQ0JBSVFBQUFBQUFBQ0JBS0lDQWdJRG9CekFDT0FCZ0FHb1BDTjZhNnhRU0NHRm5ZMjl0Y0doeWdnRUNNZ0NhQVFvS0NEQXVNQzR6TkRBMG9BRULEpRhRXawSfbJDfBbSW6zYSmEFN9DlD_haiLoDUGihWIDsqlbTK-yOJ--NyWmYMbNHH8BWEgCFhp05bUs2ZegL.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 08dc6e9b1f4c5ecc.js:2
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id/&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+528d945cd5457113.js:14 [Coframe] Mutation callback infinite loop protection triggered, disconnecting mutation observer Object
+(anonymous) @ 528d945cd5457113.js:14
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id/&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://partroutings.id/&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+ If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://u.id&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://u.id/&size=32:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar7ed%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+ WebSocket connection to 'wss://d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/?token=w1lKaSH048Dm' failed: 
+setupWebSocket @ client:536
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=w1lKaSH048Dm' is invalid.
+injected.js:37 React initialized: [object Object]
+injected.js:37 React hooks: [object Object]
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting admin to /admin-dashboard
+injected.js:37 Redirecting admin to /admin-dashboard
+d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/b9ade174-f615-41e7-91cf-fc8fa4b67bee/start (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/b9ade174-f615-41e7-91cf-fc8fa4b67bee/start: 200
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/e5bd72ef-3a35-4b1c-940a-2456751cb965/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/e5bd72ef-3a35-4b1c-940a-2456751cb965/complete: 200
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/ebb125c7-cb45-4be6-a49b-dd8af757e14f/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/ebb125c7-cb45-4be6-a49b-dd8af757e14f/complete: 200
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/c9c475d5-e153-4396-95c7-ecbff2d3187a/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/c9c475d5-e153-4396-95c7-ecbff2d3187a/complete: 200
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/b9ade174-f615-41e7-91cf-fc8fa4b67bee/sign (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/b9ade174-f615-41e7-91cf-fc8fa4b67bee/sign: 200
+injected.js:37 Warning: validateDOMNesting(...): %s cannot appear as a descendant of <%s>.%s <div> p 
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at Badge (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/components/ui/badge.tsx:35:18)
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/p
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at _c9 (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/components/ui/card.tsx:114:12)
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at _c (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/components/ui/card.tsx:20:11)
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at TravelerExecution (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/pages/TravelerExecution.tsx:142:18)
+    at Route (wouter.js:280:16)
+    at Switch (wouter.js:336:17)
+    at RouteGuard (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/components/auth/RouteGuard.tsx:82:38)
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/main
+    at d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/__replco/div
+    at Router (wouter.js:235:17)
+    at DeploymentAuthWrapper (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (@tanstack_react-query.js:2934:3)
+    at App (d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/src/App.tsx?v=t8TfBTm5hqXW3s2TcytlY:341:35)
+    at Router (react-router-dom.js:6332:13)
+    at BrowserRouter (react-router-dom.js:9416:3)
+    at QueryClientProvider (@tanstack_react-query.js:2934:3)
+(anonymous) @ injected.js:37
+528d945cd5457113.js:14 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 528d945cd5457113.js:14
+d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o
+gravatar.com/avatar/0806f034b483f38b8393eaedb9b70c5d?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/692dccf3-bcd4-4c81-b53b-031e56bb1fb2/start (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/692dccf3-bcd4-4c81-b53b-031e56bb1fb2/start: 200
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/b8cedcea-5a2b-4e94-b89f-c09a0a89d7e3/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/b8cedcea-5a2b-4e94-b89f-c09a0a89d7e3/complete: 200
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/4150d098-a950-4c71-ae68-c70df3ec063d/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/tasks/4150d098-a950-4c71-ae68-c70df3ec063d/complete: 200
+d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/692dccf3-bcd4-4c81-b53b-031e56bb1fb2/sign (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/steps/692dccf3-bcd4-4c81-b53b-031e56bb1fb2/sign: 200
+injected.js:37 🌐 API Request to /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/complete (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/travelers/4fa9bdf9-5df9-4c17-90ae-81356094dd2b/complete: 200
+injected.js:37 [vite] connecting...
+client:536 WebSocket connection to 'wss://d477820d-cee2-46c3-abca-2925dd26088c-00-1oi54y4er74d0.worf.replit.dev/?token=w1lKaSH048Dm' failed: 
+setupWebSocket @ client:536
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=w1lKaSH048Dm' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 NotFound component rendering
+injected.js:37 Current location: /p2-traveler/04131434-615e-415a-a82b-d2d0734a127f
+injected.js:37 Current hash: 
+injected.js:37 Current search: 
+injected.js:37 NotFound component rendering
+injected.js:37 Current location: /p2-traveler/04131434-615e-415a-a82b-d2d0734a127f
+injected.js:37 Current hash: 
+injected.js:37 Current search: 

@@ -10,47 +10,20 @@ const FINALIZATION_DEPARTMENTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLE
 
 router.get('/', async (req, res) => {
   try {
-    const { poId, poItemId, status } = req.query;
+    const poItemIdRaw = req.query.poItemId;
+    if (!poItemIdRaw) return res.status(400).json({ error: 'poItemId is required' });
 
-    if (!poItemId && !poId) {
-      return res.status(400).json({ error: 'At least poItemId or poId query parameter is required' });
-    }
+    const poItemId = Number(poItemIdRaw);
+    if (!Number.isFinite(poItemId)) return res.status(400).json({ error: 'poItemId must be a number' });
 
-    if (poId && isNaN(Number(poId))) {
-      return res.status(400).json({ error: 'poId must be a valid number' });
-    }
-    if (poItemId && isNaN(Number(poItemId))) {
-      return res.status(400).json({ error: 'poItemId must be a valid number' });
-    }
-
-    const conditions = [];
-    if (poId) conditions.push(eq(p2SerializedItems.poId, Number(poId)));
-    if (poItemId) conditions.push(eq(p2SerializedItems.poItemId, Number(poItemId)));
-    if (status) conditions.push(eq(p2SerializedItems.status, String(status)));
-
-    const items = await db.query.p2SerializedItems.findMany({
-      where: conditions.length > 1 ? and(...conditions) : conditions[0],
+    const units = await db.query.p2SerializedItems.findMany({
+      where: and(eq(p2SerializedItems.poItemId, poItemId), eq(p2SerializedItems.status, 'ACTIVE')),
+      orderBy: (t, { asc }) => [asc(t.sequenceNumber)],
     });
 
-    return res.json(items.map(item => ({
-      id: item.id,
-      barcode: item.barcode,
-      serialNumber: item.serialNumber,
-      sequenceNumber: item.sequenceNumber,
-      partNumber: item.partNumber,
-      partName: item.partName,
-      status: item.status,
-      currentDepartment: item.currentDepartment,
-      currentStageIndex: item.currentStageIndex,
-      buildFamilyKey: (item as any).buildFamilyKey ?? null,
-      sku: (item as any).sku ?? null,
-      drawingName: (item as any).drawingName ?? null,
-      customerSerialNumber: (item as any).customerSerialNumber ?? null,
-      finalizedAt: (item as any).finalizedAt ?? null,
-      finalizedBy: (item as any).finalizedBy ?? null,
-    })));
+    res.json({ units });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || 'Failed to fetch serialized items' });
+    res.status(500).json({ error: err?.message || 'Failed to fetch serialized units' });
   }
 });
 

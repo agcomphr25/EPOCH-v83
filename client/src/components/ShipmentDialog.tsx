@@ -511,7 +511,8 @@ function StepFinalizeP2Units({
         const url = `/api/p2/serialized-items?poItemId=${poItemId}`;
         const res = await fetch(url);
         if (res.ok) {
-          const units: SerializedUnit[] = await res.json();
+          const data = await res.json();
+          const units: SerializedUnit[] = data.units || [];
           if (units.length > 0) {
             results[poItemId] = units;
             foundAny = true;

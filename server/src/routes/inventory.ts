@@ -201,6 +201,22 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    
+    if (updates.assignedDepartments && Array.isArray(updates.assignedDepartments)) {
+      const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
+      const { db } = await import('../../db');
+      const { eq, inArray } = await import('drizzle-orm');
+      await db.delete(inventoryItemDepartments).where(eq(inventoryItemDepartments.itemId, itemId));
+      if (updates.assignedDepartments.length > 0) {
+        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, updates.assignedDepartments as string[]));
+        if (depts.length > 0) {
+          await db.insert(inventoryItemDepartments).values(
+            depts.map(d => ({ itemId, departmentId: d.id }))
+          ).onConflictDoNothing();
+        }
+      }
+    }
+    
     res.json(updatedItem);
   } catch (error) {
     console.error('Update enhanced inventory item error:', error);
@@ -341,9 +357,9 @@ router.get('/items', async (req: Request, res: Response) => {
 // Get all inventory items (for "Show all parts" feature) — must be before /items/:id
 router.get('/items/all-for-request', async (req: Request, res: Response) => {
   try {
-    const { inventoryItems } = await import('../../schema');
+    const { inventoryItems, inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
     const { db } = await import('../../db');
-    const { eq } = await import('drizzle-orm');
+    const { eq, sql } = await import('drizzle-orm');
 
     const items = await db
       .select({
@@ -358,6 +374,10 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         maxStock: inventoryItems.maxStock,
         usageUnit: inventoryItems.usageUnit,
         vendorId: inventoryItems.vendorId,
+        assignedDepartmentIds: sql<number[]>`COALESCE(
+          (SELECT array_agg(iid.department_id) FROM inventory_item_departments iid WHERE iid.item_id = ${inventoryItems.id}),
+          ARRAY[]::int[]
+        )`.as('assigned_department_ids'),
       })
       .from(inventoryItems)
       .where(eq(inventoryItems.isActive, true));
@@ -414,6 +434,19 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
     }
     
     const newItem = await storage.createInventoryItem(itemData);
+    
+    if (itemData.assignedDepartments && Array.isArray(itemData.assignedDepartments) && itemData.assignedDepartments.length > 0) {
+      const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
+      const { db } = await import('../../db');
+      const { inArray } = await import('drizzle-orm');
+      const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, itemData.assignedDepartments as string[]));
+      if (depts.length > 0) {
+        await db.insert(inventoryItemDepartments).values(
+          depts.map(d => ({ itemId: newItem.id, departmentId: d.id }))
+        ).onConflictDoNothing();
+      }
+    }
+    
     res.status(201).json(newItem);
   } catch (error) {
     console.error('Create inventory item error:', error);
@@ -454,6 +487,22 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    
+    if (updates.assignedDepartments && Array.isArray(updates.assignedDepartments)) {
+      const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
+      const { db } = await import('../../db');
+      const { eq, inArray } = await import('drizzle-orm');
+      await db.delete(inventoryItemDepartments).where(eq(inventoryItemDepartments.itemId, itemId));
+      if (updates.assignedDepartments.length > 0) {
+        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, updates.assignedDepartments as string[]));
+        if (depts.length > 0) {
+          await db.insert(inventoryItemDepartments).values(
+            depts.map(d => ({ itemId, departmentId: d.id }))
+          ).onConflictDoNothing();
+        }
+      }
+    }
+    
     res.json(updatedItem);
   } catch (error) {
     console.error('Update inventory item error:', error);

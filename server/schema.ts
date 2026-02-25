@@ -29,6 +29,12 @@ export const inventoryDepartments = pgTable('inventory_departments', {
   sortOrder: integer('sort_order').default(0),
 });
 
+export const inventoryItemDepartments = pgTable('inventory_item_departments', {
+  id: serial('id').primaryKey(),
+  itemId: integer('item_id').notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+  departmentId: integer('department_id').notNull().references(() => inventoryDepartments.id, { onDelete: 'cascade' }),
+});
+
 export const orderDepartmentTypes = pgTable('order_department_types', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),

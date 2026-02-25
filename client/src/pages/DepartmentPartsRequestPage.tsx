@@ -32,6 +32,7 @@ type InventoryItem = {
   sku?: string;
   department?: string;
   assignedDepartments?: string[];
+  assignedDepartmentIds?: number[];
   currentBalance?: number;
   minStock?: number;
   maxStock?: number;
@@ -118,10 +119,9 @@ export default function DepartmentPartsRequestPage() {
   });
 
   const isOutOfDepartment = (item: InventoryItem): boolean => {
-    if (!showAllParts || !isAdmin || !selectedDepartment) return false;
-    const deptMatch = item.department === selectedDepartment;
-    const assignedMatch = item.assignedDepartments?.includes(selectedDepartment) ?? false;
-    return !deptMatch && !assignedMatch;
+    if (!showAllParts || !isAdmin || !selectedDepartmentId) return false;
+    const assignedById = item.assignedDepartmentIds?.includes(selectedDepartmentId) ?? false;
+    return !assignedById;
   };
 
   const submitRequestMutation = useMutation({

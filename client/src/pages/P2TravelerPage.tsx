@@ -48,6 +48,7 @@ import {
   Flame,
   Thermometer,
   Timer,
+  X,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
@@ -317,6 +318,13 @@ export default function P2TravelerPage() {
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showOvenModal, setShowOvenModal] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [editTraceData, setEditTraceData] = useState<Array<{ type: string; label: string; value: string; inventoryPartId?: string; inventoryPartNumber?: string }>>([]);
+  const [editCustomData, setEditCustomData] = useState<Record<string, string>>({});
+  const [editQcResults, setEditQcResults] = useState<Array<{ standard: string; tolerance: string; requirement: string; measuredValue: string; passed: boolean | null }>>([]);
+  const [editLoading, setEditLoading] = useState(false);
   const [ovenData, setOvenData] = useState({
     ovenId: '',
     cycleNumber: '',
@@ -333,6 +341,77 @@ export default function P2TravelerPage() {
   const { data: activeTasks } = useQuery<ActiveTask[]>({
     queryKey: ['/api/p2-traveler/active-tasks', employee?.id],
     enabled: !!employee?.id,
+  });
+
+  const { data: itemNotes, refetch: refetchNotes } = useQuery<any[]>({
+    queryKey: ['/api/p2-traveler/notes', verificationData?.serializedItem?.id],
+    enabled: !!verificationData?.serializedItem?.id,
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async () => {
+      if (!verificationData?.serializedItem?.id || !newNote.trim()) return;
+      return apiRequest(`/api/p2-traveler/add-note/${verificationData.serializedItem.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          note: newNote.trim(),
+          department: activeTask?.department || verificationData.nextDepartment,
+          addedBy: employee?.employeeCode || badgeInput,
+          addedByName: employee?.name || badgeInput,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Note Added', description: 'Your note has been saved' });
+      setNewNote('');
+      refetchNotes();
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const loadEditData = async () => {
+    if (!verificationData?.serializedItem?.id || !activeTask?.department) return;
+    setEditLoading(true);
+    try {
+      const resp = await fetch(`/api/p2-traveler/department-data/${verificationData.serializedItem.id}/${encodeURIComponent(activeTask.department)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setEditTraceData(data.traceabilityData || []);
+        setEditCustomData(data.customData || {});
+        setEditQcResults(data.qcResults || []);
+      }
+    } catch (e) {
+      console.error('Failed to load edit data:', e);
+    }
+    setEditLoading(false);
+    setShowEditDialog(true);
+  };
+
+  const saveEditMutation = useMutation({
+    mutationFn: async () => {
+      if (!verificationData?.serializedItem?.id || !activeTask?.department) return;
+      return apiRequest(`/api/p2-traveler/edit-department-data/${verificationData.serializedItem.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          department: activeTask.department,
+          traceabilityData: editTraceData.length > 0 ? editTraceData : undefined,
+          customData: Object.keys(editCustomData).length > 0 ? editCustomData : undefined,
+          qcResults: editQcResults.length > 0 ? editQcResults : undefined,
+          editedBy: employee?.employeeCode || badgeInput,
+          editedByName: employee?.name || badgeInput,
+          isAdmin: false,
+        }),
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: 'Data Updated', description: data?.message || 'Changes saved successfully' });
+      setShowEditDialog(false);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    },
   });
 
   // Reset handler
@@ -1590,6 +1669,54 @@ export default function P2TravelerPage() {
                   Start Over
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={() => { setShowNotesPanel(!showNotesPanel); if (!showNotesPanel) refetchNotes(); }}
+              >
+                <Clipboard className="h-4 w-4 mr-2" />
+                Notes {itemNotes && itemNotes.length > 0 ? `(${itemNotes.length})` : ''}
+              </Button>
+
+              {showNotesPanel && (
+                <div className="space-y-3 rounded-lg border-2 border-purple-200 bg-purple-50/50 p-4">
+                  <div className="flex items-center gap-2 pb-1 border-b border-purple-200">
+                    <Clipboard className="h-4 w-4 text-purple-600" />
+                    <p className="text-xs font-bold text-purple-800 uppercase tracking-wider">Notes</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note about this part..."
+                      className="flex-1 min-h-[60px]"
+                    />
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={!newNote.trim() || addNoteMutation.isPending}
+                      onClick={() => addNoteMutation.mutate()}
+                      className="self-end"
+                    >
+                      {addNoteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                    </Button>
+                  </div>
+                  {itemNotes && itemNotes.length > 0 && (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {itemNotes.map((n: any) => (
+                        <div key={n.id} className="text-xs bg-white rounded border border-purple-100 p-2">
+                          <div className="flex justify-between text-muted-foreground mb-1">
+                            <span className="font-medium">{n.performedBy}</span>
+                            <span>{new Date(n.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-foreground">{n.notes}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1607,7 +1734,7 @@ export default function P2TravelerPage() {
                 </AlertDescription>
               </Alert>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-100"
@@ -1627,6 +1754,69 @@ export default function P2TravelerPage() {
                   </Button>
                 )}
               </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={loadEditData}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Edit Data
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+                  onClick={() => { setShowNotesPanel(!showNotesPanel); if (!showNotesPanel) refetchNotes(); }}
+                >
+                  <Clipboard className="h-4 w-4 mr-2" />
+                  Notes {itemNotes && itemNotes.length > 0 ? `(${itemNotes.length})` : ''}
+                </Button>
+              </div>
+
+              {showNotesPanel && (
+                <div className="space-y-3 rounded-lg border-2 border-purple-200 bg-purple-50/50 p-4">
+                  <div className="flex items-center gap-2 pb-1 border-b border-purple-200">
+                    <Clipboard className="h-4 w-4 text-purple-600" />
+                    <p className="text-xs font-bold text-purple-800 uppercase tracking-wider">Department Notes</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note about this part..."
+                      className="flex-1 min-h-[60px]"
+                    />
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={!newNote.trim() || addNoteMutation.isPending}
+                      onClick={() => addNoteMutation.mutate()}
+                      className="self-end"
+                    >
+                      {addNoteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                    </Button>
+                  </div>
+
+                  {itemNotes && itemNotes.length > 0 && (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {itemNotes.map((n: any) => (
+                        <div key={n.id} className="text-xs bg-white rounded border border-purple-100 p-2">
+                          <div className="flex justify-between text-muted-foreground mb-1">
+                            <span className="font-medium">{n.performedBy}</span>
+                            <span>{new Date(n.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-foreground">{n.notes}</p>
+                          {n.fromDepartment && (
+                            <Badge variant="outline" className="mt-1 text-[10px]">{n.fromDepartment}</Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <Alert variant="default">
                 <AlertCircle className="h-4 w-4" />
@@ -1887,6 +2077,144 @@ export default function P2TravelerPage() {
                   <Flame className="h-4 w-4 mr-2" />
                   Save Oven Cure Log
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Edit Department Data
+            </DialogTitle>
+            <DialogDescription>
+              Editing data for <strong>{activeTask?.department}</strong> — {activeTask?.partName}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading existing data...</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {editTraceData.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Traceability Data</p>
+                  {editTraceData.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded p-2">
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground">{item.label || item.type}</Label>
+                        <Input
+                          value={item.value}
+                          onChange={(e) => {
+                            const updated = [...editTraceData];
+                            updated[idx] = { ...updated[idx], value: e.target.value };
+                            setEditTraceData(updated);
+                          }}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 self-end"
+                        onClick={() => setEditTraceData(editTraceData.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {Object.keys(editCustomData).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Custom Data</p>
+                  {Object.entries(editCustomData).filter(([k]) => k !== 'qcResults').map(([key, value]) => (
+                    <div key={key} className="bg-gray-50 rounded p-2">
+                      <Label className="text-xs text-muted-foreground">{key}</Label>
+                      <Input
+                        value={value}
+                        onChange={(e) => setEditCustomData({ ...editCustomData, [key]: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {editQcResults.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">QC Results</p>
+                  {editQcResults.map((qc, idx) => (
+                    <div key={idx} className="bg-gray-50 rounded p-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">{qc.standard}</span>
+                        <Badge variant={qc.passed ? 'default' : qc.passed === false ? 'destructive' : 'secondary'} className="text-[10px]">
+                          {qc.passed ? 'PASS' : qc.passed === false ? 'FAIL' : 'PENDING'}
+                        </Badge>
+                      </div>
+                      {qc.requirement && <p className="text-[10px] text-muted-foreground">Req: {qc.requirement} (±{qc.tolerance})</p>}
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          value={qc.measuredValue}
+                          onChange={(e) => {
+                            const updated = [...editQcResults];
+                            updated[idx] = { ...updated[idx], measuredValue: e.target.value };
+                            setEditQcResults(updated);
+                          }}
+                          placeholder="Measured value"
+                          className="h-8 text-sm flex-1"
+                        />
+                        <Select
+                          value={qc.passed === true ? 'pass' : qc.passed === false ? 'fail' : 'pending'}
+                          onValueChange={(v) => {
+                            const updated = [...editQcResults];
+                            updated[idx] = { ...updated[idx], passed: v === 'pass' ? true : v === 'fail' ? false : null };
+                            setEditQcResults(updated);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="pass">Pass</SelectItem>
+                            <SelectItem value="fail">Fail</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {editTraceData.length === 0 && Object.keys(editCustomData).length === 0 && editQcResults.length === 0 && (
+                <div className="text-center py-6 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No editable data recorded for this department yet</p>
+                  <p className="text-xs mt-1">Complete the department tasks first, then you can edit the recorded data here</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => saveEditMutation.mutate()}
+              disabled={saveEditMutation.isPending || editLoading || (editTraceData.length === 0 && Object.keys(editCustomData).length === 0 && editQcResults.length === 0)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {saveEditMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : (
+                'Save Changes'
               )}
             </Button>
           </DialogFooter>

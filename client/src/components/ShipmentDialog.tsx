@@ -175,7 +175,6 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
 
   const [unitsByPoItemId, setUnitsByPoItemId] = useState<Record<number, SerializedUnit[]>>({});
   const [loadingUnits, setLoadingUnits] = useState(false);
-  const [unitsRefreshKey, setUnitsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -197,7 +196,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         setLoadingUnits(false);
       }
     })();
-  }, [open, uniquePoItemIds.join(','), unitsRefreshKey]);
+  }, [open, uniquePoItemIds.join(',')]);
 
   const hasP2Units = useMemo(() => {
     return Object.values(unitsByPoItemId).some(units => units.length > 0);
@@ -417,7 +416,9 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
               unitsByPoItemId={unitsByPoItemId}
               poItemIdsNeedingFinalization={poItemIdsNeedingFinalization}
               allFinalized={allFinalized}
-              onRefresh={() => setUnitsRefreshKey(k => k + 1)}
+              onUnitsUpdated={(poItemId, units) =>
+                setUnitsByPoItemId(prev => ({ ...prev, [poItemId]: units }))
+              }
             />
           )
         )}
@@ -528,20 +529,19 @@ function StepFinalizeP2Units({
   unitsByPoItemId,
   poItemIdsNeedingFinalization,
   allFinalized,
-  onRefresh,
+  onUnitsUpdated,
 }: {
   selectedItems: Array<{ poItemId: number; orderId: string; description: string; poNumber: string }>;
   unitsByPoItemId: Record<number, SerializedUnit[]>;
   poItemIdsNeedingFinalization: number[];
   allFinalized: boolean;
-  onRefresh: () => void;
+  onUnitsUpdated: (poItemId: number, units: SerializedUnit[]) => void;
 }) {
   const { toast } = useToast();
   const [sku, setSku] = useState('');
   const [drawingName, setDrawingName] = useState('');
-  const [customerSerial, setCustomerSerial] = useState('');
-  const [performedBy, setPerformedBy] = useState('');
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
 
   const allUnits = useMemo(() => Object.values(unitsByPoItemId).flat(), [unitsByPoItemId]);
   const totalUnfinalized = useMemo(
@@ -556,38 +556,36 @@ function StepFinalizeP2Units({
     }
   }, [unitsByPoItemId, selectedPoItemId]);
 
-  const finalizeMutation = useMutation({
-    mutationFn: async (data: { serializedItemIds: string[]; sku: string; drawingName: string; customerSerialNumber?: string; performedBy: string }) => {
-      return await apiRequest('/api/p2/serialized-items/finalize', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-    },
-    onSuccess: (data) => {
-      toast({
-        title: 'Units Finalized',
-        description: `${data.updatedCount} unit(s) finalized successfully.`,
-      });
-      onRefresh();
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Finalization Failed',
-        description: error.message || 'Failed to finalize units',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const handleFinalizePoItem = (poItemId: number) => {
+  const finalizeForPoItem = async (poItemId: number, skuVal: string, drawingVal: string) => {
     const units = unitsByPoItemId[poItemId] || [];
-    const unfinalized = units.filter(u => !u.finalizedAt || !u.sku || !u.drawingName);
+    const missingIds = units
+      .filter(u => !u.finalizedAt || !u.sku || !u.drawingName)
+      .map(u => u.id);
 
-    if (unfinalized.length === 0) {
-      toast({ title: 'Already finalized', description: 'All units for this item are finalized.' });
-      return;
+    if (missingIds.length === 0) return;
+
+    const resp = await fetch('/api/p2/serialized-items/finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serializedItemIds: missingIds,
+        sku: skuVal,
+        drawingName: drawingVal,
+        performedBy: 'shipping',
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error || 'Failed to finalize units');
     }
 
+    const r = await fetch(`/api/p2/serialized-items?poItemId=${poItemId}`);
+    const j = await r.json();
+    onUnitsUpdated(poItemId, j.units || []);
+  };
+
+  const handleFinalizePoItem = async (poItemId: number) => {
     if (!sku.trim()) {
       toast({ title: 'SKU required', description: 'Enter a SKU before finalizing.', variant: 'destructive' });
       return;
@@ -596,36 +594,35 @@ function StepFinalizeP2Units({
       toast({ title: 'Drawing required', description: 'Enter a drawing name before finalizing.', variant: 'destructive' });
       return;
     }
-    if (!performedBy.trim()) {
-      toast({ title: 'Name required', description: 'Enter your name/employee code.', variant: 'destructive' });
-      return;
-    }
 
-    finalizeMutation.mutate({
-      serializedItemIds: unfinalized.map(u => u.id),
-      sku: sku.trim(),
-      drawingName: drawingName.trim(),
-      customerSerialNumber: customerSerial.trim() || undefined,
-      performedBy: performedBy.trim(),
-    });
+    try {
+      setFinalizing(true);
+      await finalizeForPoItem(poItemId, sku.trim(), drawingName.trim());
+      toast({ title: 'Units Finalized', description: `Units for this item finalized successfully.` });
+    } catch (err: any) {
+      toast({ title: 'Finalization Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setFinalizing(false);
+    }
   };
 
-  const handleFinalizeAll = () => {
-    if (totalUnfinalized.length === 0) {
-      toast({ title: 'Already finalized', description: 'All units are finalized.' });
+  const handleFinalizeAll = async () => {
+    if (!sku.trim() || !drawingName.trim()) {
+      toast({ title: 'Missing fields', description: 'SKU and Drawing Name are required.', variant: 'destructive' });
       return;
     }
-    if (!sku.trim() || !drawingName.trim() || !performedBy.trim()) {
-      toast({ title: 'Missing fields', description: 'SKU, Drawing Name, and Performed By are required.', variant: 'destructive' });
-      return;
+
+    try {
+      setFinalizing(true);
+      for (const poItemId of poItemIdsNeedingFinalization) {
+        await finalizeForPoItem(poItemId, sku.trim(), drawingName.trim());
+      }
+      toast({ title: 'All Units Finalized', description: `${totalUnfinalized.length} unit(s) finalized successfully.` });
+    } catch (err: any) {
+      toast({ title: 'Finalization Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setFinalizing(false);
     }
-    finalizeMutation.mutate({
-      serializedItemIds: totalUnfinalized.map(u => u.id),
-      sku: sku.trim(),
-      drawingName: drawingName.trim(),
-      customerSerialNumber: customerSerial.trim() || undefined,
-      performedBy: performedBy.trim(),
-    });
   };
 
   if (allUnits.length === 0) {
@@ -667,7 +664,7 @@ function StepFinalizeP2Units({
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label htmlFor="fin-sku" className="text-xs font-medium">SKU *</Label>
           <Input
@@ -686,41 +683,19 @@ function StepFinalizeP2Units({
             placeholder="e.g. DWG-4002P0001-N"
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="fin-by" className="text-xs font-medium">Performed By *</Label>
-          <Input
-            id="fin-by"
-            value={performedBy}
-            onChange={(e) => setPerformedBy(e.target.value)}
-            placeholder="Employee code"
-          />
-        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="fin-custserial" className="text-xs font-medium">Customer Serial (optional)</Label>
-          <Input
-            id="fin-custserial"
-            value={customerSerial}
-            onChange={(e) => setCustomerSerial(e.target.value)}
-            placeholder="e.g. CUST-SN-001"
-          />
-        </div>
-        <div className="flex items-end">
-          <Button
-            onClick={handleFinalizeAll}
-            disabled={finalizeMutation.isPending || !sku.trim() || !drawingName.trim() || !performedBy.trim()}
-            className="w-full"
-          >
-            {finalizeMutation.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finalizing...</>
-            ) : (
-              <><Shield className="w-4 h-4 mr-2" /> Finalize All ({totalUnfinalized.length} units)</>
-            )}
-          </Button>
-        </div>
-      </div>
+      <Button
+        onClick={handleFinalizeAll}
+        disabled={finalizing || !sku.trim() || !drawingName.trim()}
+        className="w-full"
+      >
+        {finalizing ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finalizing...</>
+        ) : (
+          <><Shield className="w-4 h-4 mr-2" /> Finalize All Unfinalized Units ({totalUnfinalized.length})</>
+        )}
+      </Button>
 
       {poItemEntries.length > 1 && (
         <div className="flex gap-2 flex-wrap">
@@ -796,7 +771,7 @@ function StepFinalizeP2Units({
             variant="outline"
             size="sm"
             onClick={() => handleFinalizePoItem(selectedPoItemId)}
-            disabled={finalizeMutation.isPending || !sku.trim() || !drawingName.trim() || !performedBy.trim()}
+            disabled={finalizing || !sku.trim() || !drawingName.trim()}
           >
             Finalize This Item Only
           </Button>

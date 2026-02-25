@@ -1147,9 +1147,29 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
       });
     }
 
+    // Capture before state for audit
+    const beforeOrder = await storage.getFinalizedOrderById(orderId);
+
     // Update the order in all_orders table
     const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
     console.log('Updated order successfully:', updatedOrder);
+
+    // Log field-level audit changes (price, discount, shipping, etc.)
+    if (beforeOrder) {
+      const actor = {
+        id: (req as any).user?.id,
+        username: (req as any).user?.username || 'System',
+        role: (req as any).user?.role || 'system',
+      };
+      await auditService.logFieldChanges(
+        'p1_order',
+        orderId,
+        beforeOrder,
+        updatedOrder,
+        actor,
+        { source: 'order-edit' }
+      );
+    }
 
     // Idempotently reconcile bottom metal demand from the effective post-update order state
     // This handles all cases: feature changes, partial updates, drift correction, and updates bottomMetalSource
@@ -1355,7 +1375,28 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
     const orderId = req.params.id;
     const updates = req.body;
 
+    // Capture before state for audit
+    const beforeOrder = await storage.getFinalizedOrderById(orderId);
+
     const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+
+    // Log field-level audit changes (price, discount, shipping, etc.)
+    if (beforeOrder) {
+      const actor = {
+        id: (req as any).user?.id,
+        username: (req as any).user?.username || 'System',
+        role: (req as any).user?.role || 'system',
+      };
+      await auditService.logFieldChanges(
+        'p1_order',
+        orderId,
+        beforeOrder,
+        updatedOrder,
+        actor,
+        { source: 'order-edit' }
+      );
+    }
+
     res.json(updatedOrder);
   } catch (error) {
     console.error('Update finalized order error:', error);

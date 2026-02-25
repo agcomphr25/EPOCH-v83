@@ -93,6 +93,22 @@ export const auditableFields: Record<string, AuditFieldConfig> = {
   },
 
   // P1 Order - Finance Fields
+  shipping: {
+    fieldName: 'shipping',
+    displayName: 'Shipping Charge',
+    eventType: 'SHIPPING_CHARGE_CHANGED',
+    category: 'finance',
+    entityTypes: ['p1_order'],
+    isTracked: true,
+  },
+  flattopPriceOverride: {
+    fieldName: 'flattopPriceOverride',
+    displayName: 'Flattop Price Override',
+    eventType: 'PRICE_OVERRIDE',
+    category: 'finance',
+    entityTypes: ['p1_order'],
+    isTracked: true,
+  },
   isPaid: {
     fieldName: 'isPaid',
     displayName: 'Payment Status',

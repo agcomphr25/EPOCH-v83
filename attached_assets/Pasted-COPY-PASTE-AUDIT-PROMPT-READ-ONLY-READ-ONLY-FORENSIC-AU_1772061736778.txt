@@ -1,0 +1,211 @@
+COPY-PASTE AUDIT PROMPT (READ-ONLY)
+READ-ONLY FORENSIC AUDIT — VENDOR PO SYSTEM
+
+DO NOT MODIFY ANY FILES.
+DO NOT RUN MIGRATIONS.
+DO NOT APPLY FIXES.
+SEARCH + REPORT ONLY.
+
+We are investigating two issues:
+
+ISSUE A — Vendor PO Line Items
+--------------------------------
+When editing a Vendor PO:
+- Adding a new line item does not persist correctly
+- Line numbers may duplicate (e.g., multiple "Line 2" or "Line 3")
+- Line sequencing does not auto-normalize (2,3,4,5…)
+
+We need to determine:
+1) Where line numbers are generated
+2) Whether numbering is client-side or server-side
+3) Whether line numbers are stored in DB or derived at render
+4) Whether re-indexing occurs on save
+5) Whether optimistic updates override server response
+6) Whether multiple saves cause duplication
+7) Whether line items are PATCHed or fully replaced
+8) Whether DB constraints exist on (po_id, line_number)
+
+--------------------------------
+
+ISSUE B — "Issue PO" Email Disabled
+------------------------------------
+When Inventory Manager clicks "Issue PO":
+- Vendor email SHOULD send
+- Copy SHOULD send to Inventory Manager
+- Email system was previously active
+- It is now disabled or bypassed
+
+We need to determine:
+1) Where "Issue PO" action is handled (route)
+2) Whether it triggers a status change
+3) Whether email logic is conditionally gated
+4) Whether a feature flag is disabling email
+5) Whether environment variables are required
+6) Whether vendor email address is required
+7) Whether manager email is passed or derived
+8) Whether sendEmail() is commented, wrapped, or bypassed
+
+--------------------------------
+STEP 1 — Locate All Vendor PO Files
+--------------------------------
+
+Search entire repo for:
+
+"vendor"
+"VendorPO"
+"vendor-po"
+"issuePO"
+"issue_po"
+"purchaseOrder"
+"VPO-"
+"sendEmail"
+"email"
+"mail"
+"nodemailer"
+
+List:
+- Backend routes
+- Service modules
+- Email utility modules
+- DB schema definitions
+- Frontend pages/components
+
+--------------------------------
+STEP 2 — Inspect Vendor PO Schema
+--------------------------------
+
+Locate:
+- vendor_po table
+- vendor_po_line_items table (or equivalent)
+
+Report:
+- Columns
+- Primary keys
+- Unique constraints
+- Whether line_number exists
+- Whether (po_id, line_number) is unique
+- Whether cascade delete exists
+- Whether line items are stored as JSON instead
+
+--------------------------------
+STEP 3 — Trace Line Item Flow
+--------------------------------
+
+Map full lifecycle:
+
+Frontend:
+- Where line items are rendered
+- Where new lines are added
+- Whether index is used as line number
+- Whether line_number field exists in state
+- Whether line_number is manually editable
+- Whether re-indexing occurs on add/delete
+
+Network:
+- Inspect API payload when saving PO
+- Determine if:
+    - Entire line item array is sent
+    - Only modified items are sent
+    - Line numbers are included in payload
+
+Backend:
+- Route handling save/update
+- Whether line numbers are recalculated
+- Whether old line items are deleted + reinserted
+- Whether duplicates are possible
+- Whether transaction wrapper exists
+
+IMPORTANT:
+Determine if duplicate line numbers are:
+A) Purely UI rendering issue
+B) DB-level persistence issue
+C) Missing normalization step
+D) Missing constraint
+E) Race condition
+
+--------------------------------
+STEP 4 — Trace "Issue PO" Action
+--------------------------------
+
+Locate:
+- Route triggered by "Issue PO"
+- Controller logic
+- Status transition logic
+
+Determine:
+- Does status change from Draft → Issued?
+- Is email triggered on status change?
+- Is email explicitly called in this route?
+- Is there a feature flag like:
+    EMAIL_ENABLED
+    PO_EMAIL_ENABLED
+    SEND_VENDOR_EMAIL
+    NODE_ENV check
+
+Search for:
+if (emailEnabled)
+if (process.env...)
+return; // early exit
+
+--------------------------------
+STEP 5 — Inspect Email Pipeline
+--------------------------------
+
+Locate:
+- sendEmail() utility
+- nodemailer setup
+- SMTP config
+- Resend / Sendgrid / SES integration
+
+Report:
+- Where vendor email address comes from
+- Whether CC is supported
+- Whether manager email is available in request context
+- Whether email template exists
+- Whether attachment (PDF) is generated
+- Whether PDF generation occurs before email
+- Whether email code is commented out
+
+--------------------------------
+STEP 6 — Environment Variables
+--------------------------------
+
+List all env vars used in email logic.
+
+Determine:
+- Are they required?
+- Are they present?
+- Is NODE_ENV affecting behavior?
+- Is there a development-only bypass?
+
+--------------------------------
+STEP 7 — Produce Structured Report
+--------------------------------
+
+Provide:
+
+SECTION A — LINE ITEM ROOT CAUSE
+- Where numbering is created
+- Whether server enforces order
+- Whether DB constraint exists
+- Why duplicates happen
+- What architectural correction is needed (high level only)
+
+SECTION B — EMAIL ROOT CAUSE
+- Why email is not sending
+- Whether logic is disabled
+- Whether feature flag exists
+- Whether manager CC exists
+- Whether PDF generation still works
+
+SECTION C — RISK ASSESSMENT
+- Is this data corruption risk?
+- Is this UI-only?
+- Is email safe to re-enable?
+- Any hidden coupling?
+
+DO NOT APPLY FIXES.
+DO NOT WRITE CODE.
+DO NOT MODIFY FILES.
+
+END AUDIT.

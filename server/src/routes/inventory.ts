@@ -1352,20 +1352,19 @@ router.get('/parts-requests/:id/history', async (req: Request, res: Response) =>
 // Departments CRUD - Get actual manufacturing departments from orderDepartmentTypes
 router.get('/departments', async (req: Request, res: Response) => {
   try {
-    const { orderDepartmentTypes } = await import('../../schema');
+    const { inventoryDepartments } = await import('../../schema');
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../../db');
     
     const departments = await db
       .select()
-      .from(orderDepartmentTypes)
-      .where(eq(orderDepartmentTypes.isActive, true))
-      .orderBy(orderDepartmentTypes.sortOrder);
+      .from(inventoryDepartments)
+      .where(eq(inventoryDepartments.isActive, true))
+      .orderBy(inventoryDepartments.sortOrder);
     
-    // Map to simple id/name format expected by frontend
     const simpleDepartments = departments.map(dept => ({
       id: dept.id,
-      name: dept.displayName
+      name: dept.name
     }));
     res.json(simpleDepartments);
   } catch (error) {

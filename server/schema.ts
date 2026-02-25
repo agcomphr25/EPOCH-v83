@@ -22,6 +22,13 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
+export const inventoryDepartments = pgTable('inventory_departments', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  isActive: boolean('is_active').default(true),
+  sortOrder: integer('sort_order').default(0),
+});
+
 export const orderDepartmentTypes = pgTable('order_department_types', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),

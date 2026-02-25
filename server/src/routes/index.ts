@@ -3022,6 +3022,31 @@ export function registerRoutes(app: Express): Server {
               
               console.log(`Created serialized items for PO ${po?.poNumber}`);
             }
+
+            // Auto-generate production orders (including Cutting Table packet demands)
+            try {
+              const { p2ProductionOrders: p2ProdTable } = await import('../../schema');
+              const existingProdOrders = await db
+                .select()
+                .from(p2ProdTable)
+                .where(eq(p2ProdTable.p2PoId, poItem.poId))
+                .limit(1);
+
+              if (existingProdOrders.length === 0) {
+                console.log(`🔄 Auto-generating production orders for PO ${po?.poNumber} (including cutting table packet demands)...`);
+                const { storage } = await import('../../storage');
+                const prodOrders = await storage.generateP2ProductionOrders(poItem.poId);
+                console.log(`✅ Auto-generated ${prodOrders.length} production orders for PO ${po?.poNumber}`);
+                const cuttingOrders = prodOrders.filter(o => o.department === 'Cutting Table');
+                if (cuttingOrders.length > 0) {
+                  console.log(`  📋 ${cuttingOrders.length} cutting table packet demand(s) transferred to Cutting Table Control Center`);
+                }
+              } else {
+                console.log(`ℹ️ Production orders already exist for PO ${po?.poNumber} - skipping auto-generation`);
+              }
+            } catch (prodError) {
+              console.error(`⚠️ Failed to auto-generate production orders for PO ${po?.poNumber}:`, prodError);
+            }
           }
         }
       }

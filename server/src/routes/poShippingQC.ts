@@ -1712,7 +1712,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
         if (units.length === 0) continue;
 
-        const notFinalized = units.filter(u => !(u as any).finalizedAt || !(u as any).sku || !(u as any).drawingName);
+        const shippableUnits = units.filter(u => !!(u as any).completedAt);
+        if (shippableUnits.length === 0) continue;
+
+        const notFinalized = shippableUnits.filter(u => !(u as any).finalizedAt || !(u as any).sku || !(u as any).drawingName);
 
         if (notFinalized.length > 0) {
           return res.status(403).json({

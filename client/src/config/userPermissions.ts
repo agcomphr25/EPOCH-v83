@@ -256,6 +256,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/finance/bulk-payment',
       '/watch-rules',
       '/refund-request',
+      '/refund-queue',
       '/urgent-orders-report',
     ],
   },

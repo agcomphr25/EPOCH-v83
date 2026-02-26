@@ -786,15 +786,13 @@ Email: sales@agcomposites.com
   }
 });
 
-// POST /api/vendor-pos/:id/issue - Issue a PO and optionally send confirmation email with magic link
+// POST /api/vendor-pos/:id/issue - Issue a PO and send confirmation email with magic link
 router.post('/:id/issue', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
-
-    const { skipEmail } = req.body || {};
 
     // Get the PO first for vendor lookup and pre-flight checks
     const vendorPO = await storage.getVendorPO(id);
@@ -816,19 +814,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor not found' });
     }
 
-    // If skipEmail is true, use atomic transactional issuance (lock, generate number, update status)
-    if (skipEmail) {
-      const { vendorPO: updatedPO, poNumber } = await storage.issueVendorPO(id);
-      console.log(`✅ PO ${poNumber} marked as issued (no email sent - manual entry mode)`);
-      return res.json({
-        ...updatedPO,
-        emailSent: false,
-        emailSkipped: true,
-        message: `PO marked as issued successfully. No email was sent.`,
-      });
-    }
-
-    // Check if vendor has an email (only required when sending email)
+    // Vendor email is required — email always fires on issue
     if (!vendor.email) {
       return res.status(400).json({ 
         error: 'Vendor email not configured',
@@ -1003,10 +989,17 @@ Phone: 256-723-8381
 Email: sales@agcomposites.com
     `.trim();
 
-    // Send email to vendor with CC to laurie@agcomposites.com
+    // Build CC list: always include laurie@agcomposites.com, append issuing user's email if available
+    const ccList: string[] = ['laurie@agcomposites.com'];
+    const issuingUserEmail = (req as any).user?.email as string | undefined;
+    if (issuingUserEmail && !ccList.includes(issuingUserEmail)) {
+      ccList.push(issuingUserEmail);
+    }
+
+    // Send email to vendor with CC to all recipients
     const emailResult = await sendEmailViaSendGrid({
       to: vendor.email,
-      cc: 'laurie@agcomposites.com',
+      cc: ccList,
       subject,
       text,
       html,
@@ -1023,13 +1016,13 @@ Email: sales@agcomposites.com
       });
     }
 
-    console.log(`✅ PO ${poNumber} issued and confirmation email sent to ${vendor.email} (cc: laurie@agcomposites.com)`);
+    console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
 
     res.json({
       ...issuedPO,
       emailSent: true,
       emailRecipient: vendor.email,
-      emailCc: 'laurie@agcomposites.com',
+      emailCc: ccList,
       confirmationLinkExpires: expiresAt,
       message: `PO issued successfully. Confirmation email sent to ${vendor.email}.`,
     });

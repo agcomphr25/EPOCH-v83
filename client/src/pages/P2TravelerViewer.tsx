@@ -327,19 +327,46 @@ export default function P2TravelerViewer() {
                     </span>
                   </div>
                   <Separator className="my-4" />
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {travelerData.departmentProgress?.map((dept: any, index: number) => (
-                      <div key={dept.department} className="flex items-center gap-2 text-sm" data-testid={`dept-progress-${dept.department}`}>
-                        {dept.status === 'COMPLETED' ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : dept.status === 'IN_PROGRESS' ? (
-                          <Clock className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <div className="h-4 w-4 border-2 rounded-full border-gray-300" />
+                      <div key={dept.department} className="border rounded-md p-2" data-testid={`dept-progress-${dept.department}`}>
+                        <div className="flex items-center gap-2 text-sm">
+                          {dept.status === 'COMPLETED' ? (
+                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          ) : dept.status === 'IN_PROGRESS' ? (
+                            <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          ) : dept.status === 'BLOCKED' ? (
+                            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                          ) : (
+                            <div className="h-4 w-4 border-2 rounded-full border-gray-300 flex-shrink-0" />
+                          )}
+                          <span className={
+                            dept.status === 'COMPLETED' ? 'text-green-700 font-medium' : 
+                            dept.status === 'IN_PROGRESS' ? 'text-blue-700 font-medium' : 
+                            dept.status === 'BLOCKED' ? 'text-red-700 font-medium' :
+                            'text-gray-500'
+                          }>
+                            {dept.department}
+                          </span>
+                          <Badge variant="outline" className={
+                            dept.status === 'COMPLETED' ? 'ml-auto text-green-600 border-green-200 bg-green-50 text-xs' :
+                            dept.status === 'IN_PROGRESS' ? 'ml-auto text-blue-600 border-blue-200 bg-blue-50 text-xs' :
+                            dept.status === 'BLOCKED' ? 'ml-auto text-red-600 border-red-200 bg-red-50 text-xs' :
+                            'ml-auto text-gray-400 border-gray-200 text-xs'
+                          }>
+                            {dept.status === 'COMPLETED' ? 'Complete' : dept.status === 'IN_PROGRESS' ? 'In Progress' : dept.status === 'BLOCKED' ? 'Blocked' : 'Pending'}
+                          </Badge>
+                        </div>
+                        {(dept.startedAt || dept.completedAt) && (
+                          <div className="mt-1 ml-6 text-xs text-gray-500 space-y-0.5">
+                            {dept.startedAt && (
+                              <div>Started: {format(new Date(dept.startedAt), 'MMM d, yyyy h:mm a')}{dept.startedBy ? ` by ${dept.startedBy}` : ''}</div>
+                            )}
+                            {dept.completedAt && (
+                              <div>Completed: {format(new Date(dept.completedAt), 'MMM d, yyyy h:mm a')}{dept.completedBy ? ` by ${dept.completedBy}` : ''}</div>
+                            )}
+                          </div>
                         )}
-                        <span className={dept.status === 'COMPLETED' ? 'text-green-700' : dept.status === 'IN_PROGRESS' ? 'text-blue-700' : 'text-gray-500'}>
-                          {dept.department}
-                        </span>
                       </div>
                     ))}
                   </div>

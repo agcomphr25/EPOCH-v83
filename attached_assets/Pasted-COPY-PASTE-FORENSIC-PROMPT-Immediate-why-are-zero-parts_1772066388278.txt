@@ -1,0 +1,78 @@
+COPY-PASTE FORENSIC PROMPT
+
+(Immediate “why are zero parts returning” diagnosis)
+
+Paste this exactly:
+
+We have a critical regression:
+
+On /inventory/parts-request:
+- No parts show under any department.
+- No parts show when "Show all parts" is enabled.
+- Previously parts existed.
+
+We need an immediate forensic diagnosis.
+
+DO NOT implement changes yet.
+
+========================================
+PHASE 1 — VERIFY DATA EXISTS
+========================================
+
+1) Query inventory_items table:
+   - Count total rows
+   - Count where isActive = true
+2) Return sample 5 rows (id, name, isActive).
+
+Confirm items exist.
+
+========================================
+PHASE 2 — VERIFY DEPARTMENT LINKAGE
+========================================
+
+If using inventory_item_departments table:
+
+1) Count rows in inventory_item_departments.
+2) Join inventory_items to inventory_item_departments and count matches.
+3) If zero rows exist, confirm that migration failed to populate linkage.
+
+If still using assignedDepartments string:
+1) Return sample assignedDepartments values.
+
+========================================
+PHASE 3 — VERIFY API ROUTES
+========================================
+
+1) Locate:
+   GET /api/inventory/items/department/:departmentId
+2) Print full SQL or Drizzle query.
+3) Execute it manually with a known valid departmentId.
+
+4) Locate:
+   GET /api/inventory/items/all-for-request
+5) Print its SQL.
+6) Execute manually and confirm row count.
+
+========================================
+PHASE 4 — CHECK ISACTIVE FILTER
+========================================
+
+Confirm whether filter includes:
+   WHERE isActive = true
+
+If items are accidentally marked inactive, confirm.
+
+========================================
+PHASE 5 — RETURN ROOT CAUSE
+========================================
+
+Provide:
+
+1) Do inventory_items exist?
+2) Are department joins empty?
+3) Are queries filtering incorrectly?
+4) Is isActive filter excluding all rows?
+5) Exact reason zero rows are returned.
+
+No fixes yet.
+We are diagnosing the regression.

@@ -149,7 +149,7 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
 // Query params schema for list vendors
 const listVendorsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(200).default(100),
+  pageSize: z.coerce.number().int().min(1).max(10000).default(100),
   search: z.string().optional(),
   approved: z.enum(['true', 'false', 'any']).default('any'),
   evaluated: z.enum(['true', 'false', 'any']).default('any'),

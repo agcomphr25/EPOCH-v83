@@ -490,24 +490,49 @@ export default function InventoryReceivingPage() {
     },
   });
 
-  const handleScan = () => {
-    if (scannedCode) {
-      // Look up item by scanned code
-      const foundItem = mockReceivingItems.find(
-        (item) =>
-          item.agPartNumber === scannedCode ||
-          item.name.toLowerCase().includes(scannedCode.toLowerCase())
-      );
+  const searchSuggestions = useMemo(() => {
+    if (!scannedCode || scannedCode.length < 1 || !inventoryItems || !Array.isArray(inventoryItems)) return [];
+    const term = scannedCode.toLowerCase();
+    return inventoryItems
+      .filter((item: any) =>
+        (item.agPartNumber && item.agPartNumber.toLowerCase().includes(term)) ||
+        (item.name && item.name.toLowerCase().includes(term))
+      )
+      .slice(0, 15);
+  }, [scannedCode, inventoryItems]);
 
-      if (foundItem) {
-        setReceivingData(foundItem);
-        toast.success(`Found item: ${foundItem.name}`);
-      } else {
-        toast.error('Item not found in expected receiving list');
-      }
-      setScannedCode('');
-      setScanMode(false);
+  const selectInventoryItem = (item: any) => {
+    setReceivingData({
+      agPartNumber: item.agPartNumber || '',
+      name: item.name || '',
+      expectedQuantity: 0,
+      receivedQuantity: 0,
+      status: 'pending',
+    });
+    setScannedCode('');
+    toast.success(`Selected item: ${item.name}`);
+  };
+
+  const handleScan = () => {
+    if (!scannedCode) return;
+    if (!inventoryItems || !Array.isArray(inventoryItems) || inventoryItems.length === 0) {
+      toast.error('Inventory items are still loading, please try again');
+      return;
     }
+    const term = scannedCode.toLowerCase();
+    const foundItem = inventoryItems.find(
+      (item: any) =>
+        (item.agPartNumber && item.agPartNumber.toLowerCase() === term) ||
+        (item.name && item.name.toLowerCase().includes(term))
+    );
+
+    if (foundItem) {
+      selectInventoryItem(foundItem);
+    } else {
+      toast.error('Item not found in inventory item list');
+    }
+    setScannedCode('');
+    setScanMode(false);
   };
 
   const handleReceive = () => {
@@ -1209,7 +1234,7 @@ export default function InventoryReceivingPage() {
 
                 {!scanMode && (
                   <div className="space-y-4">
-                    <div>
+                    <div className="relative">
                       <Label htmlFor="search">Search by AG Part# or Name</Label>
                       <Input
                         id="search"
@@ -1218,6 +1243,29 @@ export default function InventoryReceivingPage() {
                         onChange={(e) => setScannedCode(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleScan()}
                       />
+                      {searchSuggestions.length > 0 && scannedCode.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {searchSuggestions.map((item: any, index: number) => (
+                            <button
+                              key={item.id || index}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center justify-between"
+                              onClick={() => selectInventoryItem(item)}
+                            >
+                              <div>
+                                <span className="font-medium text-sm">{item.agPartNumber}</span>
+                                <span className="text-sm text-gray-500 ml-2">— {item.name}</span>
+                              </div>
+                              <ArrowRight className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {scannedCode.length > 0 && searchSuggestions.length === 0 && inventoryItems && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg">
+                          <div className="px-3 py-2 text-sm text-gray-500">No matching items found</div>
+                        </div>
+                      )}
                     </div>
                     <Button onClick={handleScan} className="w-full">
                       <Search className="w-4 h-4 mr-2" />

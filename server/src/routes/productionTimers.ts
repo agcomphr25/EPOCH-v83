@@ -7,6 +7,7 @@ import {
   productionProgramRunEvents,
   insertProductionProgramRunSchema,
   users,
+  employees,
 } from '../../schema';
 import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -16,6 +17,43 @@ import { validateActionToken } from '../../middleware/actionToken';
 function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
   const end = endTime || new Date();
   return Math.floor((end.getTime() - startedAt.getTime()) / 1000);
+}
+
+async function resolveUserId(req: Request): Promise<number | null> {
+  let userId = (req as any).user?.id;
+  if (userId) return userId;
+
+  const badgeVal = req.body?.badgeId;
+  if (!badgeVal) return null;
+
+  const parsedId = parseInt(badgeVal, 10);
+  if (!isNaN(parsedId)) {
+    return parsedId;
+  }
+
+  const [userByUsername] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, badgeVal))
+    .limit(1);
+  if (userByUsername) return userByUsername.id;
+
+  const [emp] = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(eq(employees.employeeCode, badgeVal))
+    .limit(1);
+  if (emp) {
+    const [linkedUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.employeeId, emp.id))
+      .limit(1);
+    if (linkedUser) return linkedUser.id;
+    return emp.id;
+  }
+
+  return null;
 }
 
 const router = Router();
@@ -44,24 +82,7 @@ const startRunSchema = z.object({
 
 router.post('/runs/start', async (req: Request, res: Response) => {
   try {
-    let userId = (req as any).user?.id;
-    
-    if (!userId && req.body?.badgeId) {
-      const badgeVal = req.body.badgeId;
-      const parsedId = parseInt(badgeVal, 10);
-      if (!isNaN(parsedId)) {
-        userId = parsedId;
-      } else {
-        const [userByBadge] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.username, badgeVal))
-          .limit(1);
-        if (userByBadge) {
-          userId = userByBadge.id;
-        }
-      }
-    }
+    const userId = await resolveUserId(req);
     
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
@@ -166,11 +187,11 @@ router.get('/runs/active', async (req: Request, res: Response) => {
 
 router.post('/runs/:id/pause', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
 
     const [run] = await db
@@ -262,11 +283,11 @@ router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
 
 router.post('/runs/:id/resume', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
 
     const [run] = await db
@@ -311,11 +332,11 @@ router.post('/runs/:id/resume', async (req: Request, res: Response) => {
 
 router.post('/runs/:id/advance', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
 
     const [run] = await db
@@ -406,11 +427,11 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
 
 router.post('/runs/:id/stop', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: 'User not authenticated. Provide login credentials or badgeId.' });
     }
 
     const [run] = await db

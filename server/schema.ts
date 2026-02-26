@@ -8054,7 +8054,8 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
     .references(() => inventoryItems.id, { onDelete: 'cascade' })
     .notNull(),
   vendorPoId: integer('vendor_po_id'), // Reference to vendor PO that generated this queue entry
-  vendorPoLineNumber: integer('vendor_po_line_number'), // Line number in the PO
+  vendorPoLineNumber: integer('vendor_po_line_number'), // Line number in the PO (legacy — use vendorPoItemId for new lookups)
+  vendorPoItemId: integer('vendor_po_item_id').references(() => vendorPOItems.id, { onDelete: 'cascade' }), // FK to vendor_po_items.id (nullable — backfilled from line number)
   p2PoId: integer('p2_po_id'), // Reference to P2 PO that generated this queue entry
   p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
   department: text('department').notNull(), // CNC, Cutting Table, or Cores

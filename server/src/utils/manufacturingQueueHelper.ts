@@ -6,7 +6,7 @@ import { eq, and, or, desc } from 'drizzle-orm';
 /**
  * Auto-populates manufacturing queue when a PO item is created for a manufactured part
  * Supports both Vendor POs and P2 POs
- * 
+ *
  * @param params - Parameters object supporting both vendor and P2 POs
  * @returns The created queue item or null if not applicable
  */
@@ -16,6 +16,7 @@ export async function autoPopulateManufacturingQueue(
     quantity: number;
     vendorPoId?: number;
     vendorPoLineNumber?: number;
+    vendorPoItemId?: number;
     p2PoId?: number;
     p2PoItemId?: number;
     dueDate?: Date | null;
@@ -33,15 +34,21 @@ export async function autoPopulateManufacturingQueue(
     });
 
     // Only proceed if item is manufactured and has a manufacturing department
-    if (!inventoryItem || 
-        inventoryItem.type !== 'Manufactured' || 
+    if (!inventoryItem ||
+        inventoryItem.type !== 'Manufactured' ||
         !inventoryItem.manufacturingDepartment) {
       return null;
     }
 
     // Build duplicate detection conditions based on PO type
     const duplicateConditions = [];
-    if (params.vendorPoId && params.vendorPoLineNumber !== undefined) {
+
+    // Vendor PO: use FK identity when available, fall back to composite for legacy rows
+    if (params.vendorPoItemId !== undefined) {
+      duplicateConditions.push(
+        eq(manufacturingQueue.vendorPoItemId, params.vendorPoItemId)
+      );
+    } else if (params.vendorPoId && params.vendorPoLineNumber !== undefined) {
       duplicateConditions.push(
         and(
           eq(manufacturingQueue.vendorPoId, params.vendorPoId),
@@ -49,6 +56,8 @@ export async function autoPopulateManufacturingQueue(
         )
       );
     }
+
+    // P2 PO: still uses composite (p2PoId + p2PoItemId)
     if (params.p2PoId && params.p2PoItemId) {
       duplicateConditions.push(
         and(
@@ -78,25 +87,26 @@ export async function autoPopulateManufacturingQueue(
       }
     }
 
-    // Build notes based on PO type
+    // Build notes based on PO type (vendorPoLineNumber kept for human-readable display)
     let notes = '';
     if (params.vendorPoId && params.vendorPoLineNumber !== undefined) {
       notes = `Auto-generated from Vendor PO #${params.vendorPoId}, Line #${params.vendorPoLineNumber}`;
     } else if (params.p2PoId && params.p2PoItemId) {
       notes = `Auto-generated from P2 PO #${params.p2PoId}, Item #${params.p2PoItemId}`;
     }
-    
+
     const queueData = insertManufacturingQueueSchema.parse({
       inventoryItemId: inventoryItem.id,
       vendorPoId: params.vendorPoId || null,
       vendorPoLineNumber: params.vendorPoLineNumber ?? null,
+      vendorPoItemId: params.vendorPoItemId ?? null,
       p2PoId: params.p2PoId || null,
       p2PoItemId: params.p2PoItemId || null,
       department: inventoryItem.manufacturingDepartment,
       quantityRequested: params.quantity,
       quantityCompleted: 0,
       status: 'PENDING',
-      priority: 50, // Default medium priority
+      priority: 50,
       dueDate: params.dueDate || null,
       assignedTo: null,
       notes,
@@ -110,26 +120,26 @@ export async function autoPopulateManufacturingQueue(
     const poType = params.vendorPoId ? 'Vendor' : 'P2';
     const poId = params.vendorPoId || params.p2PoId;
     console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, ${poType} PO #${poId})`);
-    
+
     return newQueueItem;
   } catch (error) {
-    // Log error but don't throw - we don't want to fail PO creation if queue population fails
     console.error('❌ Failed to auto-populate manufacturing queue:', error);
     return null;
   }
 }
 
 /**
- * Updates manufacturing queue quantities when a vendor PO item is updated
- * 
- * @param poItemId - The vendor PO item ID
+ * Updates manufacturing queue quantities when a vendor PO item is updated.
+ * Uses vendor_po_item_id FK for lookup (vendorPoId/lineNumber retained for display only).
+ *
+ * @param vendorPoItemId - The vendor_po_items.id FK (sole identity reference)
  * @param oldQuantity - The previous quantity
  * @param newQuantity - The new quantity
- * @param vendorPoId - The vendor PO ID
- * @param lineNumber - The line number
+ * @param vendorPoId - The vendor PO ID (display/logging only)
+ * @param lineNumber - The line number (display/logging only)
  */
 export async function syncManufacturingQueueOnUpdate(
-  poItemId: number,
+  vendorPoItemId: number,
   oldQuantity: number,
   newQuantity: number,
   vendorPoId: number,
@@ -141,11 +151,10 @@ export async function syncManufacturingQueueOnUpdate(
       return;
     }
 
-    // Find the related queue entry using proper foreign key columns
+    // Look up the queue entry by FK identity
     const matchingEntry = await db.query.manufacturingQueue.findFirst({
       where: and(
-        eq(manufacturingQueue.vendorPoId, vendorPoId),
-        eq(manufacturingQueue.vendorPoLineNumber, lineNumber),
+        eq(manufacturingQueue.vendorPoItemId, vendorPoItemId),
         or(
           eq(manufacturingQueue.status, 'PENDING'),
           eq(manufacturingQueue.status, 'IN_PROGRESS')
@@ -154,10 +163,9 @@ export async function syncManufacturingQueueOnUpdate(
     });
 
     if (matchingEntry) {
-      // Update the requested quantity
       await db
         .update(manufacturingQueue)
-        .set({ 
+        .set({
           quantityRequested: newQuantity,
           updatedAt: new Date()
         })
@@ -165,7 +173,7 @@ export async function syncManufacturingQueueOnUpdate(
 
       console.log(`✅ Synced manufacturing queue (Queue ID: ${matchingEntry.id}, PO #${vendorPoId} Line #${lineNumber}) quantity from ${oldQuantity} to ${newQuantity}`);
     } else {
-      console.log(`⚠️ No active queue entry found for PO #${vendorPoId} Line #${lineNumber} to sync`);
+      console.log(`⚠️ No active queue entry found for vendor PO item ID ${vendorPoItemId} (PO #${vendorPoId} Line #${lineNumber}) to sync`);
     }
   } catch (error) {
     console.error('❌ Failed to sync manufacturing queue on PO update:', error);
@@ -174,7 +182,7 @@ export async function syncManufacturingQueueOnUpdate(
 
 /**
  * Explodes BOM for a P2 PO item and creates manufacturing queue entries for all manufactured components
- * 
+ *
  * @param params - P2 PO item data
  * @returns Array of created queue items
  */
@@ -236,7 +244,6 @@ export async function explodeBOMForManufacturing(params: {
 
       // Only create queue entries for manufactured components
       if (inventoryItem?.type === 'Manufactured' && inventoryItem.manufacturingDepartment) {
-        // Calculate required quantity: P2 PO quantity × BOM qty_per
         const requiredQty = params.quantity * parseFloat(component.qtyPer);
 
         // Check for duplicates
@@ -257,7 +264,6 @@ export async function explodeBOMForManufacturing(params: {
           continue;
         }
 
-        // Create manufacturing queue entry
         const queueData = insertManufacturingQueueSchema.parse({
           inventoryItemId: inventoryItem.id,
           p2PoId: params.p2PoId,

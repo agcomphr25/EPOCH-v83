@@ -19,6 +19,8 @@ import {
   p2DepartmentTransferSignatures,
   qcSubmissions,
   travelers,
+  inventoryItems,
+  cuttingFabricInventory,
   travelerSteps,
   travelerSignatures,
   employees,
@@ -99,10 +101,73 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       orderBy: [desc(p2SerializedItemEvents.createdAt)],
     });
 
-    // Get traceability data
-    const traceabilityData = await db.query.p2SerializedItemTraceability.findMany({
+    // Get traceability data and enrich with inventory/fabric details
+    const rawTraceabilityData = await db.query.p2SerializedItemTraceability.findMany({
       where: eq(p2SerializedItemTraceability.serializedItemId, serializedItem.id),
     });
+
+    const traceabilityData = await Promise.all(rawTraceabilityData.map(async (trace) => {
+      let inventoryDetail: any = null;
+      let fabricDetail: any = null;
+
+      if (trace.inventoryPartId) {
+        const partId = parseInt(trace.inventoryPartId);
+        if (!isNaN(partId)) {
+          const item = await db.query.inventoryItems.findFirst({
+            where: eq(inventoryItems.id, partId),
+          });
+          if (item) {
+            inventoryDetail = {
+              name: item.name,
+              agPartNumber: item.agPartNumber,
+              source: item.source,
+              supplierPartNumber: item.supplierPartNumber,
+              isFabric: item.isFabric,
+              category: item.category,
+              location: item.location,
+            };
+          }
+        }
+      }
+
+      if (trace.traceabilityValue) {
+        const val = trace.traceabilityValue.trim();
+        const fabricMatch = await db.query.cuttingFabricInventory.findFirst({
+          where: or(
+            eq(cuttingFabricInventory.lotNumber, val),
+            eq(cuttingFabricInventory.rollNumber, val),
+            eq(cuttingFabricInventory.batchNumber, val),
+            eq(cuttingFabricInventory.barcode, val),
+            eq(cuttingFabricInventory.internalControlNumber, val),
+          ),
+        });
+        if (fabricMatch) {
+          fabricDetail = {
+            fabricId: fabricMatch.id,
+            fabric: fabricMatch.fabric,
+            fabricPartNumber: fabricMatch.fabricPartNumber,
+            nickname: fabricMatch.nickname,
+            source: fabricMatch.source,
+            lotNumber: fabricMatch.lotNumber,
+            rollNumber: fabricMatch.rollNumber,
+            batchNumber: fabricMatch.batchNumber,
+            internalControlNumber: fabricMatch.internalControlNumber,
+            manufactureDate: fabricMatch.manufactureDate,
+            expirationDate: fabricMatch.expirationDate,
+            location: fabricMatch.location,
+            freezerNumber: fabricMatch.freezerNumber,
+            status: fabricMatch.status,
+            supplierPoNumber: fabricMatch.supplierPoNumber,
+          };
+        }
+      }
+
+      return {
+        ...trace,
+        inventoryDetail,
+        fabricDetail,
+      };
+    }));
 
     // Get custom data
     const customData = await db.query.p2SerializedItemCustomData.findMany({

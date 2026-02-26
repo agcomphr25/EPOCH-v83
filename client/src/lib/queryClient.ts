@@ -22,8 +22,8 @@ async function throwIfResNotOk(res: Response) {
       }
     }
     
-    // Create error with additional data
     const error: any = new Error(errorMessage);
+    error.status = res.status;
     if (errorData) {
       Object.assign(error, errorData);
     }
@@ -246,6 +246,9 @@ export const queryClient = new QueryClient({
       staleTime: 60000, // 1 minute instead of Infinity for better data freshness
       retry: (failureCount: number, error: any) => {
         if (error?.message?.includes('Not authenticated') || error?.message?.includes('Session expired')) {
+          return false;
+        }
+        if (error?.status === 429) {
           return false;
         }
         return failureCount < 1;

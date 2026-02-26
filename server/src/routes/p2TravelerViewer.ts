@@ -21,6 +21,8 @@ import {
   travelers,
   travelerSteps,
   travelerSignatures,
+  employees,
+  users,
   insertP2LotNumberSchema,
   insertP2PackingSlipSchema,
   insertP2CertificateOfConformanceSchema,
@@ -157,6 +159,45 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         .orderBy(asc(travelerSteps.stepNumber));
     }
 
+    // Build a name lookup for employee codes and usernames
+    const nameIdentifiers = new Set<string>();
+    travelerStepData.forEach(s => {
+      if (s.startedBy) nameIdentifiers.add(s.startedBy);
+      if (s.completedBy) nameIdentifiers.add(s.completedBy);
+    });
+    workTasks.forEach(t => {
+      if (t.employeeCode) nameIdentifiers.add(t.employeeCode);
+    });
+    
+    const nameMap: Record<string, string> = {};
+    if (nameIdentifiers.size > 0) {
+      const ids = Array.from(nameIdentifiers);
+      const matchedEmployees = await db.query.employees.findMany({
+        where: or(
+          inArray(employees.employeeCode, ids),
+          inArray(employees.name, ids)
+        ),
+      });
+      matchedEmployees.forEach(emp => {
+        if (emp.employeeCode) nameMap[emp.employeeCode] = emp.preferredName || emp.name;
+        nameMap[emp.name] = emp.preferredName || emp.name;
+      });
+      
+      const matchedUsers = await db.query.users.findMany({
+        where: inArray(users.username, ids),
+      });
+      matchedUsers.forEach(u => {
+        if (u.firstName && u.lastName) {
+          nameMap[u.username] = `${u.firstName} ${u.lastName}`;
+        }
+      });
+    }
+    
+    const resolveName = (identifier: string | null): string | null => {
+      if (!identifier) return null;
+      return nameMap[identifier] || identifier;
+    };
+
     // Build department progression data using traveler step data when available
     const departmentSequence = routing?.departmentSequence as string[] || [];
     
@@ -195,8 +236,8 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         }
         startedAt = matchingStep.startedAt;
         completedAt = matchingStep.completedAt;
-        startedBy = matchingStep.startedBy;
-        completedBy = matchingStep.completedBy;
+        startedBy = resolveName(matchingStep.startedBy);
+        completedBy = resolveName(matchingStep.completedBy);
       } else {
         status = index < (serializedItem.currentStageIndex || 0) ? 'COMPLETED' :
                 index === (serializedItem.currentStageIndex || 0) ? 
@@ -215,7 +256,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         stepId: matchingStep?.id || null,
         stepNumber: matchingStep?.stepNumber ?? null,
         technicians: completedTasks.map(t => ({
-          name: t.employeeName,
+          name: t.employeeName || resolveName(t.employeeCode) || t.employeeCode,
           code: t.employeeCode,
           startedAt: t.startedAt,
           completedAt: t.completedAt,

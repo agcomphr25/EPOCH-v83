@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { EmailTemplate } from './types';
+import { enforceTemplateEditCapability, logTemplateEdit } from './capabilities';
 
 export async function getTemplateByKey(
   db: any,
@@ -96,12 +97,17 @@ export interface UpdateTemplateWithVersioningOptions {
 export async function updateTemplateWithVersioning(
   db: any,
   opts: UpdateTemplateWithVersioningOptions
-): Promise<EmailTemplate | null> {
+): Promise<{ template: EmailTemplate | null; error?: string; statusCode?: number }> {
+  const capCheck = await enforceTemplateEditCapability(db, opts.updatedBy);
+  if (!capCheck.allowed) {
+    return { template: null, error: capCheck.reason, statusCode: 403 };
+  }
+
   const current = await db.execute(
     sql`SELECT * FROM email_templates WHERE id = ${opts.templateId} LIMIT 1`
   );
   const row = current.rows?.[0] ?? current[0];
-  if (!row) return null;
+  if (!row) return { template: null, error: 'Template not found', statusCode: 404 };
 
   const oldVersion = row.current_version ?? row.version ?? 1;
 
@@ -139,11 +145,19 @@ export async function updateTemplateWithVersioning(
     WHERE id = ${opts.templateId}
   `);
 
+  await logTemplateEdit(db, {
+    templateId: opts.templateId,
+    editedBy: opts.updatedBy,
+    previousVersion: oldVersion,
+    newVersion,
+    changeNote: opts.changeNote,
+  });
+
   const updated = await db.execute(
     sql`SELECT * FROM email_templates WHERE id = ${opts.templateId} LIMIT 1`
   );
   const updatedRow = updated.rows?.[0] ?? updated[0];
-  return updatedRow ? rowToTemplate(updatedRow) : null;
+  return { template: updatedRow ? rowToTemplate(updatedRow) : null };
 }
 
 export async function getTemplateVersionHistory(

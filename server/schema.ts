@@ -3546,6 +3546,18 @@ export const emailTemplateVersions = pgTable('email_template_versions', {
 export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;
 export type InsertEmailTemplateVersion = typeof emailTemplateVersions.$inferInsert;
 
+export const emailTemplateEditLogs = pgTable('email_template_edit_logs', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar('template_id').notNull(),
+  editedBy: varchar('edited_by'),
+  previousVersion: integer('previous_version').notNull(),
+  newVersion: integer('new_version').notNull(),
+  changeNote: text('change_note'),
+  editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
+});
+
+export type EmailTemplateEditLog = typeof emailTemplateEditLogs.$inferSelect;
+
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const communicationLogs = pgTable('communication_logs', {

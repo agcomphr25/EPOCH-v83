@@ -5823,11 +5823,15 @@ export class DatabaseStorage implements IStorage {
         .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)));
     }
     
-    // Use join table for ID-based filtering
+    // Use join table for ID-based filtering.
+    // LEFT JOIN on junction table — items with no assignment produce NULLs and are
+    // naturally excluded by the subsequent INNER JOIN to inventory_departments.
+    // This prevents a total blackout if the junction table is partially empty during
+    // future migrations (query stays valid rather than returning nothing silently).
     const results = await db
       .selectDistinctOn([inventoryItems.id])
       .from(inventoryItems)
-      .innerJoin(inventoryItemDepartments, eq(inventoryItemDepartments.itemId, inventoryItems.id))
+      .leftJoin(inventoryItemDepartments, eq(inventoryItemDepartments.itemId, inventoryItems.id))
       .innerJoin(inventoryDepartments, eq(inventoryDepartments.id, inventoryItemDepartments.departmentId))
       .where(and(
         eq(inventoryDepartments.name, departmentName),

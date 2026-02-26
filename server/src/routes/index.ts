@@ -6050,6 +6050,7 @@ export function registerRoutes(app: Express): Server {
         `🏭 Found ${stockModelItems.length} items with valid stock models to convert to production orders (filtered out ${poItems.length - stockModelItems.length} items without stock models)`
       );
 
+      const { deriveCanonicalMaterial } = await import('../../src/utils/deriveCanonicalMaterial');
       const createdOrders = [];
 
       for (const item of stockModelItems) {
@@ -6059,6 +6060,21 @@ export function registerRoutes(app: Express): Server {
           const stockModelForOrder = item.stockModelId || item.itemId || '';
           // CENTRALIZED: Use atomic order ID generator instead of inline pattern
           const orderId = await storage.generateNextOrderId();
+
+          const materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
+
+          const sourceSnapshot = {
+            po_id: poId,
+            po_item_id: item.id,
+            po_number: purchaseOrder.poNumber,
+            sku: stockModelForOrder,
+            stock_model_name: item.stockModelName || item.itemName || stockModelForOrder,
+            material: materialCanonical,
+            options: item.customOptions ?? null,
+            unit_price: item.unitPrice ?? null,
+            created_at: new Date().toISOString(),
+          };
+
           const productionOrderData = {
             orderId,
             customerId: purchaseOrder.customerId.toString(),
@@ -6085,6 +6101,8 @@ export function registerRoutes(app: Express): Server {
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery,
             },
+            materialCanonical,
+            sourceSnapshot,
           };
 
           console.log(
@@ -6096,7 +6114,7 @@ export function registerRoutes(app: Express): Server {
           createdOrders.push(_createdOrder);
 
           console.log(
-            `🏭 Created production order: ${productionOrderData.orderId} for ${stockModelForOrder}`
+            `🏭 Created production order: ${productionOrderData.orderId} for ${stockModelForOrder} | canonical material: ${materialCanonical}`
           );
         }
       }

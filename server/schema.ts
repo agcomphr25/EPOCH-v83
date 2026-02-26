@@ -5153,6 +5153,8 @@ export const productionOrders = pgTable('production_orders', {
   priorityScore: integer('priority_score'),
   currentPipelineConfig: jsonb('current_pipeline_config'),
   hasP1Priority: boolean('has_p1_priority').default(false),
+  materialCanonical: text('material_canonical').notNull().default(''),
+  sourceSnapshot: jsonb('source_snapshot'),
 });
 
 // Enhanced Form Insert Schemas
@@ -5456,6 +5458,8 @@ export const insertProductionOrderSchema = createInsertSchema(productionOrders)
     laidUpAt: z.coerce.date().optional().nullable(),
     shippedAt: z.coerce.date().optional().nullable(),
     notes: z.string().optional().nullable(),
+    materialCanonical: z.string().optional().default(''),
+    sourceSnapshot: z.any().optional().nullable(),
   });
 
 // Enhanced Form Types

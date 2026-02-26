@@ -88,7 +88,12 @@ export default function P2TravelerViewer() {
   }, [urlBarcode]);
 
   const { data: travelerData, isLoading, error } = useQuery<TravelerData>({
-    queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`],
+    queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode],
+    queryFn: async () => {
+      const res = await fetch(`/api/p2-traveler-viewer/item/${searchedBarcode}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
     enabled: !!searchedBarcode,
   });
 
@@ -112,7 +117,7 @@ export default function P2TravelerViewer() {
         description: `Lot ${result.lot.lotNumber} created successfully`,
       });
       setShowLotDialog(false);
-      queryClient.invalidateQueries({ queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
     },
     onError: (error: any) => {
       toast({
@@ -135,7 +140,7 @@ export default function P2TravelerViewer() {
         title: 'Documents Generated',
         description: 'Documents have been generated successfully',
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
     },
     onError: (error: any) => {
       toast({
@@ -477,38 +482,169 @@ export default function P2TravelerViewer() {
               <Card>
                 <CardHeader>
                   <CardTitle>Material Traceability Records</CardTitle>
-                  <CardDescription>Batch numbers, lot codes, and material certifications per AS9100 requirements</CardDescription>
+                  <CardDescription>Batch numbers, lot codes, and material certifications per AS9100 requirements — enriched with fabric inventory data</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {travelerData.traceabilityData && travelerData.traceabilityData.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Department</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Label</TableHead>
-                          <TableHead>Value</TableHead>
-                          <TableHead>Part Number</TableHead>
-                          <TableHead>Recorded By</TableHead>
-                          <TableHead>Recorded At</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {travelerData.traceabilityData.map((trace: any, index: number) => (
-                          <TableRow key={trace.id} data-testid={`row-trace-${index}`}>
-                            <TableCell className="font-medium">{trace.department}</TableCell>
-                            <TableCell>
+                    <div className="space-y-4">
+                      {travelerData.traceabilityData.map((trace: any, index: number) => (
+                        <div key={trace.id} data-testid={`row-trace-${index}`} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">{trace.department}</Badge>
                               <Badge variant="outline">{trace.traceabilityType}</Badge>
-                            </TableCell>
-                            <TableCell>{trace.traceabilityLabel}</TableCell>
-                            <TableCell className="font-mono">{trace.traceabilityValue}</TableCell>
-                            <TableCell>{trace.inventoryPartNumber || '-'}</TableCell>
-                            <TableCell>{trace.recordedBy}</TableCell>
-                            <TableCell>{format(new Date(trace.createdAt), 'MMM d, yyyy h:mm a')}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {trace.recordedBy} — {format(new Date(trace.createdAt), 'MMM d, yyyy h:mm a')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground text-xs">{trace.traceabilityLabel}</span>
+                              <p className="font-mono font-medium">{trace.traceabilityValue}</p>
+                            </div>
+                            {trace.inventoryPartNumber && (
+                              <div>
+                                <span className="text-muted-foreground text-xs">Part Number</span>
+                                <p className="font-medium">{trace.inventoryPartNumber}</p>
+                              </div>
+                            )}
+                            {trace.inventoryDetail && (
+                              <>
+                                <div>
+                                  <span className="text-muted-foreground text-xs">Material Name</span>
+                                  <p className="font-medium">{trace.inventoryDetail.name}</p>
+                                </div>
+                                {trace.inventoryDetail.agPartNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">AG Part #</span>
+                                    <p className="font-mono">{trace.inventoryDetail.agPartNumber}</p>
+                                  </div>
+                                )}
+                                {trace.inventoryDetail.source && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Source</span>
+                                    <p>{trace.inventoryDetail.source}</p>
+                                  </div>
+                                )}
+                                {trace.inventoryDetail.supplierPartNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                    <p className="font-mono">{trace.inventoryDetail.supplierPartNumber}</p>
+                                  </div>
+                                )}
+                                {trace.inventoryDetail.location && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Location</span>
+                                    <p>{trace.inventoryDetail.location}</p>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          {trace.fabricDetail && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Fabric Inventory Details</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                {trace.fabricDetail.fabric && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Fabric Type</span>
+                                    <p className="font-medium">{trace.fabricDetail.fabric}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.nickname && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Nickname</span>
+                                    <p>{trace.fabricDetail.nickname}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.fabricPartNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Fabric Part #</span>
+                                    <p className="font-mono">{trace.fabricDetail.fabricPartNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.source && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Source</span>
+                                    <p>{trace.fabricDetail.source}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.lotNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Lot #</span>
+                                    <p className="font-mono">{trace.fabricDetail.lotNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.rollNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Roll #</span>
+                                    <p className="font-mono">{trace.fabricDetail.rollNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.batchNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Batch #</span>
+                                    <p className="font-mono">{trace.fabricDetail.batchNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.internalControlNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">ICN</span>
+                                    <p className="font-mono">{trace.fabricDetail.internalControlNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.supplierPoNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Supplier PO</span>
+                                    <p className="font-mono">{trace.fabricDetail.supplierPoNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.manufactureDate && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Manufacture Date</span>
+                                    <p>{format(new Date(trace.fabricDetail.manufactureDate), 'MMM d, yyyy')}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.expirationDate && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Expiration Date</span>
+                                    <p className={new Date(trace.fabricDetail.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                                      {format(new Date(trace.fabricDetail.expirationDate), 'MMM d, yyyy')}
+                                    </p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.location && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Location</span>
+                                    <p>{trace.fabricDetail.location}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.freezerNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Freezer #</span>
+                                    <p>{trace.fabricDetail.freezerNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.status && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Status</span>
+                                    <Badge variant={trace.fabricDetail.status === 'active' ? 'default' : 'destructive'}>
+                                      {trace.fabricDetail.status}
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {!trace.inventoryDetail && !trace.fabricDetail && (
+                            <p className="text-xs text-muted-foreground mt-2 italic">
+                              No matching material found in fabric inventory
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <p className="text-center text-gray-500 py-8">No traceability records found</p>
                   )}

@@ -50,11 +50,22 @@ import { insertMaintenanceScheduleSchema } from '@shared/schema';
 import { z } from 'zod';
 import type { MaintenanceSchedule, MaintenanceLog } from '@shared/schema';
 
+type AssetRow = {
+  id: string;
+  assetTag: string;
+  name: string;
+  status: string;
+};
+
 export default function MaintenanceManager() {
   const [activeTab, setActiveTab] = useState('schedules');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: assets = [], isLoading: assetsLoading } = useQuery<AssetRow[]>({
+    queryKey: ['/api/assets'],
+  });
 
   const form = useForm<z.infer<typeof insertMaintenanceScheduleSchema>>({
     resolver: zodResolver(insertMaintenanceScheduleSchema),
@@ -219,9 +230,25 @@ export default function MaintenanceManager() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Equipment</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter equipment name" {...field} />
-                      </FormControl>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={assetsLoading ? "Loading assets..." : "Select equipment"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {assets
+                            .filter((a) => a.status !== 'retired')
+                            .map((asset) => (
+                              <SelectItem key={asset.id} value={`${asset.name} (${asset.assetTag})`}>
+                                {asset.name} ({asset.assetTag})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

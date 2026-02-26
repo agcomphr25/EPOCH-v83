@@ -8,10 +8,25 @@ export interface EmailTemplate {
   allowedVariables: string[];
   attachmentRules: Record<string, unknown>;
   version: number;
+  currentVersion: number;
   isActive: boolean;
   createdAt?: Date | null;
   updatedAt?: Date | null;
   updatedBy?: string | null;
+}
+
+export interface EmailTemplateVersion {
+  id: string;
+  templateId: string;
+  version: number;
+  subject: string | null;
+  bodyHtml: string | null;
+  bodyText: string | null;
+  attachmentRules: Record<string, unknown> | null;
+  allowedVariables: string[] | null;
+  createdAt: Date | null;
+  createdBy: string | null;
+  changeNote: string | null;
 }
 
 export interface EmailAttachment {

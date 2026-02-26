@@ -3519,6 +3519,7 @@ export const emailTemplates = pgTable('email_templates', {
   allowedVariables: jsonb('allowed_variables').default('[]'),
   attachmentRules: jsonb('attachment_rules').default('{}'),
   version: integer('version').notNull().default(1),
+  currentVersion: integer('current_version').notNull().default(1),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -3527,6 +3528,23 @@ export const emailTemplates = pgTable('email_templates', {
 
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type InsertEmailTemplate = typeof emailTemplates.$inferInsert;
+
+export const emailTemplateVersions = pgTable('email_template_versions', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar('template_id').notNull(),
+  version: integer('version').notNull(),
+  subject: text('subject'),
+  bodyHtml: text('body_html'),
+  bodyText: text('body_text'),
+  attachmentRules: jsonb('attachment_rules'),
+  allowedVariables: jsonb('allowed_variables'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  createdBy: varchar('created_by'),
+  changeNote: text('change_note'),
+});
+
+export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;
+export type InsertEmailTemplateVersion = typeof emailTemplateVersions.$inferInsert;
 
 // ──────────────────────────────────────────────────────────────────────────────
 

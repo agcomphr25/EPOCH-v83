@@ -31,7 +31,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment.
 - **Quality Control**: Nonconformance Record System, Vendor Evaluation System, and Hard QC Stop enforcement with authorized deviation approval workflow.
 - **P2 Serialized Item Tracking**: Complete serialized item tracking for P2 purchase orders with customizable workflows, barcode scanning, traceability gating, Traveler Viewer, Electronic Signature System, department data editing, and notes at any workflow stage. Supports late-finalization pattern. Traveler step completion now syncs P2 serialized item department.
-- **Communication Governance Layer**: Centralized email control plane with templating, logging, and audit capabilities.
+- **Communication Governance Layer**: Centralized email control plane with templating, logging, audit capabilities, and template version history tracking (email_template_versions table with automatic snapshotting on edit).
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue.
 - **PDF Management**: Centralized PDF configuration, flexible Template Library System, and unified `orderPdfService` for intent-based PDF generation using frozen order snapshots.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.

@@ -232,6 +232,25 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     });
     workTasks.forEach(t => {
       if (t.employeeCode) nameIdentifiers.add(t.employeeCode);
+      if (t.employeeName) nameIdentifiers.add(t.employeeName);
+    });
+    events.forEach(e => {
+      if (e.performedBy) nameIdentifiers.add(e.performedBy);
+    });
+    ovenCureLogs.forEach(l => {
+      if (l.operatorName) nameIdentifiers.add(l.operatorName);
+    });
+    vacuumLeakTests.forEach(t => {
+      if (t.operatorName) nameIdentifiers.add(t.operatorName);
+    });
+    finalInspectionResults.forEach(r => {
+      if (r.inspectorName) nameIdentifiers.add(r.inspectorName);
+    });
+    qcSubmissionsData.forEach(q => {
+      if (q.submittedBy) nameIdentifiers.add(q.submittedBy);
+    });
+    departmentTransferSignatures.forEach(s => {
+      if (s.signedByUsername) nameIdentifiers.add(s.signedByUsername);
     });
     
     const nameMap: Record<string, string> = {};
@@ -353,39 +372,49 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       ...workTasks.filter(t => t.traceabilityData && (t.traceabilityData as any)?.signature).map(t => ({
         type: 'Work Task',
         department: t.department,
-        signedBy: t.employeeName,
+        signedBy: resolveName(t.employeeCode) || t.employeeName,
         signedAt: t.completedAt,
         signatureData: (t.traceabilityData as any)?.signature,
       })),
       ...ovenCureLogs.filter(l => l.signature).map(l => ({
         type: 'Oven Cure',
         department: l.department,
-        signedBy: l.operatorName,
+        signedBy: resolveName(l.operatorName) || l.operatorName,
         signedAt: l.endTime,
         signatureData: l.signature,
       })),
       ...vacuumLeakTests.filter(t => t.signature).map(t => ({
         type: 'Vacuum Test',
         department: t.department,
-        signedBy: t.operatorName,
+        signedBy: resolveName(t.operatorName) || t.operatorName,
         signedAt: t.endTime,
         signatureData: t.signature,
       })),
       ...finalInspectionResults.filter(r => r.signature).map(r => ({
         type: 'Final Inspection',
         department: r.department,
-        signedBy: r.inspectorName,
+        signedBy: resolveName(r.inspectorName) || r.inspectorName,
         signedAt: r.inspectionDate,
         signatureData: r.signature,
       })),
       ...qcSubmissionsData.filter(q => q.signature).map(q => ({
         type: 'QC Submission',
         department: q.department,
-        signedBy: q.submittedBy,
+        signedBy: resolveName(q.submittedBy) || q.submittedBy,
         signedAt: q.submittedAt,
         signatureData: q.signature,
       })),
     ];
+
+    const resolvedWorkTasks = workTasks.map(t => ({
+      ...t,
+      employeeName: resolveName(t.employeeCode) || t.employeeName || t.employeeCode,
+    }));
+
+    const resolvedEvents = events.map(e => ({
+      ...e,
+      performedBy: resolveName(e.performedBy) || e.performedBy,
+    }));
 
     return res.json({
       serializedItem,
@@ -398,8 +427,8 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         departmentConfig: routing.departmentConfig,
       } : null,
       departmentProgress,
-      workTasks,
-      events,
+      workTasks: resolvedWorkTasks,
+      events: resolvedEvents,
       traceabilityData,
       customData,
       ovenCureLogs,

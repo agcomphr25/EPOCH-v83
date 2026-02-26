@@ -321,14 +321,23 @@ export default function P2TravelerViewer() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500">Current Department</span>
-                    <Badge className="bg-blue-100 text-blue-800" data-testid="badge-current-department">
-                      {travelerData.serializedItem.currentDepartment}
-                    </Badge>
+                    {travelerData.serializedItem.status === 'COMPLETED' || travelerData.serializedItem.currentDepartment === 'COMPLETED' ? (
+                      <Badge className="bg-green-100 text-green-800" data-testid="badge-current-department">
+                        Completed
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-blue-100 text-blue-800" data-testid="badge-current-department">
+                        {travelerData.serializedItem.currentDepartment}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500">Stage</span>
                     <span className="font-semibold" data-testid="text-stage">
-                      {(travelerData.serializedItem.currentStageIndex || 0) + 1} / {travelerData.routing?.departmentSequence?.length || 0}
+                      {travelerData.serializedItem.status === 'COMPLETED' || travelerData.serializedItem.currentDepartment === 'COMPLETED'
+                        ? `${travelerData.routing?.departmentSequence?.length || 0} / ${travelerData.routing?.departmentSequence?.length || 0}`
+                        : `${(travelerData.serializedItem.currentStageIndex || 0) + 1} / ${travelerData.routing?.departmentSequence?.length || 0}`
+                      }
                     </span>
                   </div>
                   <Separator className="my-4" />

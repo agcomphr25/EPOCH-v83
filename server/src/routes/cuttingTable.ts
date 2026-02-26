@@ -2080,10 +2080,13 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           packetBomId: matchingBom?.id,
         });
       }
+      console.log(`✅ P2 demand: found ${p2Rows.length} rows, pushed to queue (total now: ${queueItems.length})`);
     } catch (err: any) {
       console.error('❌ P2 production queue query FAILED:', err?.message || err);
       console.error('P2 query error details:', JSON.stringify({ code: err?.code, detail: err?.detail, hint: err?.hint }));
     }
+
+    const p2ItemCount = queueItems.filter(i => i.orderType === 'p2_po').length;
 
     // Calculate totals reconciled with inventory
     const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
@@ -2123,6 +2126,15 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       }),
       summary,
       totalItems: queueItems.length,
+      _debug: {
+        p2Count: p2ItemCount,
+        totalQueueItems: queueItems.length,
+        sourceBreakdown: {
+          p1: queueItems.filter(i => i.source === 'P1').length,
+          p1po: queueItems.filter(i => i.source === 'P1_PO').length,
+          p2: p2ItemCount,
+        },
+      },
     });
   } catch (error) {
     console.error('Error fetching weekly cutting queue:', error);

@@ -1,0 +1,54 @@
+index-N5Qm3QrD.js:4642 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-N5Qm3QrD.js:4642 React hooks: {useState: ƒ, useEffect: ƒ}
+index-N5Qm3QrD.js:4639 App component is rendering...
+index-N5Qm3QrD.js:4639 Environment: production
+index-N5Qm3QrD.js:4639 Base URL: /
+fabric-inventory:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-N5Qm3QrD.js:1830 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+iframe_form_detection.js:23 [Violation] 'setTimeout' handler took 52ms
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/17/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/16/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/16/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/17/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-N5Qm3QrD.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-N5Qm3QrD.js:1938  POST https://agcompepoch.xyz/api/inventory 400 (Bad Request)
+mutationFn @ index-N5Qm3QrD.js:1938
+fn @ index-N5Qm3QrD.js:51
+p @ index-N5Qm3QrD.js:51
+start @ index-N5Qm3QrD.js:51
+execute @ index-N5Qm3QrD.js:51
+await in execute
+mutate @ index-N5Qm3QrD.js:51
+(anonymous) @ index-N5Qm3QrD.js:51
+ft @ index-N5Qm3QrD.js:1938
+Twt @ index-N5Qm3QrD.js:37
+Owt @ index-N5Qm3QrD.js:37
+Fwt @ index-N5Qm3QrD.js:37
+z5e @ index-N5Qm3QrD.js:37
+fVe @ index-N5Qm3QrD.js:37
+(anonymous) @ index-N5Qm3QrD.js:37
+xbe @ index-N5Qm3QrD.js:40
+MHe @ index-N5Qm3QrD.js:37
+sle @ index-N5Qm3QrD.js:37
+$ye @ index-N5Qm3QrD.js:37
+Zwt @ index-N5Qm3QrD.js:37

@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { p2SerializedItems, p2SerializedItemEvents } from '../../schema';
-import { and, eq, inArray, or, ilike } from 'drizzle-orm';
+import { and, eq, inArray, or, ilike, isNotNull } from 'drizzle-orm';
 
 const router = Router();
 
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 
 router.get('/shipping-queue', async (req, res) => {
   try {
-    const SHIPPING_PIPELINE_DEPTS = ['Final QC', 'Shipping QC', 'Shipping'];
+    const SHIPPING_PIPELINE_DEPTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLETED', 'Quality Control'];
 
     const units = await db.query.p2SerializedItems.findMany({
       where: or(
@@ -37,7 +37,11 @@ router.get('/shipping-queue', async (req, res) => {
           or(...SHIPPING_PIPELINE_DEPTS.map(d => eq(p2SerializedItems.currentDepartment, d))),
           eq(p2SerializedItems.status, 'ACTIVE')
         ),
-        eq(p2SerializedItems.status, 'COMPLETED')
+        eq(p2SerializedItems.status, 'COMPLETED'),
+        and(
+          isNotNull(p2SerializedItems.completedAt),
+          or(eq(p2SerializedItems.status, 'ACTIVE'), eq(p2SerializedItems.status, 'COMPLETED'))
+        )
       ),
       orderBy: (t, { asc }) => [asc(t.poNumber), asc(t.sequenceNumber)],
     });
@@ -45,6 +49,23 @@ router.get('/shipping-queue', async (req, res) => {
     res.json(units);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to fetch shipping queue' });
+  }
+});
+
+router.get('/shipping-queue-debug', async (req, res) => {
+  try {
+    const rows = await pool.query(`
+      SELECT status, current_department, 
+        COUNT(*) as cnt,
+        COUNT(*) FILTER (WHERE completed_at IS NOT NULL) as completed_count,
+        COUNT(*) FILTER (WHERE finalized_at IS NOT NULL) as finalized_count
+      FROM p2_serialized_items
+      GROUP BY status, current_department
+      ORDER BY cnt DESC
+    `);
+    res.json({ groups: rows, total: rows.reduce((s: number, r: any) => s + parseInt(r.cnt), 0) });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Debug query failed' });
   }
 });
 

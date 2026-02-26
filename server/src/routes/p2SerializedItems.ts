@@ -38,8 +38,10 @@ router.get('/shipping-queue', async (req, res) => {
           eq(p2SerializedItems.status, 'ACTIVE')
         ),
         eq(p2SerializedItems.status, 'COMPLETED'),
-        isNotNull(p2SerializedItems.completedAt),
-        isNotNull((p2SerializedItems as any).finalQcCompletedAt)
+        and(
+          isNotNull(p2SerializedItems.completedAt),
+          or(eq(p2SerializedItems.status, 'ACTIVE'), eq(p2SerializedItems.status, 'COMPLETED'))
+        )
       ),
       orderBy: (t, { asc }) => [asc(t.poNumber), asc(t.sequenceNumber)],
     });
@@ -52,7 +54,7 @@ router.get('/shipping-queue', async (req, res) => {
 
 router.get('/shipping-queue-debug', async (req, res) => {
   try {
-    const result = await pool.query(`
+    const rows = await pool.query(`
       SELECT status, current_department, 
         COUNT(*) as cnt,
         COUNT(*) FILTER (WHERE completed_at IS NOT NULL) as completed_count,
@@ -61,7 +63,7 @@ router.get('/shipping-queue-debug', async (req, res) => {
       GROUP BY status, current_department
       ORDER BY cnt DESC
     `);
-    res.json({ groups: result, total: (result as any[]).reduce((s: number, r: any) => s + parseInt(r.cnt), 0) });
+    res.json({ groups: rows, total: rows.reduce((s: number, r: any) => s + parseInt(r.cnt), 0) });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Debug query failed' });
   }

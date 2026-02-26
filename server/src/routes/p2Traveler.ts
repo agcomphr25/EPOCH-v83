@@ -632,6 +632,24 @@ router.post('/start-task', async (req: Request, res: Response) => {
       });
     }
 
+    // Update serialized item's currentDepartment if task is starting in a later department
+    const departmentSequence = (routing?.departmentSequence as string[]) || 
+      ['Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC'];
+    const startedDeptIndex = departmentSequence.indexOf(department);
+    const currentStageIndex = serializedItem.currentStageIndex || 0;
+    if (startedDeptIndex >= 0 && startedDeptIndex >= currentStageIndex) {
+      await db.update(p2SerializedItems).set({
+        currentDepartment: department,
+        currentStageIndex: startedDeptIndex,
+        updatedAt: new Date(),
+      }).where(eq(p2SerializedItems.id, serializedItemId));
+    } else if (startedDeptIndex < 0) {
+      await db.update(p2SerializedItems).set({
+        currentDepartment: department,
+        updatedAt: new Date(),
+      }).where(eq(p2SerializedItems.id, serializedItemId));
+    }
+
     // Log task start event
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId,

@@ -284,6 +284,70 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
       }
 
+      // Sync serialized items stuck at "Pending Layup" with their actual work task progress
+      try {
+        const { sql: sqlDeptSync } = await import('drizzle-orm');
+        const syncResult = await db.execute(sqlDeptSync`
+          UPDATE p2_serialized_items si
+          SET current_department = latest.department,
+              updated_at = NOW()
+          FROM (
+            SELECT wt.serialized_item_id, 
+                   wt.department,
+                   wt.completed_at,
+                   wt.status as task_status
+            FROM p2_work_tasks wt
+            WHERE wt.started_at IS NOT NULL
+              AND wt.status IN ('IN_PROGRESS', 'COMPLETED')
+              AND wt.id = (
+              SELECT wt2.id FROM p2_work_tasks wt2
+              WHERE wt2.serialized_item_id = wt.serialized_item_id
+                AND wt2.started_at IS NOT NULL
+                AND wt2.status IN ('IN_PROGRESS', 'COMPLETED')
+              ORDER BY wt2.started_at DESC NULLS LAST
+              LIMIT 1
+            )
+          ) latest
+          WHERE si.id = latest.serialized_item_id
+            AND (si.current_department = 'Pending Layup' OR si.current_department IS NULL OR si.current_department = '')
+            AND latest.department IS NOT NULL
+            AND latest.department != 'Pending Layup'
+        `);
+        console.log('✅ Synced stuck "Pending Layup" items with actual work task progress');
+      } catch (deptSyncErr: any) {
+        console.warn('⚠️ Department sync skipped:', deptSyncErr.message);
+      }
+
+      // Also mark items as COMPLETED if all their routing steps have completed work tasks
+      try {
+        const { sql: sqlComplete } = await import('drizzle-orm');
+        await db.execute(sqlComplete`
+          UPDATE p2_serialized_items si
+          SET status = 'COMPLETED',
+              current_department = 'COMPLETED',
+              completed_at = latest_completed.completed_at,
+              updated_at = NOW()
+          FROM (
+            SELECT wt.serialized_item_id,
+                   MAX(wt.completed_at) as completed_at
+            FROM p2_work_tasks wt
+            WHERE wt.status = 'COMPLETED'
+              AND wt.department IN ('Final QC', 'Quality Control')
+            GROUP BY wt.serialized_item_id
+          ) latest_completed
+          WHERE si.id = latest_completed.serialized_item_id
+            AND si.status != 'COMPLETED'
+            AND NOT EXISTS (
+              SELECT 1 FROM p2_work_tasks wt3
+              WHERE wt3.serialized_item_id = si.id
+                AND wt3.status != 'COMPLETED'
+            )
+        `);
+        console.log('✅ Marked fully-completed travelers as COMPLETED');
+      } catch (completeErr: any) {
+        console.warn('⚠️ Completion sync skipped:', completeErr.message);
+      }
+
       // Clean up resolved RMAs still showing in shipping queue
       try {
         const { sql: sqlCleanup } = await import('drizzle-orm');

@@ -18,6 +18,9 @@ import {
   p2TestForConformanceReports,
   p2DepartmentTransferSignatures,
   qcSubmissions,
+  travelers,
+  travelerSteps,
+  travelerSignatures,
   insertP2LotNumberSchema,
   insertP2PackingSlipSchema,
   insertP2CertificateOfConformanceSchema,
@@ -27,7 +30,7 @@ import {
   insertP2FinalInspectionResultSchema,
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, or, ilike, asc } from 'drizzle-orm';
 
 const router = Router();
 
@@ -138,8 +141,27 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
     });
 
-    // Build department progression data
+    // Get traveler steps linked to this serialized item via serial number
+    let travelerStepData: any[] = [];
+    const linkedTravelers = await db.query.travelers.findMany({
+      where: eq(travelers.serialNumber, serializedItem.serialNumber),
+    });
+    if (linkedTravelers.length > 0) {
+      const activeTraveler = linkedTravelers.find(t => t.status === 'IN_PROGRESS') 
+        || linkedTravelers.find(t => t.status === 'COMPLETED')
+        || linkedTravelers[linkedTravelers.length - 1];
+      
+      travelerStepData = await db.select()
+        .from(travelerSteps)
+        .where(eq(travelerSteps.travelerId, activeTraveler.id))
+        .orderBy(asc(travelerSteps.stepNumber));
+    }
+
+    // Build department progression data using traveler step data when available
     const departmentSequence = routing?.departmentSequence as string[] || [];
+    
+    const normalizeDept = (name: string) => (name || '').toLowerCase().replace(/[\s_-]+/g, '');
+    
     const departmentProgress = departmentSequence.map((dept, index) => {
       const completedTasks = workTasks.filter(t => 
         t.department === dept && t.status === 'COMPLETED'
@@ -147,14 +169,51 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       const activeTasks = workTasks.filter(t => 
         t.department === dept && t.status === 'IN_PROGRESS'
       );
+
+      const deptNorm = normalizeDept(dept);
+      let matchingStep = travelerStepData.find(s => normalizeDept(s.departmentName) === deptNorm);
+      
+      if (!matchingStep && travelerStepData.length > 0) {
+        matchingStep = travelerStepData.find(s => (s.stepNumber - 1) === index);
+      }
+
+      let status: string;
+      let startedAt: string | null = null;
+      let completedAt: string | null = null;
+      let startedBy: string | null = null;
+      let completedBy: string | null = null;
+
+      if (matchingStep) {
+        if (matchingStep.status === 'COMPLETED') {
+          status = 'COMPLETED';
+        } else if (matchingStep.status === 'IN_PROGRESS') {
+          status = 'IN_PROGRESS';
+        } else if (matchingStep.status === 'BLOCKED') {
+          status = 'BLOCKED';
+        } else {
+          status = 'PENDING';
+        }
+        startedAt = matchingStep.startedAt;
+        completedAt = matchingStep.completedAt;
+        startedBy = matchingStep.startedBy;
+        completedBy = matchingStep.completedBy;
+      } else {
+        status = index < (serializedItem.currentStageIndex || 0) ? 'COMPLETED' :
+                index === (serializedItem.currentStageIndex || 0) ? 
+                  (activeTasks.length > 0 ? 'IN_PROGRESS' : 'PENDING') : 'PENDING';
+        completedAt = completedTasks[0]?.completedAt || null;
+      }
       
       return {
         department: dept,
         index,
-        status: index < (serializedItem.currentStageIndex || 0) ? 'COMPLETED' :
-                index === (serializedItem.currentStageIndex || 0) ? 
-                  (activeTasks.length > 0 ? 'IN_PROGRESS' : 'PENDING') : 'PENDING',
-        completedAt: completedTasks[0]?.completedAt || null,
+        status,
+        startedAt,
+        completedAt,
+        startedBy,
+        completedBy,
+        stepId: matchingStep?.id || null,
+        stepNumber: matchingStep?.stepNumber ?? null,
         technicians: completedTasks.map(t => ({
           name: t.employeeName,
           code: t.employeeCode,

@@ -869,6 +869,8 @@ router.post('/complete-task', async (req: Request, res: Response) => {
     } else {
       updates.status = 'COMPLETED';
       updates.completedAt = new Date();
+      updates.currentStageIndex = departmentSequence.length;
+      updates.currentDepartment = 'COMPLETED';
     }
 
     // Update serialized item

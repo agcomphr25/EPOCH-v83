@@ -88,6 +88,7 @@ interface InventoryFormData {
   hasSds: boolean;
   hasTds: boolean;
   hasOtherDocs: boolean;
+  assignedToAsset: string;
 }
 
 const InventoryForm = ({
@@ -144,6 +145,10 @@ const InventoryForm = ({
 }) => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+  const { data: assets = [] } = useQuery<{ id: string; assetTag: string; name: string; status: string }[]>({
+    queryKey: ['/api/assets'],
+  });
 
   const checkDuplicate = useCallback(async (partNumber: string) => {
     if (!partNumber.trim()) {
@@ -774,6 +779,30 @@ const InventoryForm = ({
           />
           <p className="text-xs text-gray-500 mt-1">
             Lead time for forecasting/MRP calculations
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="assignedToAsset">Assigned to Asset</Label>
+          <Select
+            value={formData.assignedToAsset || 'none'}
+            onValueChange={(value) => onSelectChange('assignedToAsset', value === 'none' ? '' : value)}
+          >
+            <SelectTrigger data-testid="select-assignedToAsset">
+              <SelectValue placeholder="Select asset (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {assets
+                .filter((a) => a.status !== 'retired')
+                .map((asset) => (
+                  <SelectItem key={asset.id} value={`${asset.name} (${asset.assetTag})`}>
+                    {asset.name} ({asset.assetTag})
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">
+            Assign this item to a specific asset/equipment
           </p>
         </div>
         <div className="md:col-span-2">
@@ -1505,6 +1534,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasSds: false,
       hasTds: false,
       hasOtherDocs: false,
+      assignedToAsset: '',
     });
     setSdsFile(null);
     setCurrentSdsFileName(null);
@@ -1635,6 +1665,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
         hasOtherDocs: formData.hasOtherDocs,
+        assignedToAsset: formData.assignedToAsset || null,
       };
 
       if (editingItem) {
@@ -1692,6 +1723,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasSds: item.hasSds || false,
       hasTds: item.hasTds || false,
       hasOtherDocs: item.hasOtherDocs || false,
+      assignedToAsset: (item as any).assignedToAsset || '',
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);

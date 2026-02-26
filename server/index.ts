@@ -517,6 +517,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Routing config fix skipped:', routingFixErr.message);
       }
 
+      // Ensure inventory_items has assigned_to_asset column
+      try {
+        const { sql: sqlAsset } = await import('drizzle-orm');
+        await db.execute(sqlAsset`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS assigned_to_asset TEXT`);
+        console.log('✅ Ensured inventory_items has assigned_to_asset column');
+      } catch (assetErr: any) {
+        console.warn('⚠️ assigned_to_asset migration:', assetErr.message);
+      }
+
       // Ensure checklist management tables exist
       try {
         const { sql: sqlCL } = await import('drizzle-orm');

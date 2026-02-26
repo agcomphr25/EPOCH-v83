@@ -8126,37 +8126,60 @@ export class DatabaseStorage implements IStorage {
     if (data.purchaseQty !== undefined && data.purchaseQty !== null && data.conversionFactor) {
       const conversionFactor = Number(data.conversionFactor);
       if (conversionFactor > 0) {
-        // Derive vendor quantity: purchaseQty / conversionFactor
         processedData.quantity = data.purchaseQty / conversionFactor;
-        // Derive vendor unit price: purchaseUnitPrice * conversionFactor
         if (data.purchaseUnitPrice !== undefined && data.purchaseUnitPrice !== null) {
           processedData.unitPrice = data.purchaseUnitPrice * conversionFactor;
         }
       }
     }
-    
-    const [item] = await db.insert(vendorPOItems).values(processedData).returning();
-    
+
+    // Strip any client-supplied lineNumber — server computes it atomically
+    delete processedData.lineNumber;
+
+    const item = await db.transaction(async (tx) => {
+      // Lock the parent PO row to serialize concurrent inserts for the same PO
+      await tx
+        .select({ id: vendorPOs.id })
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, processedData.vendorPoId))
+        .for('update');
+
+      // Compute next line number within the same transaction
+      const maxResult = await tx.execute(sql`
+        SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
+        FROM vendor_po_items
+        WHERE vendor_po_id = ${processedData.vendorPoId}
+      `);
+      const serverLineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
+
+      const [inserted] = await tx
+        .insert(vendorPOItems)
+        .values({ ...processedData, lineNumber: serverLineNumber })
+        .returning();
+
+      return inserted;
+    });
+
     // Auto-populate manufacturing queue if this is a manufactured part
     try {
       const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
       const vendorPO = data.vendorPoId ? await this.getVendorPO(data.vendorPoId) : null;
-      const dueDate = vendorPO?.expectedDeliveryDate 
-        ? new Date(vendorPO.expectedDeliveryDate) 
+      const dueDate = vendorPO?.expectedDeliveryDate
+        ? new Date(vendorPO.expectedDeliveryDate)
         : null;
-      
+
       await autoPopulateManufacturingQueue({
         inventoryPartNumber: data.agPartNumber,
         quantity: processedData.quantity,
         vendorPoId: data.vendorPoId,
-        vendorPoLineNumber: data.lineNumber,
+        vendorPoLineNumber: item.lineNumber,
         dueDate,
       });
     } catch (error) {
       console.error('Error auto-populating manufacturing queue:', error);
       // Don't fail PO item creation if queue population fails
     }
-    
+
     return item;
   }
 

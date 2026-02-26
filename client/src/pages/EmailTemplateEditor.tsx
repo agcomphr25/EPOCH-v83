@@ -384,13 +384,16 @@ export default function EmailTemplateEditor() {
         throw new Error('Invalid JSON in attachment rules');
       }
 
-      return apiRequest('PUT', `/api/email-templates/${selectedKey}`, {
-        subject,
-        bodyHtml: finalHtml,
-        bodyText: bodyText || null,
-        allowedVariables,
-        attachmentRules: parsedAttachmentRules,
-        changeNote,
+      return apiRequest(`/api/email-templates/${selectedKey}`, {
+        method: 'PUT',
+        body: {
+          subject,
+          bodyHtml: finalHtml,
+          bodyText: bodyText || null,
+          allowedVariables,
+          attachmentRules: parsedAttachmentRules,
+          changeNote,
+        },
       });
     },
     onSuccess: () => {
@@ -408,10 +411,11 @@ export default function EmailTemplateEditor() {
 
   const testSendMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/email-templates/${selectedKey}/test-send`);
-      return res.json();
+      return apiRequest(`/api/email-templates/${selectedKey}/test-send`, {
+        method: 'POST',
+      });
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({ title: 'Test email sent', description: `Sent to ${data.sentTo}` });
     },
     onError: (err: any) => {
@@ -421,8 +425,9 @@ export default function EmailTemplateEditor() {
 
   const previewMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/email-templates/${selectedKey}/preview`);
-      return res.json();
+      return apiRequest(`/api/email-templates/${selectedKey}/preview`, {
+        method: 'POST',
+      });
     },
     onSuccess: (data) => {
       setPreviewHtml(data.html);

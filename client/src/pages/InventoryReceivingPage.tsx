@@ -570,14 +570,17 @@ export default function InventoryReceivingPage() {
       ? itemTrace.fields.map((f: string) => `${TRACEABILITY_FIELD_LABELS[f] || f}: ${traceabilityData[f] || ''}`).join(', ')
       : '';
 
+    const lotBatchNotes = [
+      receivingData.lotNumber ? `Lot#: ${receivingData.lotNumber}` : '',
+      receivingData.batchNumber ? `Batch#: ${receivingData.batchNumber}` : '',
+    ].filter(Boolean).join(', ');
+
     const inventoryData = {
       agPartNumber: receivingData.agPartNumber,
       name: receivingData.name,
-      notes: `Received: ${receivingData.receivedQuantity} units.${traceNotes ? ` Traceability: ${traceNotes}.` : ''} ${receivingData.notes || ''}`.trim(),
+      notes: `Received: ${receivingData.receivedQuantity} units.${traceNotes ? ` Traceability: ${traceNotes}.` : ''}${lotBatchNotes ? ` ${lotBatchNotes}.` : ''} ${receivingData.notes || ''}`.trim(),
       department: 'Receiving',
       orderDate: new Date().toISOString().split('T')[0],
-      ...(receivingData.lotNumber ? { lotNumber: receivingData.lotNumber } : {}),
-      ...(receivingData.batchNumber ? { batchNumber: receivingData.batchNumber } : {}),
     };
 
     createInventoryMutation.mutate(inventoryData);

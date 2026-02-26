@@ -12679,14 +12679,16 @@ export class DatabaseStorage implements IStorage {
 
           const part = partInfo[0];
           
-          // CRITICAL: Only create production orders for MANUFACTURED items
-          if (part.type !== 'Manufactured') {
+          const isPacketItem = part.isPacket === true;
+          
+          if (!isPacketItem && part.type !== 'Manufactured') {
             console.log(`📦 Skipping purchased part ${line.childPartAgNumber} (type: ${part.type || 'undefined'})`);
             continue;
           }
 
-          // Manufactured items must have a manufacturing department
-          if (!part.manufacturingDepartment) {
+          const effectiveDepartment = isPacketItem ? 'Cutting Table' : part.manufacturingDepartment;
+
+          if (!effectiveDepartment) {
             const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
             console.warn(`⚠️ ${skipMsg} - skipping`);
             skippedParts.push(skipMsg);
@@ -12697,11 +12699,9 @@ export class DatabaseStorage implements IStorage {
           const qtyPer = Number(line.qtyPer) || 1;
           const totalQuantity = Math.ceil(qtyPer * quantity);
 
-          console.log(`🔧 Creating ${totalQuantity} production order(s) for manufactured part ${line.childPartAgNumber} (dept: ${part.manufacturingDepartment})`);
+          console.log(`🔧 Creating ${totalQuantity} production order(s) for ${isPacketItem ? 'packet' : 'manufactured'} part ${line.childPartAgNumber} (dept: ${effectiveDepartment})`);
 
-          // Create individual production orders (1 unit each) for manufactured items
           for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
             const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
@@ -12713,11 +12713,11 @@ export class DatabaseStorage implements IStorage {
               sku: line.childPartAgNumber,
               partName: part.name || line.childPartAgNumber,
               quantity: 1,
-              department: part.manufacturingDepartment as any,
+              department: effectiveDepartment as any,
               status: 'PENDING',
               priority: 50,
               dueDate: po.dueDate || undefined,
-              notes: `Generated from P2 PO ${po.poNumber} - BOM ${bom.code} (${revision.revCode}) - Component ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}${level > 0 ? ` (Sub-assembly level ${level})` : ''}`,
+              notes: `Generated from P2 PO ${po.poNumber} - BOM ${bom.code} (${revision.revCode}) - ${isPacketItem ? 'Packet demand' : 'Component'} ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}${level > 0 ? ` (Sub-assembly level ${level})` : ''}`,
             };
 
             const productionOrder = await this.createP2ProductionOrder(productionOrderData);
@@ -12752,39 +12752,40 @@ export class DatabaseStorage implements IStorage {
         .where(eq(inventoryItems.agPartNumber, poItem.partNumber))
         .limit(1);
 
-      // If the TOP-LEVEL PO item is Manufactured, create production orders for IT first
-      if (topLevelPart.length > 0 && topLevelPart[0].type === 'Manufactured') {
+      const topIsPacket = topLevelPart.length > 0 && topLevelPart[0].isPacket === true;
+      const topIsManufactured = topLevelPart.length > 0 && topLevelPart[0].type === 'Manufactured';
+
+      if (topLevelPart.length > 0 && (topIsManufactured || topIsPacket)) {
         const part = topLevelPart[0];
+        const topDepartment = topIsPacket ? 'Cutting Table' : part.manufacturingDepartment;
         
-        if (part.manufacturingDepartment) {
-          console.log(`🔧 Top-level item ${poItem.partNumber} is Manufactured (dept: ${part.manufacturingDepartment}) - creating ${poItem.quantity} production orders`);
+        if (topDepartment) {
+          console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - creating ${poItem.quantity} production orders`);
           
-          // Create individual production orders for the top-level manufactured item
           for (let unitIndex = 1; unitIndex <= poItem.quantity; unitIndex++) {
-            // CENTRALIZED: Use atomic order ID generator instead of inline pattern
             const orderId = await this.generateNextOrderId();
 
             const productionOrderData: InsertP2ProductionOrder = {
               orderId,
               p2PoId: poId,
               p2PoItemId: poItem.id,
-              bomDefinitionId: null, // Top-level doesn't reference a parent BOM
+              bomDefinitionId: null,
               bomItemId: null,
               sku: poItem.partNumber,
               partName: part.name || poItem.partName || poItem.partNumber,
               quantity: 1,
-              department: part.manufacturingDepartment as any,
+              department: topDepartment as any,
               status: 'PENDING',
               priority: 50,
               dueDate: po.dueDate || undefined,
-              notes: `Generated from P2 PO ${po.poNumber} - TOP-LEVEL ASSEMBLY ${poItem.partNumber} - Unit ${unitIndex} of ${poItem.quantity}`,
+              notes: `Generated from P2 PO ${po.poNumber} - ${topIsPacket ? 'PACKET DEMAND' : 'TOP-LEVEL ASSEMBLY'} ${poItem.partNumber} - Unit ${unitIndex} of ${poItem.quantity}`,
             };
 
             const productionOrder = await this.createP2ProductionOrder(productionOrderData);
             productionOrders.push(productionOrder);
           }
         } else {
-          const skipMsg = `Top-level manufactured part ${poItem.partNumber} has no manufacturing department assigned`;
+          const skipMsg = `Manufactured part ${poItem.partNumber} has no manufacturing department assigned`;
           console.warn(`⚠️ ${skipMsg} - skipping production order creation`);
           skippedParts.push(skipMsg);
         }

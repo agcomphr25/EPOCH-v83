@@ -1977,11 +1977,19 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 
     // 4. P2 PO Items - Purchase order items with BOMs requiring cutting (packets only)
     try {
+      const p2CountResult = await pool.query(`
+        SELECT COUNT(*) as total,
+          COUNT(*) FILTER (WHERE department = 'Cutting Table') as cutting_dept,
+          COUNT(*) FILTER (WHERE status IN ('pending', 'in_progress', 'queued', 'PENDING')) as active_status
+        FROM p2_production_orders
+      `);
+      const p2Counts = (p2CountResult as any).rows?.[0] || p2CountResult?.[0];
+      console.log('📊 P2 production orders diagnostic:', JSON.stringify(p2Counts));
       // Query P2 production orders table - only items that are packets or have a packet BOM
-      // Join with inventory_items to check is_packet flag, or check if matching BOM exists
-      const p2Result = showAll === 'true'
-        ? await pool.query(`
-            SELECT 
+      // Match inventory by sku (AG part number) first, then fall back to part_name matching
+      // Department = 'Cutting Table' is the primary filter since generateP2ProductionOrders always sets it for packets
+      const p2Query = `
+            SELECT DISTINCT ON (po.id)
               po.id,
               po.p2_po_id as "poId",
               po.part_name as "itemName",
@@ -1990,6 +1998,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.order_id as "poNumber",
               po.priority,
               po.status,
+              po.department as "department",
               COALESCE(p2.customer_name, 'P2 Order') as "customer",
               'P2' as source,
               COALESCE(inv.is_packet, false) as "isPacket",
@@ -1997,12 +2006,15 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
             LEFT JOIN inventory_items inv ON (
+              inv.ag_part_number = po.sku OR
+              LOWER(inv.ag_part_number) = LOWER(po.sku) OR
               LOWER(inv.name) = LOWER(po.part_name) OR 
               inv.ag_part_number = po.part_name OR
               LOWER(inv.ag_part_number) = LOWER(po.part_name)
             )
             LEFT JOIN cutting_packet_boms bom ON (
               bom.is_active = true AND (
+                bom.part_number = po.sku OR
                 bom.part_number = po.part_name OR 
                 LOWER(bom.packet_type) = LOWER(po.part_name) OR
                 LOWER(bom.part_number) = LOWER(po.part_name) OR
@@ -2011,44 +2023,16 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               )
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
-              AND (inv.is_packet = true OR po.department = 'Cutting Table')
-            ORDER BY po.due_date ASC NULLS LAST
+              AND (inv.is_packet = true OR po.department = 'Cutting Table')`;
+      
+      const p2Result = showAll === 'true'
+        ? await pool.query(p2Query + `
+            ORDER BY po.id, po.due_date ASC NULLS LAST
             LIMIT 500
           `)
-        : await pool.query(`
-            SELECT 
-              po.id,
-              po.p2_po_id as "poId",
-              po.part_name as "itemName",
-              po.quantity,
-              po.due_date as "dueDate",
-              po.order_id as "poNumber",
-              po.priority,
-              po.status,
-              COALESCE(p2.customer_name, 'P2 Order') as "customer",
-              'P2' as source,
-              COALESCE(inv.is_packet, false) as "isPacket",
-              bom.id as "matchedBomId"
-            FROM p2_production_orders po
-            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
-            LEFT JOIN inventory_items inv ON (
-              LOWER(inv.name) = LOWER(po.part_name) OR 
-              inv.ag_part_number = po.part_name OR
-              LOWER(inv.ag_part_number) = LOWER(po.part_name)
-            )
-            LEFT JOIN cutting_packet_boms bom ON (
-              bom.is_active = true AND (
-                bom.part_number = po.part_name OR 
-                LOWER(bom.packet_type) = LOWER(po.part_name) OR
-                LOWER(bom.part_number) = LOWER(po.part_name) OR
-                LOWER(bom.packet_type) LIKE '%' || LOWER(po.part_name) || '%' OR
-                LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
-              )
-            )
-            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+        : await pool.query(p2Query + `
               AND po.due_date >= $1 AND po.due_date < $2
-              AND (inv.is_packet = true OR po.department = 'Cutting Table')
-            ORDER BY po.due_date ASC
+            ORDER BY po.id, po.due_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
       const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
@@ -2096,8 +2080,9 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           packetBomId: matchingBom?.id,
         });
       }
-    } catch (err) {
-      console.log('P2 production queue query skipped:', err);
+    } catch (err: any) {
+      console.error('❌ P2 production queue query FAILED:', err?.message || err);
+      console.error('P2 query error details:', JSON.stringify({ code: err?.code, detail: err?.detail, hint: err?.hint }));
     }
 
     // Calculate totals reconciled with inventory

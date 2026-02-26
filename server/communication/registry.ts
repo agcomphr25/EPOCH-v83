@@ -123,6 +123,7 @@ const VENDOR_RFQ_TEMPLATE = {
     'vendor_contact_person',
     'desired_delivery_date',
     'items_table',
+    'items_list',
   ],
   attachmentRules: {},
   bodyHtml: `<!DOCTYPE html>
@@ -220,7 +221,7 @@ AG Composites is requesting a quote for the following items. This is NOT a purch
 Vendor: {{vendor_name}}
 Desired Delivery Date: {{desired_delivery_date}}
 
-{{items_table}}
+{{items_list}}
 
 Note: This is a Request for Quote only. No commitment to purchase is implied.
 Please reply to this email with your pricing and availability.

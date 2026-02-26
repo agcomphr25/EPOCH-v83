@@ -519,6 +519,14 @@ async function initializeBackgroundServices() {
         const { seedVendorEmailTemplates } = await import('./communication/registry');
         await seedVendorEmailTemplates(db);
 
+        // 4. One-shot: migrate vendor_rfq body_text {{items_table}} → {{items_list}}
+        await db.execute(sqlComm`
+          UPDATE email_templates
+          SET body_text = REPLACE(body_text, '{{items_table}}', '{{items_list}}'),
+              allowed_variables = '["vendor_name","vendor_contact_person","desired_delivery_date","items_table","items_list"]'
+          WHERE key = 'vendor_rfq' AND body_text LIKE '%{{items_table}}%'
+        `);
+
         console.log('✅ Communication governance layer ready (email_templates, communication_logs expanded, vendor templates seeded)');
       } catch (commErr: any) {
         console.warn('⚠️ Communication governance layer setup warning:', commErr.message);

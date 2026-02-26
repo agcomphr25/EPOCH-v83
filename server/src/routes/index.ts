@@ -128,6 +128,7 @@ import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
+import emailTemplatesRoutes from './emailTemplates';
 
 export function registerRoutes(app: Express): Server {
   // Temporary debug route - raw order data inspector
@@ -449,6 +450,9 @@ export function registerRoutes(app: Express): Server {
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
+
+  // Email template governance routes
+  app.use('/api/email-templates', emailTemplatesRoutes);
 
   // Marketing communications routes
   app.use('/api/marketing', marketingRoutes);

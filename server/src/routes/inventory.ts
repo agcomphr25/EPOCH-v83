@@ -369,11 +369,7 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         sku: inventoryItems.sku,
         department: inventoryItems.department,
         assignedDepartments: inventoryItems.assignedDepartments,
-        currentBalance: inventoryItems.currentBalance,
-        minStock: inventoryItems.minStock,
-        maxStock: inventoryItems.maxStock,
         usageUnit: inventoryItems.usageUnit,
-        vendorId: inventoryItems.vendorId,
         assignedDepartmentIds: sql<number[]>`COALESCE(
           (SELECT array_agg(iid.department_id) FROM inventory_item_departments iid WHERE iid.item_id = ${inventoryItems.id}),
           ARRAY[]::int[]

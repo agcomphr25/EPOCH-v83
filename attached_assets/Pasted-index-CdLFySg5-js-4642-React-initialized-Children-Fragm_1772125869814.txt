@@ -1,0 +1,52 @@
+index-CdLFySg5.js:4642 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-CdLFySg5.js:4642 React hooks: {useState: ƒ, useEffect: ƒ}
+index-CdLFySg5.js:4639 App component is rendering...
+index-CdLFySg5.js:4639 Environment: production
+index-CdLFySg5.js:4639 Base URL: /
+receiving:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/17/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/16/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/16/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/17/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-CdLFySg5.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-CdLFySg5.js:1938  POST https://agcompepoch.xyz/api/inventory 400 (Bad Request)
+mutationFn @ index-CdLFySg5.js:1938
+fn @ index-CdLFySg5.js:51
+p @ index-CdLFySg5.js:51
+start @ index-CdLFySg5.js:51
+execute @ index-CdLFySg5.js:51
+await in execute
+mutate @ index-CdLFySg5.js:51
+(anonymous) @ index-CdLFySg5.js:51
+ft @ index-CdLFySg5.js:1938
+Twt @ index-CdLFySg5.js:37
+Owt @ index-CdLFySg5.js:37
+Fwt @ index-CdLFySg5.js:37
+z5e @ index-CdLFySg5.js:37
+fVe @ index-CdLFySg5.js:37
+(anonymous) @ index-CdLFySg5.js:37
+xbe @ index-CdLFySg5.js:40
+MHe @ index-CdLFySg5.js:37
+sle @ index-CdLFySg5.js:37
+$ye @ index-CdLFySg5.js:37
+Zwt @ index-CdLFySg5.js:37

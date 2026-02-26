@@ -1035,4 +1035,253 @@ Email: sales@agcomposites.com
   }
 });
 
+router.post('/:id/resend', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    if (!['Sent', 'Partially Received'].includes(vendorPO.status)) {
+      return res.status(400).json({
+        error: 'PO cannot be resent',
+        message: `Only issued POs (Sent or Partially Received) can be resent. Current status: ${vendorPO.status}`,
+      });
+    }
+
+    if (!vendorPO.poNumber) {
+      return res.status(400).json({ error: 'PO has no PO number assigned' });
+    }
+
+    const vendor = await storage.getVendor(vendorPO.vendorId);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    if (!vendor.email) {
+      return res.status(400).json({
+        error: 'Vendor email not configured',
+        message: 'Please add a contact email for this vendor before resending the PO.',
+      });
+    }
+
+    const { link, expiresAt } = await generateMagicLink({
+      email: vendor.email,
+      purpose: 'vendor_po_confirmation',
+      metadata: {
+        vendorPoId: id,
+        poNumber: vendorPO.poNumber,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+      },
+      expiresInMinutes: 60 * 24 * 7,
+    });
+
+    const poNumber = vendorPO.poNumber;
+    const subject = `RESEND: PO ${poNumber} from AG Composites - Confirmation Requested`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #1a1a1a;
+      font-size: 24px;
+      margin: 0;
+    }
+    .content {
+      margin-bottom: 30px;
+    }
+    .po-details {
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .po-details p {
+      margin: 5px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #0066cc;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #0052a3;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+    .warning {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .resend-notice {
+      background-color: #e8f4fd;
+      border-left: 4px solid #0066cc;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Purchase Order Confirmation Request</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
+      
+      <div class="resend-notice">
+        <strong>Note:</strong> This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
+      </div>
+      
+      <p>AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
+      
+      <div class="po-details">
+        <p><strong>PO Number:</strong> ${poNumber}</p>
+        <p><strong>Vendor:</strong> ${vendor.name}</p>
+        ${vendorPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${link}" class="button">Confirm PO Receipt</a>
+      </div>
+      
+      <div class="warning">
+        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+      </div>
+      
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #0066cc;">${link}</p>
+      
+      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const text = `
+RESEND: Purchase Order Confirmation Request
+
+Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
+
+Note: This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
+
+AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
+
+PO Number: ${poNumber}
+Vendor: ${vendor.name}
+${vendorPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
+
+Confirm your receipt: ${link}
+
+This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+
+If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com
+    `.trim();
+
+    const ccList: string[] = ['laurie@agcomposites.com'];
+    const resendingUserEmail = (req as any).user?.email as string | undefined;
+    if (resendingUserEmail && !ccList.includes(resendingUserEmail)) {
+      ccList.push(resendingUserEmail);
+    }
+
+    const emailResult = await sendEmailViaSendGrid({
+      to: vendor.email,
+      cc: ccList,
+      subject,
+      text,
+      html,
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to resend PO confirmation email:', emailResult.error);
+      return res.status(500).json({
+        error: 'Failed to resend PO confirmation email',
+        message: emailResult.error || 'Email service unavailable.',
+        emailSent: false,
+      });
+    }
+
+    console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
+
+    res.json({
+      emailSent: true,
+      emailRecipient: vendor.email,
+      emailCc: ccList,
+      confirmationLinkExpires: expiresAt,
+      message: `PO resent successfully. Confirmation email sent to ${vendor.email}.`,
+    });
+  } catch (error) {
+    console.error('Resend vendor PO error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to resend vendor PO' });
+  }
+});
+
 export default router;

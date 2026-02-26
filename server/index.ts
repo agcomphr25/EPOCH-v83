@@ -388,6 +388,24 @@ async function initializeBackgroundServices() {
         // Columns may already exist
       }
 
+      // Ensure p2_serialized_items has late-finalization columns (build_family_key etc.)
+      try {
+        const { sql: sqlP2Si } = await import('drizzle-orm');
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS build_family_key TEXT`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS part_routing_id VARCHAR(255)`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS part_routing_revision INTEGER`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS sku TEXT`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS drawing_name TEXT`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS customer_serial_number TEXT`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS customer_serial_assigned_at TIMESTAMP`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS customer_serial_assigned_by TEXT`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMP`);
+        await db.execute(sqlP2Si`ALTER TABLE p2_serialized_items ADD COLUMN IF NOT EXISTS finalized_by TEXT`);
+        console.log('✅ Ensured p2_serialized_items has late-finalization columns');
+      } catch (p2SiError: any) {
+        // Columns may already exist
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

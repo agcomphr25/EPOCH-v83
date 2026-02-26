@@ -1,0 +1,95 @@
+PROMPT 1 — Add material_canonical + Snapshot at Creation
+
+This implements:
+
+production_orders.material_canonical
+
+production_orders.source_snapshot JSONB
+
+Set both at creation
+
+NO UI changes yet
+
+IMPLEMENTATION TASK — Phase 1: Canonical Material + Snapshot
+
+Goal:
+Make Production Orders self-contained and authoritative for workflow routing.
+
+Rules:
+- Make real code changes.
+- Generate migration.
+- Keep existing FKs intact.
+- Do NOT delete or refactor existing deriveOrderLabels yet.
+
+========================================
+STEP 1 — DB Migration
+========================================
+
+Modify production_orders table:
+
+Add:
+
+material_canonical TEXT NOT NULL DEFAULT ''
+source_snapshot JSONB NULL
+
+If using Drizzle:
+- Update schema definition
+- Generate migration
+- Ensure NOT NULL enforced
+
+========================================
+STEP 2 — Set Canonical Material at Creation
+========================================
+
+Find the function that creates production orders from PO items.
+
+In that function:
+
+1) Fetch stock_model row
+2) Read its canonical material (e.g. stock_model.material)
+3) Set:
+
+material_canonical = stock_model.material
+
+4) Build source_snapshot JSON object:
+
+{
+  po_id,
+  po_item_id,
+  po_number,
+  sku: stock_model.id,
+  stock_model_name: stock_model.name,
+  material: stock_model.material,
+  options: po_item.options ?? null,
+  unit_price: po_item.unit_price,
+  created_at: now()
+}
+
+Insert both fields during production_orders insert.
+
+========================================
+STEP 3 — Backfill Existing Records
+========================================
+
+Create a one-time migration script:
+
+For each production_order:
+- join stock_model
+- set material_canonical = stock_model.material
+- build minimal snapshot if null
+
+Only run for rows where material_canonical = '' OR null.
+
+========================================
+STEP 4 — Verification
+========================================
+
+Add temporary console log in creation flow:
+
+console.log("Production order created with canonical material:", material_canonical)
+
+Return:
+- Updated schema
+- Migration SQL
+- Modified creation function
+- Backfill script

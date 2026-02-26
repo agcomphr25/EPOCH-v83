@@ -546,6 +546,8 @@ const productionOrdersColumns = {
   currentPipelineConfig: productionOrders.currentPipelineConfig,
   hasP1Priority: productionOrders.hasP1Priority,
   currentDepartment: productionOrders.currentDepartment,
+  materialCanonical: productionOrders.materialCanonical,
+  sourceSnapshot: productionOrders.sourceSnapshot,
 };
 
 // modify the interface with any CRUD methods
@@ -10154,7 +10156,8 @@ export class DatabaseStorage implements IStorage {
       'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
       'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
-      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
+      'materialCanonical', 'sourceSnapshot'
     ]);
     const safeData: Record<string, any> = {};
     for (const [key, value] of Object.entries(data as any)) {
@@ -10176,7 +10179,8 @@ export class DatabaseStorage implements IStorage {
       'orderId', 'poId', 'poItemId', 'customerId', 'customerName', 'poNumber',
       'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
-      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment'
+      'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
+      'materialCanonical', 'sourceSnapshot'
     ]);
     const safeData: Record<string, any> = {};
     for (const [key, value] of Object.entries(data as any)) {
@@ -10226,6 +10230,7 @@ export class DatabaseStorage implements IStorage {
       items
     );
 
+    const { deriveCanonicalMaterial } = await import('./src/utils/deriveCanonicalMaterial');
     const orders: ProductionOrder[] = [];
 
     // Create production orders for each item with distributed due dates
@@ -10241,6 +10246,21 @@ export class DatabaseStorage implements IStorage {
         const itemDueDate =
           itemSchedule.weeklyDueDates[weekIndex] ||
           new Date(po.expectedDelivery);
+
+        const stockModelForOrder = item.stockModelId || item.itemId || '';
+        const materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
+
+        const sourceSnapshot = {
+          po_id: po.id,
+          po_item_id: item.id,
+          po_number: po.poNumber,
+          sku: stockModelForOrder,
+          stock_model_name: item.stockModelName || item.itemName || stockModelForOrder,
+          material: materialCanonical,
+          options: item.customOptions ?? null,
+          unit_price: item.unitPrice ?? null,
+          created_at: new Date().toISOString(),
+        };
 
         const orderData: InsertProductionOrder = {
           orderId,
@@ -10258,8 +10278,11 @@ export class DatabaseStorage implements IStorage {
           productionStatus: 'PENDING',
           currentDepartment: 'P1 Production Queue',
           status: 'IN_PROGRESS',
+          materialCanonical,
+          sourceSnapshot,
         };
 
+        console.log(`🏭 Production order ${orderId} created with canonical material: ${materialCanonical}`);
         const order = await this.createProductionOrder(orderData);
         orders.push(order);
       }

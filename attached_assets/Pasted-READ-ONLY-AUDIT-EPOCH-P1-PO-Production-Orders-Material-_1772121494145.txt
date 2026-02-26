@@ -1,0 +1,145 @@
+READ-ONLY AUDIT — EPOCH (P1) PO ↔ Production Orders + Material Mismatch
+
+Goal A (Traceability): I need a reliable, queryable link from a P1 Customer PO line item to every Production Order created from it (and vice versa), so I can “back into” the PO from a Production Order and verify correctness.
+
+Goal B (Data correctness): I have conflicting display data in the workflow. Example: a Department Queue Production Order card shows Material=Carbon Fiber, but the item/stock model name “Fg Adj Alp Hunter” implies Fiberglass. I need to identify the source of truth and why the UI is inconsistent.
+
+Hard rules:
+- READ ONLY. Do not change code, migrations, or DB state.
+- Produce file paths + line numbers + short excerpts for each finding.
+- If you need to run commands, only run safe searches/prints.
+
+========================================
+PART 0 — Fast inventory of relevant domain objects
+========================================
+1) Identify the canonical tables/models involved:
+- customer PO header + lines (P1 PO)
+- production orders
+- manufacturing/department queue items
+- stock models / SKU master / catalog products
+- option/feature selections that affect “material”
+- any “derived” computed fields (material, stock_model display name, etc.)
+
+Deliverable: a short “Entity Map” list like:
+Entity -> table/model -> primary key -> foreign keys -> where created/updated.
+
+========================================
+PART 1 — Repo search: where Production Orders are created from Customer PO
+========================================
+Run ripgrep searches and paste the top matches with file/line context:
+
+A) Creation flows (server):
+rg -n "createProduction|insert.*production|production_orders|productionOrders|prod(uction)? order" server src
+rg -n "purchase_orders|customer_po|customerPO|po_item|poLine|po_items|order_items" server src
+rg -n "department_queue|manufacturing_queue|queue" server src
+
+B) Mapping flows / autopopulation:
+rg -n "autoPopulate|populate.*queue|sync.*queue|manufacturingQueue|departmentQueue" server src
+
+C) Material resolution / item naming / SKU mapping:
+rg -n "material|carbon|fiberglass|glass|cf|carbon_fiber|fg|stock_model|sku|part_number|model_name|displayName" server src client src
+
+Deliverable: a “Flow Trace” that answers:
+- What endpoint/function creates a Production Order from a PO line?
+- What input does it use (PO item id, SKU id, config/option ids, free-text name)?
+- What DB rows are written (tables + columns)?
+- Where is the department/manufacturing queue row written from?
+
+========================================
+PART 2 — DB schema audit: what keys exist today and what’s missing
+========================================
+Locate schema definitions (Drizzle/Prisma/SQL) and list the relevant tables + columns:
+
+- customer PO header table + line items table
+- production orders table
+- department_queue / manufacturing_queue table(s)
+- stock model / products master
+- any join tables for features/options
+
+Deliverable:
+1) For each table above, list:
+- PK
+- existing FKs
+- “reference-ish” fields (external ids, display codes, sku strings)
+2) Specifically answer:
+- Is there currently a foreign key from production_orders -> customer_po_items (or similar)?
+- If not, are there any “soft links” (po_number string, sku string, order code) used today?
+
+========================================
+PART 3 — UI audit: where the prod order card gets Material + Name
+========================================
+Find the Department Queue card component(s) and the API it calls.
+
+Deliverable:
+- Component path(s) and the exact fields it renders:
+  - displayed name (e.g., “Fg Adj Alp Hunter”)
+  - displayed material (e.g., “Carbon Fiber”)
+  - any badges/tags (carbon_fiber)
+- The API route(s) used to populate the queue
+- The server query that shapes the response
+
+Then answer:
+- Are “name” and “material” coming from the same source row?
+- Is one derived from SKU/stock_model and the other derived from options/features?
+- Is there any fallback logic (e.g., “if material missing, use stock_model.material else use feature selection”)?
+
+========================================
+PART 4 — Source-of-truth analysis for “Material”
+========================================
+I need you to identify ALL places “material” can originate, ranked by authority.
+
+Examples of potential sources:
+- stock_model.material (catalog-level)
+- production_order.material (snapshot at creation time)
+- feature selection (“Material: Carbon Fiber”) stored on prod order
+- computed “material” from layup recipe/BOM
+- manufacturing queue tag (“carbon_fiber”) based on routing/area
+
+Deliverable:
+- A table (written in plain text) listing:
+  Source -> field(s) -> when set -> who sets it (module/function) -> used by which UI(s)
+
+Then give a clear recommendation:
+- Which field should be the authoritative material for workflow display?
+- Where should we snapshot vs compute live?
+
+========================================
+PART 5 — Design a robust PO ↔ Production Order linkage (proposal only)
+========================================
+Without changing code, propose the minimum safe design to guarantee traceability:
+
+Must support:
+- From Customer PO line -> list all Production Orders created
+- From Production Order -> show originating Customer PO line (and PO header)
+- Handle splits/partials (one PO line -> multiple prod orders)
+- Handle edits (PO updated after prod orders exist) without corrupting history
+
+Deliverable:
+1) Proposed schema changes (conceptually):
+Option A: production_orders.customer_po_item_id (FK)
+Option B: join table production_order_sources (prod_order_id, source_type, source_id, qty, created_at)
+…include pros/cons and which you recommend for EPOCH.
+2) Proposed service-layer behavior:
+- At prod order creation: record linkage + snapshot key fields (sku/name/material/options) for audit
+- In UI: show “Source: PO #### / Line # / SKU” and allow click-through
+
+========================================
+PART 6 — Immediate “debug checklist” for the mismatch example
+========================================
+Create a short checklist I can use on the next mismatch:
+- What record ids to capture from the UI (prod_order_id, queue_item_id, stock_model_id, po_item_id)
+- What DB rows to inspect (and which fields)
+- What API payload fields to log/compare
+
+========================================
+Output format
+========================================
+Return:
+1) Entity Map
+2) Flow Trace (creation + queue population)
+3) UI Field Trace (exact sources of Name + Material)
+4) Material Source-of-Truth table + recommendation
+5) PO↔ProdOrder linkage proposal (A/B + chosen)
+6) Debug checklist
+
+Remember: read-only, cite file paths + line numbers for each critical finding.

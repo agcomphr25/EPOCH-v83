@@ -14,6 +14,8 @@ import {
   Plus,
   MessageSquare,
   ClipboardList,
+  ScanLine,
+  Wrench,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
@@ -112,6 +114,34 @@ export default function LAURIETTestDashboard() {
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Document control & revision tracking
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/p2-traveler-viewer">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+              <CardContent className="p-4 text-center">
+                <ScanLine className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  P2 Traveler Viewer
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Production data & traceability
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/assets">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200">
+              <CardContent className="p-4 text-center">
+                <Wrench className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Assets
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Equipment & machinery registry
                 </p>
               </CardContent>
             </Card>

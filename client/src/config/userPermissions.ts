@@ -135,6 +135,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/order-heat-map',
   '/fabric-inventory',
   '/tickets',
+  '/p2-traveler-viewer',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
@@ -327,6 +328,8 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/receiving',
       '/master-document-register',
       '/inventory/parts-request',
+      '/p2-traveler-viewer',
+      '/assets',
     ],
   },
 

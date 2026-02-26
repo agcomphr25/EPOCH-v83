@@ -1,0 +1,157 @@
+COPY-PASTE AUDIT PROMPT (READ-ONLY)
+
+Paste this into a new Replit agent thread:
+
+READ-ONLY EMAIL SYSTEM AUDIT — DO NOT MODIFY CODE
+
+I need a full architectural audit of how email is currently implemented in EPOCH.
+
+This is a READ-ONLY audit.
+Do not modify, refactor, migrate, or rewrite anything.
+Do not propose fixes yet.
+Do not assume best practices.
+Only report what actually exists.
+
+PART 1 — Email Infrastructure
+
+Identify the email sending mechanism:
+
+What library is used? (Nodemailer, Resend, SendGrid, SMTP, etc.)
+
+Where is it initialized?
+
+How are credentials stored?
+
+Is there a centralized mail utility file?
+
+List all files that send emails directly.
+
+Include exact file paths.
+
+Include line numbers.
+
+Include the route or function name.
+
+PART 2 — Template Location
+
+For every email type:
+
+Show where the subject is defined.
+
+Show where the body (HTML or text) is defined.
+
+Identify if it is:
+
+Hardcoded inline
+
+In a helper function
+
+In a shared utility
+
+In a DB table
+
+In a template file
+
+Provide full code excerpts.
+
+PART 3 — Email Types Inventory
+
+List all email types currently in the system:
+
+Examples to search for:
+
+vendor
+
+po
+
+rfq
+
+shipment
+
+qc
+
+invoice
+
+password reset
+
+user invite
+
+notification
+
+For each:
+
+Trigger event
+
+File path
+
+Attachments used
+
+Dynamic variables used
+
+PART 4 — Attachment Handling
+
+Identify where attachments are generated.
+
+Identify if PDF generation is embedded inside routes.
+
+Show all instances of:
+
+attachments:
+
+pdfBuffer
+
+generatePDF
+
+buffer
+
+List all attachment flows and what triggers them.
+
+PART 5 — Variable Strategy
+
+Identify how variables are interpolated into emails.
+
+String concatenation?
+
+Template literals?
+
+Mustache-style?
+
+Custom helper?
+
+Identify all placeholders currently used in vendor emails.
+
+PART 6 — Authorization & Governance
+
+Identify who can trigger email sending.
+
+Identify if any role checks exist before sending.
+
+Identify if email sends are logged in DB.
+
+Identify if email content is stored after sending.
+
+PART 7 — Configuration & Environment
+
+Identify all environment variables related to email.
+
+Identify any feature flags.
+
+Identify if different environments use different senders.
+
+OUTPUT FORMAT
+
+Provide:
+
+Structured report
+
+File paths with line numbers
+
+Exact code snippets
+
+Clear separation by section
+
+Do not suggest changes.
+Do not rewrite code.
+Do not implement anything.
+
+This is an architectural baseline audit.

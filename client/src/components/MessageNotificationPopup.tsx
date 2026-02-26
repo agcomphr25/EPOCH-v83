@@ -36,9 +36,14 @@ export default function MessageNotificationPopup() {
 
   // Get unread message count
   const { data: unreadData, isLoading } = useQuery<UnreadCountResponse>({
-    queryKey: [`/api/internal-messages/unread/count/${currentUser?.id}`],
+    queryKey: ['/api/internal-messages/unread/count', currentUser?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/internal-messages/unread/count/${currentUser!.id}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
     enabled: !!currentUser?.id,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 60000,
   });
 
   // Reset hasBeenShown flag when user changes (logout/login)

@@ -406,6 +406,16 @@ async function initializeBackgroundServices() {
         // Columns may already exist
       }
 
+      // Ensure production_orders has canonical material + source snapshot columns
+      try {
+        const { sql: sqlPO } = await import('drizzle-orm');
+        await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS material_canonical TEXT NOT NULL DEFAULT ''`);
+        await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS source_snapshot JSONB`);
+        console.log('✅ Ensured production_orders has material_canonical and source_snapshot columns');
+      } catch (poError: any) {
+        // Columns may already exist
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

@@ -3507,6 +3507,29 @@ export const vendorPoAttachments = pgTable('vendor_po_attachments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// ─── Communication Governance Layer ───────────────────────────────────────────
+
+export const emailTemplates = pgTable('email_templates', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  key: varchar('key', { length: 255 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  subject: text('subject').notNull(),
+  bodyHtml: text('body_html').notNull(),
+  bodyText: text('body_text'),
+  allowedVariables: jsonb('allowed_variables').default('[]'),
+  attachmentRules: jsonb('attachment_rules').default('{}'),
+  version: integer('version').notNull().default(1),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: varchar('updated_by'),
+});
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = typeof emailTemplates.$inferInsert;
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -3531,6 +3554,15 @@ export const communicationLogs = pgTable('communication_logs', {
   sentAt: timestamp('sent_at'),
   receivedAt: timestamp('received_at'), // For inbound messages
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  // ── Governance columns (Communication Domain) ──
+  templateKey: varchar('template_key', { length: 255 }),
+  templateVersion: integer('template_version'),
+  triggeredBy: varchar('triggered_by'),
+  bodyHtml: text('body_html'),
+  recipients: jsonb('recipients'),
+  cc: jsonb('cc'),
+  attachmentsMeta: jsonb('attachments_meta'),
+  providerMessageId: varchar('provider_message_id', { length: 255 }),
 });
 
 // New table for customer communications to record both incoming and outgoing messages

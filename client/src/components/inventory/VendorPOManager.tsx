@@ -63,6 +63,7 @@ import {
   Check,
   Loader2,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1092,6 +1093,23 @@ export default function VendorPOManager() {
     },
   });
 
+  const resendPOMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/vendor-pos/${id}/resend`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      if (data.emailSent) {
+        toast.success(`PO resent! Confirmation email sent to ${data.emailRecipient}`);
+      } else {
+        toast.error(data.message || 'Failed to resend PO');
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to resend PO');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -1798,6 +1816,25 @@ export default function VendorPOManager() {
               </Button>
             )}
             
+            {/* Resend PO Button (only for Sent or Partially Received) */}
+            {(['Sent', 'Partially Received'].includes(selectedVendorPO.status)) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm('Are you sure you want to resend this PO? A new confirmation email with a fresh magic link will be sent to the vendor.')) {
+                    resendPOMutation.mutate(selectedVendorPO.id);
+                  }
+                }}
+                disabled={resendPOMutation.isPending}
+                className="text-blue-600 hover:text-blue-800 border-blue-300 hover:border-blue-400"
+                data-testid="button-resend-po"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${resendPOMutation.isPending ? 'animate-spin' : ''}`} />
+                {resendPOMutation.isPending ? 'Resending...' : 'Resend PO'}
+              </Button>
+            )}
+
             {/* Cancel Button (only for Draft, RFQ Sent, or Sent) */}
             {(['Draft', 'RFQ Sent', 'Sent'].includes(selectedVendorPO.status)) && (
               <Button

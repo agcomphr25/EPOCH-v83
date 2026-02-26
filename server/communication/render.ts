@@ -1,35 +1,70 @@
-import type { RenderedEmail, EmailTemplate } from './types';
+import { db } from '../db';
+import { getTemplateByKey } from './registry';
+import type { EmailTemplate } from './types';
+
+export interface RenderedEmail {
+  subject: string;
+  html: string;
+  text: string;
+  version: number;
+}
 
 const PLACEHOLDER_RE = /\{\{(\s*[\w.]+\s*)\}\}/g;
 
-export function renderTemplate(
-  template: EmailTemplate,
-  variables: Record<string, unknown>
-): RenderedEmail {
-  const subject = interpolate(template.subject, variables);
-  const bodyHtml = interpolate(template.bodyHtml, variables);
-  const bodyText = template.bodyText
-    ? interpolate(template.bodyText, variables)
-    : htmlToPlainText(bodyHtml);
+/**
+ * Primary API: fetch template from DB by key and render it with context.
+ * Throws if the template does not exist or is inactive.
+ */
+export async function renderTemplate(
+  templateKey: string,
+  context: Record<string, any>
+): Promise<RenderedEmail> {
+  const template = await getTemplateByKey(db, templateKey);
 
-  return { subject, bodyHtml, bodyText };
+  if (!template) {
+    throw new Error(
+      `[render] Email template not found or inactive: "${templateKey}"`
+    );
+  }
+
+  return renderFromObject(template, context);
 }
 
-function interpolate(source: string, variables: Record<string, unknown>): string {
+/**
+ * Internal: render from an already-fetched template object.
+ * Exported so send.ts can use it without a second DB fetch.
+ */
+export function renderFromObject(
+  template: EmailTemplate,
+  context: Record<string, any>
+): RenderedEmail {
+  const subject = interpolate(template.subject, context);
+  const html = interpolate(template.bodyHtml, context);
+  const text = template.bodyText
+    ? interpolate(template.bodyText, context)
+    : htmlToPlainText(html);
+
+  return { subject, html, text, version: template.version };
+}
+
+// ─── Interpolation ────────────────────────────────────────────────────────────
+
+function interpolate(source: string, context: Record<string, any>): string {
   return source.replace(PLACEHOLDER_RE, (_, key: string) => {
     const trimmed = key.trim();
-    const value = resolveNestedKey(trimmed, variables);
-    return value !== undefined && value !== null ? String(value) : '';
+    const value = resolveKey(trimmed, context);
+    if (value === undefined || value === null) return '';
+    return String(value);
   });
 }
 
-function resolveNestedKey(key: string, variables: Record<string, unknown>): unknown {
+function resolveKey(key: string, context: Record<string, any>): unknown {
   return key.split('.').reduce<unknown>((obj, part) => {
     if (obj !== null && obj !== undefined && typeof obj === 'object') {
       return (obj as Record<string, unknown>)[part];
     }
     return undefined;
-  }, variables);
+  }, context);
 }
 
 function htmlToPlainText(html: string): string {

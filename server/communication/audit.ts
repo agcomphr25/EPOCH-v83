@@ -1,42 +1,84 @@
-import type { AuditEntry } from './types';
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
+import type { AttachmentMeta } from './types';
 
-export async function auditEmailSend(
-  db: import('../db').Database,
-  entry: AuditEntry
+export interface LogCommunicationOptions {
+  templateKey: string;
+  templateVersion: number;
+  triggeredBy?: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  bodyHtml: string;
+  attachmentsMeta?: AttachmentMeta[];
+  providerMessageId?: string;
+  status: 'sent' | 'failed' | 'skipped';
+  error?: string;
+  // Optional context fields
+  orderId?: string;
+  customerId?: string;
+  context?: string;
+}
+
+/**
+ * Primary API: write an outbound email audit record to communication_logs.
+ * Never throws — failures are logged to console only so they never block sends.
+ */
+export async function logCommunication(
+  opts: LogCommunicationOptions
 ): Promise<void> {
   try {
-    await db.execute(
-      (await import('drizzle-orm')).sql`
-        INSERT INTO communication_logs (
-          type, method, recipient, subject, status, direction,
-          template_key, template_version, triggered_by, body_html,
-          recipients, cc, attachments_meta, provider_message_id,
-          order_id, customer_id, context, sent_at, created_at,
-          message_type
-        ) VALUES (
-          'email', 'email',
-          ${Array.isArray(entry.to) ? entry.to[0] : entry.to},
-          ${entry.subject},
-          ${entry.status},
-          'outbound',
-          ${entry.templateKey},
-          ${entry.templateVersion},
-          ${entry.triggeredBy ?? null},
-          ${entry.bodyHtml},
-          ${JSON.stringify(entry.to)},
-          ${entry.cc ? JSON.stringify(entry.cc) : null},
-          ${entry.attachmentsMeta ? JSON.stringify(entry.attachmentsMeta) : null},
-          ${entry.providerMessageId ?? null},
-          ${entry.orderId ?? null},
-          ${entry.customerId ?? 'system'},
-          ${entry.context ?? null},
-          ${entry.status === 'sent' ? new Date().toISOString() : null},
-          NOW(),
-          'transactional'
-        )
-      `
-    );
+    const primaryRecipient = opts.to[0] ?? 'unknown';
+    const sentAt = opts.status === 'sent' ? new Date().toISOString() : null;
+
+    await db.execute(sql`
+      INSERT INTO communication_logs (
+        type,
+        method,
+        recipient,
+        subject,
+        status,
+        direction,
+        template_key,
+        template_version,
+        triggered_by,
+        body_html,
+        recipients,
+        cc,
+        attachments_meta,
+        provider_message_id,
+        order_id,
+        customer_id,
+        context,
+        sent_at,
+        created_at,
+        message_type,
+        error
+      ) VALUES (
+        'email',
+        'email',
+        ${primaryRecipient},
+        ${opts.subject},
+        ${opts.status},
+        'outbound',
+        ${opts.templateKey},
+        ${opts.templateVersion},
+        ${opts.triggeredBy ?? null},
+        ${opts.bodyHtml},
+        ${JSON.stringify(opts.to)},
+        ${opts.cc ? JSON.stringify(opts.cc) : null},
+        ${opts.attachmentsMeta ? JSON.stringify(opts.attachmentsMeta) : null},
+        ${opts.providerMessageId ?? null},
+        ${opts.orderId ?? null},
+        ${opts.customerId ?? 'system'},
+        ${opts.context ?? null},
+        ${sentAt},
+        NOW(),
+        'transactional',
+        ${opts.error ?? null}
+      )
+    `);
   } catch (err: any) {
-    console.error('[CommunicationAudit] Failed to write audit log:', err.message);
+    console.error('[CommunicationAudit] Failed to write log entry:', err.message);
   }
 }

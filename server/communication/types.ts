@@ -14,18 +14,6 @@ export interface EmailTemplate {
   updatedBy?: string | null;
 }
 
-export interface SendEmailOptions {
-  templateKey: string;
-  to: string | string[];
-  cc?: string | string[];
-  variables: Record<string, unknown>;
-  attachments?: EmailAttachment[];
-  triggeredBy?: string;
-  orderId?: string;
-  customerId?: string;
-  context?: string;
-}
-
 export interface EmailAttachment {
   content: string;
   filename: string;
@@ -33,10 +21,10 @@ export interface EmailAttachment {
   disposition?: 'attachment' | 'inline';
 }
 
-export interface RenderedEmail {
-  subject: string;
-  bodyHtml: string;
-  bodyText: string;
+export interface AttachmentMeta {
+  filename: string;
+  type?: string;
+  sizeBytes?: number;
 }
 
 export interface SendResult {
@@ -45,27 +33,4 @@ export interface SendResult {
   error?: string;
   templateKey: string;
   templateVersion: number;
-}
-
-export interface AuditEntry {
-  templateKey: string;
-  templateVersion: number;
-  to: string[];
-  cc?: string[];
-  subject: string;
-  bodyHtml: string;
-  providerMessageId?: string;
-  status: 'sent' | 'failed' | 'skipped';
-  error?: string;
-  triggeredBy?: string;
-  orderId?: string;
-  customerId?: string;
-  context?: string;
-  attachmentsMeta?: AttachmentMeta[];
-}
-
-export interface AttachmentMeta {
-  filename: string;
-  type?: string;
-  sizeBytes?: number;
 }

@@ -8173,6 +8173,7 @@ export class DatabaseStorage implements IStorage {
         quantity: processedData.quantity,
         vendorPoId: data.vendorPoId,
         vendorPoLineNumber: item.lineNumber,
+        vendorPoItemId: item.id,
         dueDate,
       });
     } catch (error) {

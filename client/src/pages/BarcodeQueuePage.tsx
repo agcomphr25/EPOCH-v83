@@ -54,6 +54,7 @@ import {
   TrendingDown,
   Edit,
   Zap,
+  ExternalLink,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -910,6 +911,21 @@ export default function BarcodeQueuePage() {
                                   )}
                                 </div>
 
+                                {order.customerPO && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <FileText className="h-3 w-3" />
+                                    <Link
+                                      href="/purchase-orders"
+                                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                      className="hover:underline hover:text-blue-600 dark:hover:text-blue-400"
+                                      title={order.poItemId ? `PO Line Item: ${order.poItemId}` : undefined}
+                                    >
+                                      PO {order.customerPO}
+                                    </Link>
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </div>
+                                )}
+
                                 <div className="space-y-2 text-sm">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3 w-3 text-gray-500" />
@@ -1219,14 +1235,18 @@ export default function BarcodeQueuePage() {
                                       )}
                                     </div>
 
-                                    {isPOOrder && (
-                                      <div className="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
-                                        {order.customerPO && (
-                                          <div>PO: {order.customerPO}</div>
-                                        )}
-                                        {order.poItemId && (
-                                          <div>Line Item: {order.poItemId}</div>
-                                        )}
+                                    {isPOOrder && order.customerPO && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <FileText className="h-3 w-3" />
+                                        <Link
+                                          href="/purchase-orders"
+                                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                          className="hover:underline hover:text-blue-600 dark:hover:text-blue-400"
+                                          title={order.poItemId ? `PO Line Item: ${order.poItemId}` : undefined}
+                                        >
+                                          PO {order.customerPO}
+                                        </Link>
+                                        <ExternalLink className="h-2.5 w-2.5" />
                                       </div>
                                     )}
 

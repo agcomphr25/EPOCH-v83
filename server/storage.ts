@@ -3250,6 +3250,7 @@ export class DatabaseStorage implements IStorage {
         dueDate: po.dueDate,
         customerId: po.customerId,
         customerPO: po.poNumber,
+        poId: po.poId,
         poItemId: po.poItemId,
         fbOrderNumber: null,
         agrOrderDetails: null,

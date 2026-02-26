@@ -1,0 +1,116 @@
+COPY-PASTE PROMPT — UNIFY MATERIAL READ PATH (P1 ONLY)
+IMPLEMENTATION TASK — Unify P1 Material Authority (Read Path Only)
+
+Context:
+- production_orders.material_canonical exists
+- It is correctly written at creation
+- It is currently NOT used anywhere for rendering
+- Multiple derivation systems exist (client + server + barcode logic)
+
+Goal:
+For P1 production orders ONLY:
+Make material_canonical the single source of truth for display + workflow routing.
+
+STRICT RULES:
+- Do NOT modify schema.
+- Do NOT modify creation logic.
+- Do NOT touch P2 logic.
+- Keep safe fallback behavior during transition.
+- Remove client-side heuristics for P1 only.
+
+========================================
+STEP 1 — Barcode Queue (P1)
+========================================
+
+File:
+client/src/pages/BarcodeQueuePage.tsx
+
+Find where deriveOrderLabels() is called.
+
+Modify logic:
+
+IF order.materialCanonical exists and is non-empty:
+    use order.materialCanonical
+ELSE:
+    fallback to deriveMaterial()
+
+Remove direct material inference from features/specs for P1.
+
+Ensure the API is returning material_canonical as:
+    materialCanonical
+
+If not, modify the server route to include:
+    production_orders.material_canonical
+
+========================================
+STEP 2 — Remove Material Derivation from P1 Label Rendering
+========================================
+
+File:
+server/src/routes/index.ts
+(Barcode label generation section ~7704–7717)
+
+Replace inline material derivation logic:
+
+OLD:
+  let material = '';
+  const specs = ...
+  ...
+
+NEW:
+  let material = order.material_canonical || '';
+
+Keep fallback ONLY if canonical empty:
+  if (!material) {
+      material = deriveCanonicalMaterial(order.stockModelId);
+  }
+
+Remove JSON/spec parsing from label logic.
+
+========================================
+STEP 3 — Layup Schedule (P1 only)
+========================================
+
+File:
+server/src/routes/layupSchedule.ts
+
+Find inline prefix/keyword material detection.
+
+Replace with:
+
+const material = order.material_canonical || deriveCanonicalMaterial(order.stockModelId);
+
+Remove displayName keyword parsing.
+
+========================================
+STEP 4 — API Verification
+========================================
+
+Search all P1-related routes returning production_orders.
+
+Ensure SELECT queries include:
+  material_canonical
+
+Return it explicitly as:
+  materialCanonical
+
+========================================
+STEP 5 — Client Cleanup (P1 Only)
+========================================
+
+Do NOT delete deriveMaterial().
+But ensure:
+
+- It is NOT used in BarcodeQueuePage
+- It is NOT used for P1 workflow routing
+- It may still be used in non-workflow contexts (quotes, previews)
+
+========================================
+OUTPUT
+========================================
+
+Return:
+1) Updated files
+2) Before/After snippets
+3) List of P1 endpoints now reading material_canonical
+4) Confirmation that no P1 workflow view uses JSON/spec parsing anymore

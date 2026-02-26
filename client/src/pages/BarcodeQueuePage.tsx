@@ -310,6 +310,7 @@ export default function BarcodeQueuePage() {
       cleanedName = cleanedName.replace(/-Tikka$/i, '');
 
       const labels = deriveOrderLabels(order);
+      const materialLabel = order.materialCanonical || labels.materialLabel;
       const categoryKey = `${cleanedName} - ${labels.actionLabel}`;
 
       if (!categories[categoryKey]) {
@@ -860,7 +861,7 @@ export default function BarcodeQueuePage() {
                       const orderLabels = deriveOrderLabels(order);
                       const actionLength = orderLabels.actionLengthRaw;
                       const isTikka = orderLabels.isTikka;
-                      const materialType = orderLabels.materialLabel;
+                      const materialType = order.materialCanonical || orderLabels.materialLabel;
 
                       return (
                         <Card
@@ -1182,7 +1183,7 @@ export default function BarcodeQueuePage() {
                             const orderLabels2 = deriveOrderLabels(order);
                             const actionLength = orderLabels2.actionLengthRaw;
                             const isTikka = orderLabels2.isTikka;
-                            const materialType = orderLabels2.materialLabel;
+                            const materialType = order.materialCanonical || orderLabels2.materialLabel;
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');

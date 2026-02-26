@@ -3321,6 +3321,7 @@ export class DatabaseStorage implements IStorage {
         customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
         product: resolvedItemName,
         isFlattop: false,
+        materialCanonical: po.materialCanonical || '',
       };
     }) as any;
 

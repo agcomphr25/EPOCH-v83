@@ -4,6 +4,7 @@ import { db, pool, rawSql } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
+import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 
 const router = Router();
 
@@ -419,13 +420,10 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model display name
-        let material = null;
-        const displayName = stockModelDisplayMap.get(order.stockModel || '') || '';
-        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
-          material = 'Carbon Fiber';
-        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
-          material = 'Fiberglass';
+        // Use material_canonical as single source of truth for P1 material
+        let material: string | null = order.materialCanonical || null;
+        if (!material) {
+          material = deriveCanonicalMaterial(order.stockModel || '') || null;
         }
         
         // Determine badges
@@ -499,13 +497,10 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model display name
-        let material = null;
-        const displayName = stockModelDisplayMap.get(item.stockModel) || '';
-        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
-          material = 'Carbon Fiber';
-        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
-          material = 'Fiberglass';
+        // Use material_canonical as single source of truth for P1 material
+        let material: string | null = (item as any).materialCanonical || null;
+        if (!material) {
+          material = deriveCanonicalMaterial(item.stockModel || '') || null;
         }
         
         for (let i = 0; i < item.quantity; i++) {

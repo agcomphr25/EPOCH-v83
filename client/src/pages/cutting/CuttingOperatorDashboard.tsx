@@ -297,7 +297,7 @@ export default function CuttingOperatorDashboard() {
     sortedByExpiration.forEach(item => {
       const type = item.fabricType || 'unknown';
       if (!fifoRolls[type]) fifoRolls[type] = [];
-      if (fifoRolls[type].length < 3 && item.status !== 'expired' && item.squareMeters > 0) {
+      if (fifoRolls[type].length < 3 && item.status !== 'expired' && item.status !== 'depleted' && item.squareMeters > 0) {
         fifoRolls[type].push(item);
       }
     });
@@ -887,8 +887,9 @@ export default function CuttingOperatorDashboard() {
                 
                 if (matchingTypes.length === 0) {
                   const directMatches = fabricInventory.filter(f => 
-                    (f.fabricType || '').toLowerCase().includes(searchLower) ||
-                    (f.commonName || '').toLowerCase().includes(searchLower)
+                    f.squareMeters > 0 && f.status !== 'depleted' &&
+                    ((f.fabricType || '').toLowerCase().includes(searchLower) ||
+                    (f.commonName || '').toLowerCase().includes(searchLower))
                   );
                   
                   if (directMatches.length === 0) {
@@ -935,7 +936,7 @@ export default function CuttingOperatorDashboard() {
                 }
                 
                 return matchingTypes.slice(0, 3).map(([type, rolls]) => {
-                  const allOfType = fabricInventory.filter(f => (f.fabricType || '') === type);
+                  const allOfType = fabricInventory.filter(f => (f.fabricType || '') === type && f.squareMeters > 0 && f.status !== 'depleted');
                   const totalOnHand = allOfType.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
                   const nextRoll = rolls[0];
                   
@@ -1094,7 +1095,7 @@ export default function CuttingOperatorDashboard() {
               <div className="text-left">
                 <div className="font-semibold">All Fabric Inventory</div>
                 <div className="text-sm text-muted-foreground font-normal">
-                  {fabricInventory.length} rolls in stock - View and print barcodes
+                  {fabricInventory.filter(f => f.squareMeters > 0 && f.status !== 'depleted').length} rolls on hand - View and print barcodes
                 </div>
               </div>
             </div>
@@ -1122,8 +1123,8 @@ export default function CuttingOperatorDashboard() {
             <div className="max-h-[400px] overflow-y-auto rounded-md border">
               {loadingFabric ? (
                 <p className="text-muted-foreground text-center py-8">Loading fabric...</p>
-              ) : fabricInventory.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No fabric inventory found</p>
+              ) : fabricInventory.filter(f => f.squareMeters > 0 && f.status !== 'depleted').length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No fabric on hand</p>
               ) : (
                 <Table>
                   <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
@@ -1140,6 +1141,7 @@ export default function CuttingOperatorDashboard() {
                   </TableHeader>
                   <TableBody>
                     {fabricInventory
+                      .filter(f => f.squareMeters > 0 && f.status !== 'depleted')
                       .filter(f => {
                         if (!allFabricSearch.trim()) return true;
                         const search = allFabricSearch.toLowerCase();
@@ -1432,7 +1434,7 @@ export default function CuttingOperatorDashboard() {
                     })();
                     
                     const relevantFabrics = fabricInventory
-                      .filter(f => f.squareMeters > 0 && f.status !== 'expired')
+                      .filter(f => f.squareMeters > 0 && f.status !== 'expired' && f.status !== 'depleted')
                       .filter(f => {
                         const ft = (f.fabricType || '').toLowerCase();
                         const commonName = (f.commonName || '').toLowerCase();

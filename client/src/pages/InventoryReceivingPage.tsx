@@ -509,6 +509,7 @@ export default function InventoryReceivingPage() {
       receivedQuantity: 0,
       status: 'pending',
     });
+    setTraceabilityData({});
     setScannedCode('');
     toast.success(`Selected item: ${item.name}`);
   };
@@ -545,6 +546,16 @@ export default function InventoryReceivingPage() {
       return;
     }
 
+    const itemTrace = getItemTraceability(receivingData.agPartNumber, inventoryItems as any[]);
+    if (itemTrace.required && itemTrace.fields.length > 0) {
+      const missingFields = itemTrace.fields.filter((f: string) => !traceabilityData[f]?.trim());
+      if (missingFields.length > 0) {
+        const missingLabels = missingFields.map((f: string) => TRACEABILITY_FIELD_LABELS[f] || f);
+        toast.error(`Missing required traceability fields: ${missingLabels.join(', ')}`);
+        return;
+      }
+    }
+
     // Check if this is a P2 product
     if (isP2Product(receivingData)) {
       setSelectedP2Item(receivingData);
@@ -552,13 +563,19 @@ export default function InventoryReceivingPage() {
       return;
     }
 
-    // Regular receiving for non-P2 products
+    const traceNotes = itemTrace.required && itemTrace.fields.length > 0
+      ? itemTrace.fields.map((f: string) => `${TRACEABILITY_FIELD_LABELS[f] || f}: ${traceabilityData[f] || ''}`).join(', ')
+      : '';
+
     const inventoryData = {
       agPartNumber: receivingData.agPartNumber,
       name: receivingData.name,
-      notes: `Received: ${receivingData.receivedQuantity} units. ${receivingData.notes || ''}`,
+      notes: `Received: ${receivingData.receivedQuantity} units.${traceNotes ? ` Traceability: ${traceNotes}.` : ''} ${receivingData.notes || ''}`.trim(),
       department: 'Receiving',
       orderDate: new Date().toISOString().split('T')[0],
+      ...(receivingData.lotNumber ? { lotNumber: receivingData.lotNumber } : {}),
+      ...(receivingData.batchNumber ? { batchNumber: receivingData.batchNumber } : {}),
+      ...(itemTrace.required && itemTrace.fields.length > 0 ? { traceabilityData } : {}),
     };
 
     createInventoryMutation.mutate(inventoryData);
@@ -1143,6 +1160,7 @@ export default function InventoryReceivingPage() {
       receivedQuantity: 0,
       status: 'pending',
     });
+    setTraceabilityData({});
   };
 
   const getStatusBadge = (status: string) => {
@@ -1337,36 +1355,82 @@ export default function InventoryReceivingPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="lotNumber">Lot Number</Label>
-                    <Input
-                      id="lotNumber"
-                      value={receivingData.lotNumber || ''}
-                      onChange={(e) =>
-                        setReceivingData((prev) => ({
-                          ...prev,
-                          lotNumber: e.target.value,
-                        }))
-                      }
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="batchNumber">Batch Number</Label>
-                    <Input
-                      id="batchNumber"
-                      value={receivingData.batchNumber || ''}
-                      onChange={(e) =>
-                        setReceivingData((prev) => ({
-                          ...prev,
-                          batchNumber: e.target.value,
-                        }))
-                      }
-                      placeholder="Optional"
-                    />
-                  </div>
-                </div>
+                {(() => {
+                  const itemTrace = getItemTraceability(receivingData.agPartNumber, inventoryItems as any[]);
+                  const hasTraceFields = itemTrace.required && itemTrace.fields.length > 0;
+                  return (
+                    <>
+                      {hasTraceFields && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <ClipboardList className="w-4 h-4 text-amber-600" />
+                            <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                              Traceability Required — {itemTrace.fields.length} field{itemTrace.fields.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {itemTrace.fields.map((fieldId: string) => {
+                              const label = TRACEABILITY_FIELD_LABELS[fieldId] || fieldId;
+                              const isDate = DATE_FIELDS.includes(fieldId);
+                              return (
+                                <div key={fieldId}>
+                                  <Label htmlFor={`trace-${fieldId}`} className="text-xs">
+                                    {label} *
+                                  </Label>
+                                  <Input
+                                    id={`trace-${fieldId}`}
+                                    type={isDate ? 'date' : 'text'}
+                                    value={traceabilityData[fieldId] || ''}
+                                    onChange={(e) =>
+                                      setTraceabilityData((prev) => ({
+                                        ...prev,
+                                        [fieldId]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder={isDate ? '' : `Enter ${label}`}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {!hasTraceFields && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="lotNumber">Lot Number</Label>
+                            <Input
+                              id="lotNumber"
+                              value={receivingData.lotNumber || ''}
+                              onChange={(e) =>
+                                setReceivingData((prev) => ({
+                                  ...prev,
+                                  lotNumber: e.target.value,
+                                }))
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="batchNumber">Batch Number</Label>
+                            <Input
+                              id="batchNumber"
+                              value={receivingData.batchNumber || ''}
+                              onChange={(e) =>
+                                setReceivingData((prev) => ({
+                                  ...prev,
+                                  batchNumber: e.target.value,
+                                }))
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 <div>
                   <Label htmlFor="notes">Notes</Label>

@@ -15,6 +15,21 @@ import { renderFromObject } from '../../communication/render';
 
 const router = Router();
 
+const MAX_HTML_LENGTH = 500_000;
+const MAX_SUBJECT_LENGTH = 998;
+
+const PLACEHOLDER_RE = /\{\{(\s*[\w.]+\s*)\}\}/g;
+
+const INLINE_JS_PATTERNS = [
+  /javascript\s*:/gi,
+  /on\w+\s*=/gi,
+  /data\s*:\s*text\/html/gi,
+  /expression\s*\(/gi,
+  /vbscript\s*:/gi,
+  /-moz-binding\s*:/gi,
+  /behavior\s*:/gi,
+];
+
 const SAFE_CSS_PROPERTIES = [
   'color', 'background-color', 'background',
   'font-size', 'font-weight', 'font-family', 'font-style',
@@ -108,7 +123,64 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
 };
 
 function sanitizeTemplateHtml(html: string): string {
-  return sanitizeHtml(html, SANITIZE_OPTIONS);
+  let cleaned = sanitizeHtml(html, SANITIZE_OPTIONS);
+  for (const pattern of INLINE_JS_PATTERNS) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+  return cleaned;
+}
+
+interface PlaceholderValidationResult {
+  valid: boolean;
+  unknownPlaceholders: string[];
+  allFound: string[];
+}
+
+function extractPlaceholders(text: string): string[] {
+  const found = new Set<string>();
+  let match: RegExpExecArray | null;
+  const re = new RegExp(PLACEHOLDER_RE.source, PLACEHOLDER_RE.flags);
+  while ((match = re.exec(text)) !== null) {
+    found.add(match[1].trim());
+  }
+  return Array.from(found);
+}
+
+function validatePlaceholders(
+  allowedVariables: string[],
+  ...sources: (string | null | undefined)[]
+): PlaceholderValidationResult {
+  const allFound = new Set<string>();
+  for (const src of sources) {
+    if (!src) continue;
+    for (const p of extractPlaceholders(src)) {
+      allFound.add(p);
+    }
+  }
+
+  const allowed = new Set(allowedVariables);
+  const unknown: string[] = [];
+  for (const p of allFound) {
+    if (!allowed.has(p)) {
+      unknown.push(p);
+    }
+  }
+
+  return {
+    valid: unknown.length === 0,
+    unknownPlaceholders: unknown.sort(),
+    allFound: Array.from(allFound).sort(),
+  };
+}
+
+function detectInlineJs(html: string): string[] {
+  const violations: string[] = [];
+  if (/javascript\s*:/i.test(html)) violations.push('javascript: URI detected');
+  if (/on(click|load|error|mouseover|mouseout|focus|blur|submit|change|input|keydown|keyup|keypress)\s*=/i.test(html)) violations.push('Inline event handler detected');
+  if (/data\s*:\s*text\/html/i.test(html)) violations.push('data:text/html URI detected');
+  if (/vbscript\s*:/i.test(html)) violations.push('vbscript: URI detected');
+  if (/<script[\s>]/i.test(html)) violations.push('<script> tag detected');
+  return violations;
 }
 
 function requireAdminRole(req: any, res: any, next: any) {
@@ -150,8 +222,8 @@ router.get('/:key', async (req, res) => {
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
-  subject: z.string().min(1).optional(),
-  bodyHtml: z.string().optional(),
+  subject: z.string().min(1).max(MAX_SUBJECT_LENGTH, `Subject must not exceed ${MAX_SUBJECT_LENGTH} characters`).optional(),
+  bodyHtml: z.string().max(MAX_HTML_LENGTH, `HTML body must not exceed ${MAX_HTML_LENGTH.toLocaleString()} characters`).optional(),
   bodyText: z.string().nullable().optional(),
   allowedVariables: z.array(z.string()).optional(),
   attachmentRules: z.record(z.unknown()).optional(),
@@ -174,8 +246,37 @@ router.put('/:key', async (req, res) => {
     }
 
     const updates = { ...parsed.data };
+
     if (updates.bodyHtml) {
+      const jsViolations = detectInlineJs(updates.bodyHtml);
+      if (jsViolations.length > 0) {
+        return res.status(400).json({
+          error: 'Template contains dangerous inline JavaScript',
+          code: 'INLINE_JS_DETECTED',
+          violations: jsViolations,
+        });
+      }
+
       updates.bodyHtml = sanitizeTemplateHtml(updates.bodyHtml);
+    }
+
+    const effectiveAllowed = updates.allowedVariables ?? template.allowedVariables ?? [];
+
+    const placeholderResult = validatePlaceholders(
+      effectiveAllowed,
+      updates.bodyHtml ?? template.bodyHtml,
+      updates.subject ?? template.subject,
+      updates.bodyText ?? template.bodyText,
+    );
+
+    if (!placeholderResult.valid) {
+      return res.status(400).json({
+        error: 'Template contains unknown placeholders that are not in the allowed variables list',
+        code: 'UNKNOWN_PLACEHOLDERS',
+        unknownPlaceholders: placeholderResult.unknownPlaceholders,
+        allowedVariables: effectiveAllowed,
+        hint: `Remove or replace: ${placeholderResult.unknownPlaceholders.map(p => '{{' + p + '}}').join(', ')}`,
+      });
     }
 
     const result = await updateTemplateWithVersioning(db, {
@@ -281,6 +382,82 @@ router.post('/:key/preview', async (req, res) => {
   } catch (err: any) {
     console.error('[EmailTemplates] POST /:key/preview error:', err.message);
     res.status(500).json({ error: 'Failed to generate preview' });
+  }
+});
+
+const validateSchema = z.object({
+  bodyHtml: z.string().max(MAX_HTML_LENGTH, `HTML body must not exceed ${MAX_HTML_LENGTH.toLocaleString()} characters`).optional(),
+  subject: z.string().max(MAX_SUBJECT_LENGTH, `Subject must not exceed ${MAX_SUBJECT_LENGTH} characters`).optional(),
+  bodyText: z.string().nullable().optional(),
+});
+
+router.post('/:key/validate', async (req, res) => {
+  try {
+    const template = await getTemplateByKey(db, req.params.key);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const schemaParsed = validateSchema.safeParse(req.body);
+    if (!schemaParsed.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'SCHEMA_VALIDATION_FAILED',
+        details: schemaParsed.error.flatten(),
+      });
+    }
+
+    const { bodyHtml, subject, bodyText } = schemaParsed.data;
+    const effectiveAllowed = template.allowedVariables ?? [];
+
+    interface ValidationError {
+      code: string;
+      message: string;
+      details?: any;
+    }
+    const errors: ValidationError[] = [];
+
+    const jsViolations = bodyHtml ? detectInlineJs(bodyHtml) : [];
+    if (jsViolations.length > 0) {
+      errors.push({
+        code: 'INLINE_JS_DETECTED',
+        message: 'Template contains dangerous inline JavaScript',
+        details: { violations: jsViolations },
+      });
+    }
+
+    const placeholderResult = validatePlaceholders(
+      effectiveAllowed,
+      bodyHtml ?? template.bodyHtml,
+      subject ?? template.subject,
+      bodyText ?? template.bodyText,
+    );
+    if (!placeholderResult.valid) {
+      errors.push({
+        code: 'UNKNOWN_PLACEHOLDERS',
+        message: `Unknown placeholders: ${placeholderResult.unknownPlaceholders.map(p => '{{' + p + '}}').join(', ')}`,
+        details: { unknownPlaceholders: placeholderResult.unknownPlaceholders },
+      });
+    }
+
+    res.json({
+      valid: errors.length === 0,
+      errors,
+      placeholders: {
+        found: placeholderResult.allFound,
+        allowed: effectiveAllowed,
+        unknown: placeholderResult.unknownPlaceholders,
+      },
+      limits: {
+        htmlLength: bodyHtml?.length ?? 0,
+        htmlMaxLength: MAX_HTML_LENGTH,
+        subjectLength: subject?.length ?? 0,
+        subjectMaxLength: MAX_SUBJECT_LENGTH,
+      },
+    });
+  } catch (err: any) {
+    console.error('[EmailTemplates] POST /:key/validate error:', err.message);
+    res.status(500).json({ error: 'Failed to validate template' });
   }
 });
 

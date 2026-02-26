@@ -575,7 +575,6 @@ export default function InventoryReceivingPage() {
       orderDate: new Date().toISOString().split('T')[0],
       ...(receivingData.lotNumber ? { lotNumber: receivingData.lotNumber } : {}),
       ...(receivingData.batchNumber ? { batchNumber: receivingData.batchNumber } : {}),
-      ...(itemTrace.required && itemTrace.fields.length > 0 ? { traceabilityData } : {}),
     };
 
     createInventoryMutation.mutate(inventoryData);

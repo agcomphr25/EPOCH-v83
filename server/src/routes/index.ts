@@ -6169,6 +6169,25 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get single Production Order by ID (admin inspector)
+  app.get('/api/production-orders/:id', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid production order ID' });
+      }
+      const order = await storage.getProductionOrder(id);
+      if (!order) {
+        return res.status(404).json({ error: 'Production order not found' });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error('Error fetching production order:', error);
+      res.status(500).json({ error: 'Failed to fetch production order' });
+    }
+  });
+
   // P1 Production Schedule Calculation
   app.post('/api/pos/:id/calculate-production-schedule', async (req, res) => {
     try {

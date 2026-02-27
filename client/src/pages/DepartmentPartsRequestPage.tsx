@@ -68,6 +68,7 @@ type User = {
   username: string;
   firstName: string;
   lastName: string;
+  role?: string;
   department?: string;
   departmentId?: number;
 };
@@ -96,7 +97,7 @@ export default function DepartmentPartsRequestPage() {
     queryKey: ['/api/auth/session'],
   });
 
-  const isAdmin = user?.username ? ['glennj', 'tasham', 'staciw', 'lauriet', 'admin'].includes(user.username.toLowerCase()) : false;
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'OWNER';
 
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/inventory/departments'],

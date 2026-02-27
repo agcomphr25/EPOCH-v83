@@ -88,6 +88,7 @@ interface InventoryFormData {
   hasSds: boolean;
   hasTds: boolean;
   hasOtherDocs: boolean;
+  assignedToAsset: string;
 }
 
 const InventoryForm = ({
@@ -103,6 +104,7 @@ const InventoryForm = ({
   isUpdatePending,
   onCancel,
   vendors,
+  assets,
   departments,
   sdsFile,
   currentSdsFileName,
@@ -130,6 +132,7 @@ const InventoryForm = ({
   onCancel: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
+  assets: { id: string; assetTag: string; name: string; status: string }[];
   departments: { id: number; name: string }[];
   sdsFile: File | null;
   currentSdsFileName: string | null;
@@ -307,6 +310,28 @@ const InventoryForm = ({
                 ))}
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label htmlFor="assignedToAsset">Assigned to Asset</Label>
+          <Select
+            value={formData.assignedToAsset || 'none'}
+            onValueChange={(value) => onSelectChange('assignedToAsset', value === 'none' ? '' : value)}
+          >
+            <SelectTrigger data-testid="select-assignedToAsset">
+              <SelectValue placeholder="Select asset (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {assets
+                .filter((a) => a.status !== 'retired')
+                .map((asset) => (
+                  <SelectItem key={asset.id} value={`${asset.name} (${asset.assetTag})`}>
+                    {asset.name} ({asset.assetTag})
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Assign this item to a specific asset/equipment</p>
         </div>
         <div>
           <Label htmlFor="source">Source</Label>
@@ -1037,6 +1062,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     hasSds: false,
     hasTds: false,
     hasOtherDocs: false,
+    assignedToAsset: '',
   });
 
   const [sdsFile, setSdsFile] = useState<File | null>(null);
@@ -1137,6 +1163,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   });
 
   const vendors = vendorsResponse?.data || [];
+
+  const { data: assets = [] } = useQuery<{ id: string; assetTag: string; name: string; status: string }[]>({
+    queryKey: ['/api/assets'],
+  });
 
   // Fetch departments
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
@@ -1635,6 +1665,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
         hasOtherDocs: formData.hasOtherDocs,
+        assignedToAsset: formData.assignedToAsset || null,
       };
 
       if (editingItem) {
@@ -1692,6 +1723,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasSds: item.hasSds || false,
       hasTds: item.hasTds || false,
       hasOtherDocs: item.hasOtherDocs || false,
+      assignedToAsset: (item as any).assignedToAsset || '',
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
@@ -1936,6 +1968,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   resetForm();
                 }}
                 vendors={vendors}
+                assets={assets}
                 departments={departments}
                 sdsFile={sdsFile}
                 currentSdsFileName={currentSdsFileName}
@@ -2483,6 +2516,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               resetForm();
             }}
             vendors={vendors}
+            assets={assets}
             departments={departments}
             sdsFile={sdsFile}
             currentSdsFileName={currentSdsFileName}

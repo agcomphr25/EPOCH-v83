@@ -568,6 +568,15 @@ async function initializeBackgroundServices() {
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // Ensure inventory_items has assigned_to_asset column
+      try {
+        const { sql: sqlAsset } = await import('drizzle-orm');
+        await db.execute(sqlAsset`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS assigned_to_asset TEXT`);
+        console.log('✅ Ensured inventory_items has assigned_to_asset column');
+      } catch (assetErr: any) {
+        console.warn('⚠️ assigned_to_asset migration:', assetErr.message);
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

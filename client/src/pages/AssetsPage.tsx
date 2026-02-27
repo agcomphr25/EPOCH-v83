@@ -46,6 +46,7 @@ import {
   MapPin,
   Search,
   ArrowUpDown,
+  ClipboardList,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -199,6 +200,8 @@ export default function AssetsPage() {
   const [editingAsset, setEditingAsset] = useState<AssetRow | null>(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showLocationForm, setShowLocationForm] = useState(false);
+  const [showPartsListModal, setShowPartsListModal] = useState(false);
+  const [partsListAssetLabel, setPartsListAssetLabel] = useState('');
 
   const [formData, setFormData] = useState({
     assetTag: '',
@@ -239,6 +242,10 @@ export default function AssetsPage() {
 
   const { data: allAssets = [], isLoading } = useQuery<AssetRow[]>({
     queryKey: ['/api/assets'],
+  });
+
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
   });
 
   const tree = useMemo(() => buildTree(categories), [categories]);
@@ -690,14 +697,84 @@ export default function AssetsPage() {
               <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowAssetForm(false)}>Cancel</Button>
+          <div className="flex justify-between items-center mt-4">
             <Button
-              onClick={handleSubmitAsset}
-              disabled={!formData.assetTag || !formData.name || createAssetMutation.isPending || updateAssetMutation.isPending}
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const label = `${formData.name} (${formData.assetTag})`;
+                setPartsListAssetLabel(label);
+                setShowPartsListModal(true);
+              }}
+              disabled={!formData.assetTag || !formData.name}
             >
-              {createAssetMutation.isPending || updateAssetMutation.isPending ? 'Saving...' : editingAsset ? 'Update Asset' : 'Create Asset'}
+              <ClipboardList className="h-4 w-4 mr-2" />
+              AG Parts List
             </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowAssetForm(false)}>Cancel</Button>
+              <Button
+                onClick={handleSubmitAsset}
+                disabled={!formData.assetTag || !formData.name || createAssetMutation.isPending || updateAssetMutation.isPending}
+              >
+                {createAssetMutation.isPending || updateAssetMutation.isPending ? 'Saving...' : editingAsset ? 'Update Asset' : 'Create Asset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AG Parts List Modal */}
+      <Dialog open={showPartsListModal} onOpenChange={setShowPartsListModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              AG Parts List — {partsListAssetLabel}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const assignedParts = inventoryItems.filter(
+              (item: any) => item.assignedToAsset === partsListAssetLabel
+            );
+            if (assignedParts.length === 0) {
+              return (
+                <div className="text-center py-8 text-gray-500">
+                  <ClipboardList className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p>No inventory items are assigned to this asset.</p>
+                  <p className="text-sm mt-1">
+                    Assign items from the Inventory Items page using the "Assigned to Asset" field.
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>AG Part #</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Supplier Part #</TableHead>
+                    <TableHead>Department</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignedParts.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono font-medium">{item.agPartNumber}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.source || '—'}</TableCell>
+                      <TableCell>{item.supplierPartNumber || '—'}</TableCell>
+                      <TableCell>{item.department || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            );
+          })()}
+          <div className="flex justify-end mt-4">
+            <Button variant="outline" onClick={() => setShowPartsListModal(false)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>

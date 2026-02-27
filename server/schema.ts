@@ -607,6 +607,7 @@ export const inventoryItems = pgTable('inventory_items', {
   tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
   hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
+  assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
 });
 
 // Inventory Item Cost History - Tracks price changes over time

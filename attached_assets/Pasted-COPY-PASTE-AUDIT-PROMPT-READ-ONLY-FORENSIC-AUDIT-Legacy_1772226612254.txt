@@ -1,0 +1,102 @@
+COPY-PASTE AUDIT PROMPT
+READ-ONLY FORENSIC AUDIT — Legacy External PO Support + Vendor PO PDF Revision Display
+
+DO NOT MODIFY CODE.
+DO NOT CHANGE SCHEMA.
+SEARCH + REPORT ONLY.
+
+CONTEXT:
+
+A) We need Vendor POs imported from a previous ERP to:
+   - Have a new EPOCH PO number (e.g., VPO-26050)
+   - ALSO display the original legacy PO number in the UI
+   - Be easily identifiable during receiving and search
+   - Maintain clean audit separation between internal and external identifiers
+
+B) The Vendor PO PDF is STILL not displaying the revision suffix (e.g., VPO-26003-RB shows as 26003 instead of 26003-RB).
+
+We need to verify what is currently implemented and what is missing.
+
+------------------------------------------------------------
+PART 1 — Legacy / External PO Number Support
+------------------------------------------------------------
+
+1) Inspect vendor_pos schema.
+Search for columns like:
+- external_po_number
+- external_system
+- legacy_po_number
+- reference_number
+- imported_from
+- migration flags
+
+Report:
+- Whether any such column exists
+- Exact schema snippet if it does
+- Whether it is nullable
+- Whether it is indexed
+
+2) Search server routes and storage for any reference to:
+- "external"
+- "legacy"
+- "reference"
+- "imported"
+- migration-related logic for Vendor POs
+
+3) Inspect frontend Vendor PO UI (list view + detail view):
+Search for:
+- externalPoNumber
+- legacyPoNumber
+- reference
+- importedFrom
+Report whether the UI currently displays any external reference field.
+
+4) Inspect search logic in getAllVendorPOs():
+Does the search filter match only po_number and vendor name?
+Or does it include any external reference field?
+
+------------------------------------------------------------
+PART 2 — Vendor PO PDF Revision Display
+------------------------------------------------------------
+
+1) Re-inspect server/utils/pdf/vendorPoPdf.ts.
+
+Locate:
+- displayPoNumber logic
+- Title box render (#26003)
+- ORDER DETAILS panel render ("PO #:")
+
+Report:
+- Exact current snippet used for displayPoNumber
+- Whether revision suffix (e.g., -RB) is being stripped anywhere
+- Whether po.poNumber being passed into the PDF includes the suffix
+
+2) Verify data passed into PDF:
+Trace how poNumber is populated in generateVendorPoPdf().
+Is it coming from:
+- po.poNumber
+- po.po_number
+- parsed numeric value
+- id field
+Confirm whether the revision suffix exists at the moment the PDF is generated.
+
+3) Determine the root cause:
+Is the suffix being:
+- stripped intentionally (regex)
+- overwritten by numeric-only value earlier
+- not present in poNumber at all?
+
+------------------------------------------------------------
+OUTPUT FORMAT (STRICT)
+------------------------------------------------------------
+
+SECTION A — vendor_pos schema evidence (external ref fields or none)
+SECTION B — Current UI support for external PO display (or none)
+SECTION C — Current search behavior (what fields are matched)
+SECTION D — PDF displayPoNumber snippet (exact code)
+SECTION E — Root cause of revision not appearing in PDF
+SECTION F — Minimal fix plan for:
+   1) Adding external PO reference support cleanly
+   2) Ensuring PDF displays revision suffix correctly
+
+END AUDIT.

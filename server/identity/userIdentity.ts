@@ -15,7 +15,7 @@ This layer sits between DB and API.
 */
 
 import { db } from '../db';
-import { users } from '../schema';
+import { users, employees } from '../schema';
 import { eq } from 'drizzle-orm';
 
 export type IdentitySnapshot = {
@@ -88,8 +88,48 @@ export function formatIdentity(
   return snapshot.displayName;
 }
 
+export async function createEmployeeIdentitySnapshot(employeeId: number): Promise<IdentitySnapshot> {
+  const [employee] = await db
+    .select({
+      name: employees.name,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!employee) {
+    return {
+      userId: employeeId,
+      displayName: 'Unknown User',
+      firstName: 'Unknown',
+      lastName: '',
+    };
+  }
+
+  const nameParts = (employee.name || '').trim().split(/\s+/);
+  const firstName = nameParts[0] || 'Unknown';
+  const lastName = nameParts.slice(1).join(' ');
+  const displayName = employee.name || 'Unknown User';
+
+  return {
+    userId: employeeId,
+    displayName,
+    firstName,
+    lastName,
+  };
+}
+
 export async function buildIdentityInsertFields(userId: number) {
   const snapshot = await createIdentitySnapshot(userId);
+
+  return {
+    userId: snapshot.userId,
+    displayName: snapshot.displayName,
+  };
+}
+
+export async function buildEmployeeIdentityInsertFields(employeeId: number) {
+  const snapshot = await createEmployeeIdentitySnapshot(employeeId);
 
   return {
     userId: snapshot.userId,

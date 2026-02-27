@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
-import { resolveEmployeeSnapshot } from '../../utils/userSnapshot';
+import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 
 const router = Router();
 
@@ -155,7 +155,7 @@ router.post('/', async (req, res) => {
     }
     
     const creatorSnapshot = req.body.createdBy
-      ? await resolveEmployeeSnapshot(req.body.createdBy)
+      ? await createEmployeeIdentitySnapshot(req.body.createdBy)
       : null;
 
     await storage.createProjectActivityLog({
@@ -192,7 +192,7 @@ router.patch('/:id', async (req, res) => {
     
     if (validatedData.projectManagerId) {
       const updaterSnapshot = validatedData.updatedBy
-        ? await resolveEmployeeSnapshot(validatedData.updatedBy)
+        ? await createEmployeeIdentitySnapshot(validatedData.updatedBy)
         : null;
 
       await storage.createProjectActivityLog({
@@ -276,7 +276,7 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
     
     const performerUserId = validatedData.completedBy || validatedData.updatedBy;
     const performerSnapshot = performerUserId
-      ? await resolveEmployeeSnapshot(performerUserId)
+      ? await createEmployeeIdentitySnapshot(performerUserId)
       : null;
 
     const updateData: any = {};

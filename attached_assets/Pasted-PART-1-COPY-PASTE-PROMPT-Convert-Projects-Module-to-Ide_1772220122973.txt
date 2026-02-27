@@ -1,0 +1,127 @@
+PART 1 — COPY-PASTE PROMPT
+Convert Projects Module to Identity Layer
+
+Paste this into Replit Agent:
+
+IMPLEMENTATION TASK — CONVERT PROJECTS MODULE TO USER IDENTITY LAYER
+
+Objective:
+Refactor the Projects module to use the new Identity Layer (server/identity/userIdentity.ts).
+
+We will:
+- Stop storing raw numeric IDs alone
+- Store UserId + DisplayName snapshot
+- Remove frontend numeric rendering
+- Maintain backward compatibility
+
+Do NOT refactor unrelated modules.
+Do NOT delete legacy columns yet.
+
+---------------------------------------------------
+PHASE 1 — SCHEMA UPDATE
+---------------------------------------------------
+
+In schema for project activities and steps:
+
+For each numeric user field:
+
+createdBy
+updatedBy
+performedBy
+completedBy
+
+Add corresponding new text columns:
+
+createdByDisplayName
+updatedByDisplayName
+performedByDisplayName
+completedByDisplayName
+
+Do NOT remove numeric fields yet.
+
+Generate migration SQL.
+
+---------------------------------------------------
+PHASE 2 — ROUTE INSERT LOGIC
+---------------------------------------------------
+
+In projects.ts:
+
+Where routes accept numeric user IDs:
+
+Replace manual usage with:
+
+import { createIdentitySnapshot } from "@/identity/userIdentity"
+
+Before inserting:
+
+const identity = await createIdentitySnapshot(userId);
+
+Store:
+
+<field>UserId: identity.userId
+<field>DisplayName: identity.displayName
+
+Do this for:
+- Project creation
+- Project update
+- Step completion
+- Activity logging
+
+---------------------------------------------------
+PHASE 3 — API RESPONSE CLEANUP
+---------------------------------------------------
+
+When returning project activity objects:
+
+Return:
+
+{
+  performedByUserId,
+  performedByDisplayName
+}
+
+Do NOT rely on frontend to resolve IDs.
+Do NOT JOIN users table in route.
+
+---------------------------------------------------
+PHASE 4 — FRONTEND UPDATE
+---------------------------------------------------
+
+In ProjectDetailPage.tsx:
+
+Replace any rendering of:
+
+performedBy (number)
+completedBy (number)
+
+With:
+
+performedByDisplayName
+completedByDisplayName
+
+Remove any fallback like:
+
+"User #" + id
+
+If displayName missing, render:
+
+"Unknown User"
+
+---------------------------------------------------
+PHASE 5 — BACKWARD SAFETY
+---------------------------------------------------
+
+Do NOT remove numeric columns.
+Do NOT drop legacy behavior.
+Just ensure all new writes use snapshot model.
+
+---------------------------------------------------
+RETURN
+---------------------------------------------------
+
+- Migration SQL
+- Modified schema sections
+- Modified route sections
+- Modified frontend sections
+- Confirmation no other modules changed

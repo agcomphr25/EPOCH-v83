@@ -1,3 +1,19 @@
+/*
+EPOCH USER IDENTITY STANDARD
+
+All user references must store:
+- <field>UserId (integer FK)
+- <field>DisplayName (text snapshot)
+
+Never:
+- Store only numeric user ID
+- Store only username string
+- Return numeric ID to frontend
+
+Use resolveUserSnapshot() or resolveEmployeeSnapshot() for all inserts.
+See: server/utils/userSnapshot.ts
+*/
+
 import {
   pgTable,
   text,

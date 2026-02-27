@@ -1164,9 +1164,11 @@ export default function VendorPOManager() {
   const handleIssuePO = (id: number, _skipEmail: boolean = false) => {
     // Find the PO in the list so it can be set as selectedVendorPO (list-view entry point)
     const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
-    if (poFromList && !selectedVendorPO) {
+    if (poFromList) {
       setSelectedVendorPO(poFromList);
     }
+    // Navigate into detail view so the AlertDialog is mounted
+    setShowDetailView(true);
     // Always open the unified AlertDialog — no window.confirm
     setNoEmailMode(false);
     setNoEmailReason('');

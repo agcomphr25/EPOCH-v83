@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import {
@@ -8,7 +9,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { ClipboardCheck, Check, Circle, AlertTriangle, ArrowUp, Minus, ArrowDown } from 'lucide-react';
+import { ClipboardCheck, Check, Circle, AlertTriangle, ArrowUp, Minus, ArrowDown, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RundownItem {
@@ -21,6 +22,7 @@ interface RundownItem {
   sort_order: number;
   is_completed: boolean;
   completed_at: string | null;
+  group_date?: string;
 }
 
 interface RundownResponse {
@@ -28,17 +30,29 @@ interface RundownResponse {
   items: RundownItem[];
 }
 
+interface OverdueResponse {
+  items: RundownItem[];
+}
+
 const priorityConfig = {
-  CRITICAL: { color: 'bg-red-500 text-white', icon: AlertTriangle, label: 'CRIT' },
-  HIGH: { color: 'bg-orange-500 text-white', icon: ArrowUp, label: 'HIGH' },
-  NORMAL: { color: 'bg-blue-500 text-white', icon: Minus, label: 'NORM' },
-  LOW: { color: 'bg-gray-400 text-white', icon: ArrowDown, label: 'LOW' },
+  CRITICAL: { color: 'bg-red-500 text-white', label: 'CRIT' },
+  HIGH: { color: 'bg-orange-500 text-white', label: 'HIGH' },
+  NORMAL: { color: 'bg-blue-500 text-white', label: 'NORM' },
+  LOW: { color: 'bg-gray-400 text-white', label: 'LOW' },
 };
 
 export default function ExecutiveRundownDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+
   const { data, isLoading } = useQuery<RundownResponse>({
     queryKey: ['/api/executive/rundown/today'],
     staleTime: 60000,
+  });
+
+  const { data: overdueData } = useQuery<OverdueResponse>({
+    queryKey: ['/api/executive/rundown/overdue'],
+    staleTime: 60000,
+    enabled: isOpen,
   });
 
   const completeMutation = useMutation({
@@ -50,14 +64,27 @@ export default function ExecutiveRundownDropdown() {
     },
   });
 
+  const carryForwardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/executive/rundown/carry-forward');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/executive/rundown/today'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/executive/rundown/overdue'] });
+    },
+  });
+
   const items = data?.items ?? [];
   const displayItems = items.slice(0, 15);
   const completedCount = items.filter((i) => i.is_completed).length;
   const totalCount = items.length;
   const hasIncomplete = completedCount < totalCount;
+  const overdueItems = overdueData?.items ?? [];
+  const overdueCount = overdueItems.length;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -76,6 +103,28 @@ export default function ExecutiveRundownDropdown() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+        {overdueCount > 0 && (
+          <>
+            <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border-b border-amber-200">
+              <span className="text-xs font-medium text-amber-800">
+                Carry forward {overdueCount} item{overdueCount !== 1 ? 's' : ''}?
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  carryForwardMutation.mutate();
+                }}
+                disabled={carryForwardMutation.isPending}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                {carryForwardMutation.isPending ? 'Moving...' : 'Carry Forward'}
+              </Button>
+            </div>
+          </>
+        )}
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Today's Rundown</span>
           {totalCount > 0 && (

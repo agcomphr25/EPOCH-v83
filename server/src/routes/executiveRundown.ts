@@ -76,6 +76,60 @@ router.get('/overdue', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/carry-forward', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const overdueItems = await pool.query(
+      `SELECT i.id
+       FROM executive_rundown_items i
+       JOIN executive_rundown_groups g ON g.id = i.group_id
+       WHERE i.user_id = $1
+         AND g.group_date < $2
+         AND i.is_completed = false
+         AND i.is_active = true
+         AND g.is_active = true`,
+      [userId, today]
+    );
+
+    if (!overdueItems || overdueItems.length === 0) {
+      return res.json({ carried: 0 });
+    }
+
+    let todayGroup = await pool.query(
+      `SELECT * FROM executive_rundown_groups WHERE user_id = $1 AND group_date = $2 AND is_active = true LIMIT 1`,
+      [userId, today]
+    );
+
+    let todayGroupId: number;
+    if (!todayGroup || todayGroup.length === 0) {
+      const newGroup = await pool.query(
+        `INSERT INTO executive_rundown_groups (user_id, group_date, is_active, created_at, updated_at)
+         VALUES ($1, $2, true, NOW(), NOW())
+         RETURNING *`,
+        [userId, today]
+      );
+      todayGroupId = newGroup[0].id;
+    } else {
+      todayGroupId = todayGroup[0].id;
+    }
+
+    const ids = overdueItems.map((i: any) => i.id);
+    await pool.query(
+      `UPDATE executive_rundown_items
+       SET group_id = $1, updated_at = NOW()
+       WHERE id = ANY($2) AND user_id = $3`,
+      [todayGroupId, ids, userId]
+    );
+
+    res.json({ carried: ids.length });
+  } catch (error: any) {
+    console.error('Executive rundown POST /carry-forward error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;

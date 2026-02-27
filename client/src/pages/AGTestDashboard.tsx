@@ -24,6 +24,7 @@ import {
   ClipboardList,
   MessageSquare,
   Mic,
+  TrendingUp,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -407,6 +408,25 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               View urgent and priority orders
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-900/20"
+          onClick={() => navigateTo('/production-forecast')}
+          data-testid="card-production-forecast"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-5 h-5 text-sky-600" />
+                <span className="text-sm font-medium">Production Forecast</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Capacity planning and production forecasting
             </p>
           </CardContent>
         </Card>

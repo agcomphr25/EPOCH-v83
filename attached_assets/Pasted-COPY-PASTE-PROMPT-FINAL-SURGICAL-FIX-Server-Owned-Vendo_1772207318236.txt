@@ -1,0 +1,89 @@
+COPY-PASTE PROMPT — FINAL SURGICAL FIX
+
+Server-Owned Vendor PO Line Numbers (Race-Proof)
+
+FINAL SURGICAL HARDENING — VENDOR PO LINE NUMBER AUTHORITY (SERVER-OWNED)
+
+DO THIS CAREFULLY:
+- Minimal changes
+- No refactors unrelated to numbering
+- Preserve existing API contracts
+- Must remain compatible with existing UI
+- Must pass TypeScript build
+- Must not break prod
+
+CONTEXT:
+- vendor_po_items now has UNIQUE(vendor_po_id, line_number) in PROD
+- We already fixed manufacturing_queue identity to vendorPoItemId
+- Current bug source was client-side items.length + 1 (race)
+
+GOAL:
+When creating a vendor_po_item, the server MUST generate line_number.
+The server MUST ignore any client-supplied line_number.
+This must be concurrency-safe.
+
+------------------------------------------------------------
+STEP 1 — Find the createVendorPOItem insert path
+------------------------------------------------------------
+Locate the function that creates a vendor_po_item (likely in server/storage.ts or service).
+Find the code path for POST /api/vendor-pos/:id/items (or equivalent).
+
+Identify:
+- Where line_number currently comes from (payload)
+- The exact Drizzle insert call and transaction usage (if any)
+
+------------------------------------------------------------
+STEP 2 — Implement server-side line_number generation (transaction-safe)
+------------------------------------------------------------
+Change createVendorPOItem so that:
+
+A) It runs inside a transaction.
+B) It computes nextLineNumber using the DB:
+
+SELECT COALESCE(MAX(line_number), 0) + 1 AS next
+FROM vendor_po_items
+WHERE vendor_po_id = ?
+FOR UPDATE;
+
+(If Drizzle doesn't support FOR UPDATE cleanly, use a raw SQL query in the transaction.)
+
+C) It inserts the new item using nextLineNumber.
+D) It ignores any incoming payload line_number completely.
+
+IMPORTANT:
+- Do NOT trust client line_number.
+- Insert must use nextLineNumber derived inside the same transaction.
+
+------------------------------------------------------------
+STEP 3 — Defensive retry (optional but recommended)
+------------------------------------------------------------
+Because we have a UNIQUE constraint, add a tiny retry loop (max 2 retries) around insert:
+- If insert fails due to unique constraint on (vendor_po_id, line_number),
+  re-run MAX()+1 and retry once.
+(This is belt-and-suspenders in case FOR UPDATE is imperfect.)
+
+------------------------------------------------------------
+STEP 4 — Ensure response returns correct line_number
+------------------------------------------------------------
+The API response (the created item) must include the server-assigned line_number
+so the UI reflects true ordering immediately.
+
+------------------------------------------------------------
+STEP 5 — Verification checklist (must perform)
+------------------------------------------------------------
+1) Add 5 items rapidly in the UI → verify line_numbers are 1..5 sequential
+2) Add 2 items in rapid succession (simulate by double-clicking Add) → no errors
+3) Confirm server log shows line_number increasing and never duplicates
+4) Confirm no code path still sets line_number using items.length + 1 (client)
+5) Confirm TypeScript build passes
+
+------------------------------------------------------------
+OUTPUT REQUIRED
+------------------------------------------------------------
+SECTION A — Exact file(s) + function(s) modified
+SECTION B — Old insert snippet (before)
+SECTION C — New insert snippet (after)
+SECTION D — How uniqueness/retry is handled
+SECTION E — Proof notes from verification checklist (what you observed)
+
+END.

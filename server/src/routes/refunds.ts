@@ -14,6 +14,23 @@ import { auditService } from '../services/auditService';
 
 const router = Router();
 
+// ---------------------------------------------
+// Refund Approval Authorization Guard
+// ---------------------------------------------
+function requireRefundApprovalRole(req: any, res: any): boolean {
+  const user = req.session?.user;
+  const role = user?.role;
+
+  if (!role || !['ADMIN', 'OWNER'].includes(role)) {
+    res.status(403).json({
+      error: 'Insufficient permissions to perform this action',
+    });
+    return false;
+  }
+
+  return true;
+}
+
 // Function to process refund through Accept.Blue
 async function processAcceptBlueRefund(
   transactionId: string,
@@ -183,6 +200,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 // POST /api/refund-requests/:id/approve - Approve a refund request
 router.post('/:id/approve', async (req: Request, res: Response) => {
+  if (!requireRefundApprovalRole(req, res)) return;
   try {
     const { id } = req.params;
     console.log(`✅ Approving refund request ${id}`);
@@ -257,6 +275,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 
 // POST /api/refund-requests/:id/reject - Reject a refund request
 router.post('/:id/reject', async (req: Request, res: Response) => {
+  if (!requireRefundApprovalRole(req, res)) return;
   try {
     const { id } = req.params;
     const { rejectionReason } = req.body;
@@ -313,6 +332,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
 
 // POST /api/refund-requests/:id/process - Process an approved refund through Accept.Blue
 router.post('/:id/process', async (req: Request, res: Response) => {
+  if (!requireRefundApprovalRole(req, res)) return;
   try {
     const { id } = req.params;
     console.log(`💳 Processing refund request ${id} through Accept.Blue`);

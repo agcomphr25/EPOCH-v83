@@ -17,8 +17,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -124,6 +122,10 @@ type VendorPO = {
   isCurrentRevision?: boolean;
   revisedAt?: string;
   revisedBy?: string;
+  // Internal issuance fields
+  issuedWithoutEmail?: boolean;
+  issuedWithoutEmailReason?: string | null;
+  issuedWithoutEmailAt?: string | null;
 };
 
 type VendorPOItem = {
@@ -294,38 +296,26 @@ function getStatusColor(status: VendorPO['status']) {
   }
 }
 
-// Optional Settings Selector Component
 function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
-  // Fetch all available optional settings
   const { data: allSettings = [], isError: allSettingsError } = useQuery<any[]>({
     queryKey: ['/api/vendor-pos/optional-settings'],
     queryFn: () => apiRequest('/api/vendor-pos/optional-settings'),
   });
 
-  // Fetch currently selected optional settings for this PO
   const { data: currentSettings = [], isLoading, isError, refetch } = useQuery<any[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'],
     queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/optional-settings`),
-    enabled: isOpen,
   });
 
-  // Reset and initialize selected IDs when dialog opens and data loads
   useEffect(() => {
-    if (isOpen && !isLoading && !isError && currentSettings && currentSettings.length >= 0) {
-      // Only set once when data finishes loading
+    if (!isLoading && !isError && currentSettings && !hasInitialized) {
       setSelectedIds(currentSettings.map((s: any) => s.id));
+      setHasInitialized(true);
     }
-  }, [isOpen, isLoading, isError]);
-
-  // Clear selected IDs when dialog closes
-  useEffect(() => {
-    if (!isOpen) {
-      setSelectedIds([]);
-    }
-  }, [isOpen]);
+  }, [isLoading, isError, currentSettings, hasInitialized]);
 
   const updateMutation = useMutation({
     mutationFn: async (optionalSettingIds: number[]) => {
@@ -335,133 +325,90 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
       });
     },
     onSuccess: () => {
-      // Invalidate both the PO's optional settings and the main PO list
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      toast.success('Optional settings updated successfully');
-      setIsOpen(false);
+      toast.success('Optional statements updated');
     },
     onError: () => {
-      toast.error('Failed to update optional settings');
+      toast.error('Failed to update optional statements');
     },
   });
 
   const handleToggle = (settingId: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(settingId)
-        ? prev.filter((id) => id !== settingId)
-        : [...prev, settingId]
+    const newIds = selectedIds.includes(settingId)
+      ? selectedIds.filter((id) => id !== settingId)
+      : [...selectedIds, settingId];
+    setSelectedIds(newIds);
+    updateMutation.mutate(newIds);
+  };
+
+  if (allSettingsError) {
+    return (
+      <div className="text-sm text-red-600 py-2">
+        Failed to load optional statements.
+      </div>
     );
-  };
+  }
 
-  const handleSave = () => {
-    // Block save if there was an error loading current settings
-    if (isError) {
-      toast.error('Cannot save - failed to load current selections. Please retry.');
-      return;
-    }
-    updateMutation.mutate(selectedIds);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-sm text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading statements...
+      </div>
+    );
+  }
 
-  const handleRetry = () => {
-    refetch();
-  };
+  if (isError) {
+    return (
+      <div className="text-sm text-red-600 py-2 flex items-center gap-2">
+        Failed to load selections.
+        <Button onClick={() => refetch()} variant="outline" size="sm" data-testid="button-retry-load">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (allSettings.length === 0) {
+    return null;
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" data-testid={`button-optional-settings-${vendorPoId}`}>
-          <FileText className="w-4 h-4 mr-1" />
-          Optional Statements
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Select Optional Statements</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 max-h-96 overflow-y-auto py-4">
-          {allSettingsError ? (
-            <div className="text-center py-8 text-red-600">
-              <XCircle className="h-12 w-12 mx-auto mb-2" />
-              <p>Failed to load available optional statements.</p>
-              <p className="text-sm mt-1">Please close the dialog and try again.</p>
-            </div>
-          ) : isLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            </div>
-          ) : isError ? (
-            <div className="text-center py-8 text-red-600">
-              <XCircle className="h-12 w-12 mx-auto mb-2" />
-              <p>Failed to load this PO's optional settings.</p>
-              <Button
-                onClick={handleRetry}
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                data-testid="button-retry-load"
-              >
-                Retry
-              </Button>
-            </div>
-          ) : allSettings.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-              <p>No optional statements available.</p>
-              <p className="text-sm mt-1">Create statements in PO Settings first.</p>
-            </div>
-          ) : (
-            allSettings.map((setting) => (
-              <div
-                key={setting.id}
-                className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                data-testid={`optional-setting-item-${setting.id}`}
-              >
-                <Checkbox
-                  id={`setting-${setting.id}`}
-                  checked={selectedIds.includes(setting.id)}
-                  onCheckedChange={() => handleToggle(setting.id)}
-                  data-testid={`checkbox-optional-setting-${setting.id}`}
-                />
-                <div className="flex-1">
-                  <label
-                    htmlFor={`setting-${setting.id}`}
-                    className="font-medium text-sm cursor-pointer"
-                  >
-                    {setting.name}
-                  </label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {setting.statement}
-                  </p>
-                </div>
-                {selectedIds.includes(setting.id) && (
-                  <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
-                )}
-              </div>
-            ))
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)} data-testid="button-cancel-optional-settings">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={updateMutation.isPending}
-            data-testid="button-save-optional-settings"
+    <div className="space-y-2">
+      <Label>Optional Statements</Label>
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {allSettings.map((setting) => (
+          <div
+            key={setting.id}
+            className="flex items-start space-x-3 p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            data-testid={`optional-setting-item-${setting.id}`}
           >
-            {updateMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save'
+            <Checkbox
+              id={`setting-${setting.id}`}
+              checked={selectedIds.includes(setting.id)}
+              onCheckedChange={() => handleToggle(setting.id)}
+              disabled={updateMutation.isPending}
+              data-testid={`checkbox-optional-setting-${setting.id}`}
+            />
+            <div className="flex-1">
+              <label
+                htmlFor={`setting-${setting.id}`}
+                className="font-medium text-sm cursor-pointer"
+              >
+                {setting.name}
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {setting.statement}
+              </p>
+            </div>
+            {selectedIds.includes(setting.id) && (
+              <Check className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
             )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -664,7 +611,6 @@ function VendorPOCard({
             <FileText className="w-4 h-4 mr-1" />
             {vendorPo.poNumber ? 'View PO' : 'View RFQ'}
           </Button>
-          <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {/* Show Edit button only for Draft POs */}
           {!isIssued && (
             <Button
@@ -857,6 +803,10 @@ function VendorPOForm({
         </Select>
       </div>
 
+      {vendorPo && (
+        <OptionalSettingsSelector key={vendorPo.id} vendorPoId={vendorPo.id} />
+      )}
+
       <div>
         <Label htmlFor="notes">Notes</Label>
         <Textarea
@@ -919,7 +869,10 @@ export default function VendorPOManager() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
-  
+  const [noEmailMode, setNoEmailMode] = useState(false);
+  const [noEmailReason, setNoEmailReason] = useState('');
+  const [noEmailConfirmed, setNoEmailConfirmed] = useState(false);
+
   // Revision dialog state
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionReason, setRevisionReason] = useState('');
@@ -1044,17 +997,17 @@ export default function VendorPOManager() {
 
   // Issue PO mutation - sends confirmation email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false }: { id: number; skipEmail?: boolean }) =>
+    mutationFn: ({ id, skipEmail = false, reason }: { id: number; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail }),
+        body: JSON.stringify({ skipEmail, reason }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      if (data.emailSkipped) {
-        toast.success('PO marked as issued (no email sent)');
+      if (data.emailSent === false) {
+        toast.success('PO issued internally (vendor not notified)');
       } else if (data.emailSent) {
-        toast.success(`PO issued! Confirmation email sent to ${data.emailRecipient}`);
+        toast.success(`PO issued! Email sent to ${data.emailRecipient}`);
       } else {
         toast.error(data.message || 'PO issued but email failed to send');
       }
@@ -1063,8 +1016,14 @@ export default function VendorPOManager() {
           ...selectedVendorPO,
           status: 'Sent',
           poNumber: data.po_number || data.poNumber || selectedVendorPO.poNumber,
+          issuedWithoutEmail: data.issuedWithoutEmail ?? false,
+          issuedWithoutEmailReason: data.issuedWithoutEmailReason ?? null,
+          issuedWithoutEmailAt: data.issuedWithoutEmailAt ?? null,
         });
       }
+      setNoEmailMode(false);
+      setNoEmailReason('');
+      setNoEmailConfirmed(false);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to issue PO');
@@ -1148,20 +1107,20 @@ export default function VendorPOManager() {
     }
   };
 
-  const handleIssuePO = (id: number, skipEmail: boolean = false) => {
-    if (skipEmail) {
-      if (
-        confirm('Are you sure you want to mark this purchase order as issued WITHOUT sending an email to the vendor? This is useful for POs that were already submitted outside of EPOCH.')
-      ) {
-        issuePOMutation.mutate({ id, skipEmail: true });
-      }
-    } else {
-      if (
-        confirm('Are you sure you want to issue this purchase order? This will send a confirmation email to the vendor.')
-      ) {
-        issuePOMutation.mutate({ id, skipEmail: false });
-      }
+  const handleIssuePO = (id: number, _skipEmail: boolean = false) => {
+    // Find the PO in the list so it can be set as selectedVendorPO (list-view entry point)
+    const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
+    if (poFromList) {
+      setSelectedVendorPO(poFromList);
     }
+    // Navigate into detail view so the AlertDialog is mounted
+    setShowDetailView(true);
+    // Always open the unified AlertDialog — no window.confirm
+    setNoEmailMode(false);
+    setNoEmailReason('');
+    setNoEmailConfirmed(false);
+    setPendingStatus('Sent');
+    setShowStatusChangeDialog(true);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -1200,9 +1159,12 @@ export default function VendorPOManager() {
 
   const confirmStatusChange = (skipEmail: boolean = false) => {
     if (selectedVendorPO) {
-      // If changing to 'Sent' status, use the issue endpoint which sends the email
       if (pendingStatus === 'Sent') {
-        issuePOMutation.mutate({ id: selectedVendorPO.id, skipEmail });
+        issuePOMutation.mutate({
+          id: selectedVendorPO.id,
+          skipEmail,
+          reason: skipEmail ? noEmailReason.trim() : undefined,
+        });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
       } else {
@@ -1861,31 +1823,153 @@ export default function VendorPOManager() {
           </div>
         </div>
 
-        {/* Status Change Confirmation Dialog */}
-        <AlertDialog open={showStatusChangeDialog} onOpenChange={setShowStatusChangeDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to change the status of this purchase order from{' '}
-                <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className={pendingStatus === 'Sent' ? 'flex-col sm:flex-row gap-2' : ''}>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              {pendingStatus === 'Sent' && (
-                <Button
-                  variant="outline"
-                  onClick={() => confirmStatusChange(true)}
-                  data-testid="button-issue-no-email"
-                >
-                  Mark as Issued (No Email)
-                </Button>
+        {/* Internal Issuance Banner */}
+        {selectedVendorPO.issuedWithoutEmail && (
+          <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <span className="font-semibold">Vendor NOT notified</span>
+              {' — issued internally'}
+              {selectedVendorPO.issuedWithoutEmailAt && (
+                <> on {new Date(selectedVendorPO.issuedWithoutEmailAt).toLocaleDateString()}</>
               )}
-              <AlertDialogAction onClick={() => confirmStatusChange(false)} data-testid="button-confirm-status-change">
-                {pendingStatus === 'Sent' ? 'Issue & Send Email' : 'Confirm'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
+              {selectedVendorPO.issuedWithoutEmailReason && (
+                <>. Reason: <span className="italic">{selectedVendorPO.issuedWithoutEmailReason}</span></>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Status Change / Issue PO Confirmation Dialog */}
+        <AlertDialog
+          open={showStatusChangeDialog}
+          onOpenChange={(open) => {
+            setShowStatusChangeDialog(open);
+            if (!open) {
+              setNoEmailMode(false);
+              setNoEmailReason('');
+              setNoEmailConfirmed(false);
+            }
+          }}
+        >
+          <AlertDialogContent className="sm:max-w-lg">
+            {pendingStatus === 'Sent' ? (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Issue Purchase Order</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {noEmailMode
+                      ? 'Provide a reason for issuing this PO without notifying the vendor.'
+                      : 'Choose how to issue this purchase order.'}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                {noEmailMode && (
+                  <div className="space-y-3 py-2">
+                    <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>Internal only — the vendor will <strong>NOT</strong> be emailed.</span>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="no-email-reason" className="text-sm font-medium">
+                        Reason <span className="text-red-500">*</span>
+                      </Label>
+                      <Textarea
+                        id="no-email-reason"
+                        placeholder="Explain why the vendor is not being notified (min 10 characters)…"
+                        value={noEmailReason}
+                        onChange={(e) => setNoEmailReason(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                      {noEmailReason.length > 0 && noEmailReason.trim().length < 10 && (
+                        <p className="text-xs text-red-500">
+                          Must be at least 10 characters ({noEmailReason.trim().length}/10)
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="no-email-confirm"
+                        checked={noEmailConfirmed}
+                        onCheckedChange={(v) => setNoEmailConfirmed(!!v)}
+                      />
+                      <Label htmlFor="no-email-confirm" className="text-sm cursor-pointer">
+                        I confirm the vendor will <strong>NOT</strong> be emailed.
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
+                <AlertDialogFooter className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:justify-end">
+                  {noEmailMode ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setNoEmailMode(false);
+                          setNoEmailReason('');
+                          setNoEmailConfirmed(false);
+                        }}
+                      >
+                        ← Back
+                      </Button>
+                      <Button
+                        onClick={() => confirmStatusChange(true)}
+                        disabled={
+                          noEmailReason.trim().length < 10 ||
+                          !noEmailConfirmed ||
+                          issuePOMutation.isPending
+                        }
+                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                        data-testid="button-confirm-internal-issue"
+                      >
+                        {issuePOMutation.isPending ? 'Issuing…' : 'Confirm Internal Issue'}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <AlertDialogCancel className="sm:mr-auto mt-0">Cancel</AlertDialogCancel>
+                      <Button
+                        variant="outline"
+                        onClick={() => setNoEmailMode(true)}
+                        data-testid="button-issue-no-email"
+                        className="whitespace-nowrap text-sm"
+                      >
+                        Issue Internally (No Vendor Notification)
+                      </Button>
+                      <AlertDialogAction
+                        onClick={() => confirmStatusChange(false)}
+                        disabled={issuePOMutation.isPending}
+                        data-testid="button-confirm-status-change"
+                        className="whitespace-nowrap"
+                      >
+                        {issuePOMutation.isPending ? 'Issuing…' : 'Issue & Send Email'}
+                      </AlertDialogAction>
+                    </>
+                  )}
+                </AlertDialogFooter>
+              </>
+            ) : (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to change the status of this purchase order from{' '}
+                    <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => confirmStatusChange(false)}
+                    data-testid="button-confirm-status-change"
+                  >
+                    Confirm
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            )}
           </AlertDialogContent>
         </AlertDialog>
 

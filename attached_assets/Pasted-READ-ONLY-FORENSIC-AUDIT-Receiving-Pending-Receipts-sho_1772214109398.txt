@@ -1,0 +1,109 @@
+READ-ONLY FORENSIC AUDIT — Receiving “Pending Receipts” shows superseded Vendor PO revisions
+
+DO NOT MODIFY CODE. DO NOT CHANGE DB. SEARCH + REPORT ONLY.
+
+CONTEXT / BUG:
+In /inventory/receiving, the “Pending Receipts” list is showing ALL revisions of the same PO
+(e.g., VPO-26003, VPO-26003-RA, VPO-26003-RB) even though earlier versions are superseded.
+We want only the current/latest effective PO version to appear as pending for receiving.
+
+GOAL:
+Identify exactly how “Pending Receipts” is queried and rendered, how revisions are represented,
+and what minimal change is needed to suppress superseded POs.
+
+------------------------------------------------------------
+PART 1 — Find the UI + API used by /inventory/receiving
+------------------------------------------------------------
+1) Locate the frontend page/component for receiving:
+Search for:
+- "/inventory/receiving"
+- "Receiving"
+- "Pending Receipts"
+- "pending" + "receipts"
+Report:
+- file path(s)
+- the query/mutation hooks used
+- the API endpoint(s) called (route paths)
+
+2) Locate the backend route(s):
+Search server for:
+- "receiving"
+- "pending receipts"
+- "vendor pos" + "receiving"
+Report:
+- route file + handler
+- storage function(s) called
+
+------------------------------------------------------------
+PART 2 — Determine current “pending” criteria
+------------------------------------------------------------
+For vendor POs, document what conditions currently qualify as pending in the query:
+- status = 'Sent'?
+- not fully received?
+- item-level qty ordered vs qty received?
+- receiving table joins?
+- manufacturing_queue status?
+
+Provide the exact SQL/Drizzle conditions being used.
+
+------------------------------------------------------------
+PART 3 — Understand how revisions are modeled
+------------------------------------------------------------
+We need to know how the system knows that VPO-26003-RB supersedes VPO-26003-RA.
+
+Audit vendor_pos schema and any revision logic:
+Search for columns like:
+- revision_of_id / parent_po_id / supersedes_id
+- revision_code / revision_letter / revision_suffix
+- is_current / is_superseded / superseded_at
+- original_po_number / base_po_number
+If no explicit linkage exists, inspect the po_number format usage:
+- How do we derive “base” number vs revision suffix?
+  e.g., baseKey = "VPO-26003" for all revisions
+Report:
+- whether there is a true FK linkage between revisions
+- or whether revisions are inferred from po_number string parsing
+
+------------------------------------------------------------
+PART 4 — Identify the exact reason all revisions appear
+------------------------------------------------------------
+Answer explicitly:
+- Is the receiving query returning vendor_pos rows directly (one per revision) with no “current only” filter?
+- Or is the UI grouping incorrectly?
+- Or does the system not currently track which PO is current?
+
+Show the evidence:
+- snippet of query result shape (fields returned)
+- snippet of UI render loop
+
+------------------------------------------------------------
+PART 5 — Propose the minimal correct fix (DO NOT IMPLEMENT)
+------------------------------------------------------------
+Propose the smallest safe change to ensure only the latest effective PO appears:
+
+Option A (preferred if schema supports it):
+- Filter out vendor_pos where is_superseded=true OR superseded_at not null OR superseded_by_id exists.
+
+Option B (if no schema linkage exists):
+- Compute base key from po_number (strip revision suffix like -RA/-RB, but KEEP base VPO-26003)
+- In the pending list query, keep only the max “revision” per base key (RB > RA > none)
+  OR keep the newest created_at/issued_at per base key.
+- Return only those rows.
+
+Option C (UI-only grouping):
+- Fetch all, but group by base key and render only the latest, while still allowing drilldown to history.
+
+For whichever option is feasible in your codebase, specify:
+- where the change should live (server query vs UI)
+- how to define “latest” reliably (revision ordering vs timestamp)
+
+------------------------------------------------------------
+OUTPUT FORMAT (STRICT)
+------------------------------------------------------------
+SECTION A — Receiving page: frontend file(s) + API calls
+SECTION B — Backend receiving route + storage query (exact filters)
+SECTION C — Revision model evidence (schema + any revision creation logic)
+SECTION D — Why all revisions are currently included (root cause)
+SECTION E — Minimal fix plan (no code) + recommended option
+
+END AUDIT.

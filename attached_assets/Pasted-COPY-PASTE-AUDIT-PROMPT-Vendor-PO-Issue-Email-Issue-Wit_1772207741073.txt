@@ -1,0 +1,136 @@
+COPY-PASTE AUDIT PROMPT — Vendor PO Issue Email + “Issue Without Email” Control
+READ-ONLY FORENSIC AUDIT — VENDOR PO “ISSUE” WORKFLOW + EMAIL CONTROL
+
+DO NOT MODIFY ANY FILES.
+DO NOT CHANGE ENV VARS.
+DO NOT DEPLOY.
+SEARCH + REPORT ONLY.
+
+GOAL:
+Confirm the current Vendor PO "Issue" flow and email pipeline.
+We MUST preserve the ability to mark a PO as issued WITHOUT emailing the vendor
+(for backfilled/legacy PO entry), but we must make that option explicit, safe, and audited.
+
+------------------------------------------------------------
+PART 1 — Locate All Relevant Code Paths
+------------------------------------------------------------
+
+1) Frontend:
+Search for:
+- "Issue PO"
+- "Mark as Issued"
+- "skipEmail"
+- "Send Email"
+- "/issue"
+- "vendor-pos"
+Report:
+- file paths
+- component names
+- the exact UI that triggers issuing
+- whether there are 1 or 2 buttons and their labels
+
+2) Backend:
+Locate the route handling issue:
+- POST /api/vendor-pos/:id/issue (or equivalent)
+Search for:
+- "issue"
+- "issued"
+- "sendgrid"
+- "sendEmail"
+- "skipEmail"
+- "cc"
+Report:
+- file path + route handler
+- parameters accepted by the route
+- how status transitions happen
+
+3) Email utilities:
+Find:
+- sendEmailViaSendGrid (or equivalent)
+- any template used for Vendor PO issue
+Report:
+- how vendor email is determined
+- how CC is built
+- any hardcoded CC addresses
+- whether PDF is attached or only HTML
+
+------------------------------------------------------------
+PART 2 — Current Behavior Truth Table
+------------------------------------------------------------
+
+Construct a truth table of what happens today for each user action:
+
+A) Click “Issue & Send Email”
+- DB status changes to what?
+- Email sent to vendor? (Y/N)
+- CC sent to who? (list)
+- Any audit log event? (Y/N)
+
+B) Click “Mark as Issued (No Email)” (or equivalent)
+- DB status changes to what?
+- Email sent to vendor? (Y/N)
+- Any indication in UI that vendor was NOT notified? (Y/N)
+- Any audit log event? (Y/N)
+
+C) Any other entry points:
+- issuing from admin panel
+- editing PO status directly
+- bulk issue
+
+------------------------------------------------------------
+PART 3 — Safety Requirements for “Issue Without Email”
+------------------------------------------------------------
+
+We REQUIRE an explicit “Issue Without Email” path for legacy re-entry.
+But it must be hard to do accidentally and it must be auditable.
+
+Audit what exists today and assess whether it meets these requirements:
+
+1) Explicit label:
+Must say “Internal only — do NOT notify vendor”
+
+2) Confirm friction:
+At least one of:
+- checkbox “I confirm I do not want to notify the vendor”
+- typed confirmation (e.g. type ISSUE)
+- required reason field (recommended)
+
+3) Audit trail:
+A durable record with:
+- who performed it (user id/email)
+- timestamp
+- vendor_po_id / po_number
+- reason (if provided)
+- a flag like issued_without_email = true
+
+4) UI indicator:
+After issuing without email, the PO page must display:
+“Vendor NOT notified.”
+
+------------------------------------------------------------
+PART 4 — Identify the Best Minimal Change Plan
+------------------------------------------------------------
+
+Propose (do NOT implement) the smallest safe plan that:
+- preserves “Issue Without Email”
+- ensures “Issue & Send Email” is the default path
+- adds issuer CC dynamically (current user email)
+- adds audit logging for both paths
+
+Specifically report:
+- exactly where to implement issuer CC
+- exactly where to record audit event(s)
+- whether an audit table exists already or where similar events are stored
+
+------------------------------------------------------------
+OUTPUT FORMAT REQUIRED (STRICT)
+------------------------------------------------------------
+
+SECTION A — Frontend entry points (files + key snippets)
+SECTION B — Backend issue route (files + logic summary)
+SECTION C — Email pipeline (how TO/CC determined)
+SECTION D — Current behavior truth table (A/B/C)
+SECTION E — Gaps vs safety requirements
+SECTION F — Minimal safe change plan (no code)
+
+END AUDIT.

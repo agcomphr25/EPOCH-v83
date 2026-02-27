@@ -1,0 +1,113 @@
+COPY-PASTE PROMPT — REFUND QUEUE ACCESS AUDIT (READ-ONLY)
+READ-ONLY AUDIT — Refund Queue Access & Approval Enforcement
+
+Goal:
+I need to give a CSR read-only access to the Refund Queue.
+They must:
+- Be able to view refund requests in the queue
+- NOT be able to Approve or Deny refunds
+
+Before we modify anything, perform a complete read-only audit and produce a structured report.
+
+DO NOT MODIFY ANY FILES.
+DO NOT WRITE NEW CODE.
+ANALYZE ONLY.
+
+-----------------------------------
+SECTION 1 — Locate Refund Queue UI
+-----------------------------------
+
+1. Find the React page/component that renders the Refund Queue.
+   - Provide file path(s)
+   - Show how data is fetched (API route used)
+   - Show where Approve and Deny buttons are rendered
+   - Identify any conditional rendering logic around those buttons
+     (role checks, isAdmin flags, etc.)
+
+2. Identify:
+   - Whether the buttons are hidden via UI logic only
+   - Or conditionally rendered based on user properties
+
+-----------------------------------
+SECTION 2 — Locate Backend Routes
+-----------------------------------
+
+3. Find all backend routes related to:
+   - Approving refunds
+   - Denying refunds
+   - Fetching refund queue data
+
+Provide:
+   - Route path
+   - HTTP method
+   - File location
+   - Exact access control logic used in each route
+
+-----------------------------------
+SECTION 3 — Identify Access Enforcement Method
+-----------------------------------
+
+For each route:
+
+4. Determine:
+   - Is access restricted by role?
+   - By user flag?
+   - By middleware?
+   - Or not restricted at all?
+
+5. Confirm:
+   - If a CSR manually calls the Approve/Deny API endpoint
+     (e.g., via DevTools or Postman),
+     would the backend block it?
+
+-----------------------------------
+SECTION 4 — Current Permission Model
+-----------------------------------
+
+6. Identify:
+   - Where user roles are defined
+   - Where user object is attached to request
+   - How role checks are implemented (pattern used)
+
+7. List all instances in refund-related files where:
+   - user.role
+   - user.isAdmin
+   - user.department
+   - or similar checks are used
+
+-----------------------------------
+SECTION 5 — Risk Assessment
+-----------------------------------
+
+8. Determine:
+   - Is approval security enforced at UI only?
+   - At API level?
+   - Both?
+   - Neither?
+
+9. Identify if refund approval logic is duplicated in multiple places.
+
+-----------------------------------
+SECTION 6 — Recommended Minimal Change Strategy
+-----------------------------------
+
+Based on findings, propose:
+
+- The safest minimal change to allow:
+    CSR = view refund queue
+    CSR = cannot approve/deny
+- Without breaking current admin behavior
+- Without full permission refactor yet
+
+The recommendation must:
+- Avoid large refactors
+- Avoid breaking production
+- Minimize changes
+- Preserve future ability to migrate to capability-based system
+
+-----------------------------------
+
+Output format:
+Provide a structured report with headings for each section.
+Include file paths and code snippets where relevant.
+No modifications. No refactoring yet.

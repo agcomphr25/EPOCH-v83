@@ -607,6 +607,7 @@ export const inventoryItems = pgTable('inventory_items', {
   tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
   hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
+  assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -3400,6 +3401,9 @@ export const vendorPOs = pgTable('vendor_pos', {
   isCurrentRevision: boolean('is_current_revision').default(true).notNull(), // Only one revision should be current
   revisedAt: timestamp('revised_at'), // When this revision was created
   revisedBy: text('revised_by'), // Who created this revision
+  issuedWithoutEmail: boolean('issued_without_email').default(false),
+  issuedWithoutEmailReason: text('issued_without_email_reason'),
+  issuedWithoutEmailAt: timestamp('issued_without_email_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -3837,7 +3841,7 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
   })
   .extend({
     vendorPoId: z.number().int().positive('Vendor PO ID is required'),
-    lineNumber: z.number().int().positive('Line number is required'),
+    lineNumber: z.number().int().positive().optional(),
     agPartNumber: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
     // Purchase unit fields (what user enters)

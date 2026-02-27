@@ -1,0 +1,100 @@
+COPY-PASTE PROMPT B — Tighten communication_logs Write (Schema-Safe + Clean Semantics)
+
+Now we make the audit record clean and future-proof.
+
+We want:
+
+No fake “customer_id = username”
+
+No misused “recipient”
+
+No HTML column storing JSON
+
+Clear internal audit semantics
+
+Safe even if comm reporting grows later
+
+AUDIT HARDENING — CLEAN INTERNAL LOG ENTRY FOR SKIPPED VENDOR PO EMAIL
+
+SCOPE:
+server/storage.ts and/or server/src/routes/vendorPOs.ts
+
+GOAL:
+Ensure skipped vendor email audit log entry is clean, schema-correct, and future-safe.
+
+CURRENT:
+An entry is written to communication_logs with:
+- order_id
+- message_type
+- customer_id
+- type
+- method
+- recipient
+- status
+- skip_reason
+- template_key
+- triggered_by
+- body_html (JSON blob)
+- sent_at
+
+We need to tighten this.
+
+------------------------------------------------------
+STEP 1 — Inspect communication_logs schema
+------------------------------------------------------
+Locate schema definition (server/schema.ts).
+List actual column names and types.
+
+Confirm:
+- Does it have metadata JSONB column?
+- Does it have body_text vs body_html?
+- Does it have triggered_by?
+- Does it have skip_reason column?
+- What is customer_id supposed to represent?
+
+------------------------------------------------------
+STEP 2 — Adjust skipped-email insert
+------------------------------------------------------
+
+For skipEmail=true:
+
+Use:
+- template_key: 'vendor_po_issue_skipped'
+- method: 'internal'
+- status: 'skipped'
+- recipient: issuingUserEmail (if available), else null
+- triggered_by: issuingUserEmail
+- order_id: vendor PO id (string or numeric consistent with schema)
+- body_text (or equivalent human-readable column):
+    "Vendor PO issued internally without email. Reason: <reason>"
+
+If metadata JSON column exists:
+Store structured payload there:
+{
+  vendorPoId,
+  poNumber,
+  reason,
+  issuedWithoutEmailAt,
+  performedBy: issuingUserEmail
+}
+
+DO NOT:
+- Put JSON into body_html unless that is standard system practice.
+- Overload customer_id with username unless that is correct per schema.
+
+------------------------------------------------------
+STEP 3 — Fail-safe behavior
+------------------------------------------------------
+If audit log insert fails:
+- Log error
+- DO NOT rollback PO issuance
+
+------------------------------------------------------
+STEP 4 — Output Required
+------------------------------------------------------
+A) communication_logs schema summary
+B) Final skipped-email insert snippet
+C) Explanation of column mapping
+D) Confirmation no email-type logs are polluted
+
+END.

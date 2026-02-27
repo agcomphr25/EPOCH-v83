@@ -7722,6 +7722,8 @@ export class DatabaseStorage implements IStorage {
     const sortCol = (vendorPOs as any)[sortField] || vendorPOs.createdAt;
 
     const conditions = [];
+
+    conditions.push(eq(vendorPOs.isCurrentRevision, true));
     
     if (search) {
       conditions.push(
@@ -7770,6 +7772,10 @@ export class DatabaseStorage implements IStorage {
           isCurrentRevision: vendorPOs.isCurrentRevision,
           revisedAt: vendorPOs.revisedAt,
           revisedBy: vendorPOs.revisedBy,
+          // No-email issuance audit fields
+          issuedWithoutEmail: vendorPOs.issuedWithoutEmail,
+          issuedWithoutEmailReason: vendorPOs.issuedWithoutEmailReason,
+          issuedWithoutEmailAt: vendorPOs.issuedWithoutEmailAt,
           createdAt: vendorPOs.createdAt,
           updatedAt: vendorPOs.updatedAt,
         })
@@ -7821,6 +7827,10 @@ export class DatabaseStorage implements IStorage {
         isCurrentRevision: vendorPOs.isCurrentRevision,
         revisedAt: vendorPOs.revisedAt,
         revisedBy: vendorPOs.revisedBy,
+        // No-email issuance audit fields
+        issuedWithoutEmail: vendorPOs.issuedWithoutEmail,
+        issuedWithoutEmailReason: vendorPOs.issuedWithoutEmailReason,
+        issuedWithoutEmailAt: vendorPOs.issuedWithoutEmailAt,
         createdAt: vendorPOs.createdAt,
         updatedAt: vendorPOs.updatedAt,
       })
@@ -7850,8 +7860,30 @@ export class DatabaseStorage implements IStorage {
     return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
   }
 
-  async issueVendorPO(id: number): Promise<{ vendorPO: any; poNumber: string }> {
-    return await db.transaction(async (tx) => {
+  async issueVendorPO(
+    id: number,
+    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
+  ): Promise<{ vendorPO: any; poNumber: string }> {
+    const MAX_RETRIES = 3;
+    let lastError: any;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await this._issueVendorPOTransaction(id, opts);
+      } catch (err: any) {
+        lastError = err;
+        const isDuplicateKey = err?.code === '23505' || err?.message?.includes('duplicate key') || err?.message?.includes('vendor_pos_po_number');
+        if (!isDuplicateKey || attempt >= MAX_RETRIES - 1) throw err;
+        await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  }
+
+  private async _issueVendorPOTransaction(
+    id: number,
+    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
+  ): Promise<{ vendorPO: any; poNumber: string }> {
+    const result = await db.transaction(async (tx) => {
       const [lockedPO] = await tx
         .select()
         .from(vendorPOs)
@@ -7869,27 +7901,37 @@ export class DatabaseStorage implements IStorage {
       let poNumber = lockedPO.poNumber;
       if (!poNumber) {
         const currentYear = new Date().getFullYear().toString().slice(-2);
-        const latestPO = await tx
+        const prefix = `VPO-${currentYear}`;
+        const allMatchingPOs = await tx
           .select({ poNumber: vendorPOs.poNumber })
           .from(vendorPOs)
-          .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
-          .orderBy(desc(vendorPOs.id))
-          .limit(1)
+          .where(sql`${vendorPOs.poNumber} LIKE ${`${prefix}%`}`)
           .for('update');
 
-        let nextNumber = 1;
-        if (latestPO.length > 0 && latestPO[0].poNumber) {
-          const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
-          if (match) {
-            nextNumber = parseInt(match[1]) + 1;
+        let maxNumber = 0;
+        for (const row of allMatchingPOs) {
+          if (row.poNumber) {
+            const match = row.poNumber.match(/VPO-\d{2}(\d{3})/);
+            if (match) {
+              const num = parseInt(match[1]);
+              if (num > maxNumber) maxNumber = num;
+            }
           }
         }
-        poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+        poNumber = `${prefix}${String(maxNumber + 1).padStart(3, '0')}`;
       }
+
+      const extraFields = opts?.issuedWithoutEmail
+        ? {
+            issuedWithoutEmail: true,
+            issuedWithoutEmailReason: opts.reason ?? null,
+            issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
+          }
+        : {};
 
       const [updatedPO] = await tx
         .update(vendorPOs)
-        .set({ status: 'Sent', poNumber, updatedAt: new Date() })
+        .set({ status: 'Sent', poNumber, updatedAt: new Date(), ...extraFields })
         .where(eq(vendorPOs.id, id))
         .returning();
 
@@ -7940,6 +7982,42 @@ export class DatabaseStorage implements IStorage {
 
       return { vendorPO: updatedPO, poNumber };
     });
+
+    // Write durable audit event to communication_logs when issued without email
+    if (opts?.issuedWithoutEmail) {
+      try {
+        const issuedAt = (opts.issuedWithoutEmailAt ?? new Date()).toISOString();
+        await db.insert(communicationLogs).values({
+          orderId: String(id),
+          messageType: 'notification',
+          customerId: 'vendor-po-system',        // sentinel — NOT NULL constraint; no real customer involved
+          type: 'vendor_po_issue_skipped',
+          method: 'internal',
+          recipient: opts.performedByEmail ?? 'internal@epoch.local',
+          status: 'skipped',
+          skipReason: 'no_vendor_notification',  // system skip code — business reason text lives in message
+          message: `Vendor PO ${result.poNumber} (id=${id}) issued internally without vendor notification. Performed by: ${opts.performedBy ?? 'unknown'} (${opts.performedByEmail ?? 'no email'}). Reason: ${opts.reason ?? '(none)'}. At: ${issuedAt}`,
+          templateKey: 'vendor_po_issue_skipped',
+          triggeredBy: opts.performedBy ?? 'system',
+          direction: 'outbound',
+          attachmentsMeta: {
+            kind: 'internal_audit',
+            vendorPoId: id,
+            poNumber: result.poNumber,
+            performedBy: opts.performedBy ?? null,
+            performedByEmail: opts.performedByEmail ?? null,
+            issuedWithoutEmailAt: issuedAt,
+            reason: opts.reason ?? null,
+          },
+          sentAt: new Date(),
+        });
+      } catch (auditErr) {
+        console.error('[VendorPO] Failed to write no-email audit event:', auditErr);
+        // Non-fatal — PO issuance already committed
+      }
+    }
+
+    return result;
   }
 
   async createVendorPO(data: any): Promise<any> {
@@ -8144,29 +8222,42 @@ export class DatabaseStorage implements IStorage {
     // Strip any client-supplied lineNumber — server computes it atomically
     delete processedData.lineNumber;
 
-    const item = await db.transaction(async (tx) => {
-      // Lock the parent PO row to serialize concurrent inserts for the same PO
-      await tx
-        .select({ id: vendorPOs.id })
-        .from(vendorPOs)
-        .where(eq(vendorPOs.id, processedData.vendorPoId))
-        .for('update');
+    let item: any;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        item = await db.transaction(async (tx) => {
+          // Lock the parent PO row to serialize concurrent inserts for the same PO
+          await tx
+            .select({ id: vendorPOs.id })
+            .from(vendorPOs)
+            .where(eq(vendorPOs.id, processedData.vendorPoId))
+            .for('update');
 
-      // Compute next line number within the same transaction
-      const maxResult = await tx.execute(sql`
-        SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
-        FROM vendor_po_items
-        WHERE vendor_po_id = ${processedData.vendorPoId}
-      `);
-      const serverLineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
+          // Compute next line number within the same transaction
+          const maxResult = await tx.execute(sql`
+            SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
+            FROM vendor_po_items
+            WHERE vendor_po_id = ${processedData.vendorPoId}
+          `);
+          const serverLineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
 
-      const [inserted] = await tx
-        .insert(vendorPOItems)
-        .values({ ...processedData, lineNumber: serverLineNumber })
-        .returning();
+          const [inserted] = await tx
+            .insert(vendorPOItems)
+            .values({ ...processedData, lineNumber: serverLineNumber })
+            .returning();
 
-      return inserted;
-    });
+          return inserted;
+        });
+        break; // success — exit retry loop
+      } catch (err: any) {
+        // Retry on unique constraint violation (vendor_po_id, line_number)
+        if (attempt < 2 && err?.code === '23505') {
+          console.warn(`[VendorPO] line_number conflict on attempt ${attempt + 1}, retrying...`);
+          continue;
+        }
+        throw err;
+      }
+    }
 
     // Auto-populate manufacturing queue if this is a manufactured part
     try {

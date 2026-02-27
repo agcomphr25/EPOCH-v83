@@ -64,11 +64,12 @@ export default function RefundQueue() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showActionDialog, setShowActionDialog] = useState(false);
 
-  const { data: session } = useQuery<{ username: string } | null>({
+  const { data: session } = useQuery<{ username: string; role?: string } | null>({
     queryKey: ['/api/auth/session'],
     queryFn: () => apiRequest('/api/auth/session'),
   });
-  const canApprove = session?.username !== 'darleneb';
+  const canApprove =
+    session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   // Fetch refund requests
   const {
@@ -408,15 +409,17 @@ export default function RefundQueue() {
                             Approve
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleAction(request, 'reject')}
-                          data-testid={`reject-button-${request.id}`}
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
+                        {canApprove && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleAction(request, 'reject')}
+                            data-testid={`reject-button-${request.id}`}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -504,15 +507,17 @@ export default function RefundQueue() {
                       >
                         {formatCurrency(request.refundAmount)}
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAction(request, 'process')}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        data-testid={`process-button-${request.id}`}
-                      >
-                        <CreditCard className="h-4 w-4 mr-1" />
-                        Process Refund
-                      </Button>
+                      {canApprove && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAction(request, 'process')}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          data-testid={`process-button-${request.id}`}
+                        >
+                          <CreditCard className="h-4 w-4 mr-1" />
+                          Process Refund
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="border-t pt-3 space-y-2">

@@ -46,6 +46,8 @@ import {
   MapPin,
   Search,
   ArrowUpDown,
+  ClipboardList,
+  ShoppingCart,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -199,6 +201,14 @@ export default function AssetsPage() {
   const [editingAsset, setEditingAsset] = useState<AssetRow | null>(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showLocationForm, setShowLocationForm] = useState(false);
+  const [showPartsListModal, setShowPartsListModal] = useState(false);
+  const [partsListAssetLabel, setPartsListAssetLabel] = useState('');
+  const [requestingPart, setRequestingPart] = useState<any | null>(null);
+  const [requestQty, setRequestQty] = useState(1);
+  const [requestUrgency, setRequestUrgency] = useState('MEDIUM');
+  const [requestReason, setRequestReason] = useState('');
+  const [selectedRequestDeptId, setSelectedRequestDeptId] = useState<number | null>(null);
+  const [selectedRequestDeptName, setSelectedRequestDeptName] = useState('');
 
   const [formData, setFormData] = useState({
     assetTag: '',
@@ -240,6 +250,59 @@ export default function AssetsPage() {
   const { data: allAssets = [], isLoading } = useQuery<AssetRow[]>({
     queryKey: ['/api/assets'],
   });
+
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
+  });
+
+  const { data: currentUser } = useQuery<any>({
+    queryKey: ['/api/auth/session'],
+  });
+
+  const { data: departments = [] } = useQuery<any[]>({
+    queryKey: ['/api/inventory/departments'],
+    enabled: isAdmin,
+  });
+
+  const submitRequestMutation = useMutation({
+    mutationFn: (data: any) =>
+      apiRequest('/api/inventory/parts-requests', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      toast({ title: 'Parts request submitted', description: `Request for ${requestingPart?.name} has been submitted.` });
+      setRequestingPart(null);
+      setRequestQty(1);
+      setRequestUrgency('MEDIUM');
+      setRequestReason('');
+      setSelectedRequestDeptId(null);
+      setSelectedRequestDeptName('');
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to submit parts request.', variant: 'destructive' });
+    },
+  });
+
+  const handleSubmitPartRequest = () => {
+    if (!requestingPart || !currentUser) return;
+    if (requestQty < 1) {
+      toast({ title: 'Invalid quantity', description: 'Please enter a quantity of at least 1.', variant: 'destructive' });
+      return;
+    }
+    if (isAdmin && !selectedRequestDeptId) {
+      toast({ title: 'Select a department', description: 'Please choose a department for this request.', variant: 'destructive' });
+      return;
+    }
+    submitRequestMutation.mutate({
+      agPartNumber: requestingPart.agPartNumber,
+      partNumber: requestingPart.agPartNumber,
+      partName: requestingPart.name,
+      requestedBy: currentUser.username,
+      quantity: requestQty,
+      urgency: requestUrgency,
+      reason: requestReason.trim() || null,
+      department: isAdmin ? selectedRequestDeptName : (currentUser.department || ''),
+      departmentId: isAdmin ? selectedRequestDeptId : (currentUser.departmentId || null),
+    });
+  };
 
   const tree = useMemo(() => buildTree(categories), [categories]);
 
@@ -690,15 +753,194 @@ export default function AssetsPage() {
               <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowAssetForm(false)}>Cancel</Button>
+          <div className="flex justify-between items-center mt-4">
             <Button
-              onClick={handleSubmitAsset}
-              disabled={!formData.assetTag || !formData.name || createAssetMutation.isPending || updateAssetMutation.isPending}
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const label = `${formData.name} (${formData.assetTag})`;
+                setPartsListAssetLabel(label);
+                setShowPartsListModal(true);
+              }}
+              disabled={!formData.assetTag || !formData.name}
             >
-              {createAssetMutation.isPending || updateAssetMutation.isPending ? 'Saving...' : editingAsset ? 'Update Asset' : 'Create Asset'}
+              <ClipboardList className="h-4 w-4 mr-2" />
+              AG Parts List
             </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowAssetForm(false)}>Cancel</Button>
+              <Button
+                onClick={handleSubmitAsset}
+                disabled={!formData.assetTag || !formData.name || createAssetMutation.isPending || updateAssetMutation.isPending}
+              >
+                {createAssetMutation.isPending || updateAssetMutation.isPending ? 'Saving...' : editingAsset ? 'Update Asset' : 'Create Asset'}
+              </Button>
+            </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AG Parts List Modal */}
+      <Dialog open={showPartsListModal} onOpenChange={setShowPartsListModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              AG Parts List — {partsListAssetLabel}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const assignedParts = inventoryItems.filter(
+              (item: any) => item.assignedToAsset === partsListAssetLabel
+            );
+            if (assignedParts.length === 0) {
+              return (
+                <div className="text-center py-8 text-gray-500">
+                  <ClipboardList className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p>No inventory items are assigned to this asset.</p>
+                  <p className="text-sm mt-1">
+                    Assign items from the Inventory Items page using the "Assigned to Asset" field.
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>AG Part #</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Supplier Part #</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Request</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignedParts.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono font-medium">{item.agPartNumber}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.source || '—'}</TableCell>
+                      <TableCell>{item.supplierPartNumber || '—'}</TableCell>
+                      <TableCell>{item.department || '—'}</TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setRequestingPart(item);
+                            setRequestQty(1);
+                            setRequestUrgency('MEDIUM');
+                            setRequestReason('');
+                            setSelectedRequestDeptId(null);
+                            setSelectedRequestDeptName('');
+                          }}
+                        >
+                          <ShoppingCart className="h-3 w-3 mr-1" />
+                          Request
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            );
+          })()}
+          <div className="flex justify-end mt-4">
+            <Button variant="outline" onClick={() => setShowPartsListModal(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Part Modal */}
+      <Dialog open={!!requestingPart} onOpenChange={(open) => { if (!open) setRequestingPart(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Request Part
+            </DialogTitle>
+          </DialogHeader>
+          {requestingPart && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-md p-3 space-y-1">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Part</p>
+                <p className="font-mono font-semibold text-sm">{requestingPart.agPartNumber}</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300">{requestingPart.name}</p>
+              </div>
+
+              {isAdmin && (
+                <div>
+                  <Label>Department <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={selectedRequestDeptId ? String(selectedRequestDeptId) : ''}
+                    onValueChange={(val) => {
+                      const dept = departments.find((d: any) => String(d.id) === val);
+                      setSelectedRequestDeptId(dept?.id ?? null);
+                      setSelectedRequestDeptName(dept?.name ?? '');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d: any) => (
+                        <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div>
+                <Label>Quantity <span className="text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={requestQty}
+                  onChange={(e) => setRequestQty(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+              </div>
+
+              <div>
+                <Label>Urgency</Label>
+                <Select value={requestUrgency} onValueChange={setRequestUrgency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Reason <span className="text-gray-400 text-xs">(optional)</span></Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Why is this part needed?"
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setRequestingPart(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmitPartRequest}
+                  disabled={submitRequestMutation.isPending}
+                >
+                  {submitRequestMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

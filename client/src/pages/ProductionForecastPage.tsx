@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings, ArrowUpDown, ArrowUp, ArrowDown, X, CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,8 @@ export default function ProductionForecastPage() {
   const [modelFilter, setModelFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
   const { data: forecastData, isLoading, error } = useQuery<ForecastItem[]>({
     queryKey: ['/api/forecast/dashboard'],
@@ -59,8 +61,10 @@ export default function ProductionForecastPage() {
     if (departmentFilter !== 'all') count++;
     if (expectedDeptFilter !== 'all') count++;
     if (modelFilter !== 'all') count++;
+    if (dateFrom) count++;
+    if (dateTo) count++;
     return count;
-  }, [searchTerm, statusFilter, departmentFilter, expectedDeptFilter, modelFilter]);
+  }, [searchTerm, statusFilter, departmentFilter, expectedDeptFilter, modelFilter, dateFrom, dateTo]);
 
   const clearAllFilters = () => {
     setSearchTerm('');
@@ -68,6 +72,8 @@ export default function ProductionForecastPage() {
     setDepartmentFilter('all');
     setExpectedDeptFilter('all');
     setModelFilter('all');
+    setDateFrom('');
+    setDateTo('');
   };
 
   const handleSort = (field: SortField) => {
@@ -102,7 +108,10 @@ export default function ProductionForecastPage() {
       const matchesDept = departmentFilter === 'all' || item.actualDepartment === departmentFilter;
       const matchesExpectedDept = expectedDeptFilter === 'all' || item.expectedDepartment === expectedDeptFilter;
       const matchesModel = modelFilter === 'all' || item.model === modelFilter;
-      return matchesSearch && matchesStatus && matchesDept && matchesExpectedDept && matchesModel;
+      const itemDate = item.estimatedShipDate ? item.estimatedShipDate.slice(0, 10) : '';
+      const matchesDateFrom = !dateFrom || itemDate >= dateFrom;
+      const matchesDateTo = !dateTo || itemDate <= dateTo;
+      return matchesSearch && matchesStatus && matchesDept && matchesExpectedDept && matchesModel && matchesDateFrom && matchesDateTo;
     });
 
     if (sortField) {
@@ -277,6 +286,24 @@ export default function ProductionForecastPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <div className="flex items-center gap-1.5 border rounded-md px-2 py-1 bg-background">
+                <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="text-sm bg-transparent outline-none w-[130px] text-foreground"
+                  title="Due date from"
+                />
+                <span className="text-muted-foreground text-xs">–</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="text-sm bg-transparent outline-none w-[130px] text-foreground"
+                  title="Due date to"
+                />
+              </div>
             </div>
             {activeFilterCount > 0 && (
               <p className="text-sm text-muted-foreground">

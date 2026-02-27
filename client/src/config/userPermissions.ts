@@ -183,6 +183,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/voice-notes',
       '/order-heat-map',
       '/urgent-orders-report',
+      '/production-forecast',
     ],
   },
 

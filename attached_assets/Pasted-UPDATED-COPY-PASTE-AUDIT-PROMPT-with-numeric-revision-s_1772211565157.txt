@@ -1,0 +1,83 @@
+UPDATED COPY-PASTE AUDIT PROMPT (with numeric + revision suffix behavior)
+READ-ONLY AUDIT — Vendor PO PDF “PO Number” Formatting + Internal Issue Reason UI
+
+DO NOT MODIFY FILES. DO NOT CHANGE SCHEMA. SEARCH + REPORT ONLY.
+
+CONTEXT / REQUIREMENT FOR PDF:
+System PO numbers are stored like:
+- VPO-26003
+- VPO-26003-RB   (revision suffix letters)
+
+Customer-facing PDF should display:
+- 26003          (drop VPO-)
+- 26003-RB       (drop VPO-, KEEP revision suffix)
+In other words: strip only the leading "VPO-" prefix, not the revision suffix.
+
+------------------------------------------------------------
+ISSUE A — Vendor PO PDF drops revision suffix (shows only numeric)
+------------------------------------------------------------
+
+1) Locate the Vendor PO PDF generator:
+Search for:
+- vendorPoPdf
+- generateVendorPoPdf
+- "PURCHASE ORDER"
+- "PO Number"
+Report file path + exact snippet where the PO Number field is rendered.
+
+2) Identify which field is used today:
+Is the PDF using:
+- po_number string (e.g., "VPO-26003-RB")
+- a numeric field (e.g., 26003)
+- parsed output (regex/replace/parseInt)
+Report the exact logic.
+
+3) Determine minimal fix to meet requirement:
+Propose (do NOT implement) the smallest change so the PDF displays:
+- "26003" for "VPO-26003"
+- "26003-RB" for "VPO-26003-RB"
+
+Preferred rule:
+- If po_number starts with "VPO-", remove ONLY that prefix.
+- Leave the rest unchanged.
+Example:
+  displayPoNumber = po_number.startsWith("VPO-")
+    ? po_number.slice(4)
+    : po_number
+
+If the current source value is numeric-only, determine how to recover the suffix:
+- Find where the full po_number exists in the fetched PO data
+- Use it for display formatting
+
+------------------------------------------------------------
+ISSUE B — Issue Internally requires reason but UI doesn’t show input
+------------------------------------------------------------
+
+1) In client/src/components/inventory/VendorPOManager.tsx:
+Locate:
+- the issuing AlertDialog
+- state variables: noEmailMode, noEmailReason, noEmailConfirmed
+- internal issue button(s)
+Report:
+- what sets noEmailMode=true
+- where the Textarea + Checkbox are rendered
+- what gating conditions control visibility (pendingStatus/noEmailMode/etc.)
+
+2) Verify internal flow end-to-end:
+When user clicks “Issue Internally (No Vendor Notification)”:
+- Does the dialog switch to internal mode and show reason input?
+- Is confirm disabled until reason (trim >= 10) and checkbox are satisfied?
+- Does the mutation send: { skipEmail: true, reason } ?
+
+If not, identify the exact missing transition and the minimal fix.
+
+------------------------------------------------------------
+OUTPUT FORMAT (STRICT)
+------------------------------------------------------------
+
+SECTION A — PDF PO Number render snippet + current formatting logic
+SECTION B — Minimal PDF formatting rule recommendation (strip "VPO-" only)
+SECTION C — Issue Internally UI flow snippet + gating conditions
+SECTION D — Why reason input isn’t shown + minimal fix plan
+
+END AUDIT.

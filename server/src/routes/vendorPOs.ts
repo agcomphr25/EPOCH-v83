@@ -813,8 +813,14 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       confirmationLinkExpires: expiresAt,
       message: `PO issued successfully. Confirmation email sent to ${vendor.email}.`,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Issue vendor PO error:', error);
+    if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('vendor_pos_po_number')) {
+      return res.status(409).json({
+        error: 'PO number conflict',
+        message: 'A PO number conflict occurred. Please try again.',
+      });
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }

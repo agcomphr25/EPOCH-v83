@@ -7862,6 +7862,25 @@ export class DatabaseStorage implements IStorage {
     id: number,
     opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
   ): Promise<{ vendorPO: any; poNumber: string }> {
+    const MAX_RETRIES = 3;
+    let lastError: any;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await this._issueVendorPOTransaction(id, opts);
+      } catch (err: any) {
+        lastError = err;
+        const isDuplicateKey = err?.code === '23505' || err?.message?.includes('duplicate key') || err?.message?.includes('vendor_pos_po_number');
+        if (!isDuplicateKey || attempt >= MAX_RETRIES - 1) throw err;
+        await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  }
+
+  private async _issueVendorPOTransaction(
+    id: number,
+    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
+  ): Promise<{ vendorPO: any; poNumber: string }> {
     const result = await db.transaction(async (tx) => {
       const [lockedPO] = await tx
         .select()
@@ -7880,22 +7899,24 @@ export class DatabaseStorage implements IStorage {
       let poNumber = lockedPO.poNumber;
       if (!poNumber) {
         const currentYear = new Date().getFullYear().toString().slice(-2);
-        const latestPO = await tx
+        const prefix = `VPO-${currentYear}`;
+        const allMatchingPOs = await tx
           .select({ poNumber: vendorPOs.poNumber })
           .from(vendorPOs)
-          .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
-          .orderBy(desc(vendorPOs.id))
-          .limit(1)
+          .where(sql`${vendorPOs.poNumber} LIKE ${`${prefix}%`}`)
           .for('update');
 
-        let nextNumber = 1;
-        if (latestPO.length > 0 && latestPO[0].poNumber) {
-          const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
-          if (match) {
-            nextNumber = parseInt(match[1]) + 1;
+        let maxNumber = 0;
+        for (const row of allMatchingPOs) {
+          if (row.poNumber) {
+            const match = row.poNumber.match(/VPO-\d{2}(\d{3})/);
+            if (match) {
+              const num = parseInt(match[1]);
+              if (num > maxNumber) maxNumber = num;
+            }
           }
         }
-        poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+        poNumber = `${prefix}${String(maxNumber + 1).padStart(3, '0')}`;
       }
 
       const extraFields = opts?.issuedWithoutEmail

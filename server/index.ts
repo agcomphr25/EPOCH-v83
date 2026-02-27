@@ -827,6 +827,33 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Address validation columns migration:', addrErr.message);
       }
 
+      // Seed default inventory departments if table is empty
+      try {
+        const { sql: sqlDept } = await import('drizzle-orm');
+        const existing = await db.execute(sqlDept`SELECT COUNT(*) as cnt FROM inventory_departments`);
+        const count = Number((existing.rows[0] as any)?.cnt ?? 0);
+        if (count === 0) {
+          await db.execute(sqlDept`
+            INSERT INTO inventory_departments (name, is_active, sort_order) VALUES
+              ('Production Queue', true, 1),
+              ('Layup', true, 2),
+              ('Barcode', true, 3),
+              ('CNC', true, 4),
+              ('Gunsmith', true, 5),
+              ('Paint', true, 6),
+              ('Finish', true, 7),
+              ('Finish QC', true, 8),
+              ('Shipping QC', true, 9),
+              ('Shipping', true, 10),
+              ('Cutting Table', true, 11),
+              ('Office', true, 12)
+          `);
+          console.log('✅ Seeded default inventory departments (12)');
+        }
+      } catch (deptSeedErr: any) {
+        console.warn('⚠️ Inventory departments seed:', deptSeedErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

@@ -1,0 +1,105 @@
+COPY-PASTE AUDIT PROMPT
+
+(Asset → Parts Request Integration Audit)
+
+Paste this into Replit:
+
+We are implementing a UX enhancement:
+
+From the Asset Profile modal, we want to add a button:
+"Create Parts Request"
+
+This should:
+- Pre-link the AG part associated with the asset
+- Pre-populate the parts request form
+- Respect department and permission rules
+- Not duplicate request logic
+
+DO NOT implement yet.
+Perform a structured audit.
+
+========================================
+PHASE 1 — ASSET → PART LINKAGE
+========================================
+
+1) Identify where AG part linkage is stored on Asset:
+   - Table name
+   - Column name
+   - Data type (part_id? part_number? foreign key?)
+
+2) Confirm whether it references:
+   - inventory_items.id
+   - part_number string
+   - or another table
+
+3) Confirm relationship integrity:
+   - FK constraint exists?
+   - Nullable?
+
+========================================
+PHASE 2 — PARTS REQUEST CREATION FLOW
+========================================
+
+1) Locate POST /api/inventory/parts-requests route.
+2) Identify required payload fields.
+3) Identify whether:
+   - partId is required
+   - departmentId is required
+   - quantity is required
+   - notes optional
+4) Confirm whether request creation:
+   - creates header + line
+   - or just a single line record
+
+5) Confirm response structure.
+
+========================================
+PHASE 3 — PARTS REQUEST PAGE PREFILL LOGIC
+========================================
+
+1) Inspect DepartmentPartsRequestPage.tsx.
+2) Determine:
+   - Can it accept query params?
+   - Can it accept initial partId?
+   - Does it support prefilled state?
+
+3) Identify how parts are added:
+   - Is it modal?
+   - Is it search + add button?
+   - Is there internal state array of selected parts?
+
+========================================
+PHASE 4 — PERMISSION CONTEXT
+========================================
+
+1) Determine how departmentId is chosen:
+   - Admin selects from dropdown
+   - Non-admin auto-uses user.department
+
+2) Confirm whether we can safely pre-select department from asset context.
+
+========================================
+PHASE 5 — UX OPTIONS
+========================================
+
+Based on findings, propose 2 options:
+
+Option A:
+- Redirect to /inventory/parts-request with ?partId=XXX
+- Prefill and highlight part
+
+Option B:
+- Inline modal on Asset page that directly submits parts request
+
+Provide pros/cons of both in context of current codebase.
+
+========================================
+OUTPUT REQUIRED
+========================================
+
+Provide:
+1) Asset → Part linkage structure
+2) Request creation API structure
+3) Whether parts request page supports prefilling
+4) Recommended UX approach
+5) Minimal safe implementation path

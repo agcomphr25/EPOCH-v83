@@ -3250,6 +3250,7 @@ export class DatabaseStorage implements IStorage {
         dueDate: po.dueDate,
         customerId: po.customerId,
         customerPO: po.poNumber,
+        poId: po.poId,
         poItemId: po.poItemId,
         fbOrderNumber: null,
         agrOrderDetails: null,
@@ -3321,6 +3322,7 @@ export class DatabaseStorage implements IStorage {
         customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
         product: resolvedItemName,
         isFlattop: false,
+        materialCanonical: po.materialCanonical || '',
       };
     }) as any;
 

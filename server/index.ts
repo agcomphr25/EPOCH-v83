@@ -470,6 +470,69 @@ async function initializeBackgroundServices() {
         // Columns may already exist
       }
 
+      // Ensure production_orders has canonical material + source snapshot columns
+      try {
+        const { sql: sqlPO } = await import('drizzle-orm');
+        await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS material_canonical TEXT NOT NULL DEFAULT ''`);
+        await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS source_snapshot JSONB`);
+        console.log('✅ Ensured production_orders has material_canonical and source_snapshot columns');
+      } catch (poError: any) {
+        // Columns may already exist
+      }
+
+      // ── Communication Governance Layer ────────────────────────────────────
+      try {
+        const { sql: sqlComm } = await import('drizzle-orm');
+
+        // 1. Create email_templates table
+        await db.execute(sqlComm`
+          CREATE TABLE IF NOT EXISTS email_templates (
+            id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+            key VARCHAR(255) NOT NULL UNIQUE,
+            name VARCHAR(255) NOT NULL,
+            subject TEXT NOT NULL,
+            body_html TEXT NOT NULL,
+            body_text TEXT,
+            allowed_variables JSONB NOT NULL DEFAULT '[]',
+            attachment_rules JSONB NOT NULL DEFAULT '{}',
+            version INTEGER NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_by VARCHAR
+          )
+        `);
+        await db.execute(sqlComm`CREATE INDEX IF NOT EXISTS idx_email_templates_key ON email_templates (key)`);
+        await db.execute(sqlComm`CREATE INDEX IF NOT EXISTS idx_email_templates_is_active ON email_templates (is_active)`);
+
+        // 2. Expand communication_logs with governance columns
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS template_key VARCHAR(255)`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS template_version INTEGER`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS triggered_by VARCHAR`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS body_html TEXT`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS recipients JSONB`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS cc JSONB`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS attachments_meta JSONB`);
+        await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255)`);
+
+        // 3. Seed vendor email templates (idempotent — skip if already present)
+        const { seedVendorEmailTemplates } = await import('./communication/registry');
+        await seedVendorEmailTemplates(db);
+
+        // 4. One-shot: migrate vendor_rfq body_text {{items_table}} → {{items_list}}
+        await db.execute(sqlComm`
+          UPDATE email_templates
+          SET body_text = REPLACE(body_text, '{{items_table}}', '{{items_list}}'),
+              allowed_variables = '["vendor_name","vendor_contact_person","desired_delivery_date","items_table","items_list"]'
+          WHERE key = 'vendor_rfq' AND body_text LIKE '%{{items_table}}%'
+        `);
+
+        console.log('✅ Communication governance layer ready (email_templates, communication_logs expanded, vendor templates seeded)');
+      } catch (commErr: any) {
+        console.warn('⚠️ Communication governance layer setup warning:', commErr.message);
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

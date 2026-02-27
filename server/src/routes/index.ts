@@ -806,6 +806,7 @@ export function registerRoutes(app: Express): Server {
           po.current_department as "currentDepartment",
           po.production_status as "status",
           COALESCE(po.specifications, '{}') as features,
+          po.material_canonical as "materialCanonical",
           po.created_at as "createdAt",
           'production_order' as source
         FROM production_orders po
@@ -886,6 +887,7 @@ export function registerRoutes(app: Express): Server {
           stockModelId: po.stockModelId,
           status: po.status,
           source: po.source,
+          materialCanonical: po.materialCanonical || '',
           priorityScore: 2000, // High priority for OEM orders
           product: po.stockModelId
             .replace('_', ' ')
@@ -4050,7 +4052,40 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Request body:', req.body);
       const { storage } = await import('../../storage');
       const { id } = req.params;
+
+      const previousModel = await storage.getStockModel(id);
+      const previousMaterial = previousModel?.material ?? null;
+
       const stockModel = await storage.updateStockModel(id, req.body);
+
+      const newMaterial = stockModel.material ?? null;
+      if (previousMaterial !== newMaterial) {
+        console.warn(
+          `[STOCK MODEL MATERIAL CHANGED]\n` +
+          `Stock Model: ${id}\n` +
+          `Old: ${previousMaterial}\n` +
+          `New: ${newMaterial}\n` +
+          `WARNING: Existing production_orders retain original material_canonical.`
+        );
+
+        try {
+          const { db } = await import('../../db');
+          const { adminAuditLog } = await import('../../schema');
+          await db.insert(adminAuditLog).values({
+            orderId: `stock_model:${id}`,
+            fieldName: 'material',
+            fieldLabel: 'Stock Model Material',
+            oldValue: previousMaterial,
+            newValue: newMaterial,
+            changedBy: (req as any).user?.username || 'system',
+            userRole: (req as any).user?.role || 'SYSTEM',
+            changeType: 'INLINE',
+          });
+        } catch (auditErr) {
+          console.error('Failed to write material change audit log:', auditErr);
+        }
+      }
+
       console.log('🔧 Updated stock model:', stockModel.id);
       res.json(stockModel);
     } catch (_error) {
@@ -6167,6 +6202,25 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get single Production Order by ID (admin inspector)
+  app.get('/api/production-orders/:id', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid production order ID' });
+      }
+      const order = await storage.getProductionOrder(id);
+      if (!order) {
+        return res.status(404).json({ error: 'Production order not found' });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error('Error fetching production order:', error);
+      res.status(500).json({ error: 'Failed to fetch production order' });
+    }
+  });
+
   // P1 Production Schedule Calculation
   app.post('/api/pos/:id/calculate-production-schedule', async (req, res) => {
     try {
@@ -7305,7 +7359,9 @@ export function registerRoutes(app: Express): Server {
                 customer_name,
                 po_number,
                 item_name,
+                item_id,
                 specifications,
+                material_canonical,
                 order_date,
                 due_date,
                 production_status,
@@ -7329,13 +7385,14 @@ export function registerRoutes(app: Express): Server {
                 orderDate: po.order_date,
                 dueDate: po.due_date,
                 status: 'in_production',
-                stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-                modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+                stockModelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+                modelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
                 fbOrderNumber: po.po_number,
                 isP1Order: orderId.startsWith('P1-'),
                 isPOItem: orderId.startsWith('PO-'),
                 features: po.specifications || {},
                 actionLength: po.specifications?.actionLength || po.specifications?.action_length,
+                material_canonical: po.material_canonical || '',
               };
             }
           }
@@ -7701,19 +7758,13 @@ export function registerRoutes(app: Express): Server {
             ? paintOption.replace(/_/g, ' ').toUpperCase()
             : '';
 
-          // Determine material type from model ID or specifications
+          // Determine material type — use material_canonical as single source of truth for P1
           let material = '';
           if (isPOItem) {
-            const specs = (order as any).specifications || (order as any).features || {};
-            material = specs.material || '';
-            
-            // If no material in specs, infer from model ID
+            material = (order as any).material_canonical || '';
             if (!material) {
-              if (modelId.startsWith('cf_') || modelId.includes('carbon')) {
-                material = 'Carbon Fiber';
-              } else if (modelId.startsWith('fg_') || modelId.includes('fiberglass')) {
-                material = 'Fiberglass';
-              }
+              const { deriveCanonicalMaterial } = await import('../../src/utils/deriveCanonicalMaterial');
+              material = deriveCanonicalMaterial(modelId);
             }
           }
 

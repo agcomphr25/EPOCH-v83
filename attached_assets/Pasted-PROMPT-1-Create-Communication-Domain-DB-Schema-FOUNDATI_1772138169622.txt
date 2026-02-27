@@ -1,0 +1,144 @@
+PROMPT 1 — Create Communication Domain + DB Schema (FOUNDATION)
+
+Paste into a new thread:
+
+IMPLEMENT PHASE 0 — GOVERNED COMMUNICATION LAYER FOUNDATION
+
+This is a controlled architectural addition.
+Do NOT refactor existing email senders yet.
+Do NOT remove any current send logic.
+We are layering governance infrastructure first.
+
+OBJECTIVE
+
+Create a new communication domain that will become the single outbound email control plane.
+
+STEP 1 — Create DB Tables
+
+Create the following tables:
+
+1️⃣ email_templates
+
+Fields:
+
+id (uuid, primary key)
+
+key (varchar, unique, not null)
+
+name (varchar, not null)
+
+subject (text, not null)
+
+body_html (text, not null)
+
+body_text (text, nullable)
+
+allowed_variables (jsonb, default '[]')
+
+attachment_rules (jsonb, default '{}')
+
+version (integer, default 1)
+
+is_active (boolean, default true)
+
+created_at (timestamptz, default now())
+
+updated_at (timestamptz, default now())
+
+updated_by (uuid, nullable)
+
+Add appropriate indexes on:
+
+key
+
+is_active
+
+2️⃣ Expand communication_logs
+
+If communication_logs already exists, ALTER it.
+
+Ensure the following columns exist:
+
+template_key (varchar)
+
+template_version (integer)
+
+triggered_by (uuid)
+
+subject (text)
+
+body_html (text)
+
+recipients (jsonb)
+
+cc (jsonb)
+
+attachments (jsonb)
+
+provider_message_id (varchar)
+
+status (varchar)
+
+sent_at (timestamptz)
+
+Do NOT drop any existing columns.
+
+STEP 2 — Create Domain Folder
+
+Create:
+
+server/communication/
+
+Inside create empty scaffolds:
+
+send.ts
+
+render.ts
+
+registry.ts
+
+audit.ts
+
+attachments.ts
+
+types.ts
+
+Do not wire anything yet.
+
+STEP 3 — Seed Initial Templates (Version 1)
+
+Migrate current hardcoded vendor templates into DB:
+
+Seed keys:
+
+vendor_rfq
+
+vendor_po_issue
+
+vendor_po_resend
+
+Copy subject + body exactly as currently defined.
+
+Do not alter formatting.
+
+Set:
+
+version = 1
+
+allowed_variables = list discovered in audit
+
+attachment_rules = {}
+
+OUTPUT REQUIRED
+
+Return:
+
+SQL migration code
+
+ORM schema updates
+
+Confirmation of seed inserts
+
+Directory tree of new communication domain
+
+Do not modify any route files yet.

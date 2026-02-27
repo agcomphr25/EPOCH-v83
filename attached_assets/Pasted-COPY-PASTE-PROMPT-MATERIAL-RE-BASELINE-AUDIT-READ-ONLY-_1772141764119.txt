@@ -1,0 +1,154 @@
+COPY-PASTE PROMPT — MATERIAL RE-BASELINE AUDIT
+READ-ONLY AUDIT — Re-Baseline Material Authority After Recent Changes
+
+Context:
+We recently implemented:
+1) production_orders.material_canonical
+2) production_orders.source_snapshot
+3) Reordered deriveMaterial() authority
+
+However, additional changes may have occurred.
+Before proceeding further, I need a complete and accurate view of the CURRENT state of the system.
+
+STRICT RULES:
+- READ ONLY.
+- No code modifications.
+- No migrations.
+- No formatting refactors.
+- Return file paths + line numbers + short excerpts.
+- If something differs from expected design, explicitly flag it.
+
+========================================
+PART 1 — Schema State
+========================================
+
+Locate production_orders schema definition.
+
+Report:
+- Does material_canonical exist?
+- Is it NOT NULL?
+- Does it have a default?
+- Does source_snapshot exist?
+- Column types?
+- Any triggers or computed columns affecting material?
+
+Also:
+Search entire schema for any other material-related columns.
+
+========================================
+PART 2 — Creation Flow (Production Orders)
+========================================
+
+Find the function that creates production orders from PO items.
+
+Report:
+- Exact file + function
+- How material_canonical is currently set
+- Is it derived from:
+  - stock_model.material?
+  - stock_model prefix?
+  - JSON feature/spec?
+  - deriveMaterial()?
+  - something else?
+
+Paste the exact assignment line.
+
+Also confirm:
+- Is source_snapshot being written?
+- What fields are included?
+
+========================================
+PART 3 — deriveMaterial() CURRENT LOGIC
+========================================
+
+Open:
+client/src/utils/deriveOrderLabels.ts
+
+Report:
+- Full current deriveMaterial() function
+- Authority order as currently implemented
+- Does it now check material_canonical first?
+- Does it still inspect JSON fields?
+- Does it inspect stock_model prefix?
+
+Flag anything that contradicts:
+Canonical → Stock Model → Prefix → JSON → Fallback.
+
+========================================
+PART 4 — Department Queue Material Source
+========================================
+
+Trace the material shown in Department Queue cards.
+
+Report:
+1) API route used by queue
+2) SQL query selecting production_orders
+3) What field is returned as "material"
+4) Does it use:
+   - production_orders.material_canonical
+   - deriveMaterial()
+   - JSON parsing
+   - something else?
+
+Paste relevant query and component rendering lines.
+
+========================================
+PART 5 — Other Material Mutations
+========================================
+
+Search entire repo for:
+
+rg -n "material =" 
+rg -n "update.*material"
+rg -n "set.*material"
+rg -n "carbon"
+rg -n "fiberglass"
+
+Report:
+- Any update statements modifying material after creation
+- Any UI forms that edit material
+- Any queue-level transformations
+- Any migrations touching material
+
+========================================
+PART 6 — Runtime Reality Check
+========================================
+
+Provide a minimal SQL query I can run manually to inspect a problematic order:
+
+SELECT
+  id,
+  stock_model_id,
+  material_canonical,
+  source_snapshot,
+  po_id,
+  po_item_id
+FROM production_orders
+WHERE id = <example_id>;
+
+Also provide query to compare:
+
+SELECT
+  sm.id,
+  sm.name,
+  sm.material
+FROM stock_models sm
+JOIN production_orders po ON po.stock_model_id = sm.id
+WHERE po.id = <example_id>;
+
+========================================
+OUTPUT FORMAT
+========================================
+
+Return:
+
+1) Schema State Summary
+2) Creation Flow Material Assignment
+3) Current deriveMaterial() Authority Order
+4) Queue Rendering Source
+5) Any Additional Material Mutation Points
+6) SQL Debug Queries
+7) Clear “Current Material Authority Chain” summary
+
+This is a re-baseline audit only.
+Do not suggest changes yet.

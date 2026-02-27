@@ -8,8 +8,8 @@ import {
 } from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { generateMagicLink, getMagicLinkBaseUrl } from '../../utils/magicLink';
-import { sendEmailViaSendGrid } from '../../utils/sendgrid';
+import { generateMagicLink } from '../../utils/magicLink';
+import { sendCommunication } from '../../communication/send';
 
 const router = Router();
 
@@ -600,8 +600,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     // Fetch line items for the RFQ
     const items = await storage.getVendorPOItems(id);
 
-    const subject = `Request for Quote from AG Composites`;
-
+    // Build items context variables (HTML table for body_html, text list for body_text)
     const itemsTableRows = items.map((item: any) =>
       `<tr>
         <td style="border: 1px solid #ddd; padding: 8px;">${item.lineNumber}</td>
@@ -612,81 +611,8 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       </tr>`
     ).join('');
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .container {
-      background-color: #ffffff;
-      border-radius: 8px;
-      padding: 40px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #e67e22;
-      padding-bottom: 20px;
-    }
-    .header h1 {
-      color: #1a1a1a;
-      font-size: 24px;
-      margin: 0;
-    }
-    .content { margin-bottom: 30px; }
-    .rfq-details {
-      background-color: #fef9e7;
-      border-radius: 6px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .rfq-details p { margin: 5px 0; }
-    .notice {
-      background-color: #fef9e7;
-      border-left: 4px solid #e67e22;
-      padding: 12px;
-      margin: 20px 0;
-      font-size: 14px;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 14px;
-      color: #666;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Request for Quote</h1>
-    </div>
-    
-    <div class="content">
-      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
-      
-      <p>AG Composites is requesting a quote for the following items. <strong>This is not a purchase order</strong> — we are seeking pricing and availability information.</p>
-      
-      <div class="rfq-details">
-        <p><strong>Vendor:</strong> ${vendor.name}</p>
-        ${vendorPO.expectedDeliveryDate ? `<p><strong>Desired Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
-      </div>
-      
-      ${items.length > 0 ? `
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+    const items_table = items.length > 0
+      ? `<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
         <thead>
           <tr style="background-color: #f5f5f5;">
             <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Line</th>
@@ -696,64 +622,32 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
             <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Unit</th>
           </tr>
         </thead>
-        <tbody>
-          ${itemsTableRows}
-        </tbody>
-      </table>
-      ` : '<p><em>No specific items listed. Please contact us for details.</em></p>'}
-      
-      <div class="notice">
-        <strong>Note:</strong> This is a Request for Quote only. No commitment to purchase is implied. Please reply to this email with your pricing and availability.
-      </div>
-      
-      <p>If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
-    </div>
-    
-    <div class="footer">
-      <p>
-        <strong>AG Composites</strong><br>
-        230 Hamer Road<br>
-        Owens Cross Roads, AL 35763<br>
-        Phone: 256-723-8381<br>
-        Email: sales@agcomposites.com
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-    `.trim();
+        <tbody>${itemsTableRows}</tbody>
+      </table>`
+      : '<p><em>No specific items listed. Please contact us for details.</em></p>';
 
-    const text = `
-Request for Quote
+    const items_list = items.length > 0
+      ? items.map((item: any) => `- ${item.description || 'Item'}: Qty ${item.quantity || 0} ${item.vendorUnit || item.uom || ''}`.trimEnd()).join('\n')
+      : 'No specific items listed. Please contact us for details.';
 
-Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
+    const rfqContext = {
+      vendor_name: vendor.name,
+      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
+      desired_delivery_date: vendorPO.expectedDeliveryDate
+        ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
+        : '',
+      items_table,
+      items_list,
+    };
 
-AG Composites is requesting a quote for the following items. This is NOT a purchase order — we are seeking pricing and availability information.
-
-Vendor: ${vendor.name}
-${vendorPO.expectedDeliveryDate ? `Desired Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
-
-${items.length > 0 ? items.map((item: any) => `- ${item.description || 'Item'}: Qty ${item.quantity || 0} ${item.vendorUnit || item.uom || ''}`).join('\n') : 'No specific items listed. Please contact us for details.'}
-
-Note: This is a Request for Quote only. No commitment to purchase is implied.
-Please reply to this email with your pricing and availability.
-
-If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.
-
----
-AG Composites
-230 Hamer Road
-Owens Cross Roads, AL 35763
-Phone: 256-723-8381
-Email: sales@agcomposites.com
-    `.trim();
-
-    const emailResult = await sendEmailViaSendGrid({
+    const emailResult = await sendCommunication({
+      templateKey: 'vendor_rfq',
+      context: rfqContext,
       to: vendor.email,
       cc: 'laurie@agcomposites.com',
-      subject,
-      text,
-      html,
+      triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
+      capabilityRequired: 'send_vendor_rfq',
+      orderId: String(id),
     });
 
     if (!emailResult.success) {
@@ -838,157 +732,6 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       expiresInMinutes: 60 * 24 * 7, // 7 days expiration
     });
 
-    // Create confirmation page URL (the magic link will redirect here after verification)
-    const baseUrl = getMagicLinkBaseUrl();
-    
-    // Generate email content
-    const subject = `PO ${poNumber} from AG Composites - Confirmation Requested`;
-    
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .container {
-      background-color: #ffffff;
-      border-radius: 8px;
-      padding: 40px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #0066cc;
-      padding-bottom: 20px;
-    }
-    .header h1 {
-      color: #1a1a1a;
-      font-size: 24px;
-      margin: 0;
-    }
-    .content {
-      margin-bottom: 30px;
-    }
-    .po-details {
-      background-color: #f5f5f5;
-      border-radius: 6px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .po-details p {
-      margin: 5px 0;
-    }
-    .button {
-      display: inline-block;
-      background-color: #0066cc;
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 14px 28px;
-      border-radius: 6px;
-      font-weight: 600;
-      text-align: center;
-      margin: 20px 0;
-    }
-    .button:hover {
-      background-color: #0052a3;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 14px;
-      color: #666;
-    }
-    .warning {
-      background-color: #fff3cd;
-      border-left: 4px solid #ffc107;
-      padding: 12px;
-      margin: 20px 0;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Purchase Order Confirmation Request</h1>
-    </div>
-    
-    <div class="content">
-      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
-      
-      <p>AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
-      
-      <div class="po-details">
-        <p><strong>PO Number:</strong> ${poNumber}</p>
-        <p><strong>Vendor:</strong> ${vendor.name}</p>
-        ${issuedPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
-      </div>
-      
-      <div style="text-align: center;">
-        <a href="${link}" class="button">Confirm PO Receipt</a>
-      </div>
-      
-      <div class="warning">
-        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
-      </div>
-      
-      <p>If the button doesn't work, copy and paste this link into your browser:</p>
-      <p style="word-break: break-all; color: #0066cc;">${link}</p>
-      
-      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
-    </div>
-    
-    <div class="footer">
-      <p>
-        <strong>AG Composites</strong><br>
-        230 Hamer Road<br>
-        Owens Cross Roads, AL 35763<br>
-        Phone: 256-723-8381<br>
-        Email: sales@agcomposites.com
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-    `.trim();
-
-    const text = `
-Purchase Order Confirmation Request
-
-Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
-
-AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
-
-PO Number: ${poNumber}
-Vendor: ${vendor.name}
-${issuedPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
-
-Confirm your receipt: ${link}
-
-This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
-
-If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
-
----
-AG Composites
-230 Hamer Road
-Owens Cross Roads, AL 35763
-Phone: 256-723-8381
-Email: sales@agcomposites.com
-    `.trim();
-
     // Build CC list: always include laurie@agcomposites.com, append issuing user's email if available
     const ccList: string[] = ['laurie@agcomposites.com'];
     const issuingUserEmail = (req as any).user?.email as string | undefined;
@@ -996,18 +739,28 @@ Email: sales@agcomposites.com
       ccList.push(issuingUserEmail);
     }
 
-    // Send email to vendor with CC to all recipients
-    const emailResult = await sendEmailViaSendGrid({
+    const issueContext = {
+      vendor_name: vendor.name,
+      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
+      po_number: poNumber,
+      requested_delivery_date: issuedPO.expectedDeliveryDate
+        ? new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()
+        : '',
+      confirmation_link: link,
+    };
+
+    const emailResult = await sendCommunication({
+      templateKey: 'vendor_po_issue',
+      context: issueContext,
       to: vendor.email,
       cc: ccList,
-      subject,
-      text,
-      html,
+      triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
+      capabilityRequired: 'issue_vendor_po',
+      orderId: String(id),
     });
 
     if (!emailResult.success) {
       console.error('Failed to send PO confirmation email:', emailResult.error);
-      // PO is already issued (status = Sent) but email failed - report the failure
       return res.status(500).json({
         error: 'PO issued but confirmation email failed',
         message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
@@ -1083,165 +836,6 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     });
 
     const poNumber = vendorPO.poNumber;
-    const subject = `RESEND: PO ${poNumber} from AG Composites - Confirmation Requested`;
-
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .container {
-      background-color: #ffffff;
-      border-radius: 8px;
-      padding: 40px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #0066cc;
-      padding-bottom: 20px;
-    }
-    .header h1 {
-      color: #1a1a1a;
-      font-size: 24px;
-      margin: 0;
-    }
-    .content {
-      margin-bottom: 30px;
-    }
-    .po-details {
-      background-color: #f5f5f5;
-      border-radius: 6px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .po-details p {
-      margin: 5px 0;
-    }
-    .button {
-      display: inline-block;
-      background-color: #0066cc;
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 14px 28px;
-      border-radius: 6px;
-      font-weight: 600;
-      text-align: center;
-      margin: 20px 0;
-    }
-    .button:hover {
-      background-color: #0052a3;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 14px;
-      color: #666;
-    }
-    .warning {
-      background-color: #fff3cd;
-      border-left: 4px solid #ffc107;
-      padding: 12px;
-      margin: 20px 0;
-      font-size: 14px;
-    }
-    .resend-notice {
-      background-color: #e8f4fd;
-      border-left: 4px solid #0066cc;
-      padding: 12px;
-      margin: 20px 0;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Purchase Order Confirmation Request</h1>
-    </div>
-    
-    <div class="content">
-      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
-      
-      <div class="resend-notice">
-        <strong>Note:</strong> This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
-      </div>
-      
-      <p>AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
-      
-      <div class="po-details">
-        <p><strong>PO Number:</strong> ${poNumber}</p>
-        <p><strong>Vendor:</strong> ${vendor.name}</p>
-        ${vendorPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
-      </div>
-      
-      <div style="text-align: center;">
-        <a href="${link}" class="button">Confirm PO Receipt</a>
-      </div>
-      
-      <div class="warning">
-        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
-      </div>
-      
-      <p>If the button doesn't work, copy and paste this link into your browser:</p>
-      <p style="word-break: break-all; color: #0066cc;">${link}</p>
-      
-      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
-    </div>
-    
-    <div class="footer">
-      <p>
-        <strong>AG Composites</strong><br>
-        230 Hamer Road<br>
-        Owens Cross Roads, AL 35763<br>
-        Phone: 256-723-8381<br>
-        Email: sales@agcomposites.com
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-    `.trim();
-
-    const text = `
-RESEND: Purchase Order Confirmation Request
-
-Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
-
-Note: This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
-
-AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
-
-PO Number: ${poNumber}
-Vendor: ${vendor.name}
-${vendorPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
-
-Confirm your receipt: ${link}
-
-This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
-
-If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
-
----
-AG Composites
-230 Hamer Road
-Owens Cross Roads, AL 35763
-Phone: 256-723-8381
-Email: sales@agcomposites.com
-    `.trim();
 
     const ccList: string[] = ['laurie@agcomposites.com'];
     const resendingUserEmail = (req as any).user?.email as string | undefined;
@@ -1249,12 +843,24 @@ Email: sales@agcomposites.com
       ccList.push(resendingUserEmail);
     }
 
-    const emailResult = await sendEmailViaSendGrid({
+    const resendContext = {
+      vendor_name: vendor.name,
+      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
+      po_number: poNumber,
+      requested_delivery_date: vendorPO.expectedDeliveryDate
+        ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
+        : '',
+      confirmation_link: link,
+    };
+
+    const emailResult = await sendCommunication({
+      templateKey: 'vendor_po_resend',
+      context: resendContext,
       to: vendor.email,
       cc: ccList,
-      subject,
-      text,
-      html,
+      triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
+      capabilityRequired: 'resend_vendor_po',
+      orderId: String(id),
     });
 
     if (!emailResult.success) {

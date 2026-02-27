@@ -83,6 +83,7 @@ import POProductSelector from './POProductSelector';
 import POItemsManager from './POItemsManager';
 import AddressInput from './AddressInput';
 import { type AddressData } from '@/utils/addressUtils';
+import { format as formatDate } from 'date-fns';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -152,6 +153,104 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
     <Badge className={badgeColor}>
       {statusText} ({totalOrders})
     </Badge>
+  );
+}
+
+function POProductionOrdersTab({ poId }: { poId: number }) {
+  const { data: productionOrders = [], isLoading } = useQuery({
+    queryKey: [`/api/production-orders/by-po/${poId}`],
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`),
+  });
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return <Badge className="bg-blue-100 text-blue-800">Pending</Badge>;
+      case 'ACTIVE':
+        return <Badge className="bg-yellow-100 text-yellow-800">Active</Badge>;
+      case 'LAID_UP':
+        return <Badge className="bg-orange-100 text-orange-800">Laid Up</Badge>;
+      case 'SHIPPED':
+        return <Badge className="bg-green-100 text-green-800">Shipped</Badge>;
+      case 'CANCELLED':
+        return <Badge className="bg-red-100 text-red-800">Cancelled</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading production orders...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (productionOrders.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Package className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">No production orders generated from this PO.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Production Orders ({productionOrders.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left p-3 font-medium">Production Order #</th>
+                <th className="text-left p-3 font-medium">Item Name</th>
+                <th className="text-left p-3 font-medium">Material</th>
+                <th className="text-left p-3 font-medium">Status</th>
+                <th className="text-left p-3 font-medium">Department</th>
+                <th className="text-left p-3 font-medium">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productionOrders.map((order: any) => (
+                <tr
+                  key={order.id}
+                  className="border-b cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <td className="p-3 font-medium text-blue-600">
+                    <a href={`/barcode-queue?highlight=${order.orderId}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                      {order.orderId}
+                    </a>
+                  </td>
+                  <td className="p-3">{order.itemName || '—'}</td>
+                  <td className="p-3">{order.materialCanonical || '—'}</td>
+                  <td className="p-3">{getStatusBadge(order.productionStatus)}</td>
+                  <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
+                  <td className="p-3 text-muted-foreground">
+                    {order.createdAt ? formatDate(new Date(order.createdAt), 'M/d/yy') : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -974,14 +1073,28 @@ export default function POManager() {
               ← Back to POs
             </Button>
           </div>
-          <div className="space-y-4">
-            <POItemsManager
-              poId={selectedPO.id}
-              poNumber={selectedPO.poNumber}
-              customerName={selectedPO.customerName}
-              onAddItem={() => setShowOrderEntry(true)}
-            />
-          </div>
+
+          <Tabs defaultValue="line-items" className="w-full">
+            <TabsList>
+              <TabsTrigger value="line-items">Line Items</TabsTrigger>
+              <TabsTrigger value="production-orders">Production Orders</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="line-items">
+              <div className="space-y-4">
+                <POItemsManager
+                  poId={selectedPO.id}
+                  poNumber={selectedPO.poNumber}
+                  customerName={selectedPO.customerName}
+                  onAddItem={() => setShowOrderEntry(true)}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="production-orders">
+              <POProductionOrdersTab poId={selectedPO.id} />
+            </TabsContent>
+          </Tabs>
 
           {/* Product Selection Dialog */}
           <POProductSelector

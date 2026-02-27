@@ -1,0 +1,517 @@
+import { sql } from 'drizzle-orm';
+import type { EmailTemplate } from './types';
+
+export async function getTemplateByKey(
+  db: any,
+  key: string
+): Promise<EmailTemplate | null> {
+  const rows = await db.execute(
+    sql`SELECT * FROM email_templates WHERE key = ${key} AND is_active = TRUE LIMIT 1`
+  );
+  const row = rows.rows?.[0] ?? rows[0];
+  if (!row) return null;
+  return rowToTemplate(row);
+}
+
+export async function getAllTemplates(db: any): Promise<EmailTemplate[]> {
+  const rows = await db.execute(
+    sql`SELECT * FROM email_templates ORDER BY key ASC`
+  );
+  const data = rows.rows ?? rows;
+  return data.map(rowToTemplate);
+}
+
+export async function upsertTemplate(
+  db: any,
+  template: Omit<EmailTemplate, 'id' | 'createdAt' | 'updatedAt'> & { updatedBy?: string }
+): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO email_templates (key, name, subject, body_html, body_text, allowed_variables, attachment_rules, version, is_active, updated_by, updated_at)
+    VALUES (
+      ${template.key},
+      ${template.name},
+      ${template.subject},
+      ${template.bodyHtml},
+      ${template.bodyText ?? null},
+      ${JSON.stringify(template.allowedVariables ?? [])},
+      ${JSON.stringify(template.attachmentRules ?? {})},
+      ${template.version},
+      ${template.isActive ?? true},
+      ${template.updatedBy ?? null},
+      NOW()
+    )
+    ON CONFLICT (key) DO UPDATE SET
+      name = EXCLUDED.name,
+      subject = EXCLUDED.subject,
+      body_html = EXCLUDED.body_html,
+      body_text = EXCLUDED.body_text,
+      allowed_variables = EXCLUDED.allowed_variables,
+      attachment_rules = EXCLUDED.attachment_rules,
+      version = EXCLUDED.version,
+      is_active = EXCLUDED.is_active,
+      updated_by = EXCLUDED.updated_by,
+      updated_at = NOW()
+  `);
+}
+
+function rowToTemplate(row: any): EmailTemplate {
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    subject: row.subject,
+    bodyHtml: row.body_html,
+    bodyText: row.body_text ?? null,
+    allowedVariables: Array.isArray(row.allowed_variables)
+      ? row.allowed_variables
+      : JSON.parse(row.allowed_variables ?? '[]'),
+    attachmentRules: typeof row.attachment_rules === 'object'
+      ? row.attachment_rules ?? {}
+      : JSON.parse(row.attachment_rules ?? '{}'),
+    version: row.version ?? 1,
+    isActive: row.is_active ?? true,
+    createdAt: row.created_at ? new Date(row.created_at) : null,
+    updatedAt: row.updated_at ? new Date(row.updated_at) : null,
+    updatedBy: row.updated_by ?? null,
+  };
+}
+
+// ─── Seed: Vendor Email Templates (Version 1) ─────────────────────────────────
+// Copies subject + body exactly from vendorPOs.ts hardcoded strings.
+// Runtime JS interpolations converted to {{variable}} placeholders.
+// Idempotent — only inserts rows that don't already exist.
+
+export async function seedVendorEmailTemplates(db: any): Promise<void> {
+  const existing = await db.execute(
+    sql`SELECT key FROM email_templates WHERE key IN ('vendor_rfq', 'vendor_po_issue', 'vendor_po_resend')`
+  );
+  const existingKeys = new Set(
+    (existing.rows ?? existing).map((r: any) => r.key)
+  );
+
+  const templates = [VENDOR_RFQ_TEMPLATE, VENDOR_PO_ISSUE_TEMPLATE, VENDOR_PO_RESEND_TEMPLATE];
+
+  for (const tpl of templates) {
+    if (!existingKeys.has(tpl.key)) {
+      await db.execute(sql`
+        INSERT INTO email_templates (key, name, subject, body_html, body_text, allowed_variables, attachment_rules, version, is_active)
+        VALUES (
+          ${tpl.key},
+          ${tpl.name},
+          ${tpl.subject},
+          ${tpl.bodyHtml},
+          ${tpl.bodyText},
+          ${JSON.stringify(tpl.allowedVariables)},
+          ${JSON.stringify(tpl.attachmentRules)},
+          1,
+          TRUE
+        )
+      `);
+      console.log(`  📧 Seeded email template: ${tpl.key}`);
+    }
+  }
+}
+
+// ─── Template Definitions ─────────────────────────────────────────────────────
+
+const VENDOR_RFQ_TEMPLATE = {
+  key: 'vendor_rfq',
+  name: 'Vendor RFQ',
+  subject: 'Request for Quote from AG Composites',
+  allowedVariables: [
+    'vendor_name',
+    'vendor_contact_person',
+    'desired_delivery_date',
+    'items_table',
+    'items_list',
+  ],
+  attachmentRules: {},
+  bodyHtml: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request for Quote from AG Composites</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #e67e22;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #1a1a1a;
+      font-size: 24px;
+      margin: 0;
+    }
+    .content { margin-bottom: 30px; }
+    .rfq-details {
+      background-color: #fef9e7;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .rfq-details p { margin: 5px 0; }
+    .notice {
+      background-color: #fef9e7;
+      border-left: 4px solid #e67e22;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Request for Quote</h1>
+    </div>
+    <div class="content">
+      <p>Hello{{vendor_contact_person}},</p>
+      <p>AG Composites is requesting a quote for the following items. <strong>This is not a purchase order</strong> — we are seeking pricing and availability information.</p>
+      <div class="rfq-details">
+        <p><strong>Vendor:</strong> {{vendor_name}}</p>
+        <p><strong>Desired Delivery Date:</strong> {{desired_delivery_date}}</p>
+      </div>
+      {{items_table}}
+      <div class="notice">
+        <strong>Note:</strong> This is a Request for Quote only. No commitment to purchase is implied. Please reply to this email with your pricing and availability.
+      </div>
+      <p>If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  bodyText: `Request for Quote
+
+Hello{{vendor_contact_person}},
+
+AG Composites is requesting a quote for the following items. This is NOT a purchase order — we are seeking pricing and availability information.
+
+Vendor: {{vendor_name}}
+Desired Delivery Date: {{desired_delivery_date}}
+
+{{items_list}}
+
+Note: This is a Request for Quote only. No commitment to purchase is implied.
+Please reply to this email with your pricing and availability.
+
+If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com`,
+};
+
+const VENDOR_PO_ISSUE_TEMPLATE = {
+  key: 'vendor_po_issue',
+  name: 'Vendor PO Confirmation (Issue)',
+  subject: 'PO {{po_number}} from AG Composites - Confirmation Requested',
+  allowedVariables: [
+    'vendor_name',
+    'vendor_contact_person',
+    'po_number',
+    'requested_delivery_date',
+    'confirmation_link',
+  ],
+  attachmentRules: {},
+  bodyHtml: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO {{po_number}} from AG Composites - Confirmation Requested</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 20px;
+    }
+    .header h1 { color: #1a1a1a; font-size: 24px; margin: 0; }
+    .content { margin-bottom: 30px; }
+    .po-details {
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .po-details p { margin: 5px 0; }
+    .button {
+      display: inline-block;
+      background-color: #0066cc;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+    .warning {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Purchase Order Confirmation Request</h1>
+    </div>
+    <div class="content">
+      <p>Hello{{vendor_contact_person}},</p>
+      <p>AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
+      <div class="po-details">
+        <p><strong>PO Number:</strong> {{po_number}}</p>
+        <p><strong>Vendor:</strong> {{vendor_name}}</p>
+        <p><strong>Requested Delivery Date:</strong> {{requested_delivery_date}}</p>
+      </div>
+      <div style="text-align: center;">
+        <a href="{{confirmation_link}}" class="button">Confirm PO Receipt</a>
+      </div>
+      <div class="warning">
+        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+      </div>
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #0066cc;">{{confirmation_link}}</p>
+      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  bodyText: `Purchase Order Confirmation Request
+
+Hello{{vendor_contact_person}},
+
+AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
+
+PO Number: {{po_number}}
+Vendor: {{vendor_name}}
+Requested Delivery Date: {{requested_delivery_date}}
+
+Confirm your receipt: {{confirmation_link}}
+
+This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+
+If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com`,
+};
+
+const VENDOR_PO_RESEND_TEMPLATE = {
+  key: 'vendor_po_resend',
+  name: 'Vendor PO Confirmation (Resend)',
+  subject: 'RESEND: PO {{po_number}} from AG Composites - Confirmation Requested',
+  allowedVariables: [
+    'vendor_name',
+    'vendor_contact_person',
+    'po_number',
+    'requested_delivery_date',
+    'confirmation_link',
+  ],
+  attachmentRules: {},
+  bodyHtml: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RESEND: PO {{po_number}} from AG Composites - Confirmation Requested</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 20px;
+    }
+    .header h1 { color: #1a1a1a; font-size: 24px; margin: 0; }
+    .content { margin-bottom: 30px; }
+    .po-details {
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .po-details p { margin: 5px 0; }
+    .button {
+      display: inline-block;
+      background-color: #0066cc;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+    .warning {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .resend-notice {
+      background-color: #e8f4fd;
+      border-left: 4px solid #0066cc;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Purchase Order Confirmation Request</h1>
+    </div>
+    <div class="content">
+      <p>Hello{{vendor_contact_person}},</p>
+      <div class="resend-notice">
+        <strong>Note:</strong> This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
+      </div>
+      <p>AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
+      <div class="po-details">
+        <p><strong>PO Number:</strong> {{po_number}}</p>
+        <p><strong>Vendor:</strong> {{vendor_name}}</p>
+        <p><strong>Requested Delivery Date:</strong> {{requested_delivery_date}}</p>
+      </div>
+      <div style="text-align: center;">
+        <a href="{{confirmation_link}}" class="button">Confirm PO Receipt</a>
+      </div>
+      <div class="warning">
+        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+      </div>
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #0066cc;">{{confirmation_link}}</p>
+      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  bodyText: `RESEND: Purchase Order Confirmation Request
+
+Hello{{vendor_contact_person}},
+
+Note: This is a resend of a previously issued Purchase Order. A new confirmation link has been generated below.
+
+AG Composites has issued a Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
+
+PO Number: {{po_number}}
+Vendor: {{vendor_name}}
+Requested Delivery Date: {{requested_delivery_date}}
+
+Confirm your receipt: {{confirmation_link}}
+
+This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+
+If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com`,
+};

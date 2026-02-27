@@ -98,6 +98,7 @@ import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
+import ProductionOrderInspector from './pages/ProductionOrderInspector';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -433,6 +434,7 @@ function App() {
                   <Route path="/production-forecast" component={ProductionForecastPage} />
                   <Route path="/production-forecast/settings" component={ForecastSettings} />
                   <Route path="/admin/attention" component={AttentionDashboard} />
+                  <Route path="/admin/inspector/production-order" component={ProductionOrderInspector} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />

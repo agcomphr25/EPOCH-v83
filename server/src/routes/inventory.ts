@@ -200,15 +200,17 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       updates.hasOtherDocs = true;
     }
     
-    const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    // Strip assignedDepartments from JSONB write — junction table is authoritative
+    const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
+    const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
     
-    if (updates.assignedDepartments && Array.isArray(updates.assignedDepartments)) {
+    if (deptNames && Array.isArray(deptNames)) {
       const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
       const { db } = await import('../../db');
       const { eq, inArray } = await import('drizzle-orm');
       await db.delete(inventoryItemDepartments).where(eq(inventoryItemDepartments.itemId, itemId));
-      if (updates.assignedDepartments.length > 0) {
-        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, updates.assignedDepartments as string[]));
+      if (deptNames.length > 0) {
+        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, deptNames as string[]));
         if (depts.length > 0) {
           await db.insert(inventoryItemDepartments).values(
             depts.map(d => ({ itemId, departmentId: d.id }))
@@ -428,13 +430,15 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
       itemData.hasOtherDocs = true;
     }
     
-    const newItem = await storage.createInventoryItem(itemData);
+    // Strip assignedDepartments from JSONB write — junction table is authoritative
+    const { assignedDepartments: deptNames, ...itemStorageData } = itemData as any;
+    const newItem = await storage.createInventoryItem(itemStorageData);
     
-    if (itemData.assignedDepartments && Array.isArray(itemData.assignedDepartments) && itemData.assignedDepartments.length > 0) {
+    if (deptNames && Array.isArray(deptNames) && deptNames.length > 0) {
       const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
       const { db } = await import('../../db');
       const { inArray } = await import('drizzle-orm');
-      const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, itemData.assignedDepartments as string[]));
+      const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, deptNames as string[]));
       if (depts.length > 0) {
         await db.insert(inventoryItemDepartments).values(
           depts.map(d => ({ itemId: newItem.id, departmentId: d.id }))
@@ -481,15 +485,17 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
       updates.hasOtherDocs = true;
     }
     
-    const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    // Strip assignedDepartments from JSONB write — junction table is authoritative
+    const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
+    const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
     
-    if (updates.assignedDepartments && Array.isArray(updates.assignedDepartments)) {
+    if (deptNames && Array.isArray(deptNames)) {
       const { inventoryItemDepartments, inventoryDepartments } = await import('../../schema');
       const { db } = await import('../../db');
       const { eq, inArray } = await import('drizzle-orm');
       await db.delete(inventoryItemDepartments).where(eq(inventoryItemDepartments.itemId, itemId));
-      if (updates.assignedDepartments.length > 0) {
-        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, updates.assignedDepartments as string[]));
+      if (deptNames.length > 0) {
+        const depts = await db.select().from(inventoryDepartments).where(inArray(inventoryDepartments.name, deptNames as string[]));
         if (depts.length > 0) {
           await db.insert(inventoryItemDepartments).values(
             depts.map(d => ({ itemId, departmentId: d.id }))

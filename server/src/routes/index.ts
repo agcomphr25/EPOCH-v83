@@ -4052,7 +4052,40 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Request body:', req.body);
       const { storage } = await import('../../storage');
       const { id } = req.params;
+
+      const previousModel = await storage.getStockModel(id);
+      const previousMaterial = previousModel?.material ?? null;
+
       const stockModel = await storage.updateStockModel(id, req.body);
+
+      const newMaterial = stockModel.material ?? null;
+      if (previousMaterial !== newMaterial) {
+        console.warn(
+          `[STOCK MODEL MATERIAL CHANGED]\n` +
+          `Stock Model: ${id}\n` +
+          `Old: ${previousMaterial}\n` +
+          `New: ${newMaterial}\n` +
+          `WARNING: Existing production_orders retain original material_canonical.`
+        );
+
+        try {
+          const { db } = await import('../../db');
+          const { adminAuditLog } = await import('../../schema');
+          await db.insert(adminAuditLog).values({
+            orderId: `stock_model:${id}`,
+            fieldName: 'material',
+            fieldLabel: 'Stock Model Material',
+            oldValue: previousMaterial,
+            newValue: newMaterial,
+            changedBy: (req as any).user?.username || 'system',
+            userRole: (req as any).user?.role || 'SYSTEM',
+            changeType: 'INLINE',
+          });
+        } catch (auditErr) {
+          console.error('Failed to write material change audit log:', auditErr);
+        }
+      }
+
       console.log('🔧 Updated stock model:', stockModel.id);
       res.json(stockModel);
     } catch (_error) {

@@ -8144,29 +8144,42 @@ export class DatabaseStorage implements IStorage {
     // Strip any client-supplied lineNumber — server computes it atomically
     delete processedData.lineNumber;
 
-    const item = await db.transaction(async (tx) => {
-      // Lock the parent PO row to serialize concurrent inserts for the same PO
-      await tx
-        .select({ id: vendorPOs.id })
-        .from(vendorPOs)
-        .where(eq(vendorPOs.id, processedData.vendorPoId))
-        .for('update');
+    let item: any;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        item = await db.transaction(async (tx) => {
+          // Lock the parent PO row to serialize concurrent inserts for the same PO
+          await tx
+            .select({ id: vendorPOs.id })
+            .from(vendorPOs)
+            .where(eq(vendorPOs.id, processedData.vendorPoId))
+            .for('update');
 
-      // Compute next line number within the same transaction
-      const maxResult = await tx.execute(sql`
-        SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
-        FROM vendor_po_items
-        WHERE vendor_po_id = ${processedData.vendorPoId}
-      `);
-      const serverLineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
+          // Compute next line number within the same transaction
+          const maxResult = await tx.execute(sql`
+            SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
+            FROM vendor_po_items
+            WHERE vendor_po_id = ${processedData.vendorPoId}
+          `);
+          const serverLineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
 
-      const [inserted] = await tx
-        .insert(vendorPOItems)
-        .values({ ...processedData, lineNumber: serverLineNumber })
-        .returning();
+          const [inserted] = await tx
+            .insert(vendorPOItems)
+            .values({ ...processedData, lineNumber: serverLineNumber })
+            .returning();
 
-      return inserted;
-    });
+          return inserted;
+        });
+        break; // success — exit retry loop
+      } catch (err: any) {
+        // Retry on unique constraint violation (vendor_po_id, line_number)
+        if (attempt < 2 && err?.code === '23505') {
+          console.warn(`[VendorPO] line_number conflict on attempt ${attempt + 1}, retrying...`);
+          continue;
+        }
+        throw err;
+      }
+    }
 
     // Auto-populate manufacturing queue if this is a manufactured part
     try {

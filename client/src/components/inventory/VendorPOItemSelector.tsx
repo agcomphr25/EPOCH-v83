@@ -341,10 +341,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
 
   const createItemMutation = useMutation({
     mutationFn: async (data: any) => {
-      const lineNumber = items.length + 1;
       return apiRequest(`/api/vendor-pos/${vendorPoId}/items`, {
         method: 'POST',
-        body: { ...data, lineNumber },
+        body: data,
       });
     },
     onSuccess: () => {

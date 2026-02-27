@@ -3838,7 +3838,7 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
   })
   .extend({
     vendorPoId: z.number().int().positive('Vendor PO ID is required'),
-    lineNumber: z.number().int().positive('Line number is required'),
+    lineNumber: z.number().int().positive().optional(),
     agPartNumber: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
     // Purchase unit fields (what user enters)

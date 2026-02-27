@@ -368,7 +368,6 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         name: inventoryItems.name,
         sku: inventoryItems.sku,
         department: inventoryItems.department,
-        assignedDepartments: inventoryItems.assignedDepartments,
         usageUnit: inventoryItems.usageUnit,
         assignedDepartmentIds: sql<number[]>`COALESCE(
           (SELECT array_agg(iid.department_id) FROM inventory_item_departments iid WHERE iid.item_id = ${inventoryItems.id}),

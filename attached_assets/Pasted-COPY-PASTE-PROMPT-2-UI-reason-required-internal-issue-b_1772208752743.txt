@@ -1,0 +1,52 @@
+COPY-PASTE PROMPT 2 — UI: reason-required internal issue + banner + remove window.confirm
+IMPLEMENTATION — VENDOR PO “ISSUE” UI HARDENING (REASON + CONFIRM + BANNER)
+
+DO NOT REFACTOR UNRELATED UI.
+Keep changes scoped to VendorPOManager.tsx and any small helper components.
+
+BACKEND NOW RETURNS:
+- emailSent boolean
+- emailRecipient (if sent)
+- issuedWithoutEmail boolean
+- issuedWithoutEmailReason
+- issuedWithoutEmailAt
+
+GOALS:
+1) Preserve two actions:
+   A) Issue & Send Email (default)
+   B) Issue Internally (No Vendor Notification) — requires reason + confirm checkbox
+2) Remove window.confirm path and unify to one AlertDialog flow.
+3) Send payload:
+   - Internal: { skipEmail: true, reason }
+   - Email: { skipEmail: false }
+4) After internal issue, show persistent banner on PO detail header:
+   “Vendor NOT notified — issued internally on <date>. Reason: <reason>”
+5) Toast messaging uses server response:
+   - emailSent=false => “PO issued internally (vendor not notified)”
+   - emailSent=true => “PO issued! Email sent to <emailRecipient>”
+
+STEPS:
+A) In client/src/components/inventory/VendorPOManager.tsx:
+   - Find the Status Change AlertDialog section
+   - Replace “Mark as Issued (No Email)” label with:
+     “Issue Internally (No Vendor Notification)”
+   - When this option is chosen, render:
+     - Required Textarea: reason (min 10 chars after trim)
+     - Checkbox: “I confirm the vendor will NOT be emailed.”
+     - Disable confirm until both satisfied
+   - Ensure the mutation includes { id, skipEmail: true, reason }
+
+B) Remove/replace handleIssuePO window.confirm path:
+   - Make the list-view “Issue” action open the same AlertDialog with the same controls.
+
+C) Banner:
+   - When viewing a PO with issuedWithoutEmail=true:
+     Show an amber banner in the PO header area with reason + date.
+   - Ensure the PO fetch/state includes the new fields; if not, update types and query parsing.
+
+D) Output:
+   1) Key UI snippets for the AlertDialog controls
+   2) Mutation payloads for both actions
+   3) Banner snippet
+   4) Toast behavior mapping
+END.

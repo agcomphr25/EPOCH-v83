@@ -1,0 +1,115 @@
+Copy-Paste Implementation Prompt
+
+Paste this into Replit:
+
+We are implementing Option B:
+
+Add a lightweight inline Parts Request modal to the AG Parts List inside AssetsPage.
+
+DO NOT modify:
+- DepartmentPartsRequestPage
+- Existing request routes
+- Schema
+- Database structure
+
+This must be self-contained.
+
+========================================
+PHASE 1 — UI Button
+========================================
+
+In AssetsPage.tsx:
+
+1) Locate the AG Parts List modal table.
+2) Add a new column:
+   Header: "Request"
+3) For each row, add a small button:
+   <Button size="sm" variant="outline">Request</Button>
+
+4) Clicking sets:
+   requestingPart = selected inventory item
+
+========================================
+PHASE 2 — Request Modal State
+========================================
+
+Add new local state:
+
+const [requestingPart, setRequestingPart] = useState<InventoryItem | null>(null);
+const [requestQty, setRequestQty] = useState(1);
+const [requestUrgency, setRequestUrgency] = useState("MEDIUM");
+const [requestReason, setRequestReason] = useState("");
+
+Admin only:
+const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
+
+========================================
+PHASE 3 — Modal UI
+========================================
+
+If requestingPart exists, render a Dialog with:
+
+Title: "Request Part"
+
+Display:
+- Part Number
+- Part Name
+
+Fields:
+- Quantity (number input)
+- Urgency (select: LOW, MEDIUM, HIGH, CRITICAL)
+- Reason (textarea)
+
+If user.role is admin or owner:
+- Render department dropdown (reuse same department query used elsewhere)
+
+Buttons:
+Cancel → setRequestingPart(null)
+Submit → handleSubmitPartRequest()
+
+========================================
+PHASE 4 — Submit Logic
+========================================
+
+Create handleSubmitPartRequest() that:
+
+POST /api/inventory/parts-requests
+
+Payload:
+{
+  partNumber: requestingPart.partNumber,
+  partName: requestingPart.partName,
+  agPartNumber: requestingPart.partNumber,
+  requestedBy: currentUser.username,
+  quantity: requestQty,
+  urgency: requestUrgency,
+  reason: requestReason,
+  department: admin ? selectedDepartmentName : currentUser.department,
+  departmentId: admin ? selectedDepartmentId : currentUser.departmentId
+}
+
+On success:
+- Close modal
+- Reset state
+- Show success toast
+
+========================================
+PHASE 5 — UX Polish
+========================================
+
+After submit:
+- Do NOT redirect
+- Do NOT reload page
+- Just toast: "Parts request submitted"
+
+Keep styling consistent with existing shadcn UI components.
+
+========================================
+OUTPUT
+========================================
+
+Return:
+1) Modified AssetsPage.tsx snippet
+2) The new modal JSX
+3) The submit function
+4) Confirmation that no other files were modified

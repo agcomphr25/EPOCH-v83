@@ -12,6 +12,7 @@ import {
   User,
   Factory,
   RefreshCw,
+  Clock,
   LogOut,
   Truck,
   Package,
@@ -241,6 +242,20 @@ export default function DARLENEBTestDashboard() {
                 </h3>
                 <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Process refunds
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/refund-queue">
+            <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200 ${isDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
+              <CardContent className="p-4 text-center">
+                <Clock className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+                <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  Refund Queue
+                </h3>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  View pending refunds
                 </p>
               </CardContent>
             </Card>

@@ -1,0 +1,169 @@
+COPY-PASTE AUDIT PROMPT
+READ-ONLY FORENSIC AUDIT — ORDER BARCODE CONSISTENCY (REGULAR vs PO)
+
+DO NOT MODIFY ANY FILES.
+DO NOT REFACTOR.
+DO NOT WRITE NEW CODE.
+
+This is a full read-only audit to understand why PO barcodes are less consistently scannable than regular production order barcodes.
+
+OBJECTIVE:
+Identify ALL differences between:
+1) Regular production order barcode generation
+2) Purchase Order (PO) barcode generation
+
+We need to determine:
+- Barcode symbology (Code128, QR, EAN, etc.)
+- Library used
+- Data encoded
+- Image resolution / DPI
+- Scaling
+- Padding / quiet zones
+- Print size in PDF
+- Rendering engine differences
+- Any conditional logic differences
+- Any truncation or formatting inconsistencies
+- Any font fallback issues
+- Any image compression differences
+- Any encoding differences (ASCII vs UTF-8)
+- Any dynamic scaling based on string length
+- Any margin or layout differences
+- Any PDF canvas sizing differences
+
+------------------------------------------
+SECTION 1 — Locate All Barcode Generation Code
+------------------------------------------
+
+1. Find ALL backend files that generate barcodes.
+2. Find ALL frontend barcode generation (if any).
+3. Identify:
+   - Libraries used (e.g., bwip-js, jsbarcode, qrcode, pdf-lib, etc.)
+   - Where barcode buffers are created
+   - Where barcode images are embedded into PDFs
+   - Where barcode strings are constructed
+
+List:
+- File paths
+- Function names
+- Exact code snippets responsible for barcode creation
+
+------------------------------------------
+SECTION 2 — Regular Production Order Barcode
+------------------------------------------
+
+For regular production orders:
+
+1. Identify:
+   - Route that generates barcode
+   - Data source for barcode string
+   - Exact string format encoded
+   - Prefixes (e.g., "PO-", "P1-", etc.)
+   - Any revision stripping logic
+   - Any zero-padding logic
+   - Any sanitization
+
+2. Determine:
+   - Symbology (Code128? Code39? QR?)
+   - Module width
+   - Height
+   - Scale
+   - Quiet zone
+   - DPI (if specified)
+   - Image format (PNG? SVG?)
+   - Pixel dimensions of output
+   - Embedded display size in PDF (in points)
+
+3. Identify:
+   - How barcode is placed in PDF (coordinates, width/height)
+   - Whether it is resized or stretched
+   - Whether aspect ratio is preserved
+
+------------------------------------------
+SECTION 3 — Purchase Order (PO) Barcode
+------------------------------------------
+
+Repeat the same audit for PO barcodes.
+
+Specifically check:
+
+- Does PO use a different library?
+- Is it rendered as SVG vs PNG?
+- Is scaling dynamic?
+- Is height smaller?
+- Is the encoded string longer?
+- Is it including revision suffixes?
+- Is it including hyphens?
+- Is it including non-standard characters?
+- Is it being resized improperly in PDF?
+- Is it being embedded at different DPI?
+- Is it being rendered as text fallback instead of image?
+
+------------------------------------------
+SECTION 4 — Direct Side-by-Side Comparison
+------------------------------------------
+
+Create a comparison table:
+
+| Attribute | Regular Order | PO Order | Same / Different |
+|-----------|---------------|----------|------------------|
+
+Include:
+- Library
+- Symbology
+- Encoded string format
+- Prefix handling
+- Revision handling
+- Padding
+- Quiet zone
+- Module width
+- Height
+- Image resolution
+- PDF embed size
+- Scaling behavior
+- Compression
+- Error handling
+
+------------------------------------------
+SECTION 5 — Scan Reliability Risk Analysis
+------------------------------------------
+
+Based on findings, identify:
+
+- Why PO barcodes may fail scanning
+- If string length exceeds optimal density
+- If module width too small
+- If scaling shrinks bars too thin
+- If quiet zone is insufficient
+- If print resolution conflicts exist
+- If PDF scaling introduces distortion
+- If barcode is rasterized too small
+- If there are contrast issues
+
+------------------------------------------
+SECTION 6 — Root Cause Summary
+------------------------------------------
+
+Provide:
+
+1. Definitive list of differences
+2. Most likely cause of inconsistent scanning
+3. Minimal changes required to make PO barcode generation identical to regular orders
+4. Exact files that would need modification
+5. Whether refactor or simple parameter alignment is sufficient
+
+------------------------------------------
+SECTION 7 — Output Requirements
+------------------------------------------
+
+Return:
+
+- Structured audit report
+- Code snippets
+- File paths
+- Clear conclusion
+- No speculative refactors
+- No code edits
+
+This is strictly diagnostic.
+
+END AUDIT

@@ -1,0 +1,98 @@
+COPY-PASTE AUDIT PROMPT
+
+Department Source Divergence Audit
+
+We have a data consistency issue:
+
+The Parts Request department dropdown and the Inventory Item “Assigned Departments” checkboxes are not using the same source.
+
+We must determine exactly:
+
+- What table(s) each one reads from
+- Whether one is hardcoded
+- Whether one is legacy (order_department_types)
+- Whether inventory_item_departments join table is involved
+- Whether inventoryItems.assigned_departments JSONB is involved
+
+DO NOT FIX.
+Perform a structured audit.
+
+========================================
+PHASE 1 — PARTS REQUEST PAGE
+========================================
+
+1) Locate DepartmentPartsRequestPage.tsx.
+2) Identify the query used for the department dropdown.
+3) Identify the API endpoint it calls.
+4) Trace that endpoint to:
+   - Controller
+   - Storage function
+   - Table queried
+
+Output:
+- Table name
+- Columns used
+- Whether filtered by is_active
+- Sort order logic
+
+========================================
+PHASE 2 — INVENTORY ITEM EDIT MODAL
+========================================
+
+1) Locate the Edit Inventory Item modal.
+2) Identify where the Assigned Departments checkbox list comes from.
+3) Determine if:
+   - It calls an API
+   - It uses a local constant
+   - It uses order_department_types
+   - It uses inventory_departments
+   - It uses hardcoded array
+
+4) Trace any related storage function.
+
+Output:
+- Source of checkbox department list
+- Table name (if any)
+- Whether values match exactly the Parts Request source
+
+========================================
+PHASE 3 — DATA MODEL
+========================================
+
+Identify all department-related structures in the schema:
+
+- inventory_departments
+- inventory_item_departments (junction table)
+- order_department_types
+- inventory_items.assigned_departments JSONB
+
+For each:
+- Is it active?
+- Is it legacy?
+- Is it partially implemented?
+- Is it currently used by any live route?
+
+========================================
+PHASE 4 — MISMATCH REPORT
+========================================
+
+Produce a comparison table:
+
+Feature | Source Table | API | Data Model | Status
+----------------------------------------------------
+Parts Request Dropdown | ??? | ??? | ??? | Active?
+Inventory Item Checkbox | ??? | ??? | ??? | Active?
+Any Legacy Table | ??? | ??? | ??? | Active?
+
+========================================
+PHASE 5 — RECOMMENDATION
+========================================
+
+Based strictly on current architecture:
+
+1) Which table should be the single source of truth?
+2) Which tables are safe to deprecate?
+3) What is the minimal unification path?
+
+DO NOT implement changes yet.
+Provide only the diagnostic and recommendation.

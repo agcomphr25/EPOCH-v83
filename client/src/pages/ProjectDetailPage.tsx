@@ -48,6 +48,7 @@ interface ProjectStep {
   startedAt: string | null;
   completedAt: string | null;
   completedBy: number | null;
+  completedByDisplayName: string | null;
   linkedRfqId: number | null;
   linkedQuoteId: string | null;
   linkedPurchaseReviewId: number | null;
@@ -62,6 +63,7 @@ interface ActivityLog {
   stepType: string | null;
   description: string;
   performedBy: number | null;
+  performedByDisplayName: string | null;
   createdAt: string;
 }
 
@@ -518,7 +520,7 @@ export default function ProjectDetailPage() {
                             <h3 className="font-semibold">{config?.label || step.stepType}</h3>
                             <p className="text-sm text-muted-foreground">
                               {step.status === 'completed' && step.completedAt
-                                ? `Completed ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
+                                ? `Completed${step.completedByDisplayName ? ` by ${step.completedByDisplayName}` : ''} ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
                                 : step.status === 'in_progress' && step.startedAt
                                 ? `Started ${formatDistanceToNow(new Date(step.startedAt), { addSuffix: true })}`
                                 : 'Pending'}
@@ -720,6 +722,7 @@ export default function ProjectDetailPage() {
                         <div className="flex-1">
                           <p className="text-sm">{activity.description}</p>
                           <p className="text-xs text-muted-foreground">
+                            {activity.performedByDisplayName && `by ${activity.performedByDisplayName} · `}
                             {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
                           </p>
                         </div>

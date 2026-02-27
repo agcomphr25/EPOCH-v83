@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
+import { resolveEmployeeSnapshot } from '../../utils/userSnapshot';
 
 const router = Router();
 
@@ -153,11 +154,16 @@ router.post('/', async (req, res) => {
       });
     }
     
+    const creatorSnapshot = req.body.createdBy
+      ? await resolveEmployeeSnapshot(req.body.createdBy)
+      : null;
+
     await storage.createProjectActivityLog({
       projectId: project.id,
       activityType: 'project_created',
       description: `Project ${project.projectCode} created`,
       performedBy: req.body.createdBy,
+      performedByDisplayName: creatorSnapshot?.displayName || null,
     });
     
     const steps = await storage.getProjectSteps(project.id);
@@ -185,11 +191,16 @@ router.patch('/:id', async (req, res) => {
     const project = await storage.updateProject(id, validatedData);
     
     if (validatedData.projectManagerId) {
+      const updaterSnapshot = validatedData.updatedBy
+        ? await resolveEmployeeSnapshot(validatedData.updatedBy)
+        : null;
+
       await storage.createProjectActivityLog({
         projectId: id,
         activityType: 'project_updated',
         description: 'Project manager assigned',
         performedBy: validatedData.updatedBy,
+        performedByDisplayName: updaterSnapshot?.displayName || null,
       });
     }
     
@@ -263,6 +274,11 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       }
     }
     
+    const performerUserId = validatedData.completedBy || validatedData.updatedBy;
+    const performerSnapshot = performerUserId
+      ? await resolveEmployeeSnapshot(performerUserId)
+      : null;
+
     const updateData: any = {};
     
     if (status) {
@@ -273,6 +289,7 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       if (status === 'completed') {
         updateData.completedAt = new Date();
         updateData.completedBy = validatedData.completedBy;
+        updateData.completedByDisplayName = performerSnapshot?.displayName || null;
       }
     }
     
@@ -294,7 +311,8 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       description: status === 'completed' 
         ? `${stepInfo?.label || step.stepType} completed`
         : `${stepInfo?.label || step.stepType} updated`,
-      performedBy: req.body.completedBy || req.body.updatedBy,
+      performedBy: performerUserId,
+      performedByDisplayName: performerSnapshot?.displayName || null,
     });
     
     if (status === 'completed') {

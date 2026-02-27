@@ -639,6 +639,12 @@ export default function Navigation() {
       icon: Megaphone,
       description: 'Marketing communications board',
     },
+    {
+      path: '/email-templates',
+      label: 'Email Templates',
+      icon: FileText,
+      description: 'Manage governed email templates',
+    },
   ];
 
   const qcMaintenanceItems = [

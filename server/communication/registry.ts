@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { EmailTemplate } from './types';
+import { enforceTemplateEditCapability, logTemplateEdit } from './capabilities';
 
 export async function getTemplateByKey(
   db: any,
@@ -48,6 +49,7 @@ export async function upsertTemplate(
       allowed_variables = EXCLUDED.allowed_variables,
       attachment_rules = EXCLUDED.attachment_rules,
       version = EXCLUDED.version,
+      current_version = EXCLUDED.version,
       is_active = EXCLUDED.is_active,
       updated_by = EXCLUDED.updated_by,
       updated_at = NOW()
@@ -69,11 +71,115 @@ function rowToTemplate(row: any): EmailTemplate {
       ? row.attachment_rules ?? {}
       : JSON.parse(row.attachment_rules ?? '{}'),
     version: row.version ?? 1,
+    currentVersion: row.current_version ?? 1,
     isActive: row.is_active ?? true,
     createdAt: row.created_at ? new Date(row.created_at) : null,
     updatedAt: row.updated_at ? new Date(row.updated_at) : null,
     updatedBy: row.updated_by ?? null,
   };
+}
+
+export interface UpdateTemplateWithVersioningOptions {
+  templateId: string;
+  updates: {
+    name?: string;
+    subject?: string;
+    bodyHtml?: string;
+    bodyText?: string | null;
+    allowedVariables?: string[];
+    attachmentRules?: Record<string, unknown>;
+    isActive?: boolean;
+  };
+  updatedBy?: string;
+  changeNote?: string;
+}
+
+export async function updateTemplateWithVersioning(
+  db: any,
+  opts: UpdateTemplateWithVersioningOptions
+): Promise<{ template: EmailTemplate | null; error?: string; statusCode?: number }> {
+  const capCheck = await enforceTemplateEditCapability(db, opts.updatedBy);
+  if (!capCheck.allowed) {
+    return { template: null, error: capCheck.reason, statusCode: 403 };
+  }
+
+  const current = await db.execute(
+    sql`SELECT * FROM email_templates WHERE id = ${opts.templateId} LIMIT 1`
+  );
+  const row = current.rows?.[0] ?? current[0];
+  if (!row) return { template: null, error: 'Template not found', statusCode: 404 };
+
+  const oldVersion = row.current_version ?? row.version ?? 1;
+
+  await db.execute(sql`
+    INSERT INTO email_template_versions (template_id, version, subject, body_html, body_text, attachment_rules, allowed_variables, created_by, change_note)
+    VALUES (
+      ${row.id},
+      ${oldVersion},
+      ${row.subject},
+      ${row.body_html},
+      ${row.body_text ?? null},
+      ${JSON.stringify(typeof row.attachment_rules === 'object' ? row.attachment_rules ?? {} : JSON.parse(row.attachment_rules ?? '{}'))},
+      ${JSON.stringify(Array.isArray(row.allowed_variables) ? row.allowed_variables : JSON.parse(row.allowed_variables ?? '[]'))},
+      ${opts.updatedBy ?? null},
+      ${opts.changeNote ?? null}
+    )
+  `);
+
+  const newVersion = oldVersion + 1;
+  const u = opts.updates;
+
+  await db.execute(sql`
+    UPDATE email_templates SET
+      name = ${u.name ?? row.name},
+      subject = ${u.subject ?? row.subject},
+      body_html = ${u.bodyHtml ?? row.body_html},
+      body_text = ${u.bodyText !== undefined ? u.bodyText : (row.body_text ?? null)},
+      allowed_variables = ${JSON.stringify(u.allowedVariables ?? (Array.isArray(row.allowed_variables) ? row.allowed_variables : JSON.parse(row.allowed_variables ?? '[]')))},
+      attachment_rules = ${JSON.stringify(u.attachmentRules ?? (typeof row.attachment_rules === 'object' ? row.attachment_rules ?? {} : JSON.parse(row.attachment_rules ?? '{}')))},
+      is_active = ${u.isActive ?? row.is_active ?? true},
+      version = ${newVersion},
+      current_version = ${newVersion},
+      updated_at = NOW(),
+      updated_by = ${opts.updatedBy ?? null}
+    WHERE id = ${opts.templateId}
+  `);
+
+  await logTemplateEdit(db, {
+    templateId: opts.templateId,
+    editedBy: opts.updatedBy,
+    previousVersion: oldVersion,
+    newVersion,
+    changeNote: opts.changeNote,
+  });
+
+  const updated = await db.execute(
+    sql`SELECT * FROM email_templates WHERE id = ${opts.templateId} LIMIT 1`
+  );
+  const updatedRow = updated.rows?.[0] ?? updated[0];
+  return { template: updatedRow ? rowToTemplate(updatedRow) : null };
+}
+
+export async function getTemplateVersionHistory(
+  db: any,
+  templateId: string
+): Promise<any[]> {
+  const rows = await db.execute(
+    sql`SELECT * FROM email_template_versions WHERE template_id = ${templateId} ORDER BY version DESC`
+  );
+  return (rows.rows ?? rows).map((r: any) => ({
+    id: r.id,
+    templateId: r.template_id,
+    version: r.version,
+    subject: r.subject,
+    bodyHtml: r.body_html,
+    bodyText: r.body_text,
+    attachmentRules: typeof r.attachment_rules === 'object' ? r.attachment_rules : JSON.parse(r.attachment_rules ?? '{}'),
+    allowedVariables: Array.isArray(r.allowed_variables) ? r.allowed_variables : JSON.parse(r.allowed_variables ?? '[]'),
+    createdAt: r.created_at ? new Date(r.created_at) : null,
+    createdBy: r.created_by,
+    changeNote: r.change_note,
+  }));
 }
 
 // ─── Seed: Vendor Email Templates (Version 1) ─────────────────────────────────
@@ -247,7 +353,7 @@ const VENDOR_PO_ISSUE_TEMPLATE = {
     'requested_delivery_date',
     'confirmation_link',
   ],
-  attachmentRules: {},
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>
@@ -381,7 +487,7 @@ const VENDOR_PO_RESEND_TEMPLATE = {
     'requested_delivery_date',
     'confirmation_link',
   ],
-  attachmentRules: {},
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>

@@ -1,0 +1,217 @@
+COPY-PASTE AUDIT PROMPT
+
+(PDF + System Notice + Attachment Rule Integration)
+
+Paste into a new Replit thread:
+
+READ-ONLY AUDIT — VENDOR PO PDF + SYSTEM NOTICE INTEGRATION
+
+This is a READ-ONLY architectural audit.
+
+Do NOT modify any files.
+Do NOT refactor anything.
+Do NOT implement changes yet.
+
+We are gathering information to safely integrate:
+
+• Vendor PO PDF attachment via communication layer
+• System-generated notice wrapper
+• Attachment rule evaluation inside buildAttachments()
+
+PART 1 — Vendor PO PDF Generation
+
+Search the entire repo for:
+
+generateVendorPOPDF
+
+vendor po pdf
+
+printVendorPO
+
+createVendorPOPDF
+
+PDFDocument
+
+pdfkit
+
+puppeteer
+
+renderToPDF
+
+sales order pdf (for pattern comparison)
+
+For each match:
+
+Provide full file path
+
+Provide function name
+
+Provide line numbers
+
+Provide full function code
+
+Identify:
+
+Return type (Buffer? File path? Stream?)
+
+Does it write to disk?
+
+Does it upload to object storage?
+
+Does it mutate DB state?
+
+Does it log anything?
+
+Does it require auth context?
+
+Does it rely on Express req/res?
+
+PART 2 — Vendor PO Print Flow
+
+Identify:
+
+Where the “Print PO” button in UI triggers backend
+
+Backend route path
+
+What that route calls
+
+Whether it:
+
+Generates on demand
+
+Retrieves cached PDF
+
+Streams directly to browser
+
+Saves copy to storage
+
+Provide full route handler code.
+
+PART 3 — PDF Reusability Assessment
+
+Answer explicitly:
+
+Can the existing PDF function be safely called inside buildAttachments() without side effects?
+
+Does it require Express response object?
+
+Does it depend on req.user?
+
+Does it alter PO status?
+
+Does it assume browser streaming?
+
+We need a yes/no for each with explanation.
+
+PART 4 — Communication Layer Integration Points
+
+Search:
+
+sendCommunication
+
+buildAttachments
+
+renderTemplate
+
+Confirm:
+
+Where attachments array is constructed
+
+Where attachment_rules are read
+
+Whether template_key is available inside buildAttachments
+
+Whether full context is passed
+
+Provide code excerpts.
+
+PART 5 — System Notice Integration Audit
+
+Search for:
+
+renderTemplate
+
+wrapWithLayout
+
+email layout
+
+header/footer wrapper
+
+Confirm:
+
+Is there already a wrapper layer?
+
+Is there a single place where HTML is finalized before send?
+
+Is subject modified anywhere after render?
+
+Is plain text generated separately?
+
+We need to determine the safest injection point for:
+
+“This is a system-generated message from EPOCH.”
+
+PART 6 — Logging & Attachment Metadata
+
+Confirm in communication_logs:
+
+Are attachments stored as:
+
+full base64?
+
+filename only?
+
+metadata only?
+
+Does the log store:
+
+attachment filename?
+
+size?
+
+content hash?
+
+storage path?
+
+Provide schema excerpt and logging code.
+
+PART 7 — Performance & Safety
+
+Answer:
+
+If we generate a PDF inside sendCommunication(), could that:
+
+Block event loop?
+
+Increase response latency?
+
+Time out API route?
+
+Is PDF generation synchronous?
+
+Is it CPU heavy?
+
+Does it use headless browser?
+
+OUTPUT FORMAT
+
+Provide:
+
+Structured report
+
+Code excerpts
+
+File paths
+
+Line numbers
+
+Clear separation of sections
+
+Explicit yes/no reusability assessment
+
+Do NOT implement anything.
+Do NOT rewrite code.
+Do NOT propose fixes yet.
+
+This is an architectural safety audit before integrating PDF attachment and system notice wrapper.

@@ -527,7 +527,42 @@ async function initializeBackgroundServices() {
           WHERE key = 'vendor_rfq' AND body_text LIKE '%{{items_table}}%'
         `);
 
-        console.log('✅ Communication governance layer ready (email_templates, communication_logs expanded, vendor templates seeded)');
+        // 5. Add current_version column to email_templates
+        await db.execute(sqlComm`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 1`);
+
+        // 6. Create email_template_versions table
+        await db.execute(sqlComm`
+          CREATE TABLE IF NOT EXISTS email_template_versions (
+            id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+            template_id VARCHAR NOT NULL REFERENCES email_templates(id),
+            version INTEGER NOT NULL,
+            subject TEXT,
+            body_html TEXT,
+            body_text TEXT,
+            attachment_rules JSONB,
+            allowed_variables JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            created_by VARCHAR,
+            change_note TEXT
+          )
+        `);
+        await db.execute(sqlComm`CREATE INDEX IF NOT EXISTS idx_etv_template_version ON email_template_versions (template_id, version)`);
+
+        // 7. Create email_template_edit_logs table
+        await db.execute(sqlComm`
+          CREATE TABLE IF NOT EXISTS email_template_edit_logs (
+            id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+            template_id VARCHAR NOT NULL,
+            edited_by VARCHAR,
+            previous_version INTEGER NOT NULL,
+            new_version INTEGER NOT NULL,
+            change_note TEXT,
+            edited_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlComm`CREATE INDEX IF NOT EXISTS idx_etel_template_id ON email_template_edit_logs (template_id)`);
+
+        console.log('✅ Communication governance layer ready (email_templates, email_template_versions, email_template_edit_logs, communication_logs expanded, vendor templates seeded)');
       } catch (commErr: any) {
         console.warn('⚠️ Communication governance layer setup warning:', commErr.message);
       }

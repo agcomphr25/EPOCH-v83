@@ -59,6 +59,7 @@ import TimeClockAdminPage from './pages/TimeClockAdminPage';
 import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import MarketingCommunications from './pages/MarketingCommunications';
+import EmailTemplateEditor from './pages/EmailTemplateEditor';
 import APJournalPage from './pages/APJournalPage';
 import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
@@ -671,6 +672,10 @@ function App() {
                   <Route
                     path="/marketing-communications"
                     component={MarketingCommunications}
+                  />
+                  <Route
+                    path="/email-templates"
+                    component={EmailTemplateEditor}
                   />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route

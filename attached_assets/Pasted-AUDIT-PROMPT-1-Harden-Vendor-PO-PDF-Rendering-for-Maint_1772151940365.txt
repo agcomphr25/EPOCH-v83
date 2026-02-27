@@ -1,0 +1,149 @@
+AUDIT PROMPT 1
+Harden Vendor PO PDF Rendering for Maintainability
+
+Paste into a new thread:
+
+READ-ONLY AUDIT — VENDOR PO PDF RENDERING MAINTAINABILITY
+
+This is a read-only architectural audit.
+
+Do NOT modify any files.
+Do NOT refactor yet.
+Do NOT rewrite layout logic.
+
+We are evaluating whether the new server-side Vendor PO PDF generator is maintainable long-term.
+
+File to analyze:
+
+server/utils/pdf/vendorPoPdf.ts
+PART 1 — Structural Review
+
+Provide full file path.
+
+Provide total line count.
+
+Identify:
+
+Main exported function name
+
+Helper functions (if any)
+
+Constants defined
+
+Layout constants (margins, spacing, fonts)
+
+Answer:
+
+Is layout logic centralized or scattered?
+
+Are coordinates hard-coded inline?
+
+Are magic numbers used repeatedly?
+
+PART 2 — Layout Separation
+
+Determine:
+
+Is there a clear separation between:
+
+Data fetching
+
+Data transformation
+
+Layout rendering
+
+Drawing primitives
+
+Does the file mix:
+
+DB access
+
+Business logic
+
+PDF coordinate math
+
+Styling decisions
+
+List examples.
+
+PART 3 — Styling Consistency
+
+Search for:
+
+RGB values
+
+Font sizes
+
+Margin values
+
+Table row spacing
+
+Accent colors
+
+Identify:
+
+Repeated styling values
+
+Hard-coded numbers that should be constants
+
+Inline calculations that may cause drift
+
+Provide a list of values that appear more than once.
+
+PART 4 — Pagination Logic
+
+Analyze:
+
+How page breaks are handled.
+
+Whether table overflow is handled generically or manually.
+
+Whether header/footer rendering is reused across pages.
+
+Whether logic would break if:
+
+100+ line items exist
+
+Very long descriptions exist
+
+Notes exceed page length
+
+Provide a risk assessment.
+
+PART 5 — Reusability Assessment
+
+Answer clearly:
+
+Could this layout be reused for:
+
+RFQ PDF
+
+Revised PO
+
+Branded version
+
+Watermarked version
+
+Is the PDF renderer:
+
+Configurable?
+
+Or tightly coupled to Vendor PO only?
+
+Would adding a watermark require deep rewrite?
+
+PART 6 — Refactor Readiness Score
+
+Give a 1–10 maintainability score.
+
+Explain:
+
+Biggest architectural strength
+
+Biggest fragility risk
+
+Recommended refactor strategy (high-level only, no code yet)
+
+Output must be structured and analytical.
+
+Do NOT implement changes.

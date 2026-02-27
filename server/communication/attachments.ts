@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import crypto from 'crypto';
 import type { EmailAttachment, AttachmentMeta, EmailTemplate } from './types';
 import { generateVendorPoPdf } from '../utils/pdf/vendorPoPdf';
 import { getTemplateByKey } from './registry';
@@ -55,6 +56,7 @@ export function attachmentFromFilePath(
 ): { attachment: EmailAttachment; meta: AttachmentMeta } {
   const buffer = fs.readFileSync(filePath);
   const resolvedName = filename ?? filePath.split('/').pop() ?? 'attachment';
+  const contentHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
   return {
     attachment: {
@@ -67,6 +69,7 @@ export function attachmentFromFilePath(
       filename: resolvedName,
       type: mimeType,
       sizeBytes: buffer.length,
+      contentHash,
     },
   };
 }
@@ -76,6 +79,8 @@ export function attachmentFromBuffer(
   filename: string,
   mimeType: string = 'application/pdf'
 ): { attachment: EmailAttachment; meta: AttachmentMeta } {
+  const contentHash = crypto.createHash('sha256').update(buffer).digest('hex');
+
   return {
     attachment: {
       content: buffer.toString('base64'),
@@ -87,6 +92,7 @@ export function attachmentFromBuffer(
       filename,
       type: mimeType,
       sizeBytes: buffer.length,
+      contentHash,
     },
   };
 }

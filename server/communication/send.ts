@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { getTemplateByKey } from './registry';
 import { renderFromObject } from './render';
 import { buildAttachments } from './attachments';
@@ -71,10 +72,15 @@ export async function sendCommunication(
     attachments = built.attachments;
     attachmentsMeta = built.meta;
   } else {
-    attachmentsMeta = opts.attachments.map((a) => ({
-      filename: a.filename,
-      type: a.type,
-    }));
+    attachmentsMeta = opts.attachments.map((a) => {
+      const buf = Buffer.from(a.content, 'base64');
+      return {
+        filename: a.filename,
+        type: a.type,
+        sizeBytes: buf.length,
+        contentHash: crypto.createHash('sha256').update(buf).digest('hex'),
+      };
+    });
   }
 
   const rules = (template.attachmentRules ?? {}) as Record<string, any>;

@@ -40,6 +40,7 @@ export interface AttachmentMeta {
   filename: string;
   type?: string;
   sizeBytes?: number;
+  contentHash?: string;
 }
 
 export interface SendResult {

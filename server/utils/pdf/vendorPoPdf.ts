@@ -3,6 +3,90 @@ import { storage } from '../../storage';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
 import * as fs from 'fs';
 
+const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
+const PRINTABLE_WIDTH = PAGE.WIDTH - PAGE.MARGIN * 2;
+
+const FONT_SIZE = {
+  FOOTER: 7,
+  TABLE_CELL: 8,
+  SECTION_LABEL: 8,
+  BODY: 9,
+  SECTION_TITLE: 10,
+  PO_NUMBER: 14,
+  DOC_TITLE: 16,
+} as const;
+
+const LINE_HEIGHT = {
+  SMALL: 11,
+  BODY: 13,
+  SECTION_GAP: 16,
+  AFTER_DIVIDER: 18,
+  TOTAL_ROW: 15,
+} as const;
+
+const SPACING = {
+  CELL_PAD: 4,
+  LOGO_GAP: 8,
+  TEXT_INSET: 5,
+  ROW_TEXT_OFFSET: 10,
+  SECTION_BREAK: 12,
+  DETAIL_LABEL_OFFSET: 10,
+  DETAIL_VALUE_OFFSET: 80,
+  TOTAL_BAR_HEIGHT: 18,
+  TOTAL_BAR_PAD: 5,
+  TOTAL_BAR_OFFSET: 2,
+  AFTER_TOTAL: 30,
+  NOTES_GAP: 10,
+  NOTES_TITLE_GAP: 14,
+  TERMS_TITLE_GAP: 16,
+  TERMS_SUBSECTION_GAP: 12,
+  TERMS_SUBSECTION_TAIL: 4,
+  MIN_ROW_HEIGHT: 14,
+  ROW_HEIGHT_PAD: 3,
+  FOOTER_OFFSET: 5,
+  FOOTER_LINE_OFFSET: 12,
+} as const;
+
+const PAGE_BREAK = {
+  TABLE_ROW: 40,
+  TERMS_SECTION: 80,
+  TERMS_INNER: 15,
+  NOTES_SECTION: 50,
+} as const;
+
+const TITLE_BOX = { WIDTH: 200, HEIGHT: 60, TITLE_Y: 24, NUMBER_Y: 44, BELOW_GAP: 15 } as const;
+const LOGO_WIDTH = 140;
+
+const COLOR = {
+  PRIMARY_TEXT: rgb(0.2, 0.2, 0.2),
+  SECONDARY_TEXT: rgb(0.3, 0.3, 0.3),
+  MUTED_TEXT: rgb(0.4, 0.4, 0.4),
+  FOOTER_TEXT: rgb(0.6, 0.6, 0.6),
+  DIVIDER: rgb(0.85, 0.85, 0.85),
+  ALT_ROW_BG: rgb(0.97, 0.97, 0.97),
+  WHITE: rgb(1, 1, 1),
+  ACCENT_PO: rgb(0.1, 0.23, 0.36),
+  ACCENT_RFQ: rgb(0.9, 0.49, 0.13),
+} as const;
+
+const TABLE_COL_WIDTHS = {
+  LINE: 30,
+  PART_NUM: 90,
+  UNIT: 50,
+  QTY: 60,
+  UNIT_PRICE: 70,
+  TOTAL: 70,
+} as const;
+const TABLE_DESC_WIDTH = PRINTABLE_WIDTH
+  - TABLE_COL_WIDTHS.LINE
+  - TABLE_COL_WIDTHS.PART_NUM
+  - TABLE_COL_WIDTHS.UNIT
+  - TABLE_COL_WIDTHS.QTY
+  - TABLE_COL_WIDTHS.UNIT_PRICE
+  - TABLE_COL_WIDTHS.TOTAL;
+
+const HEADER_ROW_HEIGHT = SPACING.TOTAL_BAR_HEIGHT;
+
 interface VendorPOData {
   po: any;
   vendor: any;
@@ -78,30 +162,38 @@ async function embedLogo(pdfDoc: PDFDocument) {
   return null;
 }
 
+function buildTableColumnPositions(margin: number) {
+  const line = margin;
+  const partNum = line + TABLE_COL_WIDTHS.LINE;
+  const description = partNum + TABLE_COL_WIDTHS.PART_NUM;
+  const unit = description + TABLE_DESC_WIDTH;
+  const qty = unit + TABLE_COL_WIDTHS.UNIT;
+  const unitPrice = qty + TABLE_COL_WIDTHS.QTY;
+  const total = unitPrice + TABLE_COL_WIDTHS.UNIT_PRICE;
+  return { line, partNum, description, unit, qty, unitPrice, total };
+}
+
 export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const data = await fetchVendorPOData(poId);
   const { po, vendor, items, companySettings, poSettings } = data;
 
   const isRFQ = !po.poNumber;
   const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
-  const accentColor = isRFQ ? rgb(0.9, 0.49, 0.13) : rgb(0.1, 0.23, 0.36);
+  const accentColor = isRFQ ? COLOR.ACCENT_RFQ : COLOR.ACCENT_PO;
 
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let page = pdfDoc.addPage([612, 792]);
+  let page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
   const { width, height } = page.getSize();
-  const margin = 40;
-  const printableWidth = width - margin * 2;
-  let y = height - margin;
+  let y = height - PAGE.MARGIN;
 
   const logo = await embedLogo(pdfDoc);
   if (logo) {
-    const logoWidth = 140;
-    const logoHeight = logoWidth * (logo.height / logo.width);
-    page.drawImage(logo, { x: margin, y: y - logoHeight, width: logoWidth, height: logoHeight });
-    y -= logoHeight + 8;
+    const logoHeight = LOGO_WIDTH * (logo.height / logo.width);
+    page.drawImage(logo, { x: PAGE.MARGIN, y: y - logoHeight, width: LOGO_WIDTH, height: logoHeight });
+    y -= logoHeight + SPACING.LOGO_GAP;
   }
 
   const companyName = companySettings?.companyName || 'AG Composites';
@@ -110,40 +202,38 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const companyEmail = companySettings?.companyEmail || '';
 
   if (companyAddress) {
-    page.drawText(companyAddress, { x: margin, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-    y -= 11;
+    page.drawText(companyAddress, { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.MUTED_TEXT });
+    y -= LINE_HEIGHT.SMALL;
   }
   if (companyPhone || companyEmail) {
     const contactLine = [companyPhone ? `Phone: ${companyPhone}` : '', companyEmail ? `Email: ${companyEmail}` : ''].filter(Boolean).join(' | ');
-    page.drawText(contactLine, { x: margin, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-    y -= 16;
+    page.drawText(contactLine, { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.MUTED_TEXT });
+    y -= LINE_HEIGHT.SECTION_GAP;
   }
 
-  const titleBoxW = 200;
-  const titleBoxH = 60;
-  const titleBoxX = width - margin - titleBoxW;
-  const titleBoxY = height - margin - titleBoxH;
+  const titleBoxX = width - PAGE.MARGIN - TITLE_BOX.WIDTH;
+  const titleBoxY = height - PAGE.MARGIN - TITLE_BOX.HEIGHT;
 
-  page.drawRectangle({ x: titleBoxX, y: titleBoxY, width: titleBoxW, height: titleBoxH, color: accentColor });
-  const titleWidth = boldFont.widthOfTextAtSize(docTitle, 16);
-  page.drawText(docTitle, { x: titleBoxX + (titleBoxW - titleWidth) / 2, y: titleBoxY + titleBoxH - 24, size: 16, font: boldFont, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: titleBoxX, y: titleBoxY, width: TITLE_BOX.WIDTH, height: TITLE_BOX.HEIGHT, color: accentColor });
+  const titleWidth = boldFont.widthOfTextAtSize(docTitle, FONT_SIZE.DOC_TITLE);
+  page.drawText(docTitle, { x: titleBoxX + (TITLE_BOX.WIDTH - titleWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.TITLE_Y, size: FONT_SIZE.DOC_TITLE, font: boldFont, color: COLOR.WHITE });
 
   if (po.poNumber) {
     const poNumStr = po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '');
-    const poNumWidth = boldFont.widthOfTextAtSize(`#${poNumStr}`, 14);
-    page.drawText(`#${poNumStr}`, { x: titleBoxX + (titleBoxW - poNumWidth) / 2, y: titleBoxY + titleBoxH - 44, size: 14, font: boldFont, color: rgb(1, 1, 1) });
+    const poNumWidth = boldFont.widthOfTextAtSize(`#${poNumStr}`, FONT_SIZE.PO_NUMBER);
+    page.drawText(`#${poNumStr}`, { x: titleBoxX + (TITLE_BOX.WIDTH - poNumWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.NUMBER_Y, size: FONT_SIZE.PO_NUMBER, font: boldFont, color: COLOR.WHITE });
   }
 
-  y = Math.min(y, titleBoxY - 15);
+  y = Math.min(y, titleBoxY - TITLE_BOX.BELOW_GAP);
 
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.85, 0.85, 0.85) });
-  y -= 18;
+  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
+  y -= LINE_HEIGHT.AFTER_DIVIDER;
 
   const colMid = width / 2;
 
-  page.drawText('VENDOR', { x: margin, y, size: 8, font: boldFont, color: accentColor });
-  page.drawText('ORDER DETAILS', { x: colMid + 10, y, size: 8, font: boldFont, color: accentColor });
-  y -= 14;
+  page.drawText('VENDOR', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: accentColor });
+  page.drawText('ORDER DETAILS', { x: colMid + SPACING.DETAIL_LABEL_OFFSET, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: accentColor });
+  y -= LINE_HEIGHT.BODY + 1;
 
   const vendorLines = [
     vendor.name,
@@ -155,8 +245,8 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
 
   let vendorY = y;
   for (const line of vendorLines) {
-    page.drawText(line, { x: margin, y: vendorY, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
-    vendorY -= 13;
+    page.drawText(line, { x: PAGE.MARGIN, y: vendorY, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
+    vendorY -= LINE_HEIGHT.BODY;
   }
 
   let detailY = y;
@@ -168,53 +258,35 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   ].filter(Boolean) as string[][];
 
   for (const [label, value] of details) {
-    page.drawText(label, { x: colMid + 10, y: detailY, size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText(value, { x: colMid + 80, y: detailY, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
-    detailY -= 13;
+    page.drawText(label, { x: colMid + SPACING.DETAIL_LABEL_OFFSET, y: detailY, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.SECONDARY_TEXT });
+    page.drawText(value, { x: colMid + SPACING.DETAIL_VALUE_OFFSET, y: detailY, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
+    detailY -= LINE_HEIGHT.BODY;
   }
 
-  y = Math.min(vendorY, detailY) - 12;
+  y = Math.min(vendorY, detailY) - SPACING.SECTION_BREAK;
 
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.85, 0.85, 0.85) });
-  y -= 5;
+  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
+  y -= SPACING.TEXT_INSET;
 
-  const colWidths = {
-    line: 30,
-    partNum: 90,
-    description: printableWidth - 30 - 90 - 50 - 60 - 70 - 70,
-    unit: 50,
-    qty: 60,
-    unitPrice: 70,
-    total: 70,
-  };
-  const cols = {
-    line: margin,
-    partNum: margin + colWidths.line,
-    description: margin + colWidths.line + colWidths.partNum,
-    unit: margin + colWidths.line + colWidths.partNum + colWidths.description,
-    qty: margin + colWidths.line + colWidths.partNum + colWidths.description + colWidths.unit,
-    unitPrice: margin + colWidths.line + colWidths.partNum + colWidths.description + colWidths.unit + colWidths.qty,
-    total: margin + colWidths.line + colWidths.partNum + colWidths.description + colWidths.unit + colWidths.qty + colWidths.unitPrice,
-  };
+  const cols = buildTableColumnPositions(PAGE.MARGIN);
 
-  const headerRowH = 18;
-  page.drawRectangle({ x: margin, y: y - headerRowH, width: printableWidth, height: headerRowH, color: accentColor });
-  y -= headerRowH - 4;
+  page.drawRectangle({ x: PAGE.MARGIN, y: y - HEADER_ROW_HEIGHT, width: PRINTABLE_WIDTH, height: HEADER_ROW_HEIGHT, color: accentColor });
+  y -= HEADER_ROW_HEIGHT - SPACING.CELL_PAD;
 
   const headers = [
-    { text: '#', x: cols.line + 4 },
-    { text: 'Part Number', x: cols.partNum + 4 },
-    { text: 'Description', x: cols.description + 4 },
-    { text: 'Unit', x: cols.unit + 4 },
-    { text: 'Qty', x: cols.qty + 4 },
-    { text: 'Unit Price', x: cols.unitPrice + 4 },
-    { text: 'Total', x: cols.total + 4 },
+    { text: '#', x: cols.line + SPACING.CELL_PAD },
+    { text: 'Part Number', x: cols.partNum + SPACING.CELL_PAD },
+    { text: 'Description', x: cols.description + SPACING.CELL_PAD },
+    { text: 'Unit', x: cols.unit + SPACING.CELL_PAD },
+    { text: 'Qty', x: cols.qty + SPACING.CELL_PAD },
+    { text: 'Unit Price', x: cols.unitPrice + SPACING.CELL_PAD },
+    { text: 'Total', x: cols.total + SPACING.CELL_PAD },
   ];
 
   for (const h of headers) {
-    page.drawText(h.text, { x: h.x, y, size: 8, font: boldFont, color: rgb(1, 1, 1) });
+    page.drawText(h.text, { x: h.x, y, size: FONT_SIZE.TABLE_CELL, font: boldFont, color: COLOR.WHITE });
   }
-  y -= 8;
+  y -= FONT_SIZE.TABLE_CELL;
 
   let lineTotal = 0;
 
@@ -226,129 +298,129 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
     lineTotal += itemTotal;
 
     const descText = item.description || item.itemDescription || '';
-    const descLines = wrapText(descText, colWidths.description - 8, font, 8);
-    const rowHeight = Math.max(14, descLines.length * 11 + 3);
+    const descLines = wrapText(descText, TABLE_DESC_WIDTH - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL);
+    const rowHeight = Math.max(SPACING.MIN_ROW_HEIGHT, descLines.length * LINE_HEIGHT.SMALL + SPACING.ROW_HEIGHT_PAD);
 
-    if (y - rowHeight < margin + 40) {
-      page = pdfDoc.addPage([612, 792]);
-      y = height - margin;
+    if (y - rowHeight < PAGE.MARGIN + PAGE_BREAK.TABLE_ROW) {
+      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+      y = height - PAGE.MARGIN;
     }
 
     if (i % 2 === 1) {
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: printableWidth, height: rowHeight, color: rgb(0.97, 0.97, 0.97) });
+      page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight, width: PRINTABLE_WIDTH, height: rowHeight, color: COLOR.ALT_ROW_BG });
     }
 
-    const textY = y - 10;
-    page.drawText(String(item.lineNumber ?? i + 1), { x: cols.line + 4, y: textY, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText(truncateText(item.agPartNumber || '', colWidths.partNum - 8, font, 8), { x: cols.partNum + 4, y: textY, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+    const textY = y - SPACING.ROW_TEXT_OFFSET;
+    page.drawText(String(item.lineNumber ?? i + 1), { x: cols.line + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
+    page.drawText(truncateText(item.agPartNumber || '', TABLE_COL_WIDTHS.PART_NUM - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
 
     for (let dl = 0; dl < descLines.length; dl++) {
-      page.drawText(descLines[dl], { x: cols.description + 4, y: textY - (dl * 11), size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+      page.drawText(descLines[dl], { x: cols.description + SPACING.CELL_PAD, y: textY - (dl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
     }
 
-    page.drawText(item.unit || 'EA', { x: cols.unit + 4, y: textY, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText(String(qty), { x: cols.qty + 4, y: textY, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText(formatCurrency(price), { x: cols.unitPrice + 4, y: textY, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText(formatCurrency(itemTotal), { x: cols.total + 4, y: textY, size: 8, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText(item.unit || 'EA', { x: cols.unit + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
+    page.drawText(String(qty), { x: cols.qty + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    page.drawText(formatCurrency(price), { x: cols.unitPrice + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    page.drawText(formatCurrency(itemTotal), { x: cols.total + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font: boldFont, color: COLOR.PRIMARY_TEXT });
 
     y -= rowHeight;
   }
 
-  y -= 5;
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.85, 0.85, 0.85) });
-  y -= 16;
+  y -= SPACING.TEXT_INSET;
+  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
+  y -= LINE_HEIGHT.SECTION_GAP;
 
-  const totalLabelX = cols.unitPrice - 10;
-  const totalValueX = cols.total + 4;
+  const totalLabelX = cols.unitPrice - SPACING.DETAIL_LABEL_OFFSET;
+  const totalValueX = cols.total + SPACING.CELL_PAD;
 
-  page.drawText('Subtotal:', { x: totalLabelX, y, size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-  page.drawText(formatCurrency(lineTotal), { x: totalValueX, y, size: 9, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
-  y -= 15;
+  page.drawText('Subtotal:', { x: totalLabelX, y, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.SECONDARY_TEXT });
+  page.drawText(formatCurrency(lineTotal), { x: totalValueX, y, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.PRIMARY_TEXT });
+  y -= LINE_HEIGHT.TOTAL_ROW;
 
   if (po.shippingCost && Number(po.shippingCost) > 0) {
-    page.drawText('Shipping:', { x: totalLabelX, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText(formatCurrency(po.shippingCost), { x: totalValueX, y, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
-    y -= 15;
+    page.drawText('Shipping:', { x: totalLabelX, y, size: FONT_SIZE.BODY, font, color: COLOR.SECONDARY_TEXT });
+    page.drawText(formatCurrency(po.shippingCost), { x: totalValueX, y, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
+    y -= LINE_HEIGHT.TOTAL_ROW;
     lineTotal += Number(po.shippingCost);
   }
 
-  page.drawRectangle({ x: totalLabelX - 5, y: y - 2, width: printableWidth - (totalLabelX - margin) + 5, height: 18, color: accentColor });
-  page.drawText('TOTAL:', { x: totalLabelX, y: y + 2, size: 10, font: boldFont, color: rgb(1, 1, 1) });
-  page.drawText(formatCurrency(po.totalCost || lineTotal), { x: totalValueX, y: y + 2, size: 10, font: boldFont, color: rgb(1, 1, 1) });
-  y -= 30;
+  page.drawRectangle({ x: totalLabelX - SPACING.TOTAL_BAR_PAD, y: y - SPACING.TOTAL_BAR_OFFSET, width: PRINTABLE_WIDTH - (totalLabelX - PAGE.MARGIN) + SPACING.TOTAL_BAR_PAD, height: SPACING.TOTAL_BAR_HEIGHT, color: accentColor });
+  page.drawText('TOTAL:', { x: totalLabelX, y: y + SPACING.TOTAL_BAR_OFFSET, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: COLOR.WHITE });
+  page.drawText(formatCurrency(po.totalCost || lineTotal), { x: totalValueX, y: y + SPACING.TOTAL_BAR_OFFSET, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: COLOR.WHITE });
+  y -= SPACING.AFTER_TOTAL;
 
   const terms = vendor.termsAndConditions || poSettings?.termsAndConditions;
   const paymentTerms = vendor.paymentTerms || poSettings?.paymentTerms;
   const shippingInstructions = vendor.shippingInstructions || poSettings?.shippingInstructions;
 
   if (paymentTerms || shippingInstructions || terms) {
-    if (y < margin + 80) {
-      page = pdfDoc.addPage([612, 792]);
-      y = height - margin;
+    if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_SECTION) {
+      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+      y = height - PAGE.MARGIN;
     }
 
-    page.drawText('TERMS & CONDITIONS', { x: margin, y, size: 10, font: boldFont, color: accentColor });
-    y -= 16;
+    page.drawText('TERMS & CONDITIONS', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: accentColor });
+    y -= SPACING.TERMS_TITLE_GAP;
 
     if (paymentTerms) {
-      page.drawText('Payment Terms:', { x: margin, y, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-      y -= 12;
-      const ptLines = wrapText(paymentTerms, printableWidth - 10, font, 8);
+      page.drawText('Payment Terms:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
+      y -= SPACING.TERMS_SUBSECTION_GAP;
+      const ptLines = wrapText(paymentTerms, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
       for (const line of ptLines) {
-        page.drawText(line, { x: margin + 5, y, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-        y -= 11;
+        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
+        y -= LINE_HEIGHT.SMALL;
       }
-      y -= 4;
+      y -= SPACING.TERMS_SUBSECTION_TAIL;
     }
 
     if (shippingInstructions) {
-      page.drawText('Shipping Instructions:', { x: margin, y, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-      y -= 12;
-      const siLines = wrapText(shippingInstructions, printableWidth - 10, font, 8);
+      page.drawText('Shipping Instructions:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
+      y -= SPACING.TERMS_SUBSECTION_GAP;
+      const siLines = wrapText(shippingInstructions, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
       for (const line of siLines) {
-        page.drawText(line, { x: margin + 5, y, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-        y -= 11;
+        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
+        y -= LINE_HEIGHT.SMALL;
       }
-      y -= 4;
+      y -= SPACING.TERMS_SUBSECTION_TAIL;
     }
 
     if (terms) {
-      page.drawText('General Terms:', { x: margin, y, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-      y -= 12;
-      const tLines = wrapText(terms, printableWidth - 10, font, 8);
+      page.drawText('General Terms:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
+      y -= SPACING.TERMS_SUBSECTION_GAP;
+      const tLines = wrapText(terms, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
       for (const line of tLines.slice(0, 20)) {
-        if (y < margin + 15) {
-          page = pdfDoc.addPage([612, 792]);
-          y = height - margin;
+        if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_INNER) {
+          page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+          y = height - PAGE.MARGIN;
         }
-        page.drawText(line, { x: margin + 5, y, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-        y -= 11;
+        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
+        y -= LINE_HEIGHT.SMALL;
       }
     }
   }
 
   if (po.notes) {
-    if (y < margin + 50) {
-      page = pdfDoc.addPage([612, 792]);
-      y = height - margin;
+    if (y < PAGE.MARGIN + PAGE_BREAK.NOTES_SECTION) {
+      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+      y = height - PAGE.MARGIN;
     }
-    y -= 10;
-    page.drawText('NOTES', { x: margin, y, size: 10, font: boldFont, color: accentColor });
-    y -= 14;
-    const noteLines = wrapText(po.notes, printableWidth - 10, font, 8);
+    y -= SPACING.NOTES_GAP;
+    page.drawText('NOTES', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: accentColor });
+    y -= SPACING.NOTES_TITLE_GAP;
+    const noteLines = wrapText(po.notes, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
     for (const line of noteLines.slice(0, 15)) {
-      page.drawText(line, { x: margin + 5, y, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-      y -= 11;
+      page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
+      y -= LINE_HEIGHT.SMALL;
     }
   }
 
-  const footerY = margin - 5;
+  const footerY = PAGE.MARGIN - SPACING.FOOTER_OFFSET;
   for (const pg of pdfDoc.getPages()) {
-    pg.drawLine({ start: { x: margin, y: footerY + 12 }, end: { x: width - margin, y: footerY + 12 }, thickness: 0.5, color: rgb(0.85, 0.85, 0.85) });
-    pg.drawText(`${companyName} — Generated by EPOCH`, { x: margin, y: footerY, size: 7, font, color: rgb(0.6, 0.6, 0.6) });
+    pg.drawLine({ start: { x: PAGE.MARGIN, y: footerY + SPACING.FOOTER_LINE_OFFSET }, end: { x: width - PAGE.MARGIN, y: footerY + SPACING.FOOTER_LINE_OFFSET }, thickness: 0.5, color: COLOR.DIVIDER });
+    pg.drawText(`${companyName} — Generated by EPOCH`, { x: PAGE.MARGIN, y: footerY, size: FONT_SIZE.FOOTER, font, color: COLOR.FOOTER_TEXT });
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    const dateWidth = font.widthOfTextAtSize(dateStr, 7);
-    pg.drawText(dateStr, { x: width - margin - dateWidth, y: footerY, size: 7, font, color: rgb(0.6, 0.6, 0.6) });
+    const dateWidth = font.widthOfTextAtSize(dateStr, FONT_SIZE.FOOTER);
+    pg.drawText(dateStr, { x: width - PAGE.MARGIN - dateWidth, y: footerY, size: FONT_SIZE.FOOTER, font, color: COLOR.FOOTER_TEXT });
   }
 
   const pdfBytes = await pdfDoc.save();

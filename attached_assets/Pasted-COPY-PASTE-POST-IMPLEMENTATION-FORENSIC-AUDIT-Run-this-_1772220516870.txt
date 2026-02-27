@@ -1,0 +1,159 @@
+COPY-PASTE: POST-IMPLEMENTATION FORENSIC AUDIT
+
+Run this as a single audit session:
+
+We just implemented the Executive Rundown system.
+
+This is a READ-ONLY forensic audit.
+
+Do NOT modify files.
+Do NOT auto-fix anything.
+Return structured findings only.
+
+We are validating system integrity after introducing:
+
+- executive_priority enum
+- executive_rundown_groups table
+- executive_rundown_items table
+- requireExecutiveAccess middleware
+- /api/executive/rundown route namespace
+- Header dropdown injection
+- Carry-forward logic
+- Vendor PO linking button
+
+Run the following verification sections.
+
+----------------------------------------------------
+SECTION 1 — Schema Validation
+----------------------------------------------------
+
+1) Confirm executive_priority enum exists.
+2) Confirm executive_rundown_groups table exists.
+3) Confirm executive_rundown_items table exists.
+4) Confirm:
+   - user_id FK references users.id
+   - completed_by FK references users.id
+   - created_at / updated_at defaultNow()
+   - is_active default true
+5) Confirm no naming collisions with:
+   - daily_tasks
+   - task_items
+   - checklist_*
+6) Confirm TypeScript compiles.
+
+Return:
+- Exact schema block found
+- Validation results
+- Any enum conflicts
+- Any migration warnings
+
+----------------------------------------------------
+SECTION 2 — Route & Access Control
+----------------------------------------------------
+
+1) Confirm requireExecutiveAccess middleware exists.
+2) Confirm it strictly checks req.user.username === "glennj".
+3) Confirm route mounting path.
+4) Confirm no route is exposed without middleware.
+5) Confirm non-glennj returns 403.
+6) Confirm route does NOT bypass authenticateToken.
+
+Return:
+- Middleware code
+- Route file code
+- Mount location
+- Access risk level (Low/Medium/High)
+
+----------------------------------------------------
+SECTION 3 — Query Safety & Performance
+----------------------------------------------------
+
+For GET /today:
+
+1) Confirm it filters by:
+   - userId
+   - taskDate
+   - isActive
+2) Confirm it orders by:
+   - priority
+   - sortOrder
+3) Confirm no full table scans.
+4) Confirm no missing indexes if needed.
+
+For carry-forward:
+
+5) Confirm overdue query correctly filters:
+   - taskDate < today
+   - isCompleted = false
+   - userId scoped
+
+Return:
+- Query code
+- Potential performance concerns
+- Recommended index additions (if needed)
+
+----------------------------------------------------
+SECTION 4 — Navigation Stability
+----------------------------------------------------
+
+1) Confirm Navigation.tsx compiles.
+2) Confirm dropdown only renders when currentUser.username === "glennj".
+3) Confirm no layout shifts.
+4) Confirm no duplicate icon rendering.
+5) Confirm no new console warnings.
+
+Return:
+- Component insertion snippet
+- Risk level
+
+----------------------------------------------------
+SECTION 5 — Completion & Audit Trail
+----------------------------------------------------
+
+1) Confirm POST /:id/complete:
+   - sets isCompleted = true
+   - sets completedAt = now
+   - sets completedBy = req.user.id
+2) Confirm updatedAt updates.
+3) Confirm completed items remain queryable historically.
+
+Return:
+- Completion route code
+- Audit integrity confirmation
+
+----------------------------------------------------
+SECTION 6 — Vendor PO Linking Integrity
+----------------------------------------------------
+
+1) Confirm "+ Add to Executive Rundown" button:
+   - Hidden for non-glennj
+   - Does not interfere with PO save logic
+2) Confirm linked_entity_type and linked_entity_id populate correctly.
+3) Confirm no regressions in:
+   - PDF rendering
+   - Approval flows
+   - Receiving flows
+
+Return:
+- UI snippet
+- API payload
+- Regression risk assessment
+
+----------------------------------------------------
+SECTION 7 — Overall System Risk Assessment
+----------------------------------------------------
+
+Rate each area:
+
+- Security integrity
+- Data integrity
+- UI stability
+- Performance impact
+- Architectural cleanliness
+- Future Proteus extractability
+
+Provide:
+
+Overall grade (A–F)
+Top 3 risks (if any)
+Immediate fixes required (if any)

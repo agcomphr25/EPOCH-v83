@@ -680,13 +680,16 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendor-pos/:id/issue - Issue a PO and send confirmation email with magic link
+// POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending confirmation email to vendor
 router.post('/:id/issue', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
+
+    const { skipEmail, reason } = req.body ?? {};
+    const skip = Boolean(skipEmail);
 
     // Get the PO first for vendor lookup and pre-flight checks
     const vendorPO = await storage.getVendorPO(id);
@@ -702,17 +705,46 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
-    // Get the vendor details
+    const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+
+    // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
+    if (skip) {
+      const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
+      if (trimmedReason.length < 5) {
+        return res.status(400).json({
+          error: 'Reason required',
+          message: 'Please provide a reason (at least 5 characters) for issuing without notifying the vendor.',
+        });
+      }
+
+      const nowAt = new Date();
+      const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
+        issuedWithoutEmail: true,
+        reason: trimmedReason,
+        issuedWithoutEmailAt: nowAt,
+        performedBy,
+      });
+
+      console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
+
+      return res.json({
+        ...issuedPO,
+        emailSent: false,
+        poNumber,
+        message: 'PO marked as issued. Vendor was NOT notified.',
+      });
+    }
+
+    // ── PATH B: Issue WITH vendor confirmation email (default path) ──────────
     const vendor = await storage.getVendor(vendorPO.vendorId);
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
     }
 
-    // Vendor email is required — email always fires on issue
     if (!vendor.email) {
       return res.status(400).json({ 
         error: 'Vendor email not configured',
-        message: 'Please add a contact email for this vendor before issuing the PO.'
+        message: 'Please add a contact email for this vendor before issuing the PO.',
       });
     }
 
@@ -754,7 +786,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       context: issueContext,
       to: vendor.email,
       cc: ccList,
-      triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
+      triggeredBy: performedBy,
       capabilityRequired: 'issue_vendor_po',
       orderId: String(id),
     });
@@ -769,9 +801,9 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
+    console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
 
-    res.json({
+    return res.json({
       ...issuedPO,
       emailSent: true,
       emailRecipient: vendor.email,

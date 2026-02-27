@@ -1,0 +1,86 @@
+COPY-PASTE PROMPT 1 — Backend: Respect skipEmail, store flags, write audit
+IMPLEMENTATION — BACKEND FIX FOR ISSUE PO (skipEmail + durable flags + audit)
+
+SCOPE: server only
+DO NOT refactor unrelated code. Minimal changes only.
+Goal: Allow issuing a PO without emailing the vendor for legacy/backfill, safely and auditable.
+
+CURRENT STATE:
+- Frontend sends { skipEmail: true/false } to POST /api/vendor-pos/:id/issue
+- Backend ignores req.body and always sends email
+- Backend currently hard-blocks if vendor.email missing
+
+REQUIREMENTS:
+1) Backend must read skipEmail from request body.
+2) If skipEmail=true:
+   - DO NOT require vendor.email
+   - DO NOT generate vendor confirmation link
+   - DO NOT call sendCommunication()
+   - Still issue the PO (status/po number) exactly as today
+   - Persist issued_without_email=true and issued_without_email_reason=<reason>
+   - Write a durable audit event (prefer Option A: internal record in communication_logs)
+   - Response should include { emailSent: false }
+
+3) If skipEmail=false:
+   - Existing behavior unchanged: require vendor.email, generate link, sendCommunication()
+   - Response includes { emailSent: true, recipient: vendor.email }
+
+-------------------------------------------------------
+STEP 1 — Schema additions (server/schema.ts)
+-------------------------------------------------------
+Add to vendor_pos table:
+- issuedWithoutEmail BOOLEAN (nullable or default false)
+- issuedWithoutEmailReason TEXT (nullable)
+- issuedWithoutEmailAt TIMESTAMP (nullable)  [recommended]
+
+Update any Zod schemas / selects so these fields are returned to the client where vendor POs are fetched.
+
+-------------------------------------------------------
+STEP 2 — Route update (server/src/routes/vendorPOs.ts)
+-------------------------------------------------------
+In POST /api/vendor-pos/:id/issue:
+- Parse body safely:
+  const { skipEmail, reason } = req.body ?? {};
+  const skip = Boolean(skipEmail);
+
+- If skip==true:
+  - Validate reason:
+      - required, trimmed, min length 5 (or 10)
+  - Issue PO via storage.issueVendorPO(...) (extend storage call as needed to set flags)
+  - Write durable audit event:
+      Use existing communication_logs via sendCommunication OR direct insert:
+        channel = 'internal'
+        templateKey = 'vendor_po_issue_skipped'
+        status = 'skipped'
+        metadata includes: vendorPoId, poNumber, performedBy (user id/email), reason
+  - Return 200 with:
+      { ok: true, status: 'Sent', emailSent: false }
+
+- If skip==false:
+  - Existing behavior unchanged
+  - Return 200 with { emailSent: true, recipient: vendor.email }
+
+IMPORTANT:
+- Ensure the PO remains in 'Sent' state even if email send fails (existing behavior)
+- For skipEmail, do NOT throw if vendor.email is missing
+
+-------------------------------------------------------
+STEP 3 — Storage update (server/storage.ts)
+-------------------------------------------------------
+Update storage.issueVendorPO(...) to accept optional params:
+- issuedWithoutEmail boolean
+- reason string
+- issuedWithoutEmailAt date
+
+Ensure it persists these on the vendor_pos row when skipEmail=true.
+
+-------------------------------------------------------
+STEP 4 — Output required
+-------------------------------------------------------
+A) Files changed
+B) Route diff summary (old vs new behavior)
+C) Schema changes
+D) Audit event insertion details
+E) Example response payloads for skipEmail true/false
+
+END.

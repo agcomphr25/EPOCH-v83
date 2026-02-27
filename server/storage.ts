@@ -7850,8 +7850,11 @@ export class DatabaseStorage implements IStorage {
     return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
   }
 
-  async issueVendorPO(id: number): Promise<{ vendorPO: any; poNumber: string }> {
-    return await db.transaction(async (tx) => {
+  async issueVendorPO(
+    id: number,
+    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string }
+  ): Promise<{ vendorPO: any; poNumber: string }> {
+    const result = await db.transaction(async (tx) => {
       const [lockedPO] = await tx
         .select()
         .from(vendorPOs)
@@ -7887,9 +7890,17 @@ export class DatabaseStorage implements IStorage {
         poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
       }
 
+      const extraFields = opts?.issuedWithoutEmail
+        ? {
+            issuedWithoutEmail: true,
+            issuedWithoutEmailReason: opts.reason ?? null,
+            issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
+          }
+        : {};
+
       const [updatedPO] = await tx
         .update(vendorPOs)
-        .set({ status: 'Sent', poNumber, updatedAt: new Date() })
+        .set({ status: 'Sent', poNumber, updatedAt: new Date(), ...extraFields })
         .where(eq(vendorPOs.id, id))
         .returning();
 
@@ -7940,6 +7951,37 @@ export class DatabaseStorage implements IStorage {
 
       return { vendorPO: updatedPO, poNumber };
     });
+
+    // Write durable audit event to communication_logs when issued without email
+    if (opts?.issuedWithoutEmail) {
+      try {
+        await db.insert(communicationLogs).values({
+          orderId: String(id),
+          messageType: 'notification',
+          customerId: opts.performedBy ?? 'system',
+          type: 'vendor_po_issue_skipped',
+          method: 'internal',
+          recipient: opts.performedBy ?? 'system',
+          status: 'skipped',
+          skipReason: opts.reason ?? 'issued_without_email',
+          templateKey: 'vendor_po_issue_skipped',
+          triggeredBy: opts.performedBy ?? 'system',
+          bodyHtml: JSON.stringify({
+            vendorPoId: id,
+            poNumber: result.poNumber,
+            performedBy: opts.performedBy,
+            reason: opts.reason,
+            issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
+          }),
+          sentAt: new Date(),
+        });
+      } catch (auditErr) {
+        console.error('[VendorPO] Failed to write no-email audit event:', auditErr);
+        // Non-fatal — PO issuance already committed
+      }
+    }
+
+    return result;
   }
 
   async createVendorPO(data: any): Promise<any> {

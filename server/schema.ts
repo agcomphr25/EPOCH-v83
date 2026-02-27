@@ -3401,6 +3401,9 @@ export const vendorPOs = pgTable('vendor_pos', {
   isCurrentRevision: boolean('is_current_revision').default(true).notNull(), // Only one revision should be current
   revisedAt: timestamp('revised_at'), // When this revision was created
   revisedBy: text('revised_by'), // Who created this revision
+  issuedWithoutEmail: boolean('issued_without_email').default(false),
+  issuedWithoutEmailReason: text('issued_without_email_reason'),
+  issuedWithoutEmailAt: timestamp('issued_without_email_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

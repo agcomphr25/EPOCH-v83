@@ -7970,13 +7970,22 @@ export class DatabaseStorage implements IStorage {
           customerId: 'vendor-po-system',        // sentinel — NOT NULL constraint; no real customer involved
           type: 'vendor_po_issue_skipped',
           method: 'internal',
-          recipient: opts.performedByEmail ?? 'internal', // email preferred; 'internal' satisfies NOT NULL when unavailable
+          recipient: opts.performedByEmail ?? 'internal@epoch.local',
           status: 'skipped',
           skipReason: 'no_vendor_notification',  // system skip code — business reason text lives in message
           message: `Vendor PO ${result.poNumber} (id=${id}) issued internally without vendor notification. Performed by: ${opts.performedBy ?? 'unknown'} (${opts.performedByEmail ?? 'no email'}). Reason: ${opts.reason ?? '(none)'}. At: ${issuedAt}`,
           templateKey: 'vendor_po_issue_skipped',
           triggeredBy: opts.performedBy ?? 'system',
           direction: 'outbound',
+          attachmentsMeta: {
+            kind: 'internal_audit',
+            vendorPoId: id,
+            poNumber: result.poNumber,
+            performedBy: opts.performedBy ?? null,
+            performedByEmail: opts.performedByEmail ?? null,
+            issuedWithoutEmailAt: issuedAt,
+            reason: opts.reason ?? null,
+          },
           sentAt: new Date(),
         });
       } catch (auditErr) {

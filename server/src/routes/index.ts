@@ -128,6 +128,7 @@ import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
+import executiveRundownRoutes from './executiveRundown';
 import emailTemplatesRoutes from './emailTemplates';
 
 export function registerRoutes(app: Express): Server {
@@ -570,6 +571,9 @@ export function registerRoutes(app: Express): Server {
   
   // Cutting Table Manufacturing Queue routes
   app.use('/api/cutting-table-mfg-queue', cuttingTableManufacturingQueueRoutes);
+
+  // Executive Rundown routes (Glenn-only, access-restricted)
+  app.use('/api/executive/rundown', executiveRundownRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

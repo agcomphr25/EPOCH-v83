@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import {
@@ -42,6 +43,7 @@ const priorityConfig = {
 };
 
 export default function ExecutiveRundownDropdown() {
+  const [, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
   const { data, isLoading } = useQuery<RundownResponse>({
@@ -188,6 +190,16 @@ export default function ExecutiveRundownDropdown() {
             </div>
           </>
         )}
+        <DropdownMenuSeparator />
+        <button
+          onClick={() => {
+            setIsOpen(false);
+            setLocation('/executive');
+          }}
+          className="w-full flex items-center justify-center px-3 py-2 text-xs font-medium text-primary hover:bg-accent transition-colors cursor-pointer"
+        >
+          Open Full Rundown
+        </button>
       </DropdownMenuContent>
     </DropdownMenu>
   );

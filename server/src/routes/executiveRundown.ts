@@ -76,6 +76,110 @@ router.get('/overdue', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/week', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const mondayStr = monday.toISOString().slice(0, 10);
+    const sundayStr = sunday.toISOString().slice(0, 10);
+
+    const groups = await pool.query(
+      `SELECT * FROM executive_rundown_groups
+       WHERE user_id = $1 AND group_date >= $2 AND group_date <= $3 AND is_active = true
+       ORDER BY group_date ASC`,
+      [userId, mondayStr, sundayStr]
+    );
+
+    const groupIds = (groups || []).map((g: any) => g.id);
+    let items: any[] = [];
+    if (groupIds.length > 0) {
+      items = await pool.query(
+        `SELECT * FROM executive_rundown_items
+         WHERE group_id = ANY($1) AND is_active = true
+         ORDER BY
+           CASE priority
+             WHEN 'CRITICAL' THEN 0
+             WHEN 'HIGH' THEN 1
+             WHEN 'NORMAL' THEN 2
+             WHEN 'LOW' THEN 3
+           END,
+           sort_order ASC`,
+        [groupIds]
+      ) || [];
+    }
+
+    res.json({ groups: groups || [], items });
+  } catch (error: any) {
+    console.error('Executive rundown GET /week error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch('/:id', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { id } = req.params;
+    const { title, description, priority, category } = req.body;
+
+    const fields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (title !== undefined) { fields.push(`title = $${paramIndex++}`); values.push(title); }
+    if (description !== undefined) { fields.push(`description = $${paramIndex++}`); values.push(description); }
+    if (priority !== undefined) { fields.push(`priority = $${paramIndex++}`); values.push(priority); }
+    if (category !== undefined) { fields.push(`category = $${paramIndex++}`); values.push(category); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    fields.push(`updated_at = NOW()`);
+    values.push(id, userId);
+
+    const result = await pool.query(
+      `UPDATE executive_rundown_items SET ${fields.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} AND is_active = true RETURNING *`,
+      values
+    );
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    res.json(result[0]);
+  } catch (error: any) {
+    console.error('Executive rundown PATCH /:id error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE executive_rundown_items SET is_active = false, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND is_active = true RETURNING *`,
+      [id, userId]
+    );
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Executive rundown DELETE /:id error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/carry-forward', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;

@@ -47,6 +47,7 @@ import TVDisplayPage from './pages/TVDisplayPage';
 import ProductionTimerHistory from './pages/ProductionTimerHistory';
 import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
+import ExecutiveRundown from './pages/ExecutiveRundown';
 import TicketsPage from './pages/TicketsPage';
 import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
@@ -453,6 +454,7 @@ function App() {
                   
                   {/* Field - Calm thinking surface (single user: admin_glennj) */}
                   <Route path="/field" component={FieldPage} />
+                  <Route path="/executive" component={ExecutiveRundown} />
 
                   {/* Ticketing System - Internal CSR Tool */}
                   <Route path="/tickets" component={TicketsPage} />

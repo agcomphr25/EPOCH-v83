@@ -1,0 +1,155 @@
+IMPLEMENTATION TASK — BUILD EPOCH USER IDENTITY LAYER
+
+Objective:
+Create a long-term User Identity Layer abstraction that sits between the database and API routes.
+
+This is a foundational architecture task.
+Do NOT refactor existing modules yet.
+Do NOT remove any existing fields.
+Do NOT modify unrelated routes.
+
+We are building infrastructure only.
+
+----------------------------------------------------
+PHASE 1 — CREATE IDENTITY LAYER DIRECTORY
+----------------------------------------------------
+
+Create new directory:
+
+server/identity/
+
+Inside it create:
+
+server/identity/userIdentity.ts
+
+----------------------------------------------------
+PHASE 2 — DEFINE CORE TYPES
+----------------------------------------------------
+
+Inside userIdentity.ts define:
+
+export type IdentitySnapshot = {
+  userId: number;
+  displayName: string;
+  firstName: string;
+  lastName: string;
+};
+
+export type IdentityFormat = "full" | "first" | "initials";
+
+----------------------------------------------------
+PHASE 3 — CREATE SNAPSHOT RESOLVER
+----------------------------------------------------
+
+Implement:
+
+export async function createIdentitySnapshot(userId: number): Promise<IdentitySnapshot>
+
+Behavior:
+
+- Query users table by id
+- If user exists:
+    firstName = user.firstName ?? ""
+    lastName = user.lastName ?? ""
+    displayName = `${firstName} ${lastName}`.trim()
+- If no user found:
+    return:
+    {
+      userId,
+      displayName: "Unknown User",
+      firstName: "Unknown",
+      lastName: ""
+    }
+
+Follow existing Drizzle query patterns already used in the codebase.
+
+DO NOT import route-level logic.
+This must remain a pure identity utility.
+
+----------------------------------------------------
+PHASE 4 — CREATE FORMATTER FUNCTION
+----------------------------------------------------
+
+Implement:
+
+export function formatIdentity(
+  snapshot: IdentitySnapshot,
+  format: IdentityFormat
+): string
+
+Rules:
+
+if format === "full":
+    return snapshot.displayName
+
+if format === "first":
+    return snapshot.firstName || snapshot.displayName
+
+if format === "initials":
+    return:
+        first letter of firstName +
+        first letter of lastName
+    (fallback to first letter of displayName if needed)
+
+Never mutate the snapshot.
+This function is pure formatting only.
+
+----------------------------------------------------
+PHASE 5 — CREATE INSERT HELPER
+----------------------------------------------------
+
+Add helper:
+
+export async function buildIdentityInsertFields(userId: number) {
+  const snapshot = await createIdentitySnapshot(userId);
+
+  return {
+    userId: snapshot.userId,
+    displayName: snapshot.displayName,
+  };
+}
+
+This helper is for routes that need to store:
+
+<field>UserId
+<field>DisplayName
+
+This does NOT perform DB insert.
+It just prepares safe identity fields.
+
+----------------------------------------------------
+PHASE 6 — DOCUMENT THE STANDARD
+----------------------------------------------------
+
+At the top of userIdentity.ts add comment block:
+
+/*
+EPOCH USER IDENTITY LAYER
+
+Purpose:
+Centralize all identity resolution and formatting logic.
+
+Rules:
+- Database stores UserId + DisplayName snapshot.
+- Routes never manually build name strings.
+- Routes never JOIN users directly for display.
+- Frontend never renders numeric user IDs.
+- Formatting rules are centralized here.
+
+This layer sits between DB and API.
+*/
+
+----------------------------------------------------
+PHASE 7 — VERIFY NO SIDE EFFECTS
+----------------------------------------------------
+
+- No existing route should break.
+- No schema modifications.
+- No imports changed elsewhere.
+- No refactors.
+- This is infrastructure only.
+
+Return:
+- Full contents of server/identity/userIdentity.ts
+- Confirmation that directory and file were created
+- Confirmation no other files were modified

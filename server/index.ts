@@ -827,6 +827,56 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Address validation columns migration:', addrErr.message);
       }
 
+      // Ensure executive rundown tables exist
+      try {
+        const { sql: sqlExec } = await import('drizzle-orm');
+        await db.execute(sqlExec`
+          DO $$ BEGIN
+            CREATE TYPE executive_priority AS ENUM ('CRITICAL', 'HIGH', 'NORMAL', 'LOW');
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlExec`
+          CREATE TABLE IF NOT EXISTS executive_rundown_groups (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            group_date DATE NOT NULL,
+            title TEXT,
+            notes TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlExec`
+          CREATE INDEX IF NOT EXISTS exec_rundown_group_user_date_idx
+            ON executive_rundown_groups (user_id, group_date)
+        `);
+        await db.execute(sqlExec`
+          CREATE TABLE IF NOT EXISTS executive_rundown_items (
+            id SERIAL PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES executive_rundown_groups(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            description TEXT,
+            priority executive_priority NOT NULL DEFAULT 'NORMAL',
+            category TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_completed BOOLEAN NOT NULL DEFAULT false,
+            completed_at TIMESTAMP,
+            completed_by INTEGER REFERENCES users(id),
+            linked_entity_type TEXT,
+            linked_entity_id TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured executive rundown tables exist');
+      } catch (execErr: any) {
+        console.warn('⚠️ Executive rundown tables migration:', execErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

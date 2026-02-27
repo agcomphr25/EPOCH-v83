@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -302,6 +303,8 @@ function getStatusColor(status: VendorPO['status']) {
 function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [draftIds, setDraftIds] = useState<number[]>([]);
 
   const { data: allSettings = [], isError: allSettingsError } = useQuery<any[]>({
     queryKey: ['/api/vendor-pos/optional-settings'],
@@ -337,18 +340,39 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
     },
   });
 
-  const handleToggle = (settingId: number) => {
-    const newIds = selectedIds.includes(settingId)
-      ? selectedIds.filter((id) => id !== settingId)
-      : [...selectedIds, settingId];
-    setSelectedIds(newIds);
-    updateMutation.mutate(newIds);
+  const openModal = () => {
+    setDraftIds([...selectedIds]);
+    setIsModalOpen(true);
   };
 
-  if (allSettingsError) {
+  const handleCancel = () => {
+    setIsModalOpen(false);
+    setDraftIds([...selectedIds]);
+  };
+
+  const handleSave = () => {
+    setSelectedIds(draftIds);
+    updateMutation.mutate(draftIds);
+    setIsModalOpen(false);
+  };
+
+  const handleDraftToggle = (settingId: number) => {
+    setDraftIds((prev) =>
+      prev.includes(settingId)
+        ? prev.filter((id) => id !== settingId)
+        : [...prev, settingId]
+    );
+  };
+
+  if (allSettingsError || isError) {
     return (
-      <div className="text-sm text-red-600 py-2">
+      <div className="text-sm text-red-600 py-2 flex items-center gap-2">
         Failed to load optional statements.
+        {isError && (
+          <Button onClick={() => refetch()} variant="outline" size="sm">
+            Retry
+          </Button>
+        )}
       </div>
     );
   }
@@ -362,17 +386,6 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
     );
   }
 
-  if (isError) {
-    return (
-      <div className="text-sm text-red-600 py-2 flex items-center gap-2">
-        Failed to load selections.
-        <Button onClick={() => refetch()} variant="outline" size="sm" data-testid="button-retry-load">
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   if (allSettings.length === 0) {
     return null;
   }
@@ -380,37 +393,89 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
   return (
     <div className="space-y-2">
       <Label>Optional Statements</Label>
-      <div className="space-y-2 max-h-48 overflow-y-auto">
-        {allSettings.map((setting) => (
-          <div
-            key={setting.id}
-            className="flex items-start space-x-3 p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            data-testid={`optional-setting-item-${setting.id}`}
-          >
-            <Checkbox
-              id={`setting-${setting.id}`}
-              checked={selectedIds.includes(setting.id)}
-              onCheckedChange={() => handleToggle(setting.id)}
-              disabled={updateMutation.isPending}
-              data-testid={`checkbox-optional-setting-${setting.id}`}
-            />
-            <div className="flex-1">
-              <label
-                htmlFor={`setting-${setting.id}`}
-                className="font-medium text-sm cursor-pointer"
-              >
-                {setting.name}
-              </label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {setting.statement}
-              </p>
-            </div>
-            {selectedIds.includes(setting.id) && (
-              <Check className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
-            )}
-          </div>
-        ))}
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={openModal}
+          data-testid="button-manage-statements"
+        >
+          Manage Statements
+        </Button>
+        {selectedIds.length > 0 && (
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.length} statement{selectedIds.length !== 1 ? 's' : ''} selected
+          </span>
+        )}
       </div>
+
+      <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) handleCancel(); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Optional Statements</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-2 py-2 pr-1">
+            {allSettings.map((setting) => (
+              <div
+                key={setting.id}
+                className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => handleDraftToggle(setting.id)}
+                data-testid={`optional-setting-item-${setting.id}`}
+              >
+                <Checkbox
+                  id={`modal-setting-${setting.id}`}
+                  checked={draftIds.includes(setting.id)}
+                  onCheckedChange={() => handleDraftToggle(setting.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`checkbox-optional-setting-${setting.id}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <label
+                    htmlFor={`modal-setting-${setting.id}`}
+                    className="font-medium text-sm cursor-pointer"
+                  >
+                    {setting.name}
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                    {setting.statement}
+                  </p>
+                </div>
+                {draftIds.includes(setting.id) && (
+                  <Check className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="pt-2 border-t">
+            <div className="flex items-center justify-between w-full">
+              <span className="text-sm text-muted-foreground">
+                {draftIds.length > 0
+                  ? `${draftIds.length} statement${draftIds.length !== 1 ? 's' : ''} selected`
+                  : 'None selected'}
+              </span>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleCancel}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending}
+                  data-testid="button-save-statements"
+                >
+                  {updateMutation.isPending ? (
+                    <><Loader2 className="h-3 w-3 animate-spin mr-1" />Saving...</>
+                  ) : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,3 +1,19 @@
+/*
+EPOCH USER IDENTITY STANDARD
+
+All user references must store:
+- <field>UserId (integer FK)
+- <field>DisplayName (text snapshot)
+
+Never:
+- Store only numeric user ID
+- Store only username string
+- Return numeric ID to frontend
+
+Use resolveUserSnapshot() or resolveEmployeeSnapshot() for all inserts.
+See: server/utils/userSnapshot.ts
+*/
+
 import {
   pgTable,
   text,
@@ -9667,6 +9683,7 @@ export const projectSteps = pgTable('project_steps', {
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),
   completedBy: integer('completed_by').references(() => employees.id),
+  completedByDisplayName: text('completed_by_display_name'),
   dueDate: date('due_date'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -9694,6 +9711,7 @@ export const projectActivityLog = pgTable('project_activity_log', {
   stepType: projectStepTypeEnum('step_type'),
   description: text('description').notNull(),
   performedBy: integer('performed_by').references(() => employees.id),
+  performedByDisplayName: text('performed_by_display_name'),
   metadata: jsonb('metadata'), // Additional context data
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({

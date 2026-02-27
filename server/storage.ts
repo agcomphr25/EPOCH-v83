@@ -7722,6 +7722,8 @@ export class DatabaseStorage implements IStorage {
     const sortCol = (vendorPOs as any)[sortField] || vendorPOs.createdAt;
 
     const conditions = [];
+
+    conditions.push(eq(vendorPOs.isCurrentRevision, true));
     
     if (search) {
       conditions.push(

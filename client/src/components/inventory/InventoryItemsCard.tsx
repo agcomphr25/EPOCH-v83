@@ -2378,6 +2378,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   Utilized In
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Asset
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
               </tr>
@@ -2454,6 +2457,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           !item.utilizedInServices &&
                           '-'}
                       </div>
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm">
+                      {(item as any).assignedToAsset || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">

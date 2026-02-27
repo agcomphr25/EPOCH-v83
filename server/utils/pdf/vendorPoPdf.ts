@@ -218,8 +218,12 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const titleWidth = boldFont.widthOfTextAtSize(docTitle, FONT_SIZE.DOC_TITLE);
   page.drawText(docTitle, { x: titleBoxX + (TITLE_BOX.WIDTH - titleWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.TITLE_Y, size: FONT_SIZE.DOC_TITLE, font: boldFont, color: COLOR.WHITE });
 
+  const displayPoNumber = po.poNumber?.startsWith('VPO-')
+    ? po.poNumber.slice(4)
+    : (po.poNumber ?? '');
+
   if (po.poNumber) {
-    const poNumStr = po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '');
+    const poNumStr = displayPoNumber;
     const poNumWidth = boldFont.widthOfTextAtSize(`#${poNumStr}`, FONT_SIZE.PO_NUMBER);
     page.drawText(`#${poNumStr}`, { x: titleBoxX + (TITLE_BOX.WIDTH - poNumWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.NUMBER_Y, size: FONT_SIZE.PO_NUMBER, font: boldFont, color: COLOR.WHITE });
   }
@@ -253,7 +257,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const details = [
     ['Date:', formatDate(po.createdAt)],
     ['Delivery:', formatDate(po.expectedDeliveryDate)],
-    po.poNumber ? ['PO #:', po.poNumber] : null,
+    po.poNumber ? ['PO #:', displayPoNumber] : null,
     po.status ? ['Status:', po.status] : null,
   ].filter(Boolean) as string[][];
 

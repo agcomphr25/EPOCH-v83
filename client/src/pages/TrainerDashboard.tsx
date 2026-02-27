@@ -1546,7 +1546,7 @@ export default function TrainerDashboard() {
                         <div>
                           <CardTitle className="text-lg flex items-center gap-2">
                             <GraduationCap className="h-5 w-5 text-primary" />
-                            {assignment.trainee?.name || `Trainee #${assignment.employeeId}`}
+                            {assignment.trainee?.name || 'Unknown Employee'}
                             <Badge variant={assignment.status === 'completed' ? 'default' : 'secondary'}>
                               {assignment.status}
                             </Badge>

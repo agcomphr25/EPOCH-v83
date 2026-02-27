@@ -317,7 +317,7 @@ export default function ProgramsPage() {
                   <SelectContent>
                     {employees.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id.toString()}>
-                        {emp.name || `Employee #${emp.id}`}
+                        {emp.name || 'Unknown Employee'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -333,7 +333,7 @@ export default function ProgramsPage() {
                     <SelectItem value="none">No trainer assigned</SelectItem>
                     {employees.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id.toString()}>
-                        {emp.name || `Employee #${emp.id}`}
+                        {emp.name || 'Unknown Employee'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -367,7 +367,7 @@ export default function ProgramsPage() {
                           <div>
                             <div className="font-medium flex items-center gap-2">
                               <Users className="h-4 w-4 text-blue-500" />
-                              {assignment.trainee?.name || `Employee #${assignment.employeeId}`}
+                              {assignment.trainee?.name || 'Unknown Employee'}
                               <Badge variant={assignment.status === 'completed' ? 'default' : 'secondary'}>
                                 {assignment.status}
                               </Badge>
@@ -375,7 +375,7 @@ export default function ProgramsPage() {
                             {assignment.trainer && (
                               <div className="text-sm text-muted-foreground flex items-center gap-1">
                                 <GraduationCap className="h-3 w-3" />
-                                Trainer: {assignment.trainer.name || `Employee #${assignment.trainerId}`}
+                                Trainer: {assignment.trainer.name || 'Unknown Employee'}
                               </div>
                             )}
                           </div>

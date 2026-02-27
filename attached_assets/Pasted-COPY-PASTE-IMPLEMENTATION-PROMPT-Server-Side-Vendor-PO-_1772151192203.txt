@@ -1,0 +1,197 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+
+(Server-Side Vendor PO PDF + Attachment Rules + System Notice)
+
+Paste this into a new thread:
+
+PHASE 5 — IMPLEMENT VENDOR PO PDF ATTACHMENT + SYSTEM NOTICE WRAPPER
+
+This is a controlled implementation.
+
+Do NOT modify existing route handlers.
+Do NOT break sendCommunication().
+Do NOT remove any existing logging.
+
+We are implementing:
+
+• Server-side Vendor PO PDF generation
+• Attachment rule evaluation inside buildAttachments()
+• System-generated notice wrapper injection
+
+STEP 1 — Create Vendor PO PDF Generator
+
+Create:
+
+server/utils/pdf/vendorPoPdf.ts
+
+Use pdf-lib (already used for salesOrderPdf.ts).
+
+Create function:
+
+export async function generateVendorPoPdf(poId: string): Promise<Buffer>
+
+Requirements:
+
+Fetch:
+
+Vendor PO
+
+Vendor
+
+Items
+
+Company settings (reuse same endpoints used by frontend logic)
+
+Format a clean, structured PDF:
+
+Header: Company name + "Purchase Order"
+
+PO number
+
+Vendor name
+
+Delivery date
+
+Line item table
+
+Return Buffer
+
+Do NOT write to disk
+
+Do NOT mutate DB
+
+Do NOT log
+
+No Express req/res dependency
+
+Follow pattern used in:
+
+server/utils/pdf/salesOrderPdf.ts
+
+Return a Buffer only.
+
+STEP 2 — Implement Attachment Rule Evaluation
+
+Modify:
+
+server/communication/attachments.ts
+
+Inside buildAttachments():
+
+Fetch template record (if not already available)
+
+Read template.attachment_rules
+
+If:
+
+{
+  "attachVendorPOPDF": true
+}
+
+Then:
+
+const buffer = await generateVendorPoPdf(context.vendorPoId)
+
+const { attachment, meta } = attachmentFromBuffer(
+  buffer,
+  `Vendor_PO_${context.po_number}.pdf`,
+  'application/pdf'
+)
+
+attachments.push(attachment)
+metaList.push(meta)
+
+Return both attachments + meta.
+
+Do NOT change sendCommunication().
+
+STEP 3 — Add attachment_rules to Vendor Templates
+
+Ensure:
+
+vendor_po_issue → attachVendorPOPDF: true
+vendor_po_resend → attachVendorPOPDF: true
+vendor_rfq → attachVendorPOPDF: false
+
+Do NOT alter subject/body.
+
+STEP 4 — Add System Notice Wrapper
+
+Modify:
+
+server/communication/send.ts
+
+Just before sending to SendGrid:
+
+Add:
+
+function wrapWithSystemNotice(html: string): string {
+  const notice = `
+    <div style="background:#f3f4f6;padding:10px;font-size:12px;color:#555;text-align:center;">
+      This is a system-generated message from EPOCH.
+    </div>
+  `
+  return notice + html
+}
+
+Apply wrapper conditionally:
+
+If template.attachment_rules.systemNotice !== false
+
+Default behavior: enabled.
+
+Apply before passing to SendGrid.
+
+Ensure:
+
+Plain text includes notice
+
+Explicit bodyText gets notice appended manually
+
+STEP 5 — Logging Verification
+
+Ensure:
+
+attachmentsMeta correctly logs filename/type/size
+
+No base64 content stored
+
+communication_logs row contains metadata
+
+Do not alter audit.ts logic unless required.
+
+STEP 6 — Performance Safety
+
+Ensure:
+
+generateVendorPoPdf is async
+
+No blocking loops
+
+No file writes
+
+No Puppeteer
+
+OUTPUT REQUIRED
+
+Provide:
+
+Full vendorPoPdf.ts implementation
+
+Updated attachments.ts
+
+Updated send.ts wrapper logic
+
+Confirmation that:
+
+Vendor PO issue now attaches PDF
+
+Vendor PO resend now attaches PDF
+
+Vendor RFQ does not
+
+All emails contain system notice
+
+All attachments logged correctly
+
+Do NOT modify route files.

@@ -13,31 +13,24 @@ export interface SendCommunicationOptions {
   cc?: string | string[];
   triggeredBy?: string;
   capabilityRequired?: string;
-  // Optional explicit attachments (overrides buildAttachments)
   attachments?: EmailAttachment[];
-  // Optional logging context
   orderId?: string;
   customerId?: string;
   emailContext?: string;
 }
 
-/**
- * Primary API for the communication control plane.
- *
- * Flow:
- *   1. Capability check (stubbed — enforced when RBAC layer is added)
- *   2. Fetch + render template
- *   3. Resolve attachments
- *   4. Send via SendGrid
- *   5. Audit to communication_logs
- *   6. Return result
- *
- * Does NOT modify any existing route senders — callers opt in explicitly.
- */
+function wrapWithSystemNotice(html: string): string {
+  const notice = `<div style="background:#f3f4f6;padding:10px;font-size:12px;color:#555;text-align:center;font-family:Arial,sans-serif;">This is a system-generated message from EPOCH.</div>`;
+  return notice + html;
+}
+
+function prependSystemNoticeToText(text: string): string {
+  return `This is a system-generated message from EPOCH.\n\n${text}`;
+}
+
 export async function sendCommunication(
   opts: SendCommunicationOptions
 ): Promise<SendResult> {
-  // ── 1. Capability check ───────────────────────────────────────────────────
   if (opts.capabilityRequired) {
     const allowed = checkCapability(opts.capabilityRequired, opts.triggeredBy);
     if (!allowed) {
@@ -61,7 +54,6 @@ export async function sendCommunication(
     }
   }
 
-  // ── 2. Fetch + render template ────────────────────────────────────────────
   const template = await getTemplateByKey(db, opts.templateKey);
   if (!template) {
     const error = `[sendCommunication] Template not found or inactive: "${opts.templateKey}"`;
@@ -71,12 +63,11 @@ export async function sendCommunication(
 
   const rendered = renderFromObject(template, opts.context);
 
-  // ── 3. Resolve attachments ────────────────────────────────────────────────
   let attachments: EmailAttachment[] = opts.attachments ?? [];
   let attachmentsMeta: AttachmentMeta[] = [];
 
   if (!opts.attachments) {
-    const built = await buildAttachments(opts.templateKey, opts.context);
+    const built = await buildAttachments(opts.templateKey, opts.context, template, opts.orderId);
     attachments = built.attachments;
     attachmentsMeta = built.meta;
   } else {
@@ -86,7 +77,17 @@ export async function sendCommunication(
     }));
   }
 
-  // ── 4. Send via SendGrid ──────────────────────────────────────────────────
+  const rules = (template.attachmentRules ?? {}) as Record<string, any>;
+  const includeNotice = rules.systemNotice !== false;
+
+  let finalHtml = rendered.html;
+  let finalText = rendered.text;
+
+  if (includeNotice) {
+    finalHtml = wrapWithSystemNotice(finalHtml);
+    finalText = prependSystemNoticeToText(finalText);
+  }
+
   const toList = normalizeList(opts.to);
   const ccList = opts.cc ? normalizeList(opts.cc) : undefined;
 
@@ -94,12 +95,11 @@ export async function sendCommunication(
     to: toList.join(','),
     cc: ccList,
     subject: rendered.subject,
-    text: rendered.text,
-    html: rendered.html,
+    text: finalText,
+    html: finalHtml,
     attachments: attachments.length > 0 ? attachments : undefined,
   });
 
-  // ── 5. Audit ──────────────────────────────────────────────────────────────
   await logCommunication({
     templateKey: template.key,
     templateVersion: template.version,
@@ -107,7 +107,7 @@ export async function sendCommunication(
     to: toList,
     cc: ccList,
     subject: rendered.subject,
-    bodyHtml: rendered.html,
+    bodyHtml: finalHtml,
     attachmentsMeta: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
     providerMessageId: result.messageId,
     status: result.success ? 'sent' : 'failed',
@@ -117,7 +117,6 @@ export async function sendCommunication(
     context: opts.emailContext,
   });
 
-  // ── 6. Return ─────────────────────────────────────────────────────────────
   return {
     success: result.success,
     messageId: result.messageId,
@@ -127,19 +126,13 @@ export async function sendCommunication(
   };
 }
 
-// ─── Capability Check (stub) ──────────────────────────────────────────────────
-// When role-based capability enforcement is added, replace this function.
-// Currently allows all sends to proceed — returns true unconditionally.
-// The capabilityRequired field is recorded in logs for future enforcement.
 function checkCapability(capability: string, triggeredBy?: string): boolean {
-  // TODO: look up user role/capabilities from DB when RBAC is wired
   console.log(
     `[Capability] "${capability}" requested by "${triggeredBy ?? 'anonymous'}" — STUB: allowed`
   );
   return true;
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
 function normalizeList(value: string | string[]): string[] {
   return Array.isArray(value) ? value : [value];
 }

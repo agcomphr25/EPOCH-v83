@@ -353,7 +353,7 @@ const VENDOR_PO_ISSUE_TEMPLATE = {
     'requested_delivery_date',
     'confirmation_link',
   ],
-  attachmentRules: {},
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>
@@ -487,7 +487,7 @@ const VENDOR_PO_RESEND_TEMPLATE = {
     'requested_delivery_date',
     'confirmation_link',
   ],
-  attachmentRules: {},
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>

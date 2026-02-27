@@ -312,28 +312,6 @@ const InventoryForm = ({
           </Select>
         </div>
         <div>
-          <Label htmlFor="assignedToAsset">Assigned to Asset</Label>
-          <Select
-            value={formData.assignedToAsset || 'none'}
-            onValueChange={(value) => onSelectChange('assignedToAsset', value === 'none' ? '' : value)}
-          >
-            <SelectTrigger data-testid="select-assignedToAsset">
-              <SelectValue placeholder="Select asset (optional)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {assets
-                .filter((a) => a.status !== 'retired')
-                .map((asset) => (
-                  <SelectItem key={asset.id} value={`${asset.name} (${asset.assetTag})`}>
-                    {asset.name} ({asset.assetTag})
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">Assign this item to a specific asset/equipment</p>
-        </div>
-        <div>
           <Label htmlFor="source">Source</Label>
           <Input
             id="source"
@@ -786,6 +764,28 @@ const InventoryForm = ({
           <p className="text-xs text-gray-500 mt-1">
             Select which departments can request and use this part
           </p>
+        </div>
+        <div className="md:col-span-2">
+          <Label htmlFor="assignedToAsset">Assigned to Asset</Label>
+          <Select
+            value={formData.assignedToAsset || 'none'}
+            onValueChange={(value) => onSelectChange('assignedToAsset', value === 'none' ? '' : value)}
+          >
+            <SelectTrigger data-testid="select-assignedToAsset">
+              <SelectValue placeholder="Select asset (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {assets
+                .filter((a) => a.status !== 'retired')
+                .map((asset) => (
+                  <SelectItem key={asset.id} value={`${asset.name} (${asset.assetTag})`}>
+                    {asset.name} ({asset.assetTag})
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Assign this item to a specific asset/equipment</p>
         </div>
         <div>
           <Label htmlFor="leadTimeDays">Lead Time</Label>

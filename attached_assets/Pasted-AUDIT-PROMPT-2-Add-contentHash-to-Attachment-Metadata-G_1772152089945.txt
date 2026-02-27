@@ -1,0 +1,148 @@
+AUDIT PROMPT 2
+Add contentHash to Attachment Metadata (Governance Upgrade)
+
+Paste into a new thread:
+
+READ-ONLY AUDIT — ATTACHMENT METADATA HARDENING (ADD CONTENT HASH)
+
+This is a read-only audit.
+
+Do NOT modify files yet.
+
+We are preparing to add a contentHash field to attachment metadata for tamper-proof audit logging.
+
+PART 1 — Current Attachment Flow
+
+Trace the full attachment pipeline:
+
+attachmentFromBuffer()
+
+buildAttachments()
+
+sendCommunication()
+
+sendEmailViaSendGrid()
+
+logCommunication()
+
+For each step:
+
+Provide file path
+
+Provide function name
+
+Provide line numbers
+
+Provide relevant code excerpt
+
+PART 2 — Metadata Structure
+
+Locate:
+
+interface AttachmentMeta
+
+Provide full interface.
+
+Identify:
+
+Where metadata is constructed
+
+Where metadata is serialized
+
+Where metadata is stored in DB
+
+PART 3 — communication_logs Schema
+
+Provide:
+
+Full schema for communication_logs
+
+attachmentsMeta column type
+
+Any size limits
+
+Indexes affecting attachmentsMeta
+
+Confirm:
+
+Are we storing base64?
+
+Or metadata only?
+
+PART 4 — Hash Integration Points
+
+Answer:
+
+Where is the earliest safe place to compute a SHA-256 hash?
+
+attachmentFromBuffer?
+
+buildAttachments?
+
+sendCommunication?
+
+Does any function currently mutate the buffer after base64 conversion?
+
+Would computing a hash:
+
+Add measurable latency?
+
+Block event loop?
+
+Require async crypto?
+
+PART 5 — Backward Compatibility
+
+If we add:
+
+contentHash?: string
+
+To AttachmentMeta:
+
+Would any existing code break?
+
+Does any code assume exact meta shape?
+
+Would old records in communication_logs cause issues?
+
+PART 6 — Governance Assessment
+
+Explain:
+
+What additional guarantees contentHash provides.
+
+Whether logging only filename + size is sufficient.
+
+Whether contentHash should be:
+
+SHA-256
+
+SHA-512
+
+MD5 (not recommended)
+
+Provide recommendation with reasoning.
+
+PART 7 — Safe Migration Strategy
+
+Without implementing:
+
+Describe:
+
+Required schema change.
+
+Required type update.
+
+Where to compute hash.
+
+How to preserve performance.
+
+Whether hash should be stored:
+
+In attachmentsMeta only
+
+Or separate indexed column
+
+Provide structured output.
+
+Do NOT implement.

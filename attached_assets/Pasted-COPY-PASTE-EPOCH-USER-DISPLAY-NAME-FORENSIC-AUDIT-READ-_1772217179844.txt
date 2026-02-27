@@ -1,0 +1,106 @@
+COPY-PASTE: EPOCH USER DISPLAY NAME FORENSIC AUDIT
+READ-ONLY FORENSIC AUDIT — USER DISPLAY NAME CONSISTENCY
+
+Objective:
+Identify all instances in EPOCH where a numeric user ID (createdBy, updatedBy, approvedBy, requestedBy, employeeId, userId, etc.) is being returned by the API or rendered in the frontend instead of resolving to users.displayName.
+
+DO NOT MODIFY ANY FILES.
+This is a read-only audit.
+Return a structured report only.
+
+-----------------------------------
+PHASE 1 — BACKEND ANALYSIS
+-----------------------------------
+
+1) Search entire backend for fields:
+   createdBy
+   updatedBy
+   approvedBy
+   requestedBy
+   userId
+   employeeId
+
+2) For each occurrence:
+   - File path
+   - Route or service name
+   - Database query snippet
+   - Does it JOIN users table? (YES/NO)
+   - Does API response return only numeric ID? (YES/NO)
+   - Does it return displayName? (YES/NO)
+   - Risk level (HIGH if returned to client without resolution)
+
+3) Specifically inspect:
+   - Audit log routes
+   - Production order routes
+   - Vendor PO routes
+   - Inventory / Parts request routes
+   - QC routes
+   - Shipping routes
+   - Any activity timeline endpoints
+
+-----------------------------------
+PHASE 2 — FRONTEND ANALYSIS
+-----------------------------------
+
+Search client directory for rendering of:
+
+   createdBy
+   updatedBy
+   approvedBy
+   requestedBy
+   userId
+   employeeId
+
+Look for JSX like:
+   {order.createdBy}
+   {log.userId}
+   {po.approvedBy}
+
+For each instance:
+   - File path
+   - Component name
+   - Line number
+   - Field rendered
+   - Is it numeric? (YES/NO)
+   - Is displayName available in the data? (YES/NO)
+   - Risk level (HIGH if rendering numeric ID)
+
+-----------------------------------
+PHASE 3 — TYPE SAFETY CHECK
+-----------------------------------
+
+Check shared types / API response types.
+
+- Are user references typed as number?
+- Are they typed as { id: number, displayName: string }?
+- Is there inconsistency across endpoints?
+
+List all response type definitions that expose numeric user IDs.
+
+-----------------------------------
+PHASE 4 — CONSISTENCY SCORE
+-----------------------------------
+
+Provide:
+
+- Total backend endpoints returning user IDs without displayName
+- Total frontend components rendering numeric IDs
+- Total safe endpoints (properly joined)
+- Overall risk assessment (LOW / MODERATE / HIGH)
+
+-----------------------------------
+OUTPUT FORMAT
+-----------------------------------
+
+Return structured report:
+
+SECTION 1 — Backend Violations
+SECTION 2 — Frontend Violations
+SECTION 3 — Type Contract Issues
+SECTION 4 — Summary Metrics
+SECTION 5 — Recommended Structural Fix Strategy (do not implement)
+
+Again:
+DO NOT EDIT FILES.
+DO NOT SUGGEST CODE CHANGES YET.
+READ-ONLY AUDIT ONLY.

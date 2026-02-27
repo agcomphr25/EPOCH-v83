@@ -827,6 +827,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Address validation columns migration:', addrErr.message);
       }
 
+      // Ensure external_po_number column exists on vendor_pos
+      try {
+        const { sql: sqlVpo } = await import('drizzle-orm');
+        await db.execute(sqlVpo`ALTER TABLE vendor_pos ADD COLUMN IF NOT EXISTS external_po_number TEXT`);
+        console.log('✅ Ensured vendor_pos has external_po_number column');
+      } catch (vpoErr: any) {
+        console.warn('⚠️ vendor_pos external_po_number migration:', vpoErr.message);
+      }
+
       // Ensure executive rundown tables exist
       try {
         const { sql: sqlExec } = await import('drizzle-orm');

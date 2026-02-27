@@ -258,6 +258,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
     ['Date:', formatDate(po.createdAt)],
     ['Delivery:', formatDate(po.expectedDeliveryDate)],
     po.poNumber ? ['PO #:', displayPoNumber] : null,
+    po.externalPoNumber ? ['Reference #:', po.externalPoNumber] : null,
     po.status ? ['Status:', po.status] : null,
   ].filter(Boolean) as string[][];
 

@@ -126,6 +126,8 @@ type VendorPO = {
   issuedWithoutEmail?: boolean;
   issuedWithoutEmailReason?: string | null;
   issuedWithoutEmailAt?: string | null;
+  // External / legacy reference
+  externalPoNumber?: string | null;
 };
 
 type VendorPOItem = {
@@ -158,6 +160,7 @@ type CreateVendorPOData = {
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
+  externalPoNumber?: string;
 };
 
 // Vendor PO line items display component
@@ -533,6 +536,11 @@ function VendorPOCard({
             >
               {vendorPo.poNumber || `Draft #${vendorPo.id}`}
             </CardTitle>
+            {vendorPo.externalPoNumber && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Ref: {vendorPo.externalPoNumber}
+              </div>
+            )}
             <CardDescription
               className="mt-1"
               data-testid={`text-vendor-name-${vendorPo.id}`}
@@ -683,6 +691,7 @@ function VendorPOForm({
     expectedDeliveryDate: vendorPo?.expectedDeliveryDate || '',
     shipVia: vendorPo?.shipVia || '',
     notes: vendorPo?.notes || '',
+    externalPoNumber: vendorPo?.externalPoNumber || '',
   });
 
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(
@@ -806,6 +815,17 @@ function VendorPOForm({
       {vendorPo && (
         <OptionalSettingsSelector key={vendorPo.id} vendorPoId={vendorPo.id} />
       )}
+
+      <div>
+        <Label htmlFor="externalPoNumber">External / Legacy PO #</Label>
+        <Input
+          id="externalPoNumber"
+          value={formData.externalPoNumber || ''}
+          onChange={(e) => setFormData({ ...formData, externalPoNumber: e.target.value })}
+          placeholder="Optional — previous ERP or vendor reference number"
+          data-testid="input-external-po-number"
+        />
+      </div>
 
       <div>
         <Label htmlFor="notes">Notes</Label>
@@ -1073,6 +1093,7 @@ export default function VendorPOManager() {
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
       (vendorPo.poNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (vendorPo.externalPoNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       `Draft #${vendorPo.id}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;
@@ -1230,7 +1251,7 @@ export default function VendorPOManager() {
       const isRFQ = !po.poNumber;
       const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
       const accentColor = isRFQ ? '#e67e22' : '#1a3a5c';
-      const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '') : '';
+      const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '') : '';
       const orderDate = po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
       const deliveryDate = po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
       const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
@@ -1538,6 +1559,7 @@ export default function VendorPOManager() {
           ? '<div style="text-align:center;color:#e67e22;font-weight:600;font-size:11px;padding:2px 0;">Non-binding quote request</div>'
           : '<div class="meta-row"><span class="meta-label">PO Number</span><span class="meta-value">' + formattedPONumber + '</span></div>'
         }
+        ${po.externalPoNumber ? '<div class="meta-row"><span class="meta-label">Reference #</span><span class="meta-value">' + po.externalPoNumber + '</span></div>' : ''}
         <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${orderDate}</span></div>
         <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">${deliveryDate}</span></div>
         <div class="meta-row"><span class="meta-label">Ship Via</span><span class="meta-value">${po.shipVia || 'N/A'}</span></div>
@@ -1733,6 +1755,11 @@ export default function VendorPOManager() {
                 >
                   {selectedVendorPO.poNumber || `Draft #${selectedVendorPO.id}`}
                 </h2>
+                {selectedVendorPO.externalPoNumber && (
+                  <div className="text-sm text-muted-foreground">
+                    External Ref: {selectedVendorPO.externalPoNumber}
+                  </div>
+                )}
                 <p className="text-muted-foreground">
                   {selectedVendorPO.vendorName ||
                     `Vendor ID: ${selectedVendorPO.vendorId}`}

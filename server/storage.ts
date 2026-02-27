@@ -7729,6 +7729,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(
         or(
           sql`COALESCE(${vendorPOs.poNumber}, '') ILIKE ${`%${search}%`}`,
+          sql`COALESCE(${vendorPOs.externalPoNumber}, '') ILIKE ${`%${search}%`}`,
           ilike(vendors.name, `%${search}%`)
         )
       );
@@ -7751,6 +7752,7 @@ export class DatabaseStorage implements IStorage {
         .select({
           id: vendorPOs.id,
           poNumber: vendorPOs.poNumber,
+          externalPoNumber: vendorPOs.externalPoNumber,
           vendorId: vendorPOs.vendorId,
           vendorName: vendors.name,
           status: vendorPOs.status,
@@ -7806,6 +7808,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: vendorPOs.id,
         poNumber: vendorPOs.poNumber,
+        externalPoNumber: vendorPOs.externalPoNumber,
         vendorId: vendorPOs.vendorId,
         vendorName: vendors.name,
         status: vendorPOs.status,

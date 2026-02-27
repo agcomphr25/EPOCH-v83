@@ -3395,6 +3395,7 @@ export const vendorParts = pgTable('vendor_parts', {
 export const vendorPOs = pgTable('vendor_pos', {
   id: serial('id').primaryKey(),
   poNumber: text('po_number'),
+  externalPoNumber: text('external_po_number'), // Legacy / external ERP reference number
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
@@ -3845,6 +3846,7 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
     totalCost: z.number().default(0),
     notes: z.string().optional().nullable(),
     createdBy: z.string().optional().nullable(),
+    externalPoNumber: z.string().trim().optional().nullable(),
   });
 export type InsertVendorPO = z.infer<typeof insertVendorPOSchema>;
 export type VendorPO = typeof vendorPOs.$inferSelect;

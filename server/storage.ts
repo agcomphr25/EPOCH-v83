@@ -7963,19 +7963,20 @@ export class DatabaseStorage implements IStorage {
     // Write durable audit event to communication_logs when issued without email
     if (opts?.issuedWithoutEmail) {
       try {
-        const auditRecipient = opts.performedByEmail ?? opts.performedBy ?? 'system';
+        const issuedAt = (opts.issuedWithoutEmailAt ?? new Date()).toISOString();
         await db.insert(communicationLogs).values({
           orderId: String(id),
           messageType: 'notification',
-          customerId: 'vendor-po-system',  // NOT a real customer; required NOT NULL field
+          customerId: 'vendor-po-system',        // sentinel — NOT NULL constraint; no real customer involved
           type: 'vendor_po_issue_skipped',
           method: 'internal',
-          recipient: auditRecipient,
+          recipient: opts.performedByEmail ?? 'internal', // email preferred; 'internal' satisfies NOT NULL when unavailable
           status: 'skipped',
-          skipReason: opts.reason ?? 'issued_without_email',
+          skipReason: 'no_vendor_notification',  // system skip code — business reason text lives in message
+          message: `Vendor PO ${result.poNumber} (id=${id}) issued internally without vendor notification. Performed by: ${opts.performedBy ?? 'unknown'} (${opts.performedByEmail ?? 'no email'}). Reason: ${opts.reason ?? '(none)'}. At: ${issuedAt}`,
           templateKey: 'vendor_po_issue_skipped',
           triggeredBy: opts.performedBy ?? 'system',
-          bodyHtml: `Vendor PO ${result.poNumber} (id=${id}) issued WITHOUT vendor email notification. Performed by: ${opts.performedBy ?? 'unknown'}. Reason: ${opts.reason ?? '(none)'}. At: ${(opts.issuedWithoutEmailAt ?? new Date()).toISOString()}`,
+          direction: 'outbound',
           sentAt: new Date(),
         });
       } catch (auditErr) {

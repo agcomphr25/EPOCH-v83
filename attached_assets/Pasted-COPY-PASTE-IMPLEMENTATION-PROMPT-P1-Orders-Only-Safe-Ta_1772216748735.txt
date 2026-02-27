@@ -1,0 +1,96 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+
+(P1 Orders Only — Safe, Targeted Upgrade)
+
+Drop this into Replit Agent:
+
+ENHANCEMENT — P1 AVERY LABEL BARCODE UPGRADE
+
+We are fixing scan reliability for P1 production order labels ONLY.
+
+Do NOT modify:
+- P2 layup schedules
+- Vendor PO PDFs
+- ProductLabels.ts
+- Client-side barcode components
+
+We are ONLY modifying the Avery label barcode generation
+in server/src/routes/index.ts (lines ~7520-7951).
+
+GOAL:
+Replace the current hand-drawn Code 39 barcode implementation
+with the same bwip-js Code128 PNG approach already used in:
+
+server/src/routes/productLabels.ts
+
+--------------------------------------------
+STEP 1 — REMOVE OLD CODE
+--------------------------------------------
+
+Remove:
+- drawCode39Barcode()
+- redrawCode39Barcode()
+- Any custom Code 39 encoding table
+- Any dynamic width scaling logic
+- The 150pt max width restriction
+
+--------------------------------------------
+STEP 2 — IMPLEMENT NEW BARCODE GENERATION
+--------------------------------------------
+
+Inside the Avery label generation loop:
+
+1. Import bwip-js if not already imported:
+   import bwipjs from 'bwip-js';
+
+2. For each order:
+
+   const barcodeText = order.orderId;
+
+3. Generate PNG buffer:
+
+   const barcodeBuffer = await bwipjs.toBuffer({
+       bcid: 'code128',
+       text: barcodeText,
+       scale: 4,
+       height: 18,
+       includetext: false,
+       paddingwidth: 10,
+       paddingheight: 5,
+   });
+
+4. Embed PNG into PDF:
+
+   const pngImage = await pdfDoc.embedPng(barcodeBuffer);
+
+5. Draw image in same location where barcode was drawn before:
+
+   page.drawImage(pngImage, {
+       x: x + 8,
+       y: y + 18,
+       width: 170,
+       height: 40,
+   });
+
+--------------------------------------------
+STEP 3 — DO NOT CHANGE LABEL LAYOUT
+--------------------------------------------
+
+- Keep Avery 5160 dimensions
+- Keep text placement
+- Keep order text display
+- Only replace barcode rendering
+
+--------------------------------------------
+STEP 4 — VERIFY
+--------------------------------------------
+
+Confirm:
+- P1 regular orders still scan
+- P1 PO orders now scan
+- No visual distortion
+- No dynamic scaling
+- No shrinking below readable threshold
+
+--------------------------------------------
+END ENHANCEMENT

@@ -144,6 +144,7 @@ import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
+import executiveRundownRoutes from './executiveRundown';
 import emailTemplatesRoutes from './emailTemplates';
 
 export function registerRoutes(app: Express): Server {
@@ -586,6 +587,9 @@ export function registerRoutes(app: Express): Server {
   
   // Cutting Table Manufacturing Queue routes
   app.use('/api/cutting-table-mfg-queue', cuttingTableManufacturingQueueRoutes);
+
+  // Executive Rundown routes (Glenn-only, access-restricted)
+  app.use('/api/executive/rundown', executiveRundownRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -7533,116 +7537,7 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
 
-          // Generate proper Code 39 barcode using direct implementation
           const barcodeText = order.orderId;
-
-          // Correct Code 39 character encoding table (9 bits each: 5 bars + 4 spaces)
-          const code39Table: { [key: string]: string } = {
-            '0': '000110100',
-            '1': '100100001',
-            '2': '001100001',
-            '3': '101100000',
-            '4': '000110001',
-            '5': '100110000',
-            '6': '001110000',
-            '7': '000100101',
-            '8': '100100100',
-            '9': '001100100',
-            A: '100001001',
-            B: '001001001',
-            C: '101001000',
-            D: '000011001',
-            E: '100011000',
-            F: '001011000',
-            G: '000001101',
-            H: '100001100',
-            I: '001001100',
-            J: '000011100',
-            K: '100000011',
-            L: '001000011',
-            M: '101000010',
-            N: '000010011',
-            O: '100010010',
-            P: '001010010',
-            Q: '000000111',
-            R: '100000110',
-            S: '001000110',
-            T: '000010110',
-            U: '110000001',
-            V: '011000001',
-            W: '111000000',
-            X: '010010001',
-            Y: '110010000',
-            Z: '011010000',
-            '-': '010000101',
-            '.': '110000100',
-            ' ': '011000100',
-            $: '010101000',
-            '/': '010100010',
-            '+': '010001010',
-            '%': '000101010',
-            '*': '010010100',
-          };
-
-          const drawCode39Barcode = (
-            text: string,
-            startX: number,
-            startY: number
-          ) => {
-            // Code 39 specifications: thin=1x, thick=3x, height adequate for scanning
-            const thinWidth = 1.0;
-            const thickWidth = 3.0;
-            const barHeight = 15;
-            const interCharGap = 1.0; // Gap between characters
-            let currentX = startX;
-
-            // Add start/stop characters (* for Code 39)
-            const fullText = `*${text.toUpperCase()}*`;
-
-            // Calculate and apply scaling to fit in label
-            let estimatedWidth = 0;
-            for (let char of fullText) {
-              if (code39Table[char]) {
-                estimatedWidth += thinWidth * 6 + thickWidth * 3 + interCharGap; // 9 elements per char
-              }
-            }
-
-            const maxWidth = 150; // Increased width for better spacing
-            const scale =
-              estimatedWidth > maxWidth ? maxWidth / estimatedWidth : 1;
-            const scaledThin = thinWidth * scale;
-            const scaledThick = thickWidth * scale;
-            const scaledGap = interCharGap * scale;
-
-            for (let char of fullText) {
-              const pattern = code39Table[char];
-              if (pattern) {
-                // Code 39: 9 elements per character (5 bars, 4 spaces)
-                // Pattern alternates: bar, space, bar, space, bar, space, bar, space, bar
-                for (let i = 0; i < pattern.length; i++) {
-                  const isWide = pattern[i] === '1';
-                  const width = isWide ? scaledThick : scaledThin;
-                  const isBar = i % 2 === 0; // Positions 0,2,4,6,8 are bars
-
-                  if (isBar) {
-                    page.drawRectangle({
-                      x: currentX,
-                      y: startY,
-                      width: width,
-                      height: barHeight,
-                      color: rgb(0, 0, 0),
-                    });
-                  }
-                  currentX += width;
-                }
-                // Add inter-character gap (narrow space)
-                currentX += scaledGap;
-              }
-            }
-          };
-
-          // Skip the original barcode drawing - will be drawn with proper color below
-          console.log(`✅ Preparing Code 39 barcode for ${barcodeText}`);
 
           // Get model and action length (using display names) - need these early for display
           const actionLength =
@@ -7884,16 +7779,13 @@ export function registerRoutes(app: Express): Server {
             specialLabels.push('CARBON CAMO READY');
           }
 
-          // Check if this order is high priority or late (you can add this logic later)
-          const isHighPriority = false; // TODO: Add high priority logic
-          const isLate = false; // TODO: Add due date checking logic
+          const isHighPriority = false;
+          const isLate = false;
 
-          // Red for high priority or late orders
-          let barcodeColor = rgb(0, 0, 0); // Default black
+          let barcodeHexColor = '000000';
           if (isHighPriority || isLate) {
-            barcodeColor = rgb(1, 0, 0); // Red
+            barcodeHexColor = 'FF0000';
           } else {
-            // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
             const paintedOptions = [
               'terraine',
               'premium',
@@ -7904,67 +7796,40 @@ export function registerRoutes(app: Express): Server {
               paintOption.toLowerCase().includes(option)
             );
             const isFiberglassModel = modelId.toLowerCase().startsWith('fg');
-
             if (isPaintedOption || isFiberglassModel) {
-              barcodeColor = rgb(0, 0.4, 1); // Blue (#0066FF)
+              barcodeHexColor = '0066FF';
             }
           }
 
-          // Redraw barcode with appropriate color
-          const redrawCode39Barcode = (
-            text: string,
-            startX: number,
-            startY: number,
-            color: any
-          ) => {
-            const thinWidth = 1.0;
-            const thickWidth = 3.0;
-            const barHeight = 15;
-            const interCharGap = 1.0;
-            let currentX = startX;
-
-            const fullText = `*${text.toUpperCase()}*`;
-
-            let estimatedWidth = 0;
-            for (let char of fullText) {
-              if (code39Table[char]) {
-                estimatedWidth += thinWidth * 6 + thickWidth * 3 + interCharGap;
-              }
-            }
-
-            const maxWidth = 150;
-            const scale =
-              estimatedWidth > maxWidth ? maxWidth / estimatedWidth : 1;
-            const scaledThin = thinWidth * scale;
-            const scaledThick = thickWidth * scale;
-            const scaledGap = interCharGap * scale;
-
-            for (let char of fullText) {
-              const pattern = code39Table[char];
-              if (pattern) {
-                for (let i = 0; i < pattern.length; i++) {
-                  const isWide = pattern[i] === '1';
-                  const width = isWide ? scaledThick : scaledThin;
-                  const isBar = i % 2 === 0;
-
-                  if (isBar) {
-                    page.drawRectangle({
-                      x: currentX,
-                      y: startY,
-                      width: width,
-                      height: barHeight,
-                      color: color,
-                    });
-                  }
-                  currentX += width;
-                }
-                currentX += scaledGap;
-              }
-            }
-          };
-
-          // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
-          redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
+          try {
+            const bwipjs = await import('bwip-js');
+            const barcodeBuffer = await bwipjs.default.toBuffer({
+              bcid: 'code128',
+              text: barcodeText,
+              scale: 4,
+              height: 18,
+              includetext: false,
+              paddingwidth: 10,
+              paddingheight: 5,
+              barcolor: barcodeHexColor,
+            });
+            const pngImage = await pdfDoc.embedPng(barcodeBuffer as Buffer);
+            page.drawImage(pngImage, {
+              x: x + 8,
+              y: y + 18,
+              width: 170,
+              height: 40,
+            });
+          } catch (barcodeError) {
+            console.error(`Error generating barcode for ${barcodeText}:`, barcodeError);
+            page.drawText(barcodeText, {
+              x: x + 8,
+              y: y + 35,
+              size: 8,
+              font: helveticaFont,
+              color: rgb(1, 0, 0),
+            });
+          }
 
           // For P1 PO orders: Show customer name on separate line
           if (isPOItem && customerName) {

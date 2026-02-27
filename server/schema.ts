@@ -13078,3 +13078,62 @@ export const productionForecastVerifications = pgTable('production_forecast_veri
 export const insertProductionForecastVerificationSchema = createInsertSchema(productionForecastVerifications).omit({ id: true, verifiedAt: true, createdAt: true });
 export type ProductionForecastVerification = typeof productionForecastVerifications.$inferSelect;
 export type InsertProductionForecastVerification = z.infer<typeof insertProductionForecastVerificationSchema>;
+
+// ============ Executive Rundown System ============
+
+export const executivePriorityEnum = pgEnum('executive_priority', [
+  'CRITICAL',
+  'HIGH',
+  'NORMAL',
+  'LOW',
+]);
+
+export const executiveRundownGroups = pgTable('executive_rundown_groups', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  groupDate: date('group_date').notNull(),
+  title: text('title'),
+  notes: text('notes'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userDateIdx: index('exec_rundown_group_user_date_idx').on(table.userId, table.groupDate),
+}));
+
+export const insertExecutiveRundownGroupSchema = createInsertSchema(executiveRundownGroups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ExecutiveRundownGroup = typeof executiveRundownGroups.$inferSelect;
+export type InsertExecutiveRundownGroup = z.infer<typeof insertExecutiveRundownGroupSchema>;
+
+export const executiveRundownItems = pgTable('executive_rundown_items', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id').notNull().references(() => executiveRundownGroups.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  priority: executivePriorityEnum('priority').default('NORMAL').notNull(),
+  category: text('category'),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  isCompleted: boolean('is_completed').default(false).notNull(),
+  completedAt: timestamp('completed_at'),
+  completedBy: integer('completed_by').references(() => users.id),
+  linkedEntityType: text('linked_entity_type'),
+  linkedEntityId: text('linked_entity_id'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertExecutiveRundownItemSchema = createInsertSchema(executiveRundownItems).omit({
+  id: true,
+  completedAt: true,
+  completedBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ExecutiveRundownItem = typeof executiveRundownItems.$inferSelect;
+export type InsertExecutiveRundownItem = z.infer<typeof insertExecutiveRundownItemSchema>;

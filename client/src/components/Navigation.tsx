@@ -84,6 +84,7 @@ import {
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
 import GlobalSearch from './GlobalSearch';
+import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
@@ -2179,6 +2180,9 @@ export default function Navigation() {
                 <Layers className="h-4 w-4" />
                 <span className="hidden lg:inline">Field</span>
               </Button>
+            )}
+            {currentUser?.username === 'glennj' && (
+              <ExecutiveRundownDropdown />
             )}
             <Button
               variant="ghost"

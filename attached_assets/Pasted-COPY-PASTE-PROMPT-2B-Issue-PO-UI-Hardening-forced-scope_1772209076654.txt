@@ -1,0 +1,52 @@
+COPY-PASTE PROMPT 2B — Issue PO UI Hardening (forced scope + evidence)
+
+Paste this to the agent:
+
+STOP. The previous response audited date filters, not Issue PO UI. 
+Now do ONLY the Issue PO UI hardening requested below.
+
+READ/WRITE ALLOWED. Make the minimal code changes.
+
+TARGET FILE:
+client/src/components/inventory/VendorPOManager.tsx
+
+GOAL:
+Preserve BOTH actions, but make “Issue Internally (No Vendor Notification)” safe for ERP backfill.
+
+REQUIREMENTS (MUST IMPLEMENT ALL):
+
+1) Replace any window.confirm() issuing flow:
+   - The list-view “Issue PO” action must NOT use window.confirm anymore.
+   - It must open the SAME AlertDialog used for status-change issuing.
+
+2) AlertDialog must support BOTH actions:
+   A) “Issue & Send Email” (default)
+      - sends { skipEmail: false }
+      - no reason required
+   B) “Issue Internally (No Vendor Notification)” (skipEmail path)
+      - label must be exactly: "Issue Internally (No Vendor Notification)"
+      - shows REQUIRED controls before enabling confirm:
+         - Textarea: reason (trimmed, min length 10)
+         - Checkbox: “I confirm the vendor will NOT be emailed.”
+      - sends { skipEmail: true, reason }
+
+3) After issuing internally, show a persistent banner in the PO detail header:
+   - condition: po.issuedWithoutEmail === true
+   - content: “Vendor NOT notified — issued internally on <date>. Reason: <reason>”
+   - amber/warning styling (use your existing alert/banner styles)
+
+4) Toast behavior must be driven by server response:
+   - if res.emailSent === false: "PO issued internally (vendor not notified)"
+   - if res.emailSent === true: "PO issued! Email sent to <res.emailRecipient>"
+
+5) Output MUST include EVIDENCE:
+   - Provide exact code snippets for:
+     a) the state variables added (reason + checkbox + dialog open state)
+     b) the AlertDialog controls (textarea + checkbox + button disabled logic)
+     c) the mutation call payloads for both actions
+     d) the banner rendering block
+     e) the replacement of window.confirm path in list view
+
+Do not discuss date filters. Do not touch filter bar. Do not touch unrelated UI.
+
+END.

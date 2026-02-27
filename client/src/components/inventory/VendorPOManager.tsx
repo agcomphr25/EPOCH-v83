@@ -124,6 +124,10 @@ type VendorPO = {
   isCurrentRevision?: boolean;
   revisedAt?: string;
   revisedBy?: string;
+  // Internal issuance fields
+  issuedWithoutEmail?: boolean;
+  issuedWithoutEmailReason?: string | null;
+  issuedWithoutEmailAt?: string | null;
 };
 
 type VendorPOItem = {
@@ -919,7 +923,10 @@ export default function VendorPOManager() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
-  
+  const [noEmailMode, setNoEmailMode] = useState(false);
+  const [noEmailReason, setNoEmailReason] = useState('');
+  const [noEmailConfirmed, setNoEmailConfirmed] = useState(false);
+
   // Revision dialog state
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionReason, setRevisionReason] = useState('');
@@ -1044,17 +1051,17 @@ export default function VendorPOManager() {
 
   // Issue PO mutation - sends confirmation email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false }: { id: number; skipEmail?: boolean }) =>
+    mutationFn: ({ id, skipEmail = false, reason }: { id: number; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail }),
+        body: JSON.stringify({ skipEmail, reason }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      if (data.emailSkipped) {
-        toast.success('PO marked as issued (no email sent)');
+      if (data.emailSent === false) {
+        toast.success('PO issued internally (vendor not notified)');
       } else if (data.emailSent) {
-        toast.success(`PO issued! Confirmation email sent to ${data.emailRecipient}`);
+        toast.success(`PO issued! Email sent to ${data.emailRecipient}`);
       } else {
         toast.error(data.message || 'PO issued but email failed to send');
       }
@@ -1063,8 +1070,14 @@ export default function VendorPOManager() {
           ...selectedVendorPO,
           status: 'Sent',
           poNumber: data.po_number || data.poNumber || selectedVendorPO.poNumber,
+          issuedWithoutEmail: data.issuedWithoutEmail ?? false,
+          issuedWithoutEmailReason: data.issuedWithoutEmailReason ?? null,
+          issuedWithoutEmailAt: data.issuedWithoutEmailAt ?? null,
         });
       }
+      setNoEmailMode(false);
+      setNoEmailReason('');
+      setNoEmailConfirmed(false);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to issue PO');
@@ -1148,20 +1161,18 @@ export default function VendorPOManager() {
     }
   };
 
-  const handleIssuePO = (id: number, skipEmail: boolean = false) => {
-    if (skipEmail) {
-      if (
-        confirm('Are you sure you want to mark this purchase order as issued WITHOUT sending an email to the vendor? This is useful for POs that were already submitted outside of EPOCH.')
-      ) {
-        issuePOMutation.mutate({ id, skipEmail: true });
-      }
-    } else {
-      if (
-        confirm('Are you sure you want to issue this purchase order? This will send a confirmation email to the vendor.')
-      ) {
-        issuePOMutation.mutate({ id, skipEmail: false });
-      }
+  const handleIssuePO = (id: number, _skipEmail: boolean = false) => {
+    // Find the PO in the list so it can be set as selectedVendorPO (list-view entry point)
+    const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
+    if (poFromList && !selectedVendorPO) {
+      setSelectedVendorPO(poFromList);
     }
+    // Always open the unified AlertDialog — no window.confirm
+    setNoEmailMode(false);
+    setNoEmailReason('');
+    setNoEmailConfirmed(false);
+    setPendingStatus('Sent');
+    setShowStatusChangeDialog(true);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -1200,9 +1211,12 @@ export default function VendorPOManager() {
 
   const confirmStatusChange = (skipEmail: boolean = false) => {
     if (selectedVendorPO) {
-      // If changing to 'Sent' status, use the issue endpoint which sends the email
       if (pendingStatus === 'Sent') {
-        issuePOMutation.mutate({ id: selectedVendorPO.id, skipEmail });
+        issuePOMutation.mutate({
+          id: selectedVendorPO.id,
+          skipEmail,
+          reason: skipEmail ? noEmailReason.trim() : undefined,
+        });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
       } else {
@@ -1861,31 +1875,151 @@ export default function VendorPOManager() {
           </div>
         </div>
 
-        {/* Status Change Confirmation Dialog */}
-        <AlertDialog open={showStatusChangeDialog} onOpenChange={setShowStatusChangeDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to change the status of this purchase order from{' '}
-                <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className={pendingStatus === 'Sent' ? 'flex-col sm:flex-row gap-2' : ''}>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              {pendingStatus === 'Sent' && (
-                <Button
-                  variant="outline"
-                  onClick={() => confirmStatusChange(true)}
-                  data-testid="button-issue-no-email"
-                >
-                  Mark as Issued (No Email)
-                </Button>
+        {/* Internal Issuance Banner */}
+        {selectedVendorPO.issuedWithoutEmail && (
+          <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <span className="font-semibold">Vendor NOT notified</span>
+              {' — issued internally'}
+              {selectedVendorPO.issuedWithoutEmailAt && (
+                <> on {new Date(selectedVendorPO.issuedWithoutEmailAt).toLocaleDateString()}</>
               )}
-              <AlertDialogAction onClick={() => confirmStatusChange(false)} data-testid="button-confirm-status-change">
-                {pendingStatus === 'Sent' ? 'Issue & Send Email' : 'Confirm'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
+              {selectedVendorPO.issuedWithoutEmailReason && (
+                <>. Reason: <span className="italic">{selectedVendorPO.issuedWithoutEmailReason}</span></>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Status Change / Issue PO Confirmation Dialog */}
+        <AlertDialog
+          open={showStatusChangeDialog}
+          onOpenChange={(open) => {
+            setShowStatusChangeDialog(open);
+            if (!open) {
+              setNoEmailMode(false);
+              setNoEmailReason('');
+              setNoEmailConfirmed(false);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            {pendingStatus === 'Sent' ? (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Issue Purchase Order</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {noEmailMode
+                      ? 'Provide a reason for issuing this PO without notifying the vendor.'
+                      : 'Choose how to issue this purchase order.'}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                {noEmailMode && (
+                  <div className="space-y-3 py-2">
+                    <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>Internal only — the vendor will <strong>NOT</strong> be emailed.</span>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="no-email-reason" className="text-sm font-medium">
+                        Reason <span className="text-red-500">*</span>
+                      </Label>
+                      <Textarea
+                        id="no-email-reason"
+                        placeholder="Explain why the vendor is not being notified (min 10 characters)…"
+                        value={noEmailReason}
+                        onChange={(e) => setNoEmailReason(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                      {noEmailReason.length > 0 && noEmailReason.trim().length < 10 && (
+                        <p className="text-xs text-red-500">
+                          Must be at least 10 characters ({noEmailReason.trim().length}/10)
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="no-email-confirm"
+                        checked={noEmailConfirmed}
+                        onCheckedChange={(v) => setNoEmailConfirmed(!!v)}
+                      />
+                      <Label htmlFor="no-email-confirm" className="text-sm cursor-pointer">
+                        I confirm the vendor will <strong>NOT</strong> be emailed.
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
+                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                  {noEmailMode ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setNoEmailMode(false);
+                          setNoEmailReason('');
+                          setNoEmailConfirmed(false);
+                        }}
+                      >
+                        ← Back
+                      </Button>
+                      <Button
+                        onClick={() => confirmStatusChange(true)}
+                        disabled={
+                          noEmailReason.trim().length < 10 ||
+                          !noEmailConfirmed ||
+                          issuePOMutation.isPending
+                        }
+                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                        data-testid="button-confirm-internal-issue"
+                      >
+                        {issuePOMutation.isPending ? 'Issuing…' : 'Confirm Internal Issue'}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <Button
+                        variant="outline"
+                        onClick={() => setNoEmailMode(true)}
+                        data-testid="button-issue-no-email"
+                      >
+                        Issue Internally (No Vendor Notification)
+                      </Button>
+                      <AlertDialogAction
+                        onClick={() => confirmStatusChange(false)}
+                        disabled={issuePOMutation.isPending}
+                        data-testid="button-confirm-status-change"
+                      >
+                        {issuePOMutation.isPending ? 'Issuing…' : 'Issue & Send Email'}
+                      </AlertDialogAction>
+                    </>
+                  )}
+                </AlertDialogFooter>
+              </>
+            ) : (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to change the status of this purchase order from{' '}
+                    <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => confirmStatusChange(false)}
+                    data-testid="button-confirm-status-change"
+                  >
+                    Confirm
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            )}
           </AlertDialogContent>
         </AlertDialog>
 

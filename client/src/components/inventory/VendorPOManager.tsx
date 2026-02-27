@@ -1624,7 +1624,7 @@ export default function VendorPOManager() {
           ? '<div style="text-align:center;color:#e67e22;font-weight:600;font-size:11px;padding:2px 0;">Non-binding quote request</div>'
           : '<div class="meta-row"><span class="meta-label">PO Number</span><span class="meta-value">' + formattedPONumber + '</span></div>'
         }
-        ${po.externalPoNumber ? '<div class="meta-row"><span class="meta-label">Reference #</span><span class="meta-value">' + po.externalPoNumber + '</span></div>' : ''}
+        ${po.externalPoNumber ? '<div class="meta-row"><span class="meta-label">Legacy ERP PO #</span><span class="meta-value">' + po.externalPoNumber + '</span></div>' : ''}
         <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${orderDate}</span></div>
         <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">${deliveryDate}</span></div>
         <div class="meta-row"><span class="meta-label">Ship Via</span><span class="meta-value">${po.shipVia || 'N/A'}</span></div>

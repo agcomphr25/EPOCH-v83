@@ -1906,7 +1906,7 @@ export default function VendorPOManager() {
             }
           }}
         >
-          <AlertDialogContent>
+          <AlertDialogContent className="sm:max-w-lg">
             {pendingStatus === 'Sent' ? (
               <>
                 <AlertDialogHeader>
@@ -1955,7 +1955,7 @@ export default function VendorPOManager() {
                   </div>
                 )}
 
-                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                <AlertDialogFooter className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:justify-end">
                   {noEmailMode ? (
                     <>
                       <Button
@@ -1983,11 +1983,12 @@ export default function VendorPOManager() {
                     </>
                   ) : (
                     <>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel className="sm:mr-auto mt-0">Cancel</AlertDialogCancel>
                       <Button
                         variant="outline"
                         onClick={() => setNoEmailMode(true)}
                         data-testid="button-issue-no-email"
+                        className="whitespace-nowrap text-sm"
                       >
                         Issue Internally (No Vendor Notification)
                       </Button>
@@ -1995,6 +1996,7 @@ export default function VendorPOManager() {
                         onClick={() => confirmStatusChange(false)}
                         disabled={issuePOMutation.isPending}
                         data-testid="button-confirm-status-change"
+                        className="whitespace-nowrap"
                       >
                         {issuePOMutation.isPending ? 'Issuing…' : 'Issue & Send Email'}
                       </AlertDialogAction>

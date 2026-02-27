@@ -1,0 +1,216 @@
+COPY-PASTE AUDIT PROMPT — PERSONAL RUNDOWN IN EPOCH
+
+Paste this into a new agent session exactly as-is:
+
+I am implementing a Glenn-only Personal Daily Rundown system inside EPOCH.
+
+This is a READ-ONLY architectural audit.
+Do NOT modify any files.
+
+I need a full structural analysis to determine:
+
+Whether similar task/checklist systems already exist
+
+Where best to integrate a Glenn-only personal task layer
+
+How to safely add backend-restricted routes
+
+How the header component is structured for adding a dropdown
+
+What existing linking patterns exist for attaching notes/tasks to records
+
+Run a parallel search across the entire codebase and return findings in the structured format below.
+
+SECTION 1 — Existing Task / Checklist Systems
+
+Search for:
+
+checklist
+
+task
+
+todo
+
+notes
+
+reminders
+
+personal
+
+user_notes
+
+user_tasks
+
+dashboard widgets
+
+For each match:
+
+File path
+
+Table name (if DB)
+
+Route path (if API)
+
+Is it user-scoped or global?
+
+Is it role-based?
+
+Is it record-linked?
+
+Does it support tagging or priority?
+
+Does it support due dates?
+
+Is it used actively in UI?
+
+Summarize overlap risk.
+
+SECTION 2 — Database Architecture
+
+Identify:
+
+Where Drizzle schemas are defined
+
+Naming conventions for user-scoped tables
+
+How foreign keys are structured
+
+Whether soft deletes are used
+
+Whether status enums are centralized
+
+Timestamp conventions
+
+How user_id is stored and referenced
+
+Return:
+
+Schema file locations
+
+Pattern examples
+
+Recommendation for new personal tables placement
+
+SECTION 3 — Authentication & Authorization Pattern
+
+Find:
+
+Where session.userId is injected
+
+Where role checks are enforced
+
+Middleware pattern used
+
+Examples of 403 enforcement
+
+Any user-based scoping examples
+
+Return:
+
+Exact files and code patterns
+
+Safe pattern to enforce "Glenn-only" backend restriction
+
+SECTION 4 — Header / Layout Structure
+
+Identify:
+
+Main header component file
+
+Layout wrapper component
+
+How dropdown menus are implemented
+
+Whether global state is used (context, Zustand, etc.)
+
+How new icons are added to header
+
+Return:
+
+File path(s)
+
+Component structure overview
+
+Best insertion point for Glenn Rundown dropdown
+
+SECTION 5 — Record Linking Patterns
+
+Search for:
+
+How Vendor PO attaches documents
+
+How Refund Queue attaches actions
+
+How Production Orders attach logs
+
+Any polymorphic linking patterns (type + id)
+
+Existing activity feed or audit log structure
+
+Return:
+
+File paths
+
+DB patterns
+
+Reusable linking structure
+
+Whether a generic "linked_type + linked_id" pattern already exists
+
+SECTION 6 — Daily / Weekly Date Logic
+
+Search for:
+
+Any existing date bucket logic
+
+Any weekly grouping logic
+
+Any carry-forward automation
+
+Cron jobs or scheduled tasks
+
+Return:
+
+Files
+
+Implementation patterns
+
+Whether daily rollover already exists anywhere
+
+SECTION 7 — Risk & Collision Analysis
+
+Based on all findings:
+
+Will adding personal_tasks conflict with anything?
+
+Are there naming collisions?
+
+Is there risk of UI duplication?
+
+Is there any performance concern with a header dropdown pulling data?
+
+Return:
+
+Risk level (Low / Medium / High)
+
+Mitigation recommendations
+
+SECTION 8 — Final Architectural Recommendation
+
+Provide:
+
+Cleanest DB placement
+
+Cleanest route placement
+
+Cleanest UI insertion point
+
+Recommended naming conventions
+
+Whether to namespace under /api/personal/ or similar
+
+Whether to isolate in its own service file
+
+This is Glenn-only, but must be architecturally future-safe for Proteus extraction.
+
+Return findings only. No edits.

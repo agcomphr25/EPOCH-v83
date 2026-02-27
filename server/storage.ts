@@ -7770,6 +7770,10 @@ export class DatabaseStorage implements IStorage {
           isCurrentRevision: vendorPOs.isCurrentRevision,
           revisedAt: vendorPOs.revisedAt,
           revisedBy: vendorPOs.revisedBy,
+          // No-email issuance audit fields
+          issuedWithoutEmail: vendorPOs.issuedWithoutEmail,
+          issuedWithoutEmailReason: vendorPOs.issuedWithoutEmailReason,
+          issuedWithoutEmailAt: vendorPOs.issuedWithoutEmailAt,
           createdAt: vendorPOs.createdAt,
           updatedAt: vendorPOs.updatedAt,
         })
@@ -7821,6 +7825,10 @@ export class DatabaseStorage implements IStorage {
         isCurrentRevision: vendorPOs.isCurrentRevision,
         revisedAt: vendorPOs.revisedAt,
         revisedBy: vendorPOs.revisedBy,
+        // No-email issuance audit fields
+        issuedWithoutEmail: vendorPOs.issuedWithoutEmail,
+        issuedWithoutEmailReason: vendorPOs.issuedWithoutEmailReason,
+        issuedWithoutEmailAt: vendorPOs.issuedWithoutEmailAt,
         createdAt: vendorPOs.createdAt,
         updatedAt: vendorPOs.updatedAt,
       })
@@ -7852,7 +7860,7 @@ export class DatabaseStorage implements IStorage {
 
   async issueVendorPO(
     id: number,
-    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string }
+    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
   ): Promise<{ vendorPO: any; poNumber: string }> {
     const result = await db.transaction(async (tx) => {
       const [lockedPO] = await tx
@@ -7955,24 +7963,19 @@ export class DatabaseStorage implements IStorage {
     // Write durable audit event to communication_logs when issued without email
     if (opts?.issuedWithoutEmail) {
       try {
+        const auditRecipient = opts.performedByEmail ?? opts.performedBy ?? 'system';
         await db.insert(communicationLogs).values({
           orderId: String(id),
           messageType: 'notification',
-          customerId: opts.performedBy ?? 'system',
+          customerId: 'vendor-po-system',  // NOT a real customer; required NOT NULL field
           type: 'vendor_po_issue_skipped',
           method: 'internal',
-          recipient: opts.performedBy ?? 'system',
+          recipient: auditRecipient,
           status: 'skipped',
           skipReason: opts.reason ?? 'issued_without_email',
           templateKey: 'vendor_po_issue_skipped',
           triggeredBy: opts.performedBy ?? 'system',
-          bodyHtml: JSON.stringify({
-            vendorPoId: id,
-            poNumber: result.poNumber,
-            performedBy: opts.performedBy,
-            reason: opts.reason,
-            issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
-          }),
+          bodyHtml: `Vendor PO ${result.poNumber} (id=${id}) issued WITHOUT vendor email notification. Performed by: ${opts.performedBy ?? 'unknown'}. Reason: ${opts.reason ?? '(none)'}. At: ${(opts.issuedWithoutEmailAt ?? new Date()).toISOString()}`,
           sentAt: new Date(),
         });
       } catch (auditErr) {

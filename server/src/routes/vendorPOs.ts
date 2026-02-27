@@ -706,14 +706,15 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     }
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+    const performedByEmail = (req as any).user?.email as string | undefined;
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
     if (skip) {
       const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
-      if (trimmedReason.length < 5) {
+      if (trimmedReason.length < 10 || !/\S/.test(trimmedReason)) {
         return res.status(400).json({
           error: 'Reason required',
-          message: 'Please provide a reason (at least 5 characters) for issuing without notifying the vendor.',
+          message: 'Please provide a meaningful reason (at least 10 characters) for issuing without notifying the vendor.',
         });
       }
 
@@ -723,6 +724,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
         reason: trimmedReason,
         issuedWithoutEmailAt: nowAt,
         performedBy,
+        performedByEmail,
       });
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);

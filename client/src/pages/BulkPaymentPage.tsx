@@ -79,6 +79,7 @@ export default function BulkPaymentPage() {
   const [customerComboOpen, setCustomerComboOpen] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState<Map<string, { amount: number; total: number }>>(new Map());
   const [paymentType, setPaymentType] = useState<string>('');
+  const [processingFee, setProcessingFee] = useState<number>(0);
   const [confirmationNumber, setConfirmationNumber] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -211,6 +212,7 @@ export default function BulkPaymentPage() {
   const resetForm = () => {
     setSelectedOrders(new Map());
     setPaymentType('');
+    setProcessingFee(0);
     setConfirmationNumber('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setCreditCardData({
@@ -373,6 +375,7 @@ export default function BulkPaymentPage() {
           paymentDate,
           orderTotal: total,
           notes: confirmationNumber || null,
+          processingFee: paymentType === 'wire' ? (processingFee || null) : null,
         })
       );
 
@@ -607,6 +610,22 @@ export default function BulkPaymentPage() {
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Wire Fee — only shown when payment type is Wire */}
+                        {paymentType === 'wire' && (
+                          <div className="space-y-2">
+                            <Label>Wire Fee (optional)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={processingFee || ''}
+                              onChange={(e) => setProcessingFee(parseFloat(e.target.value) || 0)}
+                            />
+                            <p className="text-xs text-muted-foreground">Bank processing fee deducted from net deposited amount.</p>
+                          </div>
+                        )}
 
                         {paymentType !== 'live' && (
                           <>

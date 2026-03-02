@@ -76,7 +76,13 @@ export default function AccountingPage() {
   const { data, isLoading, isError, refetch } = useQuery<{ entries: JournalEntry[] }>({
     queryKey: ['/api/finance/accounting/journal-entries', fromDate, toDate, status, transactionType],
     queryFn: async () => {
-      const res = await fetch(`/api/finance/accounting/journal-entries${queryParams}`);
+      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/finance/accounting/journal-entries${queryParams}`, {
+        credentials: 'include',
+        headers,
+      });
       if (!res.ok) throw new Error('Failed to fetch journal entries');
       return res.json();
     },

@@ -761,6 +761,12 @@ export default function Navigation() {
       description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     {
+      path: '/finance/accounting',
+      label: 'Accounting Journal',
+      icon: Calculator,
+      description: 'View double-entry journal entries for wire payments',
+    },
+    {
       path: '/payment-management',
       label: 'Payment Management',
       icon: CreditCard,

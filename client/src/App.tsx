@@ -70,6 +70,7 @@ import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
+import AccountingPage from './pages/AccountingPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
@@ -711,6 +712,10 @@ function App() {
                   <Route
                     path="/finance/bulk-payment"
                     component={BulkPaymentPage}
+                  />
+                  <Route
+                    path="/finance/accounting"
+                    component={AccountingPage}
                   />
 
                   {/* Payment Processing Routes */}

@@ -602,6 +602,7 @@ export default function BulkPaymentPage() {
                               <SelectItem value="check">Check</SelectItem>
                               <SelectItem value="cash">Cash</SelectItem>
                               <SelectItem value="ach">ACH</SelectItem>
+                              <SelectItem value="wire">Wire</SelectItem>
                               <SelectItem value="aaaa">AAAA</SelectItem>
                             </SelectContent>
                           </Select>

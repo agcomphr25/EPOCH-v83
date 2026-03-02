@@ -1,0 +1,207 @@
+COPY-PASTE IMPLEMENTATION PROMPT (Phase 1 — Accounting Shadow Layer)
+
+Paste this into a new Replit Agent thread.
+
+Do not modify it.
+
+IMPLEMENTATION — PHASE 1 ACCOUNTING SHADOW LAYER (WIRE PAYMENTS ONLY)
+
+This implementation must be minimal-risk and non-invasive.
+Do NOT refactor existing payment logic.
+Do NOT introduce transaction wrappers.
+Follow existing service patterns (auditService precedent).
+
+========================================================
+SECTION 1 — PAYMENT TABLE UPDATES
+========================================================
+
+1. Add "wire" to the paymentType enum validation wherever it is explicitly enumerated.
+
+2. Add a new nullable column to payments table:
+
+processingFee: real (nullable)
+
+- Default null
+- No automatic recalculation
+- Do NOT change existing logic
+
+Ensure schema migration is created properly.
+
+========================================================
+SECTION 2 — ACCOUNTING TABLES
+========================================================
+
+Add the following new tables to schema.ts:
+
+----------------------------------------
+chartOfAccounts
+----------------------------------------
+id: serial PK
+accountName: text (NOT NULL, unique)
+accountType: text (ASSET, LIABILITY, EXPENSE, etc)
+createdAt: timestamp default now
+updatedAt: timestamp default now
+
+----------------------------------------
+journalEntries
+----------------------------------------
+id: serial PK
+transactionType: text (WIRE_PAYMENT for now)
+referenceType: text (payment)
+referenceId: integer (FK → payments.id)
+effectiveDate: timestamp (NOT NULL)
+status: text (DRAFT | EXPORTED) default DRAFT
+memo: text (nullable)
+createdBy: text (or userId if available in context)
+createdAt: timestamp default now
+updatedAt: timestamp default now
+exportedAt: timestamp nullable
+
+----------------------------------------
+journalLines
+----------------------------------------
+id: serial PK
+journalEntryId: integer FK → journalEntries.id
+accountId: integer FK → chartOfAccounts.id
+debitAmount: real default 0
+creditAmount: real default 0
+createdAt: timestamp default now
+updatedAt: timestamp default now
+
+========================================================
+SECTION 3 — ACCOUNT SEEDING
+========================================================
+
+On server boot (safe idempotent check), ensure the following accounts exist:
+
+- Bank Checking (ASSET)
+- Accounts Receivable – Other (ASSET)
+- Bank Service Charges (EXPENSE)
+
+If they exist, do nothing.
+If not, insert.
+
+Follow existing boot/migration pattern if present.
+
+========================================================
+SECTION 4 — ACCOUNTING SERVICE
+========================================================
+
+Create new file:
+
+server/src/services/accountingService.ts
+
+Export function:
+
+createOrUpdateFromPayment(paymentRecord, user)
+
+Behavior:
+
+IF paymentRecord.paymentType !== 'wire'
+  RETURN (do nothing)
+
+Lookup seeded accounts by accountName.
+
+gross = paymentRecord.paymentAmount
+fee = paymentRecord.processingFee || 0
+net = gross - fee
+
+IF net < 0 → log error and abort.
+
+Check if journalEntry already exists for referenceType='payment' AND referenceId=paymentRecord.id
+
+IF exists AND status='EXPORTED'
+  Log warning and RETURN (no mutation)
+
+IF exists AND status='DRAFT'
+  Delete existing journalLines
+  Rebuild lines
+
+IF not exists
+  Create journalEntry:
+    transactionType = 'WIRE_PAYMENT'
+    referenceType = 'payment'
+    referenceId = paymentRecord.id
+    effectiveDate = paymentRecord.paymentDate
+    memo = paymentRecord.notes
+    status = 'DRAFT'
+
+Create journalLines:
+
+1) Debit Bank Checking = net
+2) If fee > 0 → Debit Bank Service Charges = fee
+3) Credit Accounts Receivable – Other = gross
+
+Validate:
+Sum(debits) === Sum(credits)
+If not equal → throw error
+
+Wrap entire function in try/catch.
+Log failures but DO NOT block payment route.
+
+========================================================
+SECTION 5 — HOOK INTO PAYMENT INSERT POINTS
+========================================================
+
+Locate all three payment insertion locations:
+
+orders.ts (bulk-payment route)
+payments.ts (/batch route)
+payments.ts (/bulk-live route)
+
+Immediately after payment insert .returning() call,
+invoke:
+
+await AccountingService.createOrUpdateFromPayment(paymentRecord, req.user)
+
+Wrap in try/catch.
+Never block primary payment response.
+Follow auditService pattern.
+
+========================================================
+SECTION 6 — PAYMENT DELETE BEHAVIOR
+========================================================
+
+In DELETE payment route:
+
+After successful payment delete:
+
+Delete journalEntry where:
+referenceType='payment' AND referenceId=deletedPaymentId
+ONLY if status='DRAFT'
+
+If status='EXPORTED'
+Log warning and prevent deletion.
+
+========================================================
+SECTION 7 — PAYMENT EDIT BEHAVIOR
+========================================================
+
+In payment update route:
+
+After successful update:
+
+Fetch updated payment record.
+Call AccountingService.createOrUpdateFromPayment(updatedPayment, req.user)
+
+========================================================
+SECTION 8 — ADMIN ROUTE RESTRICTION
+========================================================
+
+Add new route restriction in routeAuthorization.ts:
+
+'/finance/accounting': ['ADMIN']
+
+No UI build required yet.
+Backend enforcement only.
+
+========================================================
+CONSTRAINTS
+========================================================
+
+- Do not modify existing AR calculations.
+- Do not refactor transaction safety.
+- Do not alter existing payment response shape.
+- Follow existing coding style.
+- Ensure code compiles.
+- Provide summary of all file modifications at end.

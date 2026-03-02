@@ -8252,6 +8252,65 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Admin Journal Entries — read-only, ADMIN only
+  app.get('/api/finance/accounting/journal-entries', authenticateToken, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user?.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Access denied. ADMIN role required.' });
+      }
+
+      const { fromDate, toDate, status, transactionType } = req.query;
+      const { db } = await import('../../db');
+      const { journalEntries, journalLines, chartOfAccounts } = await import('../../schema');
+      const { eq, and, gte, lte, desc } = await import('drizzle-orm');
+
+      const conditions: any[] = [];
+      if (fromDate) conditions.push(gte(journalEntries.effectiveDate, new Date(fromDate as string)));
+      if (toDate) conditions.push(lte(journalEntries.effectiveDate, new Date(toDate as string)));
+      if (status) conditions.push(eq(journalEntries.status, status as string));
+      if (transactionType) conditions.push(eq(journalEntries.transactionType, transactionType as string));
+
+      const entries = await db
+        .select()
+        .from(journalEntries)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(journalEntries.effectiveDate));
+
+      const result = await Promise.all(entries.map(async (entry: any) => {
+        const lines = await db
+          .select({
+            accountName: chartOfAccounts.accountName,
+            debitAmount: journalLines.debitAmount,
+            creditAmount: journalLines.creditAmount,
+          })
+          .from(journalLines)
+          .leftJoin(chartOfAccounts, eq(journalLines.accountId, chartOfAccounts.id))
+          .where(eq(journalLines.journalEntryId, entry.id));
+
+        const totalDebits = lines.reduce((sum: number, l: any) => sum + (l.debitAmount || 0), 0);
+        const totalCredits = lines.reduce((sum: number, l: any) => sum + (l.creditAmount || 0), 0);
+
+        return {
+          id: entry.id,
+          transactionType: entry.transactionType,
+          referenceType: entry.referenceType,
+          referenceId: entry.referenceId,
+          effectiveDate: entry.effectiveDate,
+          status: entry.status,
+          memo: entry.memo,
+          totals: { totalDebits, totalCredits },
+          lines,
+        };
+      }));
+
+      res.json({ entries: result });
+    } catch (error: any) {
+      console.error('Error fetching journal entries:', error);
+      res.status(500).json({ error: 'Failed to fetch journal entries' });
+    }
+  });
+
   // Payment Analytics API - Get payment data by month with order details
   app.get('/api/finance/payment-analytics', async (req, res) => {
     try {

@@ -8253,7 +8253,8 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Admin Journal Entries — read-only, ADMIN only
-  app.get('/api/finance/accounting/journal-entries', authenticateToken, async (req, res) => {
+  // Note: /api/* routes already pass through authenticateToken globally (server/index.ts)
+  app.get('/api/finance/accounting/journal-entries', async (req, res) => {
     try {
       const user = (req as any).user;
       if (user?.role !== 'ADMIN') {

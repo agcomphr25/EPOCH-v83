@@ -886,6 +886,60 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Executive rundown tables migration:', execErr.message);
       }
 
+      // Ensure accounting shadow layer tables exist (chart_of_accounts, journal_entries, journal_lines)
+      try {
+        const { sql: sqlAcct } = await import('drizzle-orm');
+        await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS chart_of_accounts (
+            id SERIAL PRIMARY KEY,
+            account_name TEXT NOT NULL UNIQUE,
+            account_type TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS journal_entries (
+            id SERIAL PRIMARY KEY,
+            transaction_type TEXT NOT NULL,
+            reference_type TEXT NOT NULL,
+            reference_id INTEGER NOT NULL,
+            effective_date TIMESTAMP NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            memo TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            exported_at TIMESTAMP
+          )
+        `);
+        await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS journal_lines (
+            id SERIAL PRIMARY KEY,
+            journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id),
+            account_id INTEGER NOT NULL REFERENCES chart_of_accounts(id),
+            debit_amount REAL DEFAULT 0,
+            credit_amount REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Add processing_fee column to payments if not present
+        await db.execute(sqlAcct`ALTER TABLE payments ADD COLUMN IF NOT EXISTS processing_fee REAL`);
+        // Idempotent seed: insert required chart-of-accounts entries if missing
+        await db.execute(sqlAcct`
+          INSERT INTO chart_of_accounts (account_name, account_type)
+          VALUES
+            ('Bank Checking', 'ASSET'),
+            ('Accounts Receivable – Other', 'ASSET'),
+            ('Bank Service Charges', 'EXPENSE')
+          ON CONFLICT (account_name) DO NOTHING
+        `);
+        console.log('✅ Ensured accounting shadow layer tables and seed accounts exist');
+      } catch (acctErr: any) {
+        console.warn('⚠️ Accounting shadow layer migration:', acctErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

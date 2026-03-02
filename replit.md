@@ -42,6 +42,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Voice Notes System**: Voice-activated note recording for production issues with automatic order ID extraction, issue categorization, and resolution tracking.
 - **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments with multi-person visibility sharing.
 - **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics.
+- **Accounting Shadow Layer (Phase 1)**: Double-entry journal for wire payments. Tables: `chart_of_accounts`, `journal_entries`, `journal_lines`. Seeded accounts: Bank Checking (ASSET), Accounts Receivable – Other (ASSET), Bank Service Charges (EXPENSE). `accountingService.createOrUpdateFromPayment()` fires after every payment insert in all three bulk-payment routes; re-runs on payment edits; blocks deletion of payments with EXPORTED journal entries. Status: DRAFT/EXPORTED lifecycle. Route `/finance/accounting` restricted to ADMIN only. `payments.processing_fee` nullable column added for wire fee tracking.
 - **Attention & State-Confidence System**: Cross-domain system tracking confidence in the current state of work using `lastConfirmedAt`, `lastConfirmedByUserId`, `confirmationNote`, and `attentionRisk` fields.
 - **Real-Time WebSocket Notifications**: WebSocket server for targeted notifications.
 - **Fillable PDF Templates System**: MVP for customer fill-and-sign workflow with public signature links.

@@ -24,6 +24,7 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
+import * as accountingService from '../services/accountingService';
 import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
@@ -1804,6 +1805,13 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
     const paymentId = parseInt(req.params.paymentId);
     const paymentData = insertPaymentSchema.parse(req.body);
     const updatedPayment = await storage.updatePayment(paymentId, paymentData);
+
+    try {
+      await accountingService.createOrUpdateFromPayment(updatedPayment, (req as any).user);
+    } catch (accountingError) {
+      console.error('[Accounting] Failed to update journal entry for payment edit:', accountingError);
+    }
+
     res.json(updatedPayment);
   } catch (error) {
     console.error('Update payment error:', error);
@@ -1846,6 +1854,18 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
     } catch (checkError) {
       console.error('Error checking payment existence:', checkError);
       return res.status(500).json({ error: 'Error validating payment' });
+    }
+
+    // Check if an EXPORTED journal entry exists — block deletion if so
+    try {
+      const journalCheck = await accountingService.deleteJournalEntryForPayment(paymentId);
+      if (journalCheck.blocked) {
+        return res.status(409).json({
+          error: 'Cannot delete this payment — an exported accounting journal entry exists. Contact your accountant to reverse it first.',
+        });
+      }
+    } catch (journalCheckError) {
+      console.error('[Accounting] Error checking journal entry before payment delete:', journalCheckError);
     }
 
     await storage.deletePayment(paymentId);
@@ -1903,6 +1923,12 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
         });
 
         const newPayment = await storage.createPayment(paymentData);
+
+        try {
+          await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
+        } catch (accountingError) {
+          console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
+        }
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
         const totalPaid = allPayments.reduce(

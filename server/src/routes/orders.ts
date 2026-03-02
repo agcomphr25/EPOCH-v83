@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
+import { journalEntries } from '../../schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
@@ -1803,6 +1804,25 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
 router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+
+    // Block edit if journal entry is EXPORTED
+    const [existingJournal] = await db
+      .select({ status: journalEntries.status })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.referenceType, 'payment'),
+          eq(journalEntries.referenceId, paymentId)
+        )
+      )
+      .limit(1);
+
+    if (existingJournal?.status === 'EXPORTED') {
+      return res.status(409).json({
+        error: 'Cannot edit payment — journal entry is EXPORTED',
+      });
+    }
+
     const paymentData = insertPaymentSchema.parse(req.body);
     const updatedPayment = await storage.updatePayment(paymentId, paymentData);
 

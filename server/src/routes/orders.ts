@@ -1919,6 +1919,15 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
 
     console.log(`💳 Processing bulk payment for ${paymentItems.length} orders`);
 
+    // Determine if this is a bulk wire — extract top-level wire metadata once
+    const firstItem = paymentItems[0];
+    const bulkPaymentType = firstItem?.paymentType || '';
+    const totalFee = bulkPaymentType === 'wire' ? (parseFloat(firstItem?.processingFee) || 0) : 0;
+    const bulkPaymentDate = firstItem?.paymentDate ? new Date(firstItem.paymentDate) : new Date();
+    const bulkMemo = firstItem?.notes || null;
+    let totalGross = 0;
+    const createdPaymentIds: number[] = [];
+
     const results = [];
     const errors = [];
 
@@ -1944,10 +1953,16 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
 
         const newPayment = await storage.createPayment(paymentData);
 
-        try {
-          await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
-        } catch (accountingError) {
-          console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
+        if (paymentType === 'wire') {
+          // Suppress per-row accounting for wire — ONE consolidated entry is created after the loop
+          totalGross += parseFloat(paymentAmount);
+          createdPaymentIds.push(newPayment.id);
+        } else {
+          try {
+            await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
+          } catch (accountingError) {
+            console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
+          }
         }
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
@@ -2008,6 +2023,22 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           orderId: item.orderId,
           error: (error as Error).message,
         });
+      }
+    }
+
+    // After loop: create ONE consolidated journal entry for bulk wire payments
+    if (bulkPaymentType === 'wire' && createdPaymentIds.length > 0) {
+      try {
+        await accountingService.createBulkWireJournalEntry({
+          paymentIds: createdPaymentIds,
+          totalGross: Math.round(totalGross * 100) / 100,
+          totalFee,
+          paymentDate: bulkPaymentDate,
+          memo: bulkMemo,
+          user: (req as any).user,
+        });
+      } catch (err) {
+        console.error('[Accounting] Failed to create consolidated bulk wire journal entry:', err);
       }
     }
 

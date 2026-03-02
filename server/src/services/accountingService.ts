@@ -131,6 +131,100 @@ export async function createOrUpdateFromPayment(
   );
 }
 
+export async function createBulkWireJournalEntry({
+  paymentIds,
+  totalGross,
+  totalFee,
+  paymentDate,
+  memo,
+  user,
+}: {
+  paymentIds: number[];
+  totalGross: number;
+  totalFee: number;
+  paymentDate: Date;
+  memo: string | null;
+  user?: { id?: number; username?: string } | null;
+}): Promise<void> {
+  try {
+    const net = Math.round((totalGross - totalFee) * 100) / 100;
+
+    if (net < 0) {
+      console.error(
+        `[AccountingService] Bulk wire net is negative: gross=${totalGross}, fee=${totalFee}, net=${net}. Aborting.`
+      );
+      return;
+    }
+
+    const allAccounts = await db.select().from(chartOfAccounts);
+    const bankChecking = allAccounts.find((a) => a.accountName === 'Bank Checking');
+    const arOther = allAccounts.find((a) => a.accountName === 'Accounts Receivable – Other');
+    const bankServiceCharges = allAccounts.find((a) => a.accountName === 'Bank Service Charges');
+
+    if (!bankChecking || !arOther || !bankServiceCharges) {
+      console.error('[AccountingService] Required chart-of-accounts entries not found for bulk wire. Aborting.');
+      return;
+    }
+
+    const [newEntry] = await db
+      .insert(journalEntries)
+      .values({
+        transactionType: 'WIRE_PAYMENT',
+        referenceType: 'bulk_wire',
+        referenceId: 0, // sentinel — no single payment row; see paymentIds in memo
+        effectiveDate: paymentDate,
+        memo: memo || `Bulk wire — payment IDs: ${paymentIds.join(', ')}`,
+        status: 'DRAFT',
+        createdBy: user?.username || null,
+      })
+      .returning();
+
+    type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
+    const linesToInsert: LineInsert[] = [];
+
+    linesToInsert.push({
+      journalEntryId: newEntry.id,
+      accountId: bankChecking.id,
+      debitAmount: net,
+      creditAmount: 0,
+    });
+
+    if (totalFee > 0) {
+      linesToInsert.push({
+        journalEntryId: newEntry.id,
+        accountId: bankServiceCharges.id,
+        debitAmount: totalFee,
+        creditAmount: 0,
+      });
+    }
+
+    linesToInsert.push({
+      journalEntryId: newEntry.id,
+      accountId: arOther.id,
+      debitAmount: 0,
+      creditAmount: totalGross,
+    });
+
+    const totalDebits = Math.round(linesToInsert.reduce((s, l) => s + l.debitAmount, 0) * 100) / 100;
+    const totalCredits = Math.round(linesToInsert.reduce((s, l) => s + l.creditAmount, 0) * 100) / 100;
+
+    if (Math.abs(totalDebits - totalCredits) > 0.001) {
+      console.error(
+        `[AccountingService] Bulk wire journal entry imbalanced: debits=${totalDebits}, credits=${totalCredits}. Aborting line insert.`
+      );
+      return;
+    }
+
+    await db.insert(journalLines).values(linesToInsert);
+
+    console.log(
+      `✅ [AccountingService] Bulk wire journal entry ${newEntry.id} created — ${paymentIds.length} payments, gross=${totalGross}, fee=${totalFee}, net=${net}`
+    );
+  } catch (err) {
+    console.error('[AccountingService] createBulkWireJournalEntry failed:', err);
+  }
+}
+
 export async function deleteJournalEntryForPayment(paymentId: number): Promise<{ blocked: boolean }> {
   const [entry] = await db
     .select()

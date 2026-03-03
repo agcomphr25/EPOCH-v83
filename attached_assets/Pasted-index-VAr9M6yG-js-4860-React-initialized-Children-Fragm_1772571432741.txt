@@ -1,0 +1,137 @@
+index-VAr9M6yG.js:4860 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-VAr9M6yG.js:4860 React hooks: {useState: ƒ, useEffect: ƒ}
+index-VAr9M6yG.js:4857 App component is rendering...
+index-VAr9M6yG.js:4857 Environment: production
+index-VAr9M6yG.js:4857 Base URL: /
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+schedule:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-VAr9M6yG.js:4857 App component is rendering...
+index-VAr9M6yG.js:4857 Environment: production
+index-VAr9M6yG.js:4857 Base URL: /
+index-VAr9M6yG.js:4857 App component is rendering...
+index-VAr9M6yG.js:4857 Environment: production
+index-VAr9M6yG.js:4857 Base URL: /
+index-VAr9M6yG.js:4860 RangeError: Invalid time value
+    at nn (index-VAr9M6yG.js:1542:57809)
+    at index-VAr9M6yG.js:3221:196585
+    at Array.map (<anonymous>)
+    at Wsn (index-VAr9M6yG.js:3221:196149)
+    at W2e (index-VAr9M6yG.js:38:17154)
+    at kAe (index-VAr9M6yG.js:40:3169)
+    at Itt (index-VAr9M6yG.js:40:45259)
+    at Ctt (index-VAr9M6yG.js:40:40148)
+    at BPt (index-VAr9M6yG.js:40:40071)
+    at Are (index-VAr9M6yG.js:40:39918)
+console.error @ index-VAr9M6yG.js:4860
+IAe @ index-VAr9M6yG.js:40
+n.callback @ index-VAr9M6yG.js:40
+kTe @ index-VAr9M6yG.js:38
+HTe @ index-VAr9M6yG.js:40
+btt @ index-VAr9M6yG.js:40
+TPt @ index-VAr9M6yG.js:40
+RPt @ index-VAr9M6yG.js:40
+SD @ index-VAr9M6yG.js:40
+GTe @ index-VAr9M6yG.js:40
+P3 @ index-VAr9M6yG.js:38
+(anonymous) @ index-VAr9M6yG.js:40
+setTimeout
+wBt @ index-VAr9M6yG.js:51
+o @ index-VAr9M6yG.js:51
+batch @ index-VAr9M6yG.js:51
+i4 @ index-VAr9M6yG.js:51
+setData @ index-VAr9M6yG.js:51
+fetch @ index-VAr9M6yG.js:51
+await in fetch
+jQ @ index-VAr9M6yG.js:51
+onSubscribe @ index-VAr9M6yG.js:51
+subscribe @ index-VAr9M6yG.js:51
+(anonymous) @ index-VAr9M6yG.js:51
+$et @ index-VAr9M6yG.js:38
+aoe @ index-VAr9M6yG.js:40
+_R @ index-VAr9M6yG.js:40
+RPt @ index-VAr9M6yG.js:40
+SD @ index-VAr9M6yG.js:40
+GTe @ index-VAr9M6yG.js:40
+P3 @ index-VAr9M6yG.js:38
+(anonymous) @ index-VAr9M6yG.js:40
+index-VAr9M6yG.js:4860 Global error caught: RangeError: Invalid time value
+    at nn (index-VAr9M6yG.js:1542:57809)
+    at index-VAr9M6yG.js:3221:196585
+    at Array.map (<anonymous>)
+    at Wsn (index-VAr9M6yG.js:3221:196149)
+    at W2e (index-VAr9M6yG.js:38:17154)
+    at kAe (index-VAr9M6yG.js:40:3169)
+    at Itt (index-VAr9M6yG.js:40:45259)
+    at Ctt (index-VAr9M6yG.js:40:40148)
+    at BPt (index-VAr9M6yG.js:40:40071)
+    at Are (index-VAr9M6yG.js:40:39918)
+console.error @ index-VAr9M6yG.js:4860
+n @ index-VAr9M6yG.js:4857
+setTimeout
+wBt @ index-VAr9M6yG.js:51
+o @ index-VAr9M6yG.js:51
+batch @ index-VAr9M6yG.js:51
+i4 @ index-VAr9M6yG.js:51
+setData @ index-VAr9M6yG.js:51
+fetch @ index-VAr9M6yG.js:51
+await in fetch
+jQ @ index-VAr9M6yG.js:51
+onSubscribe @ index-VAr9M6yG.js:51
+subscribe @ index-VAr9M6yG.js:51
+(anonymous) @ index-VAr9M6yG.js:51
+$et @ index-VAr9M6yG.js:38
+aoe @ index-VAr9M6yG.js:40
+_R @ index-VAr9M6yG.js:40
+RPt @ index-VAr9M6yG.js:40
+SD @ index-VAr9M6yG.js:40
+GTe @ index-VAr9M6yG.js:40
+P3 @ index-VAr9M6yG.js:38
+(anonymous) @ index-VAr9M6yG.js:40
+index-VAr9M6yG.js:1542 Uncaught RangeError: Invalid time value
+    at nn (index-VAr9M6yG.js:1542:57809)
+    at index-VAr9M6yG.js:3221:196585
+    at Array.map (<anonymous>)
+    at Wsn (index-VAr9M6yG.js:3221:196149)
+    at W2e (index-VAr9M6yG.js:38:17154)
+    at kAe (index-VAr9M6yG.js:40:3169)
+    at Itt (index-VAr9M6yG.js:40:45259)
+    at Ctt (index-VAr9M6yG.js:40:40148)
+    at BPt (index-VAr9M6yG.js:40:40071)
+    at Are (index-VAr9M6yG.js:40:39918)
+nn @ index-VAr9M6yG.js:1542
+(anonymous) @ index-VAr9M6yG.js:3221
+Wsn @ index-VAr9M6yG.js:3221
+W2e @ index-VAr9M6yG.js:38
+kAe @ index-VAr9M6yG.js:40
+Itt @ index-VAr9M6yG.js:40
+Ctt @ index-VAr9M6yG.js:40
+BPt @ index-VAr9M6yG.js:40
+Are @ index-VAr9M6yG.js:40
+UAe @ index-VAr9M6yG.js:40
+GTe @ index-VAr9M6yG.js:40
+P3 @ index-VAr9M6yG.js:38
+(anonymous) @ index-VAr9M6yG.js:40
+setTimeout
+wBt @ index-VAr9M6yG.js:51
+o @ index-VAr9M6yG.js:51
+batch @ index-VAr9M6yG.js:51
+i4 @ index-VAr9M6yG.js:51
+setData @ index-VAr9M6yG.js:51
+fetch @ index-VAr9M6yG.js:51
+await in fetch
+jQ @ index-VAr9M6yG.js:51
+onSubscribe @ index-VAr9M6yG.js:51
+subscribe @ index-VAr9M6yG.js:51
+(anonymous) @ index-VAr9M6yG.js:51
+$et @ index-VAr9M6yG.js:38
+aoe @ index-VAr9M6yG.js:40
+_R @ index-VAr9M6yG.js:40
+RPt @ index-VAr9M6yG.js:40
+SD @ index-VAr9M6yG.js:40
+GTe @ index-VAr9M6yG.js:40
+P3 @ index-VAr9M6yG.js:38
+(anonymous) @ index-VAr9M6yG.js:40

@@ -199,7 +199,7 @@ export default function CuttingOperatorDashboard() {
   });
 
   const { data: fabricInventory = [], isLoading: loadingFabric, refetch: refetchFabric } = useQuery<FabricInventoryItem[]>({
-    queryKey: ['/api/cutting-table/fabric-inventory-full'],
+    queryKey: ['/api/cutting-table/fabric-inventory'],
     queryFn: async () => {
       const res = await fetch('/api/cutting-table/fabric-inventory');
       if (!res.ok) return [];
@@ -213,24 +213,24 @@ export default function CuttingOperatorDashboard() {
       
       const fifoByType: Record<string, string> = {};
       sortedByExpiration.forEach((item: any) => {
-        const fabricType = item.fabricType || item.fabric || item.nickname || 'unknown';
+        const fabricName = item.fabric || 'Unknown';
         const squareMeters = parseFloat(item.squareMeters) || 0;
-        if (!fifoByType[fabricType] && squareMeters > 0) {
-          fifoByType[fabricType] = item.id;
+        if (!fifoByType[fabricName] && squareMeters > 0) {
+          fifoByType[fabricName] = item.id;
         }
       });
       
       return data.map((item: any) => {
-        const fabricType = item.fabricType || item.fabric || item.nickname || 'unknown';
+        const fabricName = item.fabric || 'Unknown';
         const squareMeters = parseFloat(item.squareMeters) || 0;
         return {
           ...item,
-          fabricType,
-          commonName: item.nickname || item.fabricType || item.fabric || 'Unknown',
+          fabricType: fabricName,
+          commonName: fabricName,
           barcode: item.barcode || null,
           barcodeValue: item.barcode || item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
           status: getFabricStatus(squareMeters, item.expirationDate, item.lowStockThreshold || 10),
-          isFifoNext: fifoByType[fabricType] === item.id,
+          isFifoNext: fifoByType[fabricName] === item.id,
           lowStockThreshold: item.lowStockThreshold || 10,
           freezerLocation: item.location || item.freezerLocation,
           squareMeters,
@@ -456,7 +456,7 @@ export default function CuttingOperatorDashboard() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
     },
   });
 
@@ -471,7 +471,7 @@ export default function CuttingOperatorDashboard() {
       });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       if (data.generatedBarcode) {
         setReceivingForm(prev => ({ ...prev, generatedBarcode: data.generatedBarcode }));
         toast({
@@ -658,7 +658,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();
       toast({
@@ -1048,7 +1048,7 @@ export default function CuttingOperatorDashboard() {
                                 method: 'POST',
                                 body: JSON.stringify({ freezerNumber: val }),
                               }).then(() => {
-                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
                                 toast({ title: 'Updated', description: `Assigned to Freezer ${val}` });
                               }).catch(() => {
                                 toast({ title: 'Error', description: 'Failed to update freezer', variant: 'destructive' });

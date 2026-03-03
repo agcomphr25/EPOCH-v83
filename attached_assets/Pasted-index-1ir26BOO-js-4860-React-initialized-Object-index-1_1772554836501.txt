@@ -1,0 +1,567 @@
+index-1ir26BOO.js:4860 React initialized: Object
+index-1ir26BOO.js:4860 React hooks: Object
+index-1ir26BOO.js:4857 App component is rendering...
+index-1ir26BOO.js:4857 Environment: production
+index-1ir26BOO.js:4857 Base URL: /
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+receiving:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:4442 🛒 P1 Purchase Orders received: Object
+index-1ir26BOO.js:4442 🔍 Fetching production queue...
+index-1ir26BOO.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-1ir26BOO.js:4442 🛒 P1 Purchase Orders received: Object
+index-1ir26BOO.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-1ir26BOO.js:4442 🔍 Production queue result: 158 orders
+index-1ir26BOO.js:4442 🛒 P1 Purchase Orders received: Object
+index-1ir26BOO.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-1ir26BOO.js:4442 🛒 P1 Purchase Orders received: Object
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/19/receive (timeout: 15000ms, deployment: true)
+/api/vendor-pos/items/19/receive:1  Failed to load resource: the server responded with a status of 400 ()
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/19/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"41.040000000000006\""}
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/19/receive: Error: invalid input syntax for type integer: "41.040000000000006"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "41.040000000000006"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+/api/vendor-pos/items/21/receive:1  Failed to load resource: the server responded with a status of 400 ()
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"88.9\""}
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/21/receive: Error: invalid input syntax for type integer: "88.9"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "88.9"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235  POST https://agcompepoch.xyz/api/vendor-pos/items/21/receive 400 (Bad Request)
+Me @ index-1ir26BOO.js:235
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"0.9000000000000057\""}
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/21/receive: Error: invalid input syntax for type integer: "0.9000000000000057"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "0.9000000000000057"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Wt @ index-1ir26BOO.js:1993
+await in Wt
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235  POST https://agcompepoch.xyz/api/vendor-pos/items/21/receive 400 (Bad Request)
+Me @ index-1ir26BOO.js:235
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"0.9\""}
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/21/receive: Error: invalid input syntax for type integer: "0.9"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "0.9"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Wt @ index-1ir26BOO.js:1993
+await in Wt
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/20/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/20/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/21/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235  POST https://agcompepoch.xyz/api/vendor-pos/items/21/receive 400 (Bad Request)
+Me @ index-1ir26BOO.js:235
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/21/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"0.9000000000000057\""}
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/21/receive: Error: invalid input syntax for type integer: "0.9000000000000057"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "0.9000000000000057"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Wt @ index-1ir26BOO.js:1993
+await in Wt
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/19/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235  POST https://agcompepoch.xyz/api/vendor-pos/items/19/receive 400 (Bad Request)
+Me @ index-1ir26BOO.js:235
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/19/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"41.040000000000006\""}
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/19/receive: Error: invalid input syntax for type integer: "41.040000000000006"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "41.040000000000006"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Wt @ index-1ir26BOO.js:1993
+await in Wt
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/20/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/20/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/20/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/20/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/20/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/20/receive: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+index-1ir26BOO.js:235 🌐 API Request to /api/vendor-pos/items/19/receive (timeout: 15000ms, deployment: true)
+index-1ir26BOO.js:235  POST https://agcompepoch.xyz/api/vendor-pos/items/19/receive 400 (Bad Request)
+Me @ index-1ir26BOO.js:235
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:235 ✅ API Response from /api/vendor-pos/items/19/receive: 400
+index-1ir26BOO.js:4860 API error raw body: {"error":"invalid input syntax for type integer: \"66.04\""}
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 💥 API Request failed for /api/vendor-pos/items/19/receive: Error: invalid input syntax for type integer: "66.04"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Me @ index-1ir26BOO.js:235
+await in Me
+Wt @ index-1ir26BOO.js:1993
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37
+index-1ir26BOO.js:4860 Receiving error: Error: invalid input syntax for type integer: "66.04"
+    at Me (index-1ir26BOO.js:235:6283)
+    at async Wt (index-1ir26BOO.js:1993:14206)
+console.error @ index-1ir26BOO.js:4860
+Wt @ index-1ir26BOO.js:1993
+await in Wt
+rTt @ index-1ir26BOO.js:37
+sTt @ index-1ir26BOO.js:37
+aTt @ index-1ir26BOO.js:37
+vTe @ index-1ir26BOO.js:37
+ket @ index-1ir26BOO.js:37
+(anonymous) @ index-1ir26BOO.js:37
+sCe @ index-1ir26BOO.js:40
+XZe @ index-1ir26BOO.js:37
+Ohe @ index-1ir26BOO.js:37
+T2e @ index-1ir26BOO.js:37
+bTt @ index-1ir26BOO.js:37

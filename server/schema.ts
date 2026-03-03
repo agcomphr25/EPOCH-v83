@@ -12496,6 +12496,7 @@ export const productionPrograms = pgTable('production_programs', {
   name: text('name').notNull(),
   description: text('description'),
   isActive: boolean('is_active').default(true).notNull(),
+  logType: varchar('log_type', { length: 50 }).default('none').notNull(), // 'none' | 'oven_cure' | 'vacuum_leak_test' | 'final_inspection'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
@@ -12537,6 +12538,8 @@ export const productionProgramRuns = pgTable('production_program_runs', {
   travelerStepId: varchar('traveler_step_id', { length: 255 }),
   travelerTaskId: varchar('traveler_task_id', { length: 255 }),
   departmentName: varchar('department_name', { length: 255 }),
+  linkedLogId: uuid('linked_log_id'), // UUID of the auto-created p2OvenCureLog / p2VacuumLeakTest / p2FinalInspectionResult
+  linkedLogType: varchar('linked_log_type', { length: 50 }), // 'oven_cure' | 'vacuum_leak_test' | 'final_inspection'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

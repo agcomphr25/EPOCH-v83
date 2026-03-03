@@ -41,11 +41,21 @@ interface ProgramStep {
   stepIndex: number;
 }
 
+type ProgramLogType = 'none' | 'oven_cure' | 'vacuum_leak_test' | 'final_inspection';
+
+const LOG_TYPE_LABELS: Record<ProgramLogType, string> = {
+  none: 'None (no auto-log)',
+  oven_cure: 'Oven Cure',
+  vacuum_leak_test: 'Vacuum Leak Test',
+  final_inspection: 'Final Inspection',
+};
+
 interface TimerProgram {
   id: string;
   name: string;
   description: string | null;
   isActive: boolean;
+  logType: ProgramLogType;
   steps: ProgramStep[];
   createdAt: string;
   updatedAt: string;
@@ -72,6 +82,7 @@ export default function TimerProgramsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [programType, setProgramType] = useState<'single' | 'multi'>('single');
+  const [logType, setLogType] = useState<ProgramLogType>('none');
   const [steps, setSteps] = useState<StepInput[]>([{ stepName: 'Step 1', durationMinutes: 5 }]);
 
   const { data: programs, isLoading } = useQuery<TimerProgram[]>({
@@ -137,6 +148,7 @@ export default function TimerProgramsPage() {
     setName('');
     setDescription('');
     setProgramType('single');
+    setLogType('none');
     setSteps([{ stepName: 'Step 1', durationMinutes: 5 }]);
     setIsDialogOpen(true);
   };
@@ -146,6 +158,7 @@ export default function TimerProgramsPage() {
     setName(program.name);
     setDescription(program.description || '');
     setProgramType(program.steps.length > 1 ? 'multi' : 'single');
+    setLogType(program.logType || 'none');
     setSteps(
       program.steps.map((s) => ({
         stepName: s.stepName,
@@ -213,6 +226,7 @@ export default function TimerProgramsPage() {
       name: name.trim(),
       description: description.trim() || undefined,
       programType,
+      logType,
       steps,
     };
 
@@ -285,6 +299,7 @@ export default function TimerProgramsPage() {
                 <TableRow>
                   <TableHead>Program Name</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Auto-Log</TableHead>
                   <TableHead>Steps</TableHead>
                   <TableHead>Total Duration</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
@@ -298,6 +313,15 @@ export default function TimerProgramsPage() {
                       <TableCell className="font-medium">{program.name}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {program.description || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {program.logType && program.logType !== 'none' ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {LOG_TYPE_LABELS[program.logType]}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -391,6 +415,26 @@ export default function TimerProgramsPage() {
                   <SelectItem value="multi">Multi-Step Program</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>AS9100 Auto-Log Type</Label>
+              <Select value={logType} onValueChange={(v) => setLogType(v as ProgramLogType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (no auto-log)</SelectItem>
+                  <SelectItem value="oven_cure">Oven Cure</SelectItem>
+                  <SelectItem value="vacuum_leak_test">Vacuum Leak Test</SelectItem>
+                  <SelectItem value="final_inspection">Final Inspection</SelectItem>
+                </SelectContent>
+              </Select>
+              {logType !== 'none' && (
+                <p className="text-xs text-muted-foreground">
+                  Starting a run will automatically create a {LOG_TYPE_LABELS[logType]} log entry. It will be stamped PASS when the run completes.
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">

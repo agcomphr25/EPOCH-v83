@@ -1020,6 +1020,27 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ bom_items quantity type migration:', bomQtyErr.message);
       }
 
+      // Add log_type to production_programs (tracks what kind of log this program auto-creates)
+      try {
+        const { sql: sqlProgType } = await import('drizzle-orm');
+        await db.execute(sqlProgType`
+          ALTER TABLE production_programs ADD COLUMN IF NOT EXISTS log_type VARCHAR(50) DEFAULT 'none' NOT NULL
+        `);
+        console.log('✅ Ensured production_programs has log_type column');
+      } catch (progTypeErr: any) {
+        console.warn('⚠️ production_programs.log_type migration:', progTypeErr.message);
+      }
+
+      // Add linked_log_id and linked_log_type to production_program_runs
+      try {
+        const { sql: sqlRunLog } = await import('drizzle-orm');
+        await db.execute(sqlRunLog`ALTER TABLE production_program_runs ADD COLUMN IF NOT EXISTS linked_log_id UUID`);
+        await db.execute(sqlRunLog`ALTER TABLE production_program_runs ADD COLUMN IF NOT EXISTS linked_log_type VARCHAR(50)`);
+        console.log('✅ Ensured production_program_runs has linked_log_id/linked_log_type columns');
+      } catch (runLogErr: any) {
+        console.warn('⚠️ production_program_runs linked log migration:', runLogErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

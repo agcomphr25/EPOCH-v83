@@ -1,0 +1,151 @@
+COPY-PASTE AUDIT PROMPT
+P2 Traveler + Production Identity Audit
+
+Paste into Replit Agent:
+
+READ-ONLY FORENSIC AUDIT — P2 TRAVELER USER IDENTITY DISPLAY
+
+Objective:
+Identify why the P2 Traveler Viewer is displaying employee code (e.g., EMP007) instead of employee display name.
+
+This is a read-only audit.
+DO NOT modify any files.
+Return a structured report only.
+
+----------------------------------------------------
+PHASE 1 — FIND DISPLAY SOURCE
+----------------------------------------------------
+
+Locate route and frontend code for:
+
+/p2-traveler-viewer
+
+Search for:
+
+- "Started by:"
+- startedBy
+- startedByUserId
+- startedByEmployeeId
+- startedByCode
+- employeeId
+- employeeCode
+- EMP
+
+Identify:
+
+1. Backend route serving traveler data
+2. DB fields returned for startedBy
+3. Whether Identity Layer is used
+4. Whether a JOIN is used
+5. Whether only numeric ID or employee code is returned
+
+For each occurrence provide:
+- File path
+- Line number
+- Code snippet
+- What field is returned (UserId, employeeId, employeeCode, displayName)
+- Risk assessment (ID-only, code-only, resolved properly)
+
+----------------------------------------------------
+PHASE 2 — CHECK SCHEMA
+----------------------------------------------------
+
+Locate schema definitions for:
+
+- production runs
+- traveler steps
+- p2 records
+- step execution records
+
+For each table containing:
+
+startedBy
+completedBy
+approvedBy
+restartedBy
+
+Report:
+
+- Field name
+- Type (integer, text, etc.)
+- Does it have DisplayName sibling?
+- Does it store employeeCode instead of name?
+- Is it legacy pattern?
+
+----------------------------------------------------
+PHASE 3 — CHECK ROUTE INSERT LOGIC
+----------------------------------------------------
+
+Inspect:
+
+- productionTimers.ts
+- p2 routes
+- traveler routes
+- any run/start/stop handlers
+
+Determine:
+
+- Are we calling createIdentitySnapshot?
+- Are we storing snapshot?
+- Are we storing employeeCode?
+- Are we storing only numeric ID?
+
+----------------------------------------------------
+PHASE 4 — FRONTEND RENDER LOGIC
+----------------------------------------------------
+
+In client:
+
+Search for rendering of:
+
+startedBy
+completedBy
+employeeId
+employeeCode
+
+Specifically in:
+
+- P2TravelerViewer
+- ProductionTravelerData
+- LayupScheduler
+- ProductionStationDashboard
+
+For each rendering instance report:
+
+- File path
+- Line number
+- JSX snippet
+- Field rendered
+- Is it employeeCode?
+- Is displayName available but unused?
+- Is fallback logic present?
+
+----------------------------------------------------
+PHASE 5 — IDENTITY LAYER USAGE CHECK
+----------------------------------------------------
+
+Search entire codebase for:
+
+createIdentitySnapshot
+formatIdentity
+
+Report:
+- Where it is used
+- Whether P2 routes are using it
+- Any modules not yet converted
+
+----------------------------------------------------
+PHASE 6 — SUMMARY
+----------------------------------------------------
+
+Return:
+
+SECTION 1 — Where EMP007 is coming from
+SECTION 2 — Tables storing employeeCode instead of displayName
+SECTION 3 — Routes not using Identity Layer
+SECTION 4 — Frontend rendering violations
+SECTION 5 — Recommended minimal fix path for P2 traveler only
+
+Again:
+DO NOT MODIFY FILES.
+READ-ONLY ONLY.

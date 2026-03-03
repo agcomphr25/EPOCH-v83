@@ -1111,6 +1111,17 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       if (traceWarnings.length > 0) {
         console.warn(`[TRACE Validation] Warnings for task ${taskId}:`, traceWarnings);
       }
+
+      // Write ICN back to the traveler header so it's visible in the traveler record
+      const resolvedVals = fieldValues || {};
+      const icnWriteBack =
+        resolvedVals['material_internal_control_number'] ||
+        resolvedVals['internalControlNumber'] ||
+        resolvedVals['material_icn'] ||
+        '';
+      if (icnWriteBack) {
+        await storage.updateTraveler(travelerId, { internalControlNumber: icnWriteBack });
+      }
     }
 
     // Hard QC Stop validation: block completion if any hardQcStop fields are out of tolerance

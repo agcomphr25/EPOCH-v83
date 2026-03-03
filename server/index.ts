@@ -1000,6 +1000,26 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Traveler step renumbering migration:', tsRenErr.message);
       }
 
+      // Ensure bom_items.quantity supports decimals (real instead of integer)
+      try {
+        const { sql: sqlBomQty } = await import('drizzle-orm');
+        await db.execute(sqlBomQty`
+          DO $$ BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'bom_items'
+                AND column_name = 'quantity'
+                AND data_type = 'integer'
+            ) THEN
+              ALTER TABLE bom_items ALTER COLUMN quantity TYPE real USING quantity::real;
+            END IF;
+          END $$
+        `);
+        console.log('✅ Ensured bom_items.quantity supports decimal values');
+      } catch (bomQtyErr: any) {
+        console.warn('⚠️ bom_items quantity type migration:', bomQtyErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

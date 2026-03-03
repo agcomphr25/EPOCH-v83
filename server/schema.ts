@@ -6233,7 +6233,7 @@ export const bomItems = pgTable('bom_items', {
     .references(() => bomDefinitions.id)
     .notNull(),
   partName: text('part_name').notNull(),
-  quantity: integer('quantity').notNull().default(1),
+  quantity: real('quantity').notNull().default(1),
   firstDept: text('first_dept').notNull().default('Layup'),
   itemType: text('item_type').notNull().default('manufactured'), // 'manufactured', 'material', 'sub_assembly', or 'labor'
   // Multi-Level Hierarchy Support
@@ -6277,7 +6277,7 @@ export const insertBomItemSchema = createInsertSchema(bomItems)
   .extend({
     bomId: z.string().uuid('BOM ID must be a valid UUID'),
     partName: z.string().min(1, 'Part name is required'),
-    quantity: z.number().min(1, 'Quantity must be at least 1').default(1),
+    quantity: z.number().min(0.0001, 'Quantity must be greater than 0').default(1),
     firstDept: z
       .enum([
         'Layup',

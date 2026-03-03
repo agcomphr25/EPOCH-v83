@@ -44,7 +44,7 @@ import type { InventoryItem } from '@shared/schema';
 
 const bomItemSchema = z.object({
   partName: z.string().min(1, 'Part name is required'),
-  quantity: z.number().min(1, 'Quantity must be at least 1'),
+  quantity: z.number().min(0.0001, 'Quantity must be greater than 0'),
   purchasingUnitConversion: z
     .number()
     .min(0.001, 'Conversion must be greater than 0')
@@ -268,11 +268,12 @@ export function BOMItemForm({
                 <FormControl>
                   <Input
                     type="number"
-                    min="1"
+                    min="0.0001"
+                    step="any"
                     placeholder="1"
                     {...field}
                     onChange={(e) =>
-                      field.onChange(parseInt(e.target.value) || 1)
+                      field.onChange(parseFloat(e.target.value) || 1)
                     }
                   />
                 </FormControl>

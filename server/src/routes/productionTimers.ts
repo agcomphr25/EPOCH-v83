@@ -8,11 +8,126 @@ import {
   insertProductionProgramRunSchema,
   users,
   employees,
+  p2OvenCureLogs,
+  p2VacuumLeakTests,
+  p2FinalInspectionResults,
+  p2SerializedItems,
 } from '../../schema';
 import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, optionalAuth } from '../../middleware/auth';
 import { validateActionToken } from '../../middleware/actionToken';
+
+// ── Auto-logging helpers ──────────────────────────────────────────────────────
+// Resolves serialized item from run serial number / sku for log creation
+async function lookupSerializedItem(serialNumber: string | null, sku: string | null) {
+  if (!serialNumber) return null;
+  try {
+    const [item] = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.serialNumber, serialNumber))
+      .limit(1);
+    return item || null;
+  } catch {
+    return null;
+  }
+}
+
+// Creates the appropriate AS9100 log entry when a timer run starts
+async function autoCreateLinkedLog(
+  run: any,
+  program: any,
+  userId: number | null,
+): Promise<{ linkedLogId: string | null; linkedLogType: string | null }> {
+  const logType: string = program.logType || 'none';
+  if (logType === 'none') return { linkedLogId: null, linkedLogType: null };
+
+  const item = await lookupSerializedItem(run.serialNumber, run.sku);
+  if (!item) {
+    console.warn(`[ProductionTimer] No serialized item found for serial=${run.serialNumber} — skipping auto-log`);
+    return { linkedLogId: null, linkedLogType: null };
+  }
+
+  const dept = run.departmentName || item.currentDepartment || 'Unknown';
+
+  try {
+    if (logType === 'oven_cure') {
+      const [log] = await db.insert(p2OvenCureLogs).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        partNumber: item.partNumber,
+        department: dept,
+        ovenId: run.ovenNumber ? `Oven ${run.ovenNumber}` : null,
+        cycleNumber: null,
+        startTime: run.startedAt,
+        endTime: null,
+        result: 'PENDING',
+        operatorId: null,
+        operatorName: null,
+        notes: `Auto-logged from timer run ${run.id} — program: ${program.name}`,
+      }).returning();
+      return { linkedLogId: log.id, linkedLogType: 'oven_cure' };
+    }
+
+    if (logType === 'vacuum_leak_test') {
+      const [log] = await db.insert(p2VacuumLeakTests).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        partNumber: item.partNumber,
+        department: dept,
+        startTime: run.startedAt,
+        endTime: null,
+        result: 'PENDING',
+        operatorId: null,
+        operatorName: null,
+        notes: `Auto-logged from timer run ${run.id} — program: ${program.name}`,
+      }).returning();
+      return { linkedLogId: log.id, linkedLogType: 'vacuum_leak_test' };
+    }
+
+    if (logType === 'final_inspection') {
+      const [log] = await db.insert(p2FinalInspectionResults).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        partNumber: item.partNumber,
+        department: dept,
+        inspectionDate: run.startedAt,
+        inspectionType: 'FINAL',
+        overallResult: 'PENDING',
+        notes: `Auto-logged from timer run ${run.id} — program: ${program.name}`,
+      }).returning();
+      return { linkedLogId: log.id, linkedLogType: 'final_inspection' };
+    }
+  } catch (err: any) {
+    console.warn(`[ProductionTimer] Failed to auto-create ${logType} log:`, err.message);
+  }
+
+  return { linkedLogId: null, linkedLogType: null };
+}
+
+// Closes (stamps endTime + result) the linked log entry when a run completes/stops
+async function autoCloseLinkedLog(run: any, result: 'PASS' | 'STOPPED', endTime: Date) {
+  if (!run.linkedLogId || !run.linkedLogType) return;
+  try {
+    if (run.linkedLogType === 'oven_cure') {
+      await db.update(p2OvenCureLogs)
+        .set({ endTime, result, updatedAt: endTime })
+        .where(eq(p2OvenCureLogs.id, run.linkedLogId));
+    } else if (run.linkedLogType === 'vacuum_leak_test') {
+      await db.update(p2VacuumLeakTests)
+        .set({ endTime, result, updatedAt: endTime })
+        .where(eq(p2VacuumLeakTests.id, run.linkedLogId));
+    } else if (run.linkedLogType === 'final_inspection') {
+      await db.update(p2FinalInspectionResults)
+        .set({ overallResult: result === 'PASS' ? 'PASS' : 'PENDING', updatedAt: endTime })
+        .where(eq(p2FinalInspectionResults.id, run.linkedLogId));
+    }
+    console.log(`[ProductionTimer] Auto-closed ${run.linkedLogType} log ${run.linkedLogId} → ${result}`);
+  } catch (err: any) {
+    console.warn(`[ProductionTimer] Failed to auto-close linked log:`, err.message);
+  }
+}
 
 function calculateElapsedSeconds(startedAt: Date, endTime?: Date): number {
   const end = endTime || new Date();
@@ -137,9 +252,17 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       occurredAt: new Date(),
     });
 
-    console.log(`[ProductionTimer] Run started: ${run.id} for program ${program.name}`);
+    // Auto-create linked AS9100 log entry if this program type requires it
+    const { linkedLogId, linkedLogType } = await autoCreateLinkedLog(run, program, userId);
+    if (linkedLogId && linkedLogType) {
+      await db.update(productionProgramRuns)
+        .set({ linkedLogId, linkedLogType })
+        .where(eq(productionProgramRuns.id, run.id));
+    }
 
-    return res.status(201).json(run);
+    console.log(`[ProductionTimer] Run started: ${run.id} for program ${program.name}${linkedLogType ? ` (auto-linked ${linkedLogType} log ${linkedLogId})` : ''}`);
+
+    return res.status(201).json({ ...run, linkedLogId, linkedLogType });
   } catch (error: any) {
     console.error('[ProductionTimer] Error starting run:', error);
     return res.status(500).json({ error: 'Failed to start run', detail: error?.message || 'Unknown error' });
@@ -393,6 +516,9 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
         occurredAt: completedAt,
       });
 
+      // Auto-close linked AS9100 log entry
+      await autoCloseLinkedLog(run, 'PASS', completedAt);
+
       console.log(`[ProductionTimer] Run completed: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
       return res.json({ ...updated, message: 'Run completed' });
@@ -469,6 +595,9 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
       userId,
       occurredAt: completedAt,
     });
+
+    // Auto-close linked AS9100 log entry (with STOPPED result so technicians know it was interrupted)
+    await autoCloseLinkedLog(run, 'STOPPED', completedAt);
 
     console.log(`[ProductionTimer] Run stopped: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
@@ -753,6 +882,7 @@ const createProgramSchema = z.object({
   name: z.string().min(1, 'Program name is required'),
   description: z.string().optional(),
   programType: z.enum(['single', 'multi']),
+  logType: z.enum(['none', 'oven_cure', 'vacuum_leak_test', 'final_inspection']).default('none'),
   steps: z.array(z.object({
     stepName: z.string().min(1),
     durationMinutes: z.number().positive('Duration must be greater than 0'),
@@ -766,7 +896,7 @@ router.post('/programs', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { name, description, programType, steps } = parseResult.data;
+    const { name, description, programType, logType, steps } = parseResult.data;
 
     if (programType === 'multi' && steps.length < 2) {
       return res.status(400).json({ error: 'Multi-step programs must have at least 2 steps' });
@@ -775,6 +905,7 @@ router.post('/programs', async (req: Request, res: Response) => {
     const [program] = await db.insert(productionPrograms).values({
       name,
       description: description || null,
+      logType: logType || 'none',
       isActive: true,
     }).returning();
 
@@ -810,7 +941,7 @@ router.put('/programs/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { name, description, programType, steps } = parseResult.data;
+    const { name, description, programType, logType, steps } = parseResult.data;
 
     if (programType === 'multi' && steps.length < 2) {
       return res.status(400).json({ error: 'Multi-step programs must have at least 2 steps' });
@@ -830,6 +961,7 @@ router.put('/programs/:id', async (req: Request, res: Response) => {
       .set({
         name,
         description: description || null,
+        logType: logType || 'none',
         updatedAt: new Date(),
       })
       .where(eq(productionPrograms.id, id))

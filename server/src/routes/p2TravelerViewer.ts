@@ -22,6 +22,8 @@ import {
   inventoryItems,
   cuttingFabricInventory,
   travelerSteps,
+  travelerTasks,
+  travelerTaskFields,
   travelerSignatures,
   employees,
   users,
@@ -234,6 +236,26 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         .orderBy(asc(travelerSteps.stepNumber));
     }
 
+    // Load traveler tasks, field values, and signatures for the linked traveler steps
+    let travelerTasksData: any[] = [];
+    let travelerTaskFieldsData: any[] = [];
+    let travelerSigsData: any[] = [];
+    if (travelerStepData.length > 0) {
+      const stepIds = travelerStepData.map((s: any) => s.id);
+      travelerTasksData = await db.query.travelerTasks.findMany({
+        where: inArray(travelerTasks.travelerStepId, stepIds),
+      });
+      if (travelerTasksData.length > 0) {
+        const taskIds = travelerTasksData.map((t: any) => t.id);
+        travelerTaskFieldsData = await db.query.travelerTaskFields.findMany({
+          where: inArray(travelerTaskFields.travelerTaskId, taskIds),
+        });
+      }
+      travelerSigsData = await db.query.travelerSignatures.findMany({
+        where: inArray(travelerSignatures.travelerStepId, stepIds),
+      });
+    }
+
     // Build a name lookup for employee codes and usernames
     const nameIdentifiers = new Set<string>();
     travelerStepData.forEach(s => {
@@ -246,6 +268,16 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     });
     events.forEach(e => {
       if (e.performedBy) nameIdentifiers.add(e.performedBy);
+    });
+    travelerTasksData.forEach((t: any) => {
+      if (t.completedBy) nameIdentifiers.add(t.completedBy);
+    });
+    travelerSigsData.forEach((s: any) => {
+      if (s.signedBy) nameIdentifiers.add(s.signedBy);
+      if (s.signedByName) nameIdentifiers.add(s.signedByName);
+    });
+    travelerTaskFieldsData.forEach((f: any) => {
+      if (f.recordedBy) nameIdentifiers.add(f.recordedBy);
     });
     ovenCureLogs.forEach(l => {
       if (l.operatorName) nameIdentifiers.add(l.operatorName);
@@ -293,9 +325,13 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       });
     }
     
+    const empCodePattern = /^EMP\d+$/i;
     const resolveName = (identifier: string | null): string | null => {
       if (!identifier) return null;
-      return nameMap[identifier] || identifier;
+      const key = String(identifier);
+      if (nameMap[key]) return nameMap[key];
+      if (empCodePattern.test(key)) return 'Unknown Technician';
+      return key;
     };
 
     // Build department progression data using traveler step data when available
@@ -420,17 +456,93 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         signedAt: q.submittedAt,
         signatureData: q.signature,
       })),
+      // Signatures captured directly in TravelerExecution steps
+      ...travelerSigsData.map((s: any) => {
+        const step = travelerStepData.find((st: any) => st.id === s.travelerStepId);
+        return {
+          id: s.id,
+          type: 'Traveler Step',
+          department: step?.departmentName || 'Unknown',
+          signedBy: resolveName(s.signedBy) || s.signedByName || s.signedBy,
+          signedByUsername: s.signedBy,
+          signedAt: s.signedAt,
+          signatureData: s.signatureData,
+          notes: s.notes,
+          meaning: s.meaning,
+          signatureRole: s.signatureRole,
+        };
+      }),
     ];
 
-    const resolvedWorkTasks = workTasks.map(t => ({
-      ...t,
-      employeeName: resolveName(t.employeeCode) || t.employeeName || t.employeeCode,
-    }));
+    // Technicians derived from traveler steps (startedBy / completedBy)
+    const stepTechnicianTasks: any[] = [];
+    travelerStepData.forEach((step: any) => {
+      if (step.startedBy) {
+        stepTechnicianTasks.push({
+          id: `step-start-${step.id}`,
+          department: step.departmentName,
+          employeeName: resolveName(step.startedBy) || step.startedBy,
+          employeeCode: step.startedBy,
+          status: step.status === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
+          startedAt: step.startedAt,
+          completedAt: step.status === 'COMPLETED' ? step.completedAt : null,
+          durationMinutes: null,
+          source: 'traveler_step',
+        });
+      }
+      if (step.completedBy && step.completedBy !== step.startedBy) {
+        stepTechnicianTasks.push({
+          id: `step-complete-${step.id}`,
+          department: step.departmentName,
+          employeeName: resolveName(step.completedBy) || step.completedBy,
+          employeeCode: step.completedBy,
+          status: 'COMPLETED',
+          startedAt: step.startedAt,
+          completedAt: step.completedAt,
+          durationMinutes: null,
+          source: 'traveler_step',
+        });
+      }
+    });
+
+    const resolvedWorkTasks = [
+      ...workTasks.map(t => ({
+        ...t,
+        employeeName: resolveName(t.employeeCode) || t.employeeName || t.employeeCode,
+      })),
+      ...stepTechnicianTasks,
+    ];
 
     const resolvedEvents = events.map(e => ({
       ...e,
       performedBy: resolveName(e.performedBy) || e.performedBy,
     }));
+
+    // Task field values from TravelerExecution as traceability entries
+    const stepIdToDept: Record<string, string> = {};
+    travelerStepData.forEach((s: any) => { stepIdToDept[s.id] = s.departmentName; });
+    const taskIdToStepId: Record<string, string> = {};
+    travelerTasksData.forEach((t: any) => { taskIdToStepId[t.id] = t.travelerStepId; });
+
+    const travelerFieldTraceability = travelerTaskFieldsData
+      .filter((f: any) => f.value && f.value.trim() !== '')
+      .map((f: any) => {
+        const stepId = taskIdToStepId[f.travelerTaskId];
+        const dept = stepId ? stepIdToDept[stepId] : 'Unknown';
+        return {
+          id: `ttf-${f.id}`,
+          serializedItemId: serializedItem.id,
+          department: dept,
+          traceabilityType: f.fieldType || 'text',
+          traceabilityLabel: f.fieldLabel,
+          traceabilityValue: f.value,
+          recordedBy: resolveName(f.recordedBy) || f.recordedBy,
+          recordedAt: f.recordedAt,
+          source: 'traveler_field',
+        };
+      });
+
+    const mergedTraceabilityData = [...traceabilityData, ...travelerFieldTraceability];
 
     return res.json({
       serializedItem,
@@ -445,7 +557,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       departmentProgress,
       workTasks: resolvedWorkTasks,
       events: resolvedEvents,
-      traceabilityData,
+      traceabilityData: mergedTraceabilityData,
       customData,
       ovenCureLogs,
       vacuumLeakTests,

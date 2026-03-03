@@ -36,8 +36,15 @@ import {
   Plus,
   ScrollText,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
+
+function safeFormat(dateValue: any, fmt: string): string {
+  if (!dateValue) return '-';
+  const d = new Date(dateValue);
+  if (!isValid(d)) return '-';
+  return format(d, fmt);
+}
 
 interface TravelerData {
   serializedItem: any;
@@ -374,10 +381,10 @@ export default function P2TravelerViewer() {
                         {(dept.startedAt || dept.completedAt) && (
                           <div className="mt-1 ml-6 text-xs text-gray-500 space-y-0.5">
                             {dept.startedAt && (
-                              <div>Started: {format(new Date(dept.startedAt), 'MMM d, yyyy h:mm a')}{dept.startedBy ? ` by ${dept.startedBy}` : ''}</div>
+                              <div>Started: {safeFormat(dept.startedAt, 'MMM d, yyyy h:mm a')}{dept.startedBy ? ` by ${dept.startedBy}` : ''}</div>
                             )}
                             {dept.completedAt && (
-                              <div>Completed: {format(new Date(dept.completedAt), 'MMM d, yyyy h:mm a')}{dept.completedBy ? ` by ${dept.completedBy}` : ''}</div>
+                              <div>Completed: {safeFormat(dept.completedAt, 'MMM d, yyyy h:mm a')}{dept.completedBy ? ` by ${dept.completedBy}` : ''}</div>
                             )}
                           </div>
                         )}
@@ -470,9 +477,9 @@ export default function P2TravelerViewer() {
                           <TableRow key={task.id} data-testid={`row-task-${index}`}>
                             <TableCell className="font-medium">{task.department}</TableCell>
                             <TableCell>{task.employeeName}</TableCell>
-                            <TableCell>{format(new Date(task.startedAt), 'MMM d, yyyy h:mm a')}</TableCell>
+                            <TableCell>{safeFormat(task.startedAt, 'MMM d, yyyy h:mm a')}</TableCell>
                             <TableCell>
-                              {task.completedAt ? format(new Date(task.completedAt), 'MMM d, yyyy h:mm a') : '-'}
+                              {safeFormat(task.completedAt, 'MMM d, yyyy h:mm a')}
                             </TableCell>
                             <TableCell>{task.durationMinutes ? `${task.durationMinutes} min` : '-'}</TableCell>
                             <TableCell>{getDepartmentStatusBadge(task.status)}</TableCell>
@@ -504,7 +511,7 @@ export default function P2TravelerViewer() {
                               <Badge variant="outline">{trace.traceabilityType}</Badge>
                             </div>
                             <span className="text-xs text-muted-foreground">
-                              {trace.recordedBy} — {format(new Date(trace.createdAt), 'MMM d, yyyy h:mm a')}
+                              {trace.recordedBy} — {safeFormat(trace.createdAt, 'MMM d, yyyy h:mm a')}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
@@ -630,20 +637,20 @@ export default function P2TravelerViewer() {
                                 {trace.fabricDetail.manufactureDate && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Manufacture Date</span>
-                                    <p>{format(new Date(trace.fabricDetail.manufactureDate), 'MMM d, yyyy')}</p>
+                                    <p>{safeFormat(trace.fabricDetail.manufactureDate, 'MMM d, yyyy')}</p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.receivedDate && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Received Date</span>
-                                    <p>{format(new Date(trace.fabricDetail.receivedDate), 'MMM d, yyyy')}</p>
+                                    <p>{safeFormat(trace.fabricDetail.receivedDate, 'MMM d, yyyy')}</p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.expirationDate && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Expiration Date</span>
-                                    <p className={new Date(trace.fabricDetail.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
-                                      {format(new Date(trace.fabricDetail.expirationDate), 'MMM d, yyyy')}
+                                    <p className={isValid(new Date(trace.fabricDetail.expirationDate)) && new Date(trace.fabricDetail.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                                      {safeFormat(trace.fabricDetail.expirationDate, 'MMM d, yyyy')}
                                     </p>
                                   </div>
                                 )}
@@ -699,7 +706,7 @@ export default function P2TravelerViewer() {
                                     <span className="text-muted-foreground text-xs">Depleted</span>
                                     <p className="text-red-600">
                                       {trace.fabricDetail.depletedAt
-                                        ? format(new Date(trace.fabricDetail.depletedAt), 'MMM d, yyyy h:mm a')
+                                        ? safeFormat(trace.fabricDetail.depletedAt, 'MMM d, yyyy h:mm a')
                                         : 'Yes'}
                                       {trace.fabricDetail.depletedBy ? ` by ${trace.fabricDetail.depletedBy}` : ''}
                                     </p>
@@ -759,8 +766,8 @@ export default function P2TravelerViewer() {
                             <TableCell>{log.targetTemperature ? `${log.targetTemperature}°F` : '-'}</TableCell>
                             <TableCell>{log.actualTemperature ? `${log.actualTemperature}°F` : '-'}</TableCell>
                             <TableCell>{log.actualDuration ? `${log.actualDuration} min` : '-'}</TableCell>
-                            <TableCell>{format(new Date(log.startTime), 'MMM d, yyyy h:mm a')}</TableCell>
-                            <TableCell>{log.endTime ? format(new Date(log.endTime), 'MMM d, yyyy h:mm a') : '-'}</TableCell>
+                            <TableCell>{safeFormat(log.startTime, 'MMM d, yyyy h:mm a')}</TableCell>
+                            <TableCell>{safeFormat(log.endTime, 'MMM d, yyyy h:mm a')}</TableCell>
                             <TableCell>{log.operatorName || '-'}</TableCell>
                             <TableCell>{getResultBadge(log.result)}</TableCell>
                           </TableRow>
@@ -838,7 +845,7 @@ export default function P2TravelerViewer() {
                             <div>
                               <h4 className="font-semibold">{inspection.inspectionType} Inspection</h4>
                               <p className="text-sm text-gray-500">
-                                {format(new Date(inspection.inspectionDate), 'MMM d, yyyy h:mm a')}
+                                {safeFormat(inspection.inspectionDate, 'MMM d, yyyy h:mm a')}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -902,7 +909,7 @@ export default function P2TravelerViewer() {
                                 QA Manager Approved: {inspection.qaMgrApproval}
                                 {inspection.qaMgrApprovalDate && (
                                   <span className="text-gray-500">
-                                    on {format(new Date(inspection.qaMgrApprovalDate), 'MMM d, yyyy')}
+                                    on {safeFormat(inspection.qaMgrApprovalDate, 'MMM d, yyyy')}
                                   </span>
                                 )}
                               </div>
@@ -943,7 +950,7 @@ export default function P2TravelerViewer() {
                               )}
                             </div>
                             <span className="text-xs text-gray-500">
-                              {sig.signedAt ? format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a') : 'N/A'}
+                              {safeFormat(sig.signedAt, 'MMM d, yyyy h:mm a')}
                             </span>
                           </div>
                           
@@ -1047,7 +1054,7 @@ export default function P2TravelerViewer() {
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="text-xs">{event.eventType}</Badge>
                                 <span className="text-xs text-gray-500">
-                                  {format(new Date(event.createdAt), 'MMM d, yyyy h:mm a')}
+                                  {safeFormat(event.createdAt, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
                               {event.notes && <p className="text-sm mt-1">{event.notes}</p>}

@@ -133,7 +133,7 @@ export default function ProductionForecastPage() {
     }
 
     return result;
-  }, [forecastData, searchTerm, statusFilter, departmentFilter, expectedDeptFilter, modelFilter, sortField, sortDirection]);
+  }, [forecastData, searchTerm, statusFilter, departmentFilter, expectedDeptFilter, modelFilter, sortField, sortDirection, dateFrom, dateTo]);
 
   const statusCounts = useMemo(() => {
     if (!forecastData) return { on_track: 0, off_track: 0, total: 0 };

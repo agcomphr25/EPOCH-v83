@@ -921,7 +921,50 @@ export default function P2TravelerViewer() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-center text-gray-500 py-8">No inspection results recorded</p>
+                    <p className="text-center text-gray-500 py-8">No final inspection results recorded</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle>QC Submissions</CardTitle>
+                  <CardDescription>Quality control inspections and department QC records</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {travelerData.qcSubmissions && travelerData.qcSubmissions.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Department</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Result</TableHead>
+                          <TableHead>Submitted By</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {travelerData.qcSubmissions.map((qc: any, index: number) => (
+                          <TableRow key={qc.id} data-testid={`qc-submission-${index}`}>
+                            <TableCell className="font-medium">{qc.department}</TableCell>
+                            <TableCell>{qc.sku || '-'}</TableCell>
+                            <TableCell>{qc.final ? 'Final QC' : 'In-Process QC'}</TableCell>
+                            <TableCell>{getResultBadge(qc.summary || 'PENDING')}</TableCell>
+                            <TableCell>{qc.submittedBy || '-'}</TableCell>
+                            <TableCell>{safeFormat(qc.submittedAt, 'MMM d, yyyy h:mm a')}</TableCell>
+                            <TableCell>
+                              <Badge variant={qc.status === 'completed' ? 'default' : 'secondary'}>
+                                {qc.status || 'pending'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-center text-gray-500 py-8">No QC submissions recorded</p>
                   )}
                 </CardContent>
               </Card>

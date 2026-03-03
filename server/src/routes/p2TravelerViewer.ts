@@ -598,7 +598,10 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       ovenCureLogs,
       vacuumLeakTests,
       finalInspectionResults,
-      qcSubmissions: qcSubmissionsData,
+      qcSubmissions: qcSubmissionsData.map(q => ({
+        ...q,
+        submittedBy: resolveName(q.submittedBy) || q.submittedBy,
+      })),
       signatures,
       lotNumbers,
     });

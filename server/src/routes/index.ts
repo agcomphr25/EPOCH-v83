@@ -2700,17 +2700,18 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P2 Update item status (Hold/Scrap)
+  // P2 Update item status (Hold/Scrap/Complete)
   app.patch('/api/p2/control-center/item-status/:itemId', async (req, res) => {
     try {
       const { itemId } = req.params;
       const { z } = await import('zod');
       
-      // Validate request body with Zod
       const updateStatusSchema = z.object({
-        status: z.enum(['HOLD', 'SCRAPPED', 'ACTIVE']),
+        status: z.enum(['HOLD', 'SCRAPPED', 'ACTIVE', 'COMPLETED']),
         reason: z.string().min(1, 'Reason is required'),
         performedBy: z.string().optional().default('System'),
+        notes: z.string().optional().default(''),
+        linkedTravelerId: z.string().optional(),
       });
       
       const validationResult = updateStatusSchema.safeParse(req.body);
@@ -2721,20 +2722,18 @@ export function registerRoutes(app: Express): Server {
         });
       }
       
-      const { status, reason, performedBy } = validationResult.data;
+      const { status, reason, performedBy, notes, linkedTravelerId } = validationResult.data;
       
       const { db } = await import('../../db');
-      const { p2SerializedItems, p2SerializedItemEvents } = await import('../../schema');
+      const { p2SerializedItems, p2SerializedItemEvents, travelers } = await import('../../schema');
       const { eq } = await import('drizzle-orm');
       
-      // Get item
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
       if (!item) {
         return res.status(404).json({ error: 'Item not found' });
       }
       
-      // Update item status
       await db.update(p2SerializedItems)
         .set({
           status,
@@ -2742,19 +2741,71 @@ export function registerRoutes(app: Express): Server {
         })
         .where(eq(p2SerializedItems.id, itemId));
       
-      // Log event
+      let eventType = 'NOTE';
+      if (status === 'HOLD') eventType = 'HOLD';
+      else if (status === 'SCRAPPED') eventType = 'SCRAP';
+      else if (status === 'COMPLETED') eventType = 'OFF_SYSTEM_COMPLETE';
+
       await db.insert(p2SerializedItemEvents).values({
         serializedItemId: itemId,
         barcode: item.barcode,
-        eventType: status === 'HOLD' ? 'HOLD' : status === 'SCRAPPED' ? 'SCRAP' : 'NOTE',
+        eventType,
         performedBy: performedBy || 'System',
-        notes: reason || `Status changed to ${status}`,
-        metadata: { previousStatus: item.status, newStatus: status },
+        notes: [reason, notes].filter(Boolean).join(' — ') || `Status changed to ${status}`,
+        metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null },
       });
+
+      let travelerCreated = false;
+      let linkedTravelerFound = false;
+      if (status === 'COMPLETED') {
+        if (linkedTravelerId) {
+          const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
+          if (existingTraveler) {
+            linkedTravelerFound = true;
+            await db.update(travelers)
+              .set({ 
+                serialNumber: existingTraveler.serialNumber || item.barcode,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(travelers.id, linkedTravelerId));
+          } else {
+            const travelerNum = `TRV-OFF-${Date.now().toString(36).toUpperCase()}`;
+            await db.insert(travelers).values({
+              travelerNumber: travelerNum,
+              partNumber: item.partNumber || '',
+              partName: item.partName || item.drawingName || '',
+              serialNumber: item.barcode,
+              lotNumber: item.serialNumber,
+              quantity: 1,
+              status: 'COMPLETED',
+              createdBy: performedBy || 'System',
+              workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
+            });
+            travelerCreated = true;
+          }
+        } else {
+          const travelerNum = `TRV-OFF-${Date.now().toString(36).toUpperCase()}`;
+          await db.insert(travelers).values({
+            travelerNumber: travelerNum,
+            partNumber: item.partNumber || '',
+            partName: item.partName || item.drawingName || '',
+            serialNumber: item.barcode,
+            lotNumber: item.serialNumber,
+            quantity: 1,
+            status: 'COMPLETED',
+            createdBy: performedBy || 'System',
+            workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
+          });
+          travelerCreated = true;
+        }
+      }
       
       res.json({
         success: true,
         message: `Item status updated to ${status}`,
+        travelerCreated,
+        linkedTravelerFound,
       });
     } catch (_error) {
       console.error('P2 Update item status error:', _error);

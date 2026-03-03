@@ -43,7 +43,8 @@ import {
   Eye,
   Loader2,
   ChevronRight,
-  Printer
+  Printer,
+  ExternalLink
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -117,9 +118,12 @@ export default function P2ProductionQueue() {
   const [showScanDialog, setShowScanDialog] = useState(false);
   const [showHoldDialog, setShowHoldDialog] = useState(false);
   const [showScrapDialog, setShowScrapDialog] = useState(false);
+  const [showOffSystemDialog, setShowOffSystemDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [scrapReason, setScrapReason] = useState('');
+  const [offSystemNotes, setOffSystemNotes] = useState('');
+  const [offSystemLinkedTraveler, setOffSystemLinkedTraveler] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
 
@@ -152,23 +156,30 @@ export default function P2ProductionQueue() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ itemId, status, reason }: { itemId: string; status: string; reason: string }) => {
+    mutationFn: async ({ itemId, status, reason, notes, linkedTravelerId }: { itemId: string; status: string; reason: string; notes?: string; linkedTravelerId?: string }) => {
       return apiRequest(`/api/p2/control-center/item-status/${itemId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, reason, performedBy: 'Supervisor' }),
+        body: JSON.stringify({ status, reason, notes, linkedTravelerId, performedBy: 'Supervisor' }),
       });
     },
     onSuccess: (_, variables) => {
+      const desc = variables.status === 'COMPLETED' 
+        ? 'Item marked as completed (off-system production) and added to traveler management'
+        : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
-        description: `Item status changed to ${variables.status}`,
+        description: desc,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
       setShowHoldDialog(false);
       setShowScrapDialog(false);
+      setShowOffSystemDialog(false);
       setSelectedItem(null);
       setHoldReason('');
       setScrapReason('');
+      setOffSystemNotes('');
+      setOffSystemLinkedTraveler('');
     },
     onError: (error: any) => {
       toast({
@@ -199,6 +210,23 @@ export default function P2ProductionQueue() {
   const openScrapDialog = (item: QueueItem) => {
     setSelectedItem(item);
     setShowScrapDialog(true);
+  };
+
+  const openOffSystemDialog = (item: QueueItem) => {
+    setSelectedItem(item);
+    setShowOffSystemDialog(true);
+  };
+
+  const confirmOffSystem = () => {
+    if (selectedItem) {
+      updateStatusMutation.mutate({
+        itemId: selectedItem.id,
+        status: 'COMPLETED',
+        reason: 'Off-system production completed',
+        notes: offSystemNotes,
+        linkedTravelerId: offSystemLinkedTraveler || undefined,
+      } as any);
+    }
   };
 
   const confirmHold = () => {
@@ -677,6 +705,16 @@ export default function P2ProductionQueue() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => openOffSystemDialog(item)}
+                                  className="text-indigo-600 hover:text-indigo-700"
+                                  title="Off-System Production Complete"
+                                  data-testid={`button-off-system-${item.id}`}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => openScrapDialog(item)}
                                   className="text-red-600 hover:text-red-700"
                                   data-testid={`button-scrap-${item.id}`}
@@ -934,6 +972,79 @@ export default function P2ProductionQueue() {
                 <XCircle className="h-4 w-4 mr-2" />
               )}
               Scrap Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Off-System Production Dialog */}
+      <Dialog open={showOffSystemDialog} onOpenChange={setShowOffSystemDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-600">
+              <ExternalLink className="h-5 w-5" />
+              Off-System Production Complete
+            </DialogTitle>
+            <DialogDescription>
+              Mark this item as completed outside the digital traveler system. The item will be removed from production and a completed traveler record will be created.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="bg-indigo-50 dark:bg-indigo-950 p-3 rounded-lg border border-indigo-200">
+                <div className="font-medium">{selectedItem.barcode}</div>
+                <div className="text-sm text-muted-foreground">
+                  {selectedItem.partNumber} - {selectedItem.partName}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Department: {selectedItem.currentDepartment} · PO: {selectedItem.poNumber}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea
+                  placeholder="Add any notes about the off-system production (optional)..."
+                  value={offSystemNotes}
+                  onChange={(e) => setOffSystemNotes(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-off-system-notes"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Link to Existing Traveler</label>
+                <Input
+                  placeholder="Enter traveler ID to link (optional)..."
+                  value={offSystemLinkedTraveler}
+                  onChange={(e) => setOffSystemLinkedTraveler(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-off-system-traveler"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  If a traveler was already completed for this item, enter its ID to link them. Otherwise a new completed traveler will be created automatically.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOffSystemDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmOffSystem}
+              disabled={updateStatusMutation.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
+              data-testid="button-confirm-off-system"
+            >
+              {updateStatusMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Complete Off-System
             </Button>
           </DialogFooter>
         </DialogContent>

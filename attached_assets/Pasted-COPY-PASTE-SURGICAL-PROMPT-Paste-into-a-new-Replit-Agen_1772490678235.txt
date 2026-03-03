@@ -1,0 +1,140 @@
+COPY-PASTE SURGICAL PROMPT
+
+Paste into a new Replit Agent thread:
+
+IMPLEMENTATION — BULK WIRE AWARE ACCOUNTING ADJUSTMENT (SURGICAL)
+
+Objective:
+Ensure that bulk wire payments generate ONE consolidated journal entry representing the full wire transaction, rather than one per payment row.
+
+Do NOT refactor payment schema.
+Do NOT redesign tables.
+Do NOT modify single-payment behavior.
+Modify ONLY the /bulk-payment route logic in orders.ts.
+
+========================================================
+SECTION 1 — LOCATE BULK ROUTE
+========================================================
+
+File:
+server/src/routes/orders.ts
+
+Locate:
+router.post('/bulk-payment', ...)
+
+========================================================
+SECTION 2 — SUPPRESS PER-ROW ACCOUNTING CALL
+========================================================
+
+Inside the bulk loop:
+
+Current pattern:
+create payment
+await accountingService.createOrUpdateFromPayment(payment, req.user)
+
+Modify logic:
+
+If paymentType === 'wire':
+    DO NOT call accountingService inside loop
+Else:
+    Keep existing accountingService call as-is
+
+========================================================
+SECTION 3 — AGGREGATE BULK WIRE TOTALS
+========================================================
+
+Before loop:
+Initialize:
+let totalGross = 0;
+let totalFee = parsed processingFee from request (default 0);
+let createdPaymentIds = [];
+
+Inside loop:
+After each payment insert:
+    totalGross += paymentAmount for that order
+    push payment.id into createdPaymentIds
+
+========================================================
+SECTION 4 — AFTER LOOP COMPLETES
+========================================================
+
+After the loop finishes:
+
+If paymentType === 'wire':
+
+    Call new method:
+
+    await accountingService.createBulkWireJournalEntry({
+        paymentIds: createdPaymentIds,
+        totalGross,
+        totalFee,
+        paymentDate,
+        memo,
+        user
+    });
+
+========================================================
+SECTION 5 — ADD NEW ACCOUNTING SERVICE METHOD
+========================================================
+
+In:
+server/src/services/accountingService.ts
+
+Add new exported function:
+
+createBulkWireJournalEntry({
+    paymentIds,
+    totalGross,
+    totalFee,
+    paymentDate,
+    memo,
+    user
+})
+
+Behavior:
+
+1. Lookup accounts:
+   - Bank Checking
+   - Accounts Receivable – Other
+   - Bank Service Charges
+
+2. Compute:
+   net = totalGross - totalFee
+
+3. Create ONE journalEntry:
+   transactionType = 'WIRE_PAYMENT'
+   referenceType = 'bulk_wire'
+   referenceId = null
+   effectiveDate = paymentDate
+   memo = memo
+
+4. Create journalLines:
+   Dr Bank Checking = net
+   If totalFee > 0 → Dr Bank Service Charges = totalFee
+   Cr Accounts Receivable – Other = totalGross
+
+5. Validate debits === credits
+
+6. Do NOT attach journal to individual payment rows
+
+7. Wrap in try/catch
+   Log errors but do not block bulk route response
+
+========================================================
+SECTION 6 — DO NOT MODIFY
+========================================================
+
+- Do NOT change single-payment accounting logic
+- Do NOT modify edit/delete handlers
+- Do NOT change journal schema
+- Do NOT introduce transactions
+- Keep existing behavior intact for non-wire bulk payments
+
+========================================================
+CONSTRAINTS
+========================================================
+
+- Minimal diff footprint
+- Maintain compile integrity
+- Provide summary of exact lines modified
+- Confirm single wire now produces exactly ONE journal entry

@@ -180,6 +180,11 @@ export default function TicketsPage() {
     queryKey: ['/api/employees'],
   });
 
+  const { data: currentUserData } = useQuery<{ valid: boolean; user: { id: number; username: string; role: string } }>({
+    queryKey: ['/api/auth/validate'],
+  });
+  const currentUserId = currentUserData?.user?.id;
+
   const { data: selectedTicket, isLoading: isLoadingSelectedTicket } = useQuery<Ticket>({
     queryKey: ['/api/tickets', selectedTicketId],
     enabled: !!selectedTicketId,
@@ -438,6 +443,14 @@ export default function TicketsPage() {
                   rows={4}
                   data-testid="input-ticket-description"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label>Owner (Created By)</Label>
+                <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-muted text-sm">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{currentUserId ? getUserName(currentUserId) : 'You'}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">Auto-assigned</span>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label>Assigned To</Label>

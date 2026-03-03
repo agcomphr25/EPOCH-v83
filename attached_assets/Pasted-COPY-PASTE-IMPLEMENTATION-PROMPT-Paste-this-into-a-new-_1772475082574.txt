@@ -1,0 +1,99 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+
+Paste this into a new Replit Agent thread:
+
+IMPLEMENTATION — ADMIN JOURNAL ENTRIES GET ENDPOINT (SUMMARY + LINES)
+
+Objective:
+Create an Admin-only endpoint that returns journal entries with:
+- Header data
+- Calculated debit/credit totals
+- Full line detail
+
+Do not modify existing accounting logic.
+Do not refactor schema.
+Add minimal route only.
+
+========================================================
+SECTION 1 — ROUTE CREATION
+========================================================
+
+File: server/src/routes/finance.ts (or appropriate finance route file)
+
+Add new route:
+
+GET /finance/accounting/journal-entries
+
+Restrict to ADMIN via existing routeAuthorization mapping.
+
+========================================================
+SECTION 2 — QUERY PARAMS
+========================================================
+
+Accept optional query parameters:
+
+- fromDate (ISO string)
+- toDate (ISO string)
+- status (DRAFT | EXPORTED)
+- transactionType (e.g., WIRE_PAYMENT)
+
+If provided:
+- Filter journalEntries.effectiveDate between fromDate and toDate
+- Filter journalEntries.status
+- Filter journalEntries.transactionType
+
+========================================================
+SECTION 3 — DATA FETCHING
+========================================================
+
+Fetch journalEntries matching filters.
+
+For each journalEntry:
+
+1. Fetch associated journalLines
+   JOIN chartOfAccounts to get accountName
+
+2. Calculate totals:
+   totalDebits = sum(debitAmount)
+   totalCredits = sum(creditAmount)
+
+========================================================
+SECTION 4 — RESPONSE SHAPE
+========================================================
+
+Return:
+
+{
+  entries: [
+    {
+      id,
+      transactionType,
+      referenceType,
+      referenceId,
+      effectiveDate,
+      status,
+      memo,
+      totals: {
+        totalDebits,
+        totalCredits
+      },
+      lines: [
+        {
+          accountName,
+          debitAmount,
+          creditAmount
+        }
+      ]
+    }
+  ]
+}
+
+========================================================
+SECTION 5 — SAFETY
+========================================================
+
+- No mutation.
+- Read-only.
+- No pagination required for Phase 1.
+- Ensure compile passes.
+- Provide summary of file modifications and line numbers.

@@ -31,7 +31,7 @@ type InventoryItem = {
   name: string;
   sku?: string;
   department?: string;
-  assignedDepartments?: string[];
+
   assignedDepartmentIds?: number[];
   currentBalance?: number;
   minStock?: number;

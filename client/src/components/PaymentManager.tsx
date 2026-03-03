@@ -31,6 +31,7 @@ export interface Payment {
   paymentAmount: number;
   paymentDate: string;
   notes?: string;
+  processingFee?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +69,7 @@ export default function PaymentManager({
     new Date().toISOString().split('T')[0]
   );
   const [notes, setNotes] = useState('');
+  const [processingFee, setProcessingFee] = useState(0);
 
   useEffect(() => {
     const fetchCustomerAddresses = async () => {
@@ -182,6 +184,7 @@ export default function PaymentManager({
     setPaymentAmount('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    setProcessingFee(0);
     setEditingPayment(null);
   };
 
@@ -200,6 +203,7 @@ export default function PaymentManager({
     setPaymentAmount(payment.paymentAmount.toString());
     setPaymentDate(payment.paymentDate.split('T')[0]);
     setNotes(payment.notes || '');
+    setProcessingFee(payment.processingFee || 0);
     setShowPaymentModal(true);
   };
 
@@ -265,6 +269,7 @@ export default function PaymentManager({
       paymentAmount: parseFloat(paymentAmount),
       paymentDate: new Date(paymentDate),
       notes: notes.trim() || null,
+      processingFee: paymentType === 'wire' ? (processingFee || null) : null,
     };
 
     if (editingPayment) {
@@ -474,10 +479,27 @@ export default function PaymentManager({
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
+                    <SelectItem value="wire">Wire</SelectItem>
                     <SelectItem value="aaaa">AAAA</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Wire Fee — only shown when payment type is Wire */}
+              {paymentType === 'wire' && (
+                <div className="space-y-2">
+                  <Label>Wire Fee (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={processingFee || ''}
+                    onChange={(e) => setProcessingFee(parseFloat(e.target.value) || 0)}
+                  />
+                  <p className="text-xs text-muted-foreground">Bank processing fee deducted from net deposited amount.</p>
+                </div>
+              )}
 
               {/* Payment Amount */}
               <div className="space-y-2">
@@ -645,10 +667,27 @@ export default function PaymentManager({
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
+                    <SelectItem value="wire">Wire</SelectItem>
                     <SelectItem value="aaaa">AAAA</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Wire Fee — only shown when payment type is Wire */}
+              {paymentType === 'wire' && (
+                <div className="space-y-2">
+                  <Label>Wire Fee (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={processingFee || ''}
+                    onChange={(e) => setProcessingFee(parseFloat(e.target.value) || 0)}
+                  />
+                  <p className="text-xs text-muted-foreground">Bank processing fee deducted from net deposited amount.</p>
+                </div>
+              )}
 
               {/* Payment Amount */}
               <div className="space-y-2">

@@ -469,10 +469,11 @@ export const payments = pgTable('payments', {
   orderId: text('order_id')
     .references(() => allOrders.orderId)
     .notNull(),
-  paymentType: text('payment_type').notNull(), // credit_card, agr, check, cash, ach
+  paymentType: text('payment_type').notNull(), // credit_card, agr, check, cash, ach, wire
   paymentAmount: real('payment_amount').notNull(),
   paymentDate: timestamp('payment_date').notNull(),
   notes: text('notes'), // Optional notes for the payment
+  processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -2032,7 +2033,7 @@ export const insertPaymentSchema = createInsertSchema(payments)
   })
   .extend({
     orderId: z.string().min(1, 'Order ID is required'),
-    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa']),
+    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire']),
     paymentAmount: z
       .number()
       .min(0.01, 'Payment amount must be greater than 0'),
@@ -3395,6 +3396,7 @@ export const vendorParts = pgTable('vendor_parts', {
 export const vendorPOs = pgTable('vendor_pos', {
   id: serial('id').primaryKey(),
   poNumber: text('po_number'),
+  externalPoNumber: text('external_po_number'), // Legacy / external ERP reference number
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
@@ -3845,6 +3847,7 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
     totalCost: z.number().default(0),
     notes: z.string().optional().nullable(),
     createdBy: z.string().optional().nullable(),
+    externalPoNumber: z.string().trim().optional().nullable(),
   });
 export type InsertVendorPO = z.infer<typeof insertVendorPOSchema>;
 export type VendorPO = typeof vendorPOs.$inferSelect;
@@ -13137,3 +13140,70 @@ export const insertExecutiveRundownItemSchema = createInsertSchema(executiveRund
 });
 export type ExecutiveRundownItem = typeof executiveRundownItems.$inferSelect;
 export type InsertExecutiveRundownItem = z.infer<typeof insertExecutiveRundownItemSchema>;
+
+// ===========================
+// ACCOUNTING SHADOW LAYER
+// ===========================
+
+// Chart of accounts — canonical account definitions
+export const chartOfAccounts = pgTable('chart_of_accounts', {
+  id: serial('id').primaryKey(),
+  accountName: text('account_name').notNull().unique(),
+  accountType: text('account_type').notNull(), // ASSET, LIABILITY, EXPENSE, REVENUE, etc.
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertChartOfAccountsSchema = createInsertSchema(chartOfAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ChartOfAccount = typeof chartOfAccounts.$inferSelect;
+export type InsertChartOfAccount = z.infer<typeof insertChartOfAccountsSchema>;
+
+// Journal entries — one per transaction event (e.g. a wire payment)
+export const journalEntries = pgTable('journal_entries', {
+  id: serial('id').primaryKey(),
+  transactionType: text('transaction_type').notNull(), // WIRE_PAYMENT
+  referenceType: text('reference_type').notNull(),     // payment
+  referenceId: integer('reference_id').notNull(),      // payments.id
+  effectiveDate: timestamp('effective_date').notNull(),
+  status: text('status').notNull().default('DRAFT'),   // DRAFT | EXPORTED
+  memo: text('memo'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  exportedAt: timestamp('exported_at'),
+});
+
+export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type JournalEntry = typeof journalEntries.$inferSelect;
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+
+// Journal lines — individual debit/credit lines within an entry
+export const journalLines = pgTable('journal_lines', {
+  id: serial('id').primaryKey(),
+  journalEntryId: integer('journal_entry_id')
+    .references(() => journalEntries.id)
+    .notNull(),
+  accountId: integer('account_id')
+    .references(() => chartOfAccounts.id)
+    .notNull(),
+  debitAmount: real('debit_amount').default(0),
+  creditAmount: real('credit_amount').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertJournalLineSchema = createInsertSchema(journalLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type JournalLine = typeof journalLines.$inferSelect;
+export type InsertJournalLine = z.infer<typeof insertJournalLineSchema>;

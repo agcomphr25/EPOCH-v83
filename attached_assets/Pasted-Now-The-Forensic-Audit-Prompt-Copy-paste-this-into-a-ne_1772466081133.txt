@@ -1,0 +1,80 @@
+Now — The Forensic Audit Prompt
+
+Copy-paste this into a new Replit Agent thread.
+
+Do not modify it.
+
+COPY-PASTE AUDIT PROMPT
+READ-ONLY FORENSIC AUDIT — CUSTOMER PAYMENT + AR + ACCOUNTING INSERTION POINT
+
+This is a strictly read-only audit. Do not modify any files.
+
+Objective:
+Map the complete lifecycle of a bulk customer payment in EPOCH and determine the correct architectural insertion point for an Accounting Service layer that will create shadow journal entries.
+
+SECTION 1 — Identify Payment Schema
+1. Locate the schema/table definition for customer_payment (or equivalent).
+2. List:
+   - All columns
+   - Primary key
+   - Foreign keys
+   - Date fields
+   - Notes/memo fields (if any)
+   - Payment method field (confirm “wire” option exists)
+3. Confirm whether a transaction reference / wire number field exists.
+
+SECTION 2 — Bulk Payment Logic
+1. Locate the route(s) responsible for:
+   - Creating a customer payment
+   - Allocating payment to multiple invoices
+2. Provide:
+   - File path
+   - Function name
+   - Line numbers
+3. Identify:
+   - Where invoice balances are reduced
+   - Whether AR is recalculated or directly adjusted
+   - Whether this occurs inside a DB transaction block
+
+SECTION 3 — Accounts Receivable Handling
+1. Identify where customer account balance is derived:
+   - Computed from invoices?
+   - Stored field?
+2. Confirm whether:
+   - There is any existing accounting / journal logic
+   - Any ledger tables already exist
+
+SECTION 4 — Payment Edit & Delete Behavior
+1. Locate:
+   - Edit payment route
+   - Delete payment route
+2. Confirm:
+   - Whether invoice reallocations are recalculated
+   - Whether edits use transactions
+   - Whether soft delete or hard delete
+
+SECTION 5 — Permissions Model
+1. Identify:
+   - How roles are enforced
+   - How Admin role is determined
+2. Confirm best method to restrict Accounting Module to Admin only.
+
+SECTION 6 — Service Layer Architecture
+1. Identify whether there is an existing:
+   - services/ directory
+   - domain services pattern
+2. Recommend best insertion point for:
+   AccountingService.createOrUpdateFromCustomerPayment(paymentId)
+
+SECTION 7 — Risk & Transaction Safety
+1. Confirm whether payment creation + invoice allocation is atomic.
+2. Recommend how accounting shadow entry can:
+   - Execute inside same transaction OR
+   - Safely execute immediately after commit.
+
+OUTPUT FORMAT:
+Structured report.
+Include file paths and line numbers.
+No speculation.
+No modifications.
+No proposed code changes yet.

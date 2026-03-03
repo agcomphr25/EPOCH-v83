@@ -52,6 +52,7 @@ const PAYMENT_METHODS = [
   },
   { value: 'agr', label: 'AGR', icon: Building, color: 'bg-orange-500' },
   { value: 'ach', label: 'ACH', icon: University, color: 'bg-indigo-500' },
+  { value: 'wire', label: 'Wire', icon: University, color: 'bg-slate-500' },
 ];
 
 const batchPaymentSchema = z.object({

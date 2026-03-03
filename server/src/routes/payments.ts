@@ -12,6 +12,7 @@ import {
 import { eq, desc, inArray } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
+import * as accountingService from '../services/accountingService';
 
 const router = Router();
 
@@ -412,7 +413,7 @@ router.post('/void/:transactionId', async (req, res) => {
 
 // Batch payment processing
 const batchPaymentSchema = z.object({
-  paymentMethod: z.enum(['cash', 'check', 'credit_card', 'agr', 'ach']),
+  paymentMethod: z.enum(['cash', 'check', 'credit_card', 'agr', 'ach', 'wire']),
   totalAmount: z.number().min(0.01),
   notes: z.string().optional(),
   orderAllocations: z
@@ -481,6 +482,12 @@ router.post('/batch', async (req, res) => {
               `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
           })
           .returning();
+
+        try {
+          await accountingService.createOrUpdateFromPayment(paymentRecord, (req as any).user);
+        } catch (accountingError) {
+          console.error('[Accounting] Failed to create journal entry for batch payment:', accountingError);
+        }
 
         // Update order payment status
         await db
@@ -697,6 +704,12 @@ router.post('/bulk-live', async (req, res) => {
               notes: `Live credit card payment - Trans: ${transactionId}, Auth: ${result.authCode || 'N/A'}`,
             })
             .returning();
+
+          try {
+            await accountingService.createOrUpdateFromPayment(payment, (req as any).user);
+          } catch (accountingError) {
+            console.error('[Accounting] Failed to create journal entry for bulk-live payment:', accountingError);
+          }
 
           // Create credit card transaction record for this order
           const [transaction] = await db

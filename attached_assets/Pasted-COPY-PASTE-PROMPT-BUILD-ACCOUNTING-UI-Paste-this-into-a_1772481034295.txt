@@ -1,0 +1,84 @@
+COPY-PASTE PROMPT — BUILD ACCOUNTING UI
+
+Paste this into a new Replit Agent thread:
+
+IMPLEMENTATION — BASIC ACCOUNTING UI PAGE
+
+Objective:
+Create a simple Admin-only Accounting page that displays journal entries and allows row expansion to view lines.
+
+Do not over-style.
+Use existing layout patterns.
+Keep it minimal and functional.
+
+========================================================
+SECTION 1 — CREATE PAGE
+========================================================
+
+File:
+client/src/pages/AccountingPage.tsx
+
+Create a React component that:
+
+1. On mount, fetches:
+   /api/finance/accounting/journal-entries
+
+2. Stores entries in state.
+
+3. Renders:
+
+- Date filter (fromDate)
+- Date filter (toDate)
+- Status dropdown (All, DRAFT, EXPORTED)
+- TransactionType dropdown (All, WIRE_PAYMENT)
+
+Filters should re-fetch with query params.
+
+========================================================
+SECTION 2 — TABLE DISPLAY
+========================================================
+
+Render table with columns:
+
+- Effective Date
+- Transaction Type
+- Reference ID
+- Status
+- Total Debits
+- Total Credits
+- Expand Button
+
+Each row expandable.
+
+When expanded:
+Display journal lines:
+
+Account Name | Debit | Credit
+
+========================================================
+SECTION 3 — ROUTING
+========================================================
+
+Add route to existing router:
+
+Path: /finance/accounting
+Component: AccountingPage
+
+Ensure it follows same route protection pattern as other finance pages.
+
+========================================================
+SECTION 4 — ACCESS CONTROL
+========================================================
+
+Only render page if user.role === 'ADMIN'.
+If not, redirect or show unauthorized message.
+
+========================================================
+CONSTRAINTS
+========================================================
+
+- No CSV yet.
+- No pagination required.
+- Keep styling consistent with existing pages.
+- Ensure compile succeeds.
+- Provide summary of all file modifications.

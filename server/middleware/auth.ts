@@ -55,29 +55,11 @@ export async function authenticateToken(
   next: NextFunction
 ) {
   try {
-    // Only bypass authentication if DEV_AUTH_BYPASS is explicitly enabled
-    if (isAuthBypassEnabled()) {
-      // In development with bypass enabled, use admin user for testing
-      req.user = {
-        id: 2,
-        username: 'admin',
-        role: 'ADMIN',
-        employeeId: null,
-        canOverridePrices: true,
-        isActive: true,
-      };
-      return next();
-    }
-
     const authHeader = req.headers['authorization'];
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;
 
     const token = bearerToken || cookieToken;
-
-    if (!token) {
-      return res.status(401).json({ error: 'No session token' });
-    }
 
     let user = null;
 
@@ -85,7 +67,6 @@ export async function authenticateToken(
     if (bearerToken) {
       const jwtPayload = AuthService.verifyJWT(bearerToken);
       if (jwtPayload) {
-        // Get user from database using JWT payload
         const dbUser = await AuthService.getUserById(jwtPayload.userId);
         if (dbUser && dbUser.isActive) {
           user = dbUser;
@@ -98,13 +79,27 @@ export async function authenticateToken(
       user = await AuthService.getUserBySession(cookieToken);
     }
 
-    if (!user) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+    // If a real session was found, use it regardless of bypass mode
+    if (user) {
+      req.user = user;
+      return next();
     }
 
-    // Attach user data to request
-    req.user = user;
-    next();
+    // Only bypass authentication if DEV_AUTH_BYPASS is explicitly enabled
+    // and there is no valid real session
+    if (isAuthBypassEnabled()) {
+      req.user = {
+        id: 2,
+        username: 'admin',
+        role: 'ADMIN',
+        employeeId: null,
+        canOverridePrices: true,
+        isActive: true,
+      };
+      return next();
+    }
+
+    return res.status(token ? 403 : 401).json({ error: token ? 'Invalid or expired token' : 'No session token' });
   } catch (error) {
     console.error('Authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });

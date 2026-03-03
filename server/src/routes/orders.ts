@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
+import { journalEntries } from '../../schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
@@ -24,6 +25,7 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
+import * as accountingService from '../services/accountingService';
 import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
@@ -1802,8 +1804,34 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
 router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+
+    // Block edit if journal entry is EXPORTED
+    const [existingJournal] = await db
+      .select({ status: journalEntries.status })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.referenceType, 'payment'),
+          eq(journalEntries.referenceId, paymentId)
+        )
+      )
+      .limit(1);
+
+    if (existingJournal?.status === 'EXPORTED') {
+      return res.status(409).json({
+        error: 'Cannot edit payment — journal entry is EXPORTED',
+      });
+    }
+
     const paymentData = insertPaymentSchema.parse(req.body);
     const updatedPayment = await storage.updatePayment(paymentId, paymentData);
+
+    try {
+      await accountingService.createOrUpdateFromPayment(updatedPayment, (req as any).user);
+    } catch (accountingError) {
+      console.error('[Accounting] Failed to update journal entry for payment edit:', accountingError);
+    }
+
     res.json(updatedPayment);
   } catch (error) {
     console.error('Update payment error:', error);
@@ -1848,6 +1876,18 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Error validating payment' });
     }
 
+    // Check if an EXPORTED journal entry exists — block deletion if so
+    try {
+      const journalCheck = await accountingService.deleteJournalEntryForPayment(paymentId);
+      if (journalCheck.blocked) {
+        return res.status(409).json({
+          error: 'Cannot delete this payment — an exported accounting journal entry exists. Contact your accountant to reverse it first.',
+        });
+      }
+    } catch (journalCheckError) {
+      console.error('[Accounting] Error checking journal entry before payment delete:', journalCheckError);
+    }
+
     await storage.deletePayment(paymentId);
     console.log(`✅ Successfully deleted payment ID: ${paymentId}`);
     res.json({ success: true });
@@ -1879,6 +1919,15 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
 
     console.log(`💳 Processing bulk payment for ${paymentItems.length} orders`);
 
+    // Determine if this is a bulk wire — extract top-level wire metadata once
+    const firstItem = paymentItems[0];
+    const bulkPaymentType = firstItem?.paymentType || '';
+    const totalFee = bulkPaymentType === 'wire' ? (parseFloat(firstItem?.processingFee) || 0) : 0;
+    const bulkPaymentDate = firstItem?.paymentDate ? new Date(firstItem.paymentDate) : new Date();
+    const bulkMemo = firstItem?.notes || null;
+    let totalGross = 0;
+    const createdPaymentIds: number[] = [];
+
     const results = [];
     const errors = [];
 
@@ -1903,6 +1952,18 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
         });
 
         const newPayment = await storage.createPayment(paymentData);
+
+        if (paymentType === 'wire') {
+          // Suppress per-row accounting for wire — ONE consolidated entry is created after the loop
+          totalGross += parseFloat(paymentAmount);
+          createdPaymentIds.push(newPayment.id);
+        } else {
+          try {
+            await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
+          } catch (accountingError) {
+            console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
+          }
+        }
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
         const totalPaid = allPayments.reduce(
@@ -1962,6 +2023,22 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           orderId: item.orderId,
           error: (error as Error).message,
         });
+      }
+    }
+
+    // After loop: create ONE consolidated journal entry for bulk wire payments
+    if (bulkPaymentType === 'wire' && createdPaymentIds.length > 0) {
+      try {
+        await accountingService.createBulkWireJournalEntry({
+          paymentIds: createdPaymentIds,
+          totalGross: Math.round(totalGross * 100) / 100,
+          totalFee,
+          paymentDate: bulkPaymentDate,
+          memo: bulkMemo,
+          user: (req as any).user,
+        });
+      } catch (err) {
+        console.error('[Accounting] Failed to create consolidated bulk wire journal entry:', err);
       }
     }
 

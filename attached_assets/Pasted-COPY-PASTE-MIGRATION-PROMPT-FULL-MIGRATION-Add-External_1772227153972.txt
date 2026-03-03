@@ -1,0 +1,156 @@
+COPY-PASTE MIGRATION PROMPT
+FULL MIGRATION — Add External PO Reference Support (Schema + Search + UI + PDF)
+
+GOAL:
+Allow Vendor POs to store and display a legacy/external PO number
+while keeping EPOCH po_number as the canonical identifier.
+
+DO NOT modify revision logic.
+DO NOT alter po_number behavior.
+DO NOT remove any existing fields.
+
+------------------------------------------------------------
+PART 1 — SCHEMA
+------------------------------------------------------------
+
+1) In server/schema.ts:
+   Add to vendorPOs table:
+
+     externalPoNumber: text('external_po_number'),
+
+   Place it near poNumber for clarity.
+
+2) In server start/migration bootstrap:
+   Ensure column exists:
+
+     ALTER TABLE vendor_pos
+     ADD COLUMN IF NOT EXISTS external_po_number TEXT;
+
+3) Update any insert/update Zod schema for Vendor PO:
+   Add optional field:
+
+     externalPoNumber: z.string().trim().optional(),
+
+------------------------------------------------------------
+PART 2 — STORAGE LAYER
+------------------------------------------------------------
+
+1) Ensure getAllVendorPOs() SELECT includes:
+     vendorPOs.externalPoNumber
+
+2) Ensure getVendorPO(id) includes:
+     externalPoNumber
+
+3) Ensure createVendorPO and updateVendorPO:
+     persist externalPoNumber if provided
+
+------------------------------------------------------------
+PART 3 — SEARCH ENHANCEMENT
+------------------------------------------------------------
+
+In getAllVendorPOs():
+
+Extend search OR condition:
+
+BEFORE:
+  ilike(vendorPOs.poNumber, `%${search}%`)
+  ilike(vendors.name, `%${search}%`)
+
+AFTER:
+  ilike(vendorPOs.poNumber, `%${search}%`)
+  ilike(vendorPOs.externalPoNumber, `%${search}%`)
+  ilike(vendors.name, `%${search}%`)
+
+Keep existing logic intact.
+
+------------------------------------------------------------
+PART 4 — UI CHANGES (VendorPOManager.tsx)
+------------------------------------------------------------
+
+A) Create/Edit Form:
+Add input field:
+
+Label: "External / Legacy PO #"
+Bind to: externalPoNumber
+Optional field.
+
+B) Detail Header:
+Under the main PO number display:
+
+If externalPoNumber exists, render:
+
+  <div className="text-sm text-muted-foreground">
+    External Ref: {externalPoNumber}
+  </div>
+
+C) List View Row:
+Under main PO number:
+
+  {po.externalPoNumber && (
+     <div className="text-xs text-muted-foreground">
+       Ref: {po.externalPoNumber}
+     </div>
+  )}
+
+Keep styling subtle.
+
+------------------------------------------------------------
+PART 5 — SERVER-SIDE PDF (pdf-lib)
+------------------------------------------------------------
+
+File: server/utils/pdf/vendorPoPdf.ts
+
+In ORDER DETAILS panel:
+
+If po.externalPoNumber exists,
+add a new row below PO #:
+
+  ['Reference #:', po.externalPoNumber]
+
+Do NOT alter displayPoNumber logic.
+
+------------------------------------------------------------
+PART 6 — CLIENT PRINT WINDOW FIX
+------------------------------------------------------------
+
+File: VendorPOManager.tsx
+
+Fix revision stripping bug:
+
+BEFORE:
+  po.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')
+
+AFTER:
+  po.poNumber.replace('VPO-', '')
+
+Ensure externalPoNumber also appears in print window header:
+
+If present, render:
+
+  <div>Reference #: {po.externalPoNumber}</div>
+
+------------------------------------------------------------
+PART 7 — DO NOT CHANGE
+------------------------------------------------------------
+
+- revision_number
+- isCurrentRevision
+- parentPoId
+- issued_without_email fields
+- manufacturing queue linkage
+- communication logs
+
+------------------------------------------------------------
+OUTPUT
+------------------------------------------------------------
+
+Provide:
+
+SECTION A — schema diff
+SECTION B — storage updates
+SECTION C — search diff
+SECTION D — UI snippets added
+SECTION E — PDF snippets added
+SECTION F — confirmation revision suffix still preserved
+
+END MIGRATION

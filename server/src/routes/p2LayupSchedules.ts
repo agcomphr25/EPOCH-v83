@@ -5,6 +5,7 @@ import {
   p2SerializedItems,
   p2PurchaseOrders,
   p2PurchaseOrderItems,
+  p2ProductionOrders,
   partRoutings,
   insertP2LayupScheduleSchema 
 } from '../../schema';
@@ -700,10 +701,39 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
       .values(itemsToCreate)
       .returning();
 
+    let productionOrderCount = 0;
+    let cuttingOrderCount = 0;
+    try {
+      const existingProdOrders = await db
+        .select()
+        .from(p2ProductionOrders)
+        .where(eq(p2ProductionOrders.p2PoId, po.id))
+        .limit(1);
+
+      if (existingProdOrders.length === 0) {
+        console.log(`🔄 Auto-generating production orders for PO ${po.poNumber} (including cutting table packet demands)...`);
+        const { storage } = await import('../../storage');
+        const prodOrders = await storage.generateP2ProductionOrders(po.id);
+        productionOrderCount = prodOrders.length;
+        const cuttingOrders = prodOrders.filter(o => o.department === 'Cutting Table');
+        cuttingOrderCount = cuttingOrders.length;
+        console.log(`✅ Auto-generated ${prodOrders.length} production orders for PO ${po.poNumber}`);
+        if (cuttingOrders.length > 0) {
+          console.log(`  📋 ${cuttingOrders.length} cutting table packet demand(s) transferred to Cutting Table Control Center`);
+        }
+      } else {
+        console.log(`ℹ️ Production orders already exist for PO ${po.poNumber} - skipping auto-generation`);
+      }
+    } catch (prodError) {
+      console.error(`⚠️ Failed to auto-generate production orders for PO ${po.poNumber}:`, prodError);
+    }
+
     res.json({
-      message: `Successfully generated ${createdItems.length} serialized items`,
+      message: `Successfully generated ${createdItems.length} serialized items${productionOrderCount > 0 ? ` and ${productionOrderCount} production orders (${cuttingOrderCount} cutting table demands)` : ''}`,
       count: createdItems.length,
       items: createdItems,
+      productionOrders: productionOrderCount,
+      cuttingTableDemands: cuttingOrderCount,
     });
   } catch (error: any) {
     console.error('Error generating serialized items:', error);
@@ -755,6 +785,55 @@ router.post('/layup-schedules/send-to-layup/:poItemId', async (req: Request, res
     });
   } catch (error: any) {
     console.error('Error moving items to Layup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/generate-production-orders/:poId', async (req: Request, res: Response) => {
+  try {
+    const poId = parseInt(req.params.poId);
+    if (isNaN(poId)) {
+      return res.status(400).json({ error: 'Invalid PO ID' });
+    }
+
+    const existingProdOrders = await db
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.p2PoId, poId))
+      .limit(1);
+
+    if (existingProdOrders.length > 0) {
+      const totalCount = await db
+        .select()
+        .from(p2ProductionOrders)
+        .where(eq(p2ProductionOrders.p2PoId, poId));
+      return res.status(409).json({
+        error: `Production orders already exist for this PO (${totalCount.length} orders found). Delete existing orders first if regeneration is needed.`,
+        existingCount: totalCount.length,
+      });
+    }
+
+    const { storage } = await import('../../storage');
+    const prodOrders = await storage.generateP2ProductionOrders(poId);
+    const cuttingOrders = prodOrders.filter(o => o.department === 'Cutting Table');
+
+    console.log(`✅ Manually generated ${prodOrders.length} production orders for P2 PO ${poId} (${cuttingOrders.length} cutting table demands)`);
+
+    res.json({
+      success: true,
+      message: `Generated ${prodOrders.length} production orders (${cuttingOrders.length} cutting table demands)`,
+      totalOrders: prodOrders.length,
+      cuttingTableDemands: cuttingOrders.length,
+      orders: prodOrders.map(o => ({
+        id: o.id,
+        orderId: o.orderId,
+        partName: o.partName,
+        department: o.department,
+        status: o.status,
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error generating P2 production orders:', error);
     res.status(500).json({ error: error.message });
   }
 });

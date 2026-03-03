@@ -619,11 +619,15 @@ export default function TravelerManagement() {
                         {new Date(traveler.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-2">
                           <Link href={`/travelers/${traveler.id}`}>
-                            <Button variant="ghost" size="sm" data-testid={`button-view-${traveler.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <Badge
+                              className="cursor-pointer bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors px-3 py-1 inline-flex items-center gap-1"
+                              data-testid={`badge-view-${traveler.id}`}
+                            >
+                              <Eye className="h-3 w-3" />
+                              View Traveler
+                            </Badge>
                           </Link>
                           {traveler.status === 'IN_PROGRESS' && (
                             <Link href={`/travelers/${traveler.id}/execute`}>

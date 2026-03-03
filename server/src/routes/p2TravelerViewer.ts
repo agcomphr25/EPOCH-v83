@@ -148,16 +148,26 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
             fabricPartNumber: fabricMatch.fabricPartNumber,
             nickname: fabricMatch.nickname,
             source: fabricMatch.source,
+            supplierPartNumber: fabricMatch.supplierPartNumber,
+            supplierPoNumber: fabricMatch.supplierPoNumber,
+            manufacturerPoNumber: fabricMatch.manufacturerPoNumber,
             lotNumber: fabricMatch.lotNumber,
             rollNumber: fabricMatch.rollNumber,
             batchNumber: fabricMatch.batchNumber,
             internalControlNumber: fabricMatch.internalControlNumber,
+            barcode: fabricMatch.barcode,
             manufactureDate: fabricMatch.manufactureDate,
+            receivedDate: fabricMatch.receivedDate,
             expirationDate: fabricMatch.expirationDate,
             location: fabricMatch.location,
             freezerNumber: fabricMatch.freezerNumber,
+            conformanceDocumentLink: fabricMatch.conformanceDocumentLink,
+            quantityInStock: fabricMatch.quantityInStock,
+            squareMeters: fabricMatch.squareMeters,
+            notes: fabricMatch.notes,
             status: fabricMatch.status,
-            supplierPoNumber: fabricMatch.supplierPoNumber,
+            depletedAt: fabricMatch.depletedAt,
+            depletedBy: fabricMatch.depletedBy,
           };
         }
       }
@@ -256,15 +266,21 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     const nameMap: Record<string, string> = {};
     if (nameIdentifiers.size > 0) {
       const ids = Array.from(nameIdentifiers);
+      const numericIds = ids.filter(id => /^\d+$/.test(id)).map(Number);
       const matchedEmployees = await db.query.employees.findMany({
         where: or(
           inArray(employees.employeeCode, ids),
-          inArray(employees.name, ids)
+          inArray(employees.name, ids),
+          inArray(employees.badgeScanCode, ids),
+          ...(numericIds.length > 0 ? [inArray(employees.id, numericIds)] : [])
         ),
       });
       matchedEmployees.forEach(emp => {
-        if (emp.employeeCode) nameMap[emp.employeeCode] = emp.preferredName || emp.name;
-        nameMap[emp.name] = emp.preferredName || emp.name;
+        const displayName = emp.preferredName || emp.name;
+        if (emp.employeeCode) nameMap[emp.employeeCode] = displayName;
+        if (emp.badgeScanCode) nameMap[emp.badgeScanCode] = displayName;
+        nameMap[emp.name] = displayName;
+        nameMap[String(emp.id)] = displayName;
       });
       
       const matchedUsers = await db.query.users.findMany({

@@ -1768,7 +1768,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
-            LEFT JOIN customers c ON o.customer = c.id
+            LEFT JOIN customers c ON o.customer = c.name
             ORDER BY ls.scheduled_date DESC
             LIMIT 500
           `)
@@ -1785,7 +1785,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
-            LEFT JOIN customers c ON o.customer = c.id
+            LEFT JOIN customers c ON o.customer = c.name
             WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
             ORDER BY ls.scheduled_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
@@ -1993,6 +1993,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.id,
               po.p2_po_id as "poId",
               po.part_name as "itemName",
+              po.sku,
               po.quantity,
               po.due_date as "dueDate",
               po.order_id as "poNumber",
@@ -2028,7 +2029,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `
             ORDER BY po.id, po.due_date ASC NULLS LAST
-            LIMIT 500
+            LIMIT 2000
           `)
         : await pool.query(p2Query + `
               AND po.due_date >= $1 AND po.due_date < $2
@@ -2036,8 +2037,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
       const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
+      const p2MaterialCache: Record<string, string> = {};
       for (const item of p2Rows) {
-        // Use the pre-matched BOM from query, or find a match
         const matchingBomId = item.matchedBomId;
         const matchingBom = matchingBomId ? boms.find(b => b.id === matchingBomId) : 
           boms.find(b => 
@@ -2046,19 +2047,60 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             b.partNumber?.toLowerCase().includes(item.itemName?.toLowerCase() || '')
           );
         
-        // Determine material type from BOM or item name
         let materialType = 'unknown';
+        
         if (matchingBom) {
           const materials = await db.select().from(cuttingPacketBOMMaterials)
             .where(eq(cuttingPacketBOMMaterials.packetBomId, matchingBom.id));
           const primaryMaterial = materials[0];
-          materialType = primaryMaterial?.fabricType?.toLowerCase().includes('carbon') ? 'carbon_fiber' : 
-                        primaryMaterial?.fabricType?.toLowerCase().includes('fiber') ? 'fiberglass' : 'unknown';
-        } else {
-          // Infer from item name
+          if (primaryMaterial?.fabricType) {
+            materialType = primaryMaterial.fabricType.toLowerCase().includes('carbon') ? 'carbon_fiber' : 
+                          primaryMaterial.fabricType.toLowerCase().includes('fiber') ? 'fiberglass' : 'unknown';
+          }
+        }
+        
+        if (materialType === 'unknown') {
           const itemNameLower = (item.itemName || '').toLowerCase();
           materialType = itemNameLower.includes('cf') || itemNameLower.includes('carbon') ? 'carbon_fiber' :
                         itemNameLower.includes('fg') || itemNameLower.includes('fiber') ? 'fiberglass' : 'unknown';
+        }
+        
+        if (materialType === 'unknown') {
+          const sku = item.sku || '';
+          if (p2MaterialCache[sku]) {
+            materialType = p2MaterialCache[sku];
+          } else {
+            try {
+              const childNames = await pool.query(`
+                SELECT ii.name
+                FROM bom_lines bl
+                JOIN bom_revisions br ON bl.revision_id = br.id
+                JOIN boms b ON br.bom_id = b.id
+                JOIN inventory_items ii ON ii.ag_part_number = bl.child_part_ag_number
+                WHERE b.parent_part_ag_number = $1
+                UNION
+                SELECT ii2.name
+                FROM bom_lines bl1
+                JOIN bom_revisions br1 ON bl1.revision_id = br1.id
+                JOIN boms b1 ON br1.bom_id = b1.id
+                JOIN boms b2 ON b2.parent_part_ag_number = bl1.child_part_ag_number AND b2.is_active = true
+                JOIN bom_revisions br2 ON br2.bom_id = b2.id
+                JOIN bom_lines bl2 ON bl2.revision_id = br2.id
+                JOIN inventory_items ii2 ON ii2.ag_part_number = bl2.child_part_ag_number
+                WHERE b1.parent_part_ag_number = $1
+                LIMIT 40
+              `, [sku]);
+              const childRows = (childNames as any).rows || childNames || [];
+              const allNames = childRows.map((r: any) => (r.name || '').toLowerCase()).join(' ');
+              if (allNames.includes('carbon') || allNames.includes('cf ') || allNames.includes('twill')) {
+                materialType = 'carbon_fiber';
+              } else if (allNames.includes('fiberglass') || allNames.includes('fg ')) {
+                materialType = 'fiberglass';
+              }
+              p2MaterialCache[sku] = materialType;
+            } catch (e) {
+            }
+          }
         }
         
         queueItems.push({

@@ -1,0 +1,160 @@
+COPY-PASTE FORENSIC AUDIT PROMPT
+FORENSIC AUDIT — P1 PO MATERIAL DRIFT (carbon_fiber → fiberglass)
+
+DO NOT MODIFY FILES.
+READ-ONLY AUDIT.
+TRACE DATA FLOW END-TO-END.
+
+PROBLEM:
+P1 Purchase Orders show material = "carbon_fiber" in:
+  /department-queue/production-queue
+
+But after selecting items and generating a Layup Schedule via:
+  /department-queue/barcode
+
+The Layup Schedule renders material as:
+  "Fiberglass"
+
+Confirmed in generated schedule PDF.
+
+OBJECTIVE:
+Identify EXACTLY where and why the material changes from carbon_fiber to fiberglass.
+
+------------------------------------------------------------
+SECTION 1 — TRACE DATA SOURCE (P1 PO ITEMS)
+------------------------------------------------------------
+
+1. Locate where P1 PO line items are fetched for:
+   - Production Queue
+   - Barcode selection page
+   - Layup schedule creation
+
+2. Identify:
+   - Database column storing material
+   - Enum definition (if any)
+   - JSONB usage (if applicable)
+   - Any default values
+
+Show:
+   - Schema definition
+   - Relevant Drizzle models
+   - Raw DB field names
+
+------------------------------------------------------------
+SECTION 2 — TRACE PRODUCTION QUEUE DISPLAY
+------------------------------------------------------------
+
+Find:
+  /department-queue/production-queue
+  component + API route
+
+Answer:
+  - Which API route supplies material?
+  - Is material coming from:
+      a) purchase_order_items?
+      b) inventory_items?
+      c) stock_models?
+      d) hardcoded mapping?
+
+Print:
+  - The exact line where material is assigned to response object
+  - The raw DB field used
+
+------------------------------------------------------------
+SECTION 3 — TRACE BARCODE PAGE SELECTION LOGIC
+------------------------------------------------------------
+
+Find:
+  /department-queue/barcode
+
+Trace:
+  - How selected P1 items are transformed
+  - What payload is sent to layup schedule creation route
+
+Print:
+  - API route handling schedule creation
+  - The request body shape
+  - The object property for material
+  - Any fallback logic like:
+        item.material || 'fiberglass'
+        materialMap[stockModel]
+        defaultMaterial
+
+------------------------------------------------------------
+SECTION 4 — TRACE LAYUP SCHEDULE CREATION
+------------------------------------------------------------
+
+Find:
+  - Route that creates layup_schedule
+  - Service function that inserts schedule items
+
+Answer:
+  - Is material persisted in schedule table?
+  - Or recomputed from stock model?
+  - Is there a material inference function?
+
+Search for:
+  - resolveMaterial
+  - getMaterialFromStockModel
+  - stockModelDefaults
+  - layupMaterial
+  - fiberglass
+  - carbon_fiber
+
+Print:
+  - Exact lines where material is set during schedule creation
+
+------------------------------------------------------------
+SECTION 5 — TRACE PDF GENERATION
+------------------------------------------------------------
+
+Find:
+  - PDF generator for Layup Schedule
+
+Answer:
+  - Does it render stored material?
+  - Or re-derive material from stock model?
+  - Is there string formatting logic like:
+        formatMaterial(material)
+
+Print:
+  - The exact line where "Fiberglass" is rendered
+
+------------------------------------------------------------
+SECTION 6 — ENUM / MAPPING AUDIT
+------------------------------------------------------------
+
+Search entire repo for:
+  'fiberglass'
+  'carbon_fiber'
+  'carbon fiber'
+
+Determine:
+  - Is fiberglass the enum default?
+  - Is there a mapping like:
+        carbon_fiber → Fiberglass (incorrect aliasing)
+
+------------------------------------------------------------
+SECTION 7 — COMPARISON SUMMARY
+------------------------------------------------------------
+
+Produce a structured report:
+
+1. Source of truth material value
+2. Production Queue material source
+3. Layup Schedule material source
+4. Exact mutation point (file + line)
+5. Root cause classification:
+
+   A) Default fallback override
+   B) Stock model hardcoding
+   C) Enum mismatch
+   D) Payload omission
+   E) Incorrect join
+   F) Case/formatting mismatch
+   G) JSONB parsing issue
+
+Do NOT suggest fixes.
+Only identify root cause and exact code location.
+
+END AUDIT.

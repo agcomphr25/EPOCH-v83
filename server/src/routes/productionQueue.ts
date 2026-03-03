@@ -337,7 +337,11 @@ router.get('/prioritized', async (req: Request, res: Response) => {
             AND (is_cancelled IS NULL OR is_cancelled = false)
             AND model_id IS NOT NULL AND model_id != '' AND model_id != 'None'
             AND LOWER(model_id) NOT IN ('no stock', 'no_stock')
-            AND features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
+            AND (
+              features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
+              OR LOWER(model_id) LIKE '%m1a%'
+              OR is_flattop = true
+            )
           ) as passes_all_filters
         FROM all_orders 
         WHERE current_department = 'P1 Production Queue'
@@ -377,7 +381,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         0 as queuePosition,
         o.created_at as createdAt,
         COALESCE(c.name, 'Customer ' || o.customer_id) as customerName,
-        'SALES' as orderSource
+        'SALES' as orderSource,
+        o.is_flattop as "isFlattop"
       FROM all_orders o
       LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
@@ -391,6 +396,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND (
           (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
           OR LOWER(o.model_id) LIKE '%m1a%'
+          OR o.is_flattop = true
         )
       ORDER BY 
         o.due_date ASC,

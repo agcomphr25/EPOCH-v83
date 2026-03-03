@@ -133,13 +133,14 @@ export default function P2ProductionScheduler() {
       });
       return result;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue'] });
+      const cuttingMsg = result?.cuttingTableDemands > 0 ? ` ${result.cuttingTableDemands} cutting table stock packet demand(s) created.` : '';
       toast({
         title: 'Items Scheduled',
-        description: `${variables.quantity} items have been scheduled for production.`,
+        description: `${variables.quantity} items have been scheduled for production.${cuttingMsg}`,
       });
-      // Clear the amount for this group
       setScheduleAmounts(prev => ({ ...prev, [variables.groupKey]: 0 }));
       refetch();
     },
@@ -180,11 +181,13 @@ export default function P2ProductionScheduler() {
       });
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue'] });
+      const cuttingMsg = result?.cuttingTableDemands > 0 ? ` ${result.cuttingTableDemands} cutting table stock packet demand(s) created.` : '';
       toast({
         title: 'Items Scheduled',
-        description: `${totalToSchedule} items have been scheduled for production.`,
+        description: `${totalToSchedule} items have been scheduled for production.${cuttingMsg}`,
       });
       setScheduleAmounts({});
       refetch();

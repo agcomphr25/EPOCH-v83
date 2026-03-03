@@ -3203,7 +3203,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       const { db } = await import('../../db');
-      const { p2SerializedItems } = await import('../../schema');
+      const { p2SerializedItems, p2ProductionOrders, p2PurchaseOrders, manufacturingQueue, inventoryItems, cuttingPacketBOMs } = await import('../../schema');
       const { eq, inArray, and } = await import('drizzle-orm');
       
       // Update all items to move to Layup department (scheduled for production)
@@ -3220,14 +3220,115 @@ export function registerRoutes(app: Express): Server {
             eq(p2SerializedItems.currentDepartment, 'Pending Layup')
           )
         )
-        .returning({ id: p2SerializedItems.id });
+        .returning({ id: p2SerializedItems.id, poId: p2SerializedItems.poId });
       
       console.log(`Scheduled ${result.length} items for production`);
+      
+      // Auto-sync P2 cutting table demands for the affected POs
+      let cuttingTableSynced = 0;
+      try {
+        const affectedPoIds = [...new Set(result.map(r => r.poId))];
+        
+        for (const poId of affectedPoIds) {
+          const p2Orders = await db
+            .select()
+            .from(p2ProductionOrders)
+            .where(
+              and(
+                eq(p2ProductionOrders.department, 'Cutting Table'),
+                eq(p2ProductionOrders.status, 'PENDING'),
+                eq(p2ProductionOrders.p2PoId, poId)
+              )
+            );
+          
+          if (p2Orders.length === 0) continue;
+          
+          const demandMap: Record<string, { sku: string; partName: string; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null }> = {};
+          
+          for (const order of p2Orders) {
+            const key = `${order.p2PoId}-${order.p2PoItemId}-${order.sku}`;
+            if (!demandMap[key]) {
+              demandMap[key] = {
+                sku: order.sku,
+                partName: order.partName,
+                p2PoId: order.p2PoId,
+                p2PoItemId: order.p2PoItemId,
+                quantity: 0,
+                dueDate: order.dueDate,
+              };
+            }
+            demandMap[key].quantity += (order.quantity || 1);
+          }
+          
+          const existingEntries = await db
+            .select()
+            .from(manufacturingQueue)
+            .where(
+              and(
+                eq(manufacturingQueue.department, 'Cutting Table'),
+                eq(manufacturingQueue.p2PoId, poId)
+              )
+            );
+          
+          for (const [, demand] of Object.entries(demandMap)) {
+            const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, demand.sku)).limit(1);
+            if (!inventoryItem) continue;
+            
+            const existing = existingEntries.find(e => 
+              e.p2PoId === demand.p2PoId && 
+              e.inventoryItemId === inventoryItem.id &&
+              e.p2PoItemId === demand.p2PoItemId
+            );
+            if (existing) continue;
+            
+            const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, demand.p2PoId)).limit(1);
+            const poNumber = po?.poNumber || `PO-${demand.p2PoId}`;
+            
+            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.sku)).limit(1);
+            
+            const notesObj = {
+              source: 'P2_SYNC',
+              p2PoNumber: poNumber,
+              p2PoId: demand.p2PoId,
+              p2PoItemId: demand.p2PoItemId,
+              bomId: matchingBom?.id || null,
+              materialType: 'carbon_fiber',
+            };
+            
+            await db
+              .insert(manufacturingQueue)
+              .values({
+                inventoryItemId: inventoryItem.id,
+                department: 'Cutting Table',
+                quantityRequested: demand.quantity,
+                quantityCompleted: 0,
+                priority: 50,
+                status: 'PENDING',
+                dueDate: demand.dueDate,
+                notes: JSON.stringify(notesObj),
+                requestedBy: 'system',
+                p2PoId: demand.p2PoId,
+                p2PoItemId: demand.p2PoItemId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            
+            cuttingTableSynced++;
+          }
+        }
+        
+        if (cuttingTableSynced > 0) {
+          console.log(`Auto-synced ${cuttingTableSynced} cutting table stock packet demands`);
+        }
+      } catch (syncError) {
+        console.error('Non-fatal: Failed to auto-sync cutting table demands:', syncError);
+      }
       
       res.json({ 
         success: true, 
         scheduled: result.length,
-        message: `${result.length} items moved to Layup department`
+        cuttingTableDemands: cuttingTableSynced,
+        message: `${result.length} items moved to Layup department${cuttingTableSynced > 0 ? `, ${cuttingTableSynced} cutting table stock packet demands created` : ''}`
       });
     } catch (_error) {
       console.error('P2 schedule-items error:', _error);

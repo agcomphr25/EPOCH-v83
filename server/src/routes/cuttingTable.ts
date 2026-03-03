@@ -745,6 +745,35 @@ router.get('/fabric-inventory/by-material/:materialId', async (req, res) => {
   }
 });
 
+router.get('/fabric-inventory-by-icn/:icn', async (req, res) => {
+  try {
+    const { icn } = req.params;
+    const allInventory = await storage.getAllCuttingFabricInventory();
+    const matches = allInventory.filter(item => 
+      item.internalControlNumber && 
+      item.internalControlNumber.toLowerCase().includes(icn.toLowerCase())
+    );
+    
+    const exactMatch = allInventory.find(item => 
+      item.internalControlNumber && 
+      item.internalControlNumber.toLowerCase() === icn.toLowerCase()
+    );
+    
+    if (exactMatch) {
+      return res.json({ match: exactMatch, suggestions: [] });
+    }
+    
+    if (matches.length > 0) {
+      return res.json({ match: null, suggestions: matches.slice(0, 10) });
+    }
+    
+    res.json({ match: null, suggestions: [] });
+  } catch (error) {
+    console.error('Error fetching fabric inventory by ICN:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric inventory by ICN' });
+  }
+});
+
 // Look up fabric inventory by barcode
 router.get('/fabric-inventory-by-barcode/:barcode', async (req, res) => {
   try {

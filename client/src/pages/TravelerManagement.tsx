@@ -63,6 +63,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -629,6 +630,17 @@ export default function TravelerManagement() {
                               View Traveler
                             </Badge>
                           </Link>
+                          {(traveler.serialNumber || traveler.lotNumber) && (
+                            <Link href={`/p2-traveler-viewer?barcode=${encodeURIComponent(traveler.serialNumber || traveler.lotNumber || '')}`}>
+                              <Badge
+                                className="cursor-pointer bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors px-3 py-1 inline-flex items-center gap-1"
+                                data-testid={`badge-p2-view-${traveler.id}`}
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                P2 View
+                              </Badge>
+                            </Link>
+                          )}
                           {traveler.status === 'IN_PROGRESS' && (
                             <Link href={`/travelers/${traveler.id}/execute`}>
                               <Button variant="outline" size="sm" data-testid={`button-execute-${traveler.id}`}>

@@ -293,9 +293,13 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       });
     }
     
+    const empCodePattern = /^EMP\d+$/i;
     const resolveName = (identifier: string | null): string | null => {
       if (!identifier) return null;
-      return nameMap[identifier] || identifier;
+      const key = String(identifier);
+      if (nameMap[key]) return nameMap[key];
+      if (empCodePattern.test(key)) return 'Unknown Technician';
+      return key;
     };
 
     // Build department progression data using traveler step data when available

@@ -476,32 +476,68 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     // Technicians derived from traveler steps (startedBy / completedBy)
     const stepTechnicianTasks: any[] = [];
+    const seenTechKeys = new Set<string>();
     travelerStepData.forEach((step: any) => {
       if (step.startedBy) {
-        stepTechnicianTasks.push({
-          id: `step-start-${step.id}`,
-          department: step.departmentName,
-          employeeName: resolveName(step.startedBy) || step.startedBy,
-          employeeCode: step.startedBy,
-          status: step.status === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
-          startedAt: step.startedAt,
-          completedAt: step.status === 'COMPLETED' ? step.completedAt : null,
-          durationMinutes: null,
-          source: 'traveler_step',
-        });
+        const key = `${step.departmentName}-${step.startedBy}-start`;
+        if (!seenTechKeys.has(key)) {
+          seenTechKeys.add(key);
+          stepTechnicianTasks.push({
+            id: `step-start-${step.id}`,
+            department: step.departmentName,
+            employeeName: resolveName(step.startedBy) || step.startedBy,
+            employeeCode: step.startedBy,
+            status: step.status === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
+            startedAt: step.startedAt,
+            completedAt: step.status === 'COMPLETED' ? step.completedAt : null,
+            durationMinutes: null,
+            source: 'traveler_step',
+          });
+        }
       }
       if (step.completedBy && step.completedBy !== step.startedBy) {
-        stepTechnicianTasks.push({
-          id: `step-complete-${step.id}`,
-          department: step.departmentName,
-          employeeName: resolveName(step.completedBy) || step.completedBy,
-          employeeCode: step.completedBy,
-          status: 'COMPLETED',
-          startedAt: step.startedAt,
-          completedAt: step.completedAt,
-          durationMinutes: null,
-          source: 'traveler_step',
-        });
+        const key = `${step.departmentName}-${step.completedBy}-complete`;
+        if (!seenTechKeys.has(key)) {
+          seenTechKeys.add(key);
+          stepTechnicianTasks.push({
+            id: `step-complete-${step.id}`,
+            department: step.departmentName,
+            employeeName: resolveName(step.completedBy) || step.completedBy,
+            employeeCode: step.completedBy,
+            status: 'COMPLETED',
+            startedAt: step.startedAt,
+            completedAt: step.completedAt,
+            durationMinutes: null,
+            source: 'traveler_step',
+          });
+        }
+      }
+    });
+
+    // Technicians derived from traveler tasks (badge scans on individual tasks)
+    const stepIdToDeptName: Record<string, string> = {};
+    travelerStepData.forEach((s: any) => { stepIdToDeptName[s.id] = s.departmentName; });
+    travelerTasksData.forEach((task: any) => {
+      if (task.completedBy) {
+        const dept = stepIdToDeptName[task.travelerStepId] || 'Unknown';
+        const key = `${dept}-${task.completedBy}-task`;
+        if (!seenTechKeys.has(key)) {
+          seenTechKeys.add(key);
+          stepTechnicianTasks.push({
+            id: `task-${task.id}`,
+            department: dept,
+            employeeName: resolveName(task.completedBy) || task.completedBy,
+            employeeCode: task.completedBy,
+            taskTitle: task.title,
+            status: 'COMPLETED',
+            startedAt: task.startedAt,
+            completedAt: task.completedAt,
+            durationMinutes: task.startedAt && task.completedAt
+              ? Math.round((new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 60000)
+              : null,
+            source: 'traveler_task',
+          });
+        }
       }
     });
 
@@ -562,7 +598,10 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       ovenCureLogs,
       vacuumLeakTests,
       finalInspectionResults,
-      qcSubmissions: qcSubmissionsData,
+      qcSubmissions: qcSubmissionsData.map(q => ({
+        ...q,
+        submittedBy: resolveName(q.submittedBy) || q.submittedBy,
+      })),
       signatures,
       lotNumbers,
     });

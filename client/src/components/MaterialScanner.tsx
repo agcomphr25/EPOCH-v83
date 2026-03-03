@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
@@ -89,7 +89,43 @@ export default function MaterialScanner({
   const [overrideApprovedBy, setOverrideApprovedBy] = useState('');
   const [entryMode, setEntryMode] = useState<'scan' | 'manual'>('scan');
   const [freeTextControlNumber, setFreeTextControlNumber] = useState('');
+  const [icnSuggestions, setIcnSuggestions] = useState<any[]>([]);
+  const [icnMatch, setIcnMatch] = useState<any | null>(null);
+  const [icnSearching, setIcnSearching] = useState(false);
   const queryClient = useQueryClient();
+
+  const lookupIcn = useCallback(async (icn: string) => {
+    if (icn.length < 2) {
+      setIcnSuggestions([]);
+      setIcnMatch(null);
+      return;
+    }
+    setIcnSearching(true);
+    try {
+      const res = await fetch(`/api/cutting-table/fabric-inventory-by-icn/${encodeURIComponent(icn)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIcnMatch(data.match || null);
+        setIcnSuggestions(data.suggestions || []);
+      }
+    } catch {
+      // silently fail lookup
+    } finally {
+      setIcnSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (entryMode === 'manual' && freeTextControlNumber.trim()) {
+        lookupIcn(freeTextControlNumber.trim());
+      } else {
+        setIcnSuggestions([]);
+        setIcnMatch(null);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [freeTextControlNumber, entryMode, lookupIcn]);
 
   const validateMutation = useMutation({
     mutationFn: async (icn: string) => {
@@ -202,6 +238,14 @@ export default function MaterialScanner({
     setOverrideReason('');
     setOverrideApprovedBy('');
     setFreeTextControlNumber('');
+    setIcnSuggestions([]);
+    setIcnMatch(null);
+  };
+
+  const selectIcnMatch = (item: any) => {
+    setFreeTextControlNumber(item.internalControlNumber || '');
+    setIcnMatch(item);
+    setIcnSuggestions([]);
   };
 
   const handleFreeTextSubmit = () => {
@@ -209,14 +253,35 @@ export default function MaterialScanner({
       toast.error('Please enter an internal control number');
       return;
     }
-    onMaterialConsumed?.({
-      internalControlNumber: freeTextControlNumber.trim(),
-      entryMethod: 'manual',
-      travelerId,
-      travelerStepId,
-    });
-    resetScanner();
-    toast.success('Control number recorded');
+    
+    if (icnMatch) {
+      onMaterialConsumed?.({
+        internalControlNumber: icnMatch.internalControlNumber || freeTextControlNumber.trim(),
+        entryMethod: 'manual',
+        travelerId,
+        travelerStepId,
+        fabricInventoryMatch: icnMatch,
+        updatedLot: {
+          id: icnMatch.id,
+          internalControlNumber: icnMatch.internalControlNumber,
+          expirationDate: icnMatch.expirationDate,
+          supplierLotNumber: icnMatch.batchNumber || icnMatch.lotNumber,
+          fabricType: icnMatch.fabric,
+          materialPartNumber: icnMatch.fabricPartNumber,
+          supplier: icnMatch.source,
+          manufacturer: icnMatch.source,
+          rollNumber: icnMatch.rollNumber,
+          receivedDate: icnMatch.receivedDate,
+          freezerNumber: icnMatch.location || (icnMatch.freezerNumber ? `Freezer ${icnMatch.freezerNumber}` : ''),
+          remainingQty: icnMatch.squareMeters,
+          unitOfMeasure: 'sq meters',
+        },
+      });
+      resetScanner();
+      toast.success(`Matched ICN: ${icnMatch.internalControlNumber} — ${icnMatch.fabric || 'Fabric'}`);
+    } else {
+      toast.error('No matching internal control number found in fabric inventory. Please verify the ICN.');
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -266,27 +331,86 @@ export default function MaterialScanner({
             <Alert>
               <FileText className="h-4 w-4" />
               <AlertDescription>
-                Enter internal control number for traceability records
+                Enter internal control number — must match an existing fabric inventory record
               </AlertDescription>
             </Alert>
             <div className="flex gap-2">
-              <div className="flex-1">
+              <div className="flex-1 relative">
                 <Input
                   placeholder="Enter internal control number..."
                   value={freeTextControlNumber}
                   onChange={(e) => setFreeTextControlNumber(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleFreeTextSubmit()}
                   autoFocus
+                  className={icnMatch ? 'border-green-500 pr-8' : ''}
                   data-testid="input-control-number"
                 />
+                {icnSearching && (
+                  <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                {!icnSearching && icnMatch && (
+                  <CheckCircle className="absolute right-2 top-2.5 h-4 w-4 text-green-500" />
+                )}
               </div>
               <Button
                 onClick={handleFreeTextSubmit}
+                disabled={!icnMatch}
                 data-testid="button-submit-control-number"
               >
                 <CheckCircle className="h-4 w-4" />
               </Button>
             </div>
+            
+            {icnMatch && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-800">Matched: {icnMatch.internalControlNumber}</AlertTitle>
+                <AlertDescription className="text-green-700">
+                  <div className="grid grid-cols-2 gap-1 mt-1 text-xs">
+                    <span>Fabric: {icnMatch.fabric || '-'}</span>
+                    <span>Roll #: {icnMatch.rollNumber || '-'}</span>
+                    <span>Batch #: {icnMatch.batchNumber || icnMatch.lotNumber || '-'}</span>
+                    <span>Location: {icnMatch.location || '-'}</span>
+                    {icnMatch.expirationDate && (
+                      <span>Expires: {icnMatch.expirationDate}</span>
+                    )}
+                    {icnMatch.squareMeters && (
+                      <span>Available: {icnMatch.squareMeters} m²</span>
+                    )}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {!icnMatch && icnSuggestions.length > 0 && (
+              <div className="border rounded-md max-h-48 overflow-y-auto">
+                <div className="p-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0">
+                  Matching control numbers ({icnSuggestions.length})
+                </div>
+                {icnSuggestions.map((item: any) => (
+                  <button
+                    key={item.id}
+                    className="w-full text-left px-3 py-2 hover:bg-accent/50 border-b last:border-b-0 text-sm"
+                    onClick={() => selectIcnMatch(item)}
+                    data-testid={`suggestion-${item.id}`}
+                  >
+                    <span className="font-mono font-medium">{item.internalControlNumber}</span>
+                    <span className="text-muted-foreground ml-2">
+                      {item.fabric || ''} {item.rollNumber ? `· Roll ${item.rollNumber}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {!icnMatch && !icnSearching && freeTextControlNumber.trim().length >= 2 && icnSuggestions.length === 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  No matching ICN found in fabric inventory. Please check the control number.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         ) : (
           <div className="flex gap-2">

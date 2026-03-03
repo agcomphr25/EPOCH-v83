@@ -1394,7 +1394,7 @@ export default function FabricInventoryPage() {
               <div className="relative w-64">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search inventory..."
+                  placeholder="Search by fabric, ICN, roll #, batch #, barcode..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8"

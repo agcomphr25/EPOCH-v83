@@ -1492,26 +1492,28 @@ export default function TravelerExecution() {
                                               if (result?.entryMethod === 'manual') {
                                                 const today = new Date().toISOString().split('T')[0];
                                                 const icn = result.internalControlNumber || '';
+                                                const lot = result.updatedLot;
+                                                const hasInventoryMatch = !!lot;
                                                 const allManualVals: Record<string, string> = {
                                                   material_internal_control_number: icn,
                                                   internalControlNumber: icn,
                                                   material_icn: icn,
-                                                  material_expiration_date: today,
-                                                  expirationDate: today,
-                                                  material_batch_number: 'N/A',
-                                                  batchLotNumber: 'N/A',
-                                                  material_type: 'Manual Entry',
-                                                  material_brand: 'Manual Entry',
-                                                  material_freezer: 'N/A',
-                                                  material_lot: '',
-                                                  qty_used: '',
-                                                  unit_of_measure: '',
-                                                  material_part_number: '',
-                                                  supplier: 'Manual Entry',
-                                                  inventoryPartNumber: 'Manual Entry',
-                                                  manufacturer: 'Manual Entry',
-                                                  rollNumber: 'N/A',
-                                                  receivedDate: today,
+                                                  material_expiration_date: lot?.expirationDate || '',
+                                                  expirationDate: lot?.expirationDate || '',
+                                                  material_batch_number: lot?.supplierLotNumber || 'N/A',
+                                                  batchLotNumber: lot?.supplierLotNumber || 'N/A',
+                                                  material_type: lot?.fabricType || 'Manual Entry',
+                                                  material_brand: lot?.supplier || lot?.manufacturer || 'Manual Entry',
+                                                  material_freezer: lot?.freezerNumber || 'N/A',
+                                                  material_lot: lot?.supplierLotNumber || '',
+                                                  qty_used: lot?.remainingQty?.toString() || '',
+                                                  unit_of_measure: lot?.unitOfMeasure || '',
+                                                  material_part_number: lot?.materialPartNumber || '',
+                                                  supplier: lot?.supplier || 'Manual Entry',
+                                                  inventoryPartNumber: lot?.materialPartNumber || 'Manual Entry',
+                                                  manufacturer: lot?.manufacturer || 'Manual Entry',
+                                                  rollNumber: lot?.rollNumber || 'N/A',
+                                                  receivedDate: lot?.receivedDate || today,
                                                 };
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
@@ -1520,9 +1522,10 @@ export default function TravelerExecution() {
                                                   }
                                                 }
                                                 const manualValidation = {
-                                                  source: 'manual_entry',
+                                                  source: hasInventoryMatch ? 'fabric_inventory' : 'manual_entry',
+                                                  inventoryId: lot?.id || '',
                                                   internalControlNumber: icn,
-                                                  readonly: false,
+                                                  readonly: hasInventoryMatch,
                                                 };
                                                 const manualFieldValidations: Record<string, any> = {};
                                                 for (const key of Object.keys(traceFieldVals)) {

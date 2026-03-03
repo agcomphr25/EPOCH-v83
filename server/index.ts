@@ -940,6 +940,66 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Accounting shadow layer migration:', acctErr.message);
       }
 
+      // Ensure vendor_po_items.received_quantity is REAL (not integer) to support decimal quantities
+      try {
+        const { sql: sqlRq } = await import('drizzle-orm');
+        await db.execute(sqlRq`
+          DO $$ BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'vendor_po_items'
+                AND column_name = 'received_quantity'
+                AND data_type = 'integer'
+            ) THEN
+              ALTER TABLE vendor_po_items ALTER COLUMN received_quantity TYPE real USING received_quantity::real;
+            END IF;
+          END $$
+        `);
+        console.log('✅ Ensured vendor_po_items.received_quantity is real (decimal-safe)');
+      } catch (rqErr: any) {
+        console.warn('⚠️ vendor_po_items received_quantity type migration:', rqErr.message);
+      }
+
+      // Ensure cutting_fabric_inventory.quantity_in_stock is REAL (not integer)
+      try {
+        const { sql: sqlFq } = await import('drizzle-orm');
+        await db.execute(sqlFq`
+          DO $$ BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'cutting_fabric_inventory'
+                AND column_name = 'quantity_in_stock'
+                AND data_type = 'integer'
+            ) THEN
+              ALTER TABLE cutting_fabric_inventory ALTER COLUMN quantity_in_stock TYPE real USING quantity_in_stock::real;
+            END IF;
+          END $$
+        `);
+        console.log('✅ Ensured cutting_fabric_inventory.quantity_in_stock is real (decimal-safe)');
+      } catch (fqErr: any) {
+        console.warn('⚠️ cutting_fabric_inventory quantity_in_stock type migration:', fqErr.message);
+      }
+
+      // Renumber traveler steps from 10/20/30 style to 1/2/3 style
+      try {
+        const { sql: sqlTsRen } = await import('drizzle-orm');
+        await db.execute(sqlTsRen`
+          UPDATE traveler_steps ts
+          SET step_number = sub.new_number
+          FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (PARTITION BY traveler_id ORDER BY step_number) AS new_number
+            FROM traveler_steps
+            WHERE step_number >= 10 AND step_number % 10 = 0
+          ) sub
+          WHERE ts.id = sub.id
+            AND ts.step_number != sub.new_number
+        `);
+        console.log('✅ Ensured traveler steps use sequential numbering (1, 2, 3…)');
+      } catch (tsRenErr: any) {
+        console.warn('⚠️ Traveler step renumbering migration:', tsRenErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

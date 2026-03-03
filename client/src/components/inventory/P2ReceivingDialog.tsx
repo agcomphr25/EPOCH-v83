@@ -93,21 +93,48 @@ export default function P2ReceivingDialog({
 
   const createScanMutation = useMutation({
     mutationFn: async (data: P2ReceivingData) => {
-      const response = await fetch('/api/inventory/scan', {
+      const scanResponse = await fetch('/api/inventory/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create scan record');
-      return response.json();
+      if (!scanResponse.ok) throw new Error('Failed to create scan record');
+      const scanResult = await scanResponse.json();
+
+      if (item?.id) {
+        const notes = [
+          data.batchNumber ? `Batch: ${data.batchNumber}` : '',
+          data.lotNumber ? `Lot: ${data.lotNumber}` : '',
+          data.aluminumHeatNumber ? `Aluminum Heat #: ${data.aluminumHeatNumber}` : '',
+          data.manufactureDate ? `Mfg Date: ${data.manufactureDate}` : '',
+          data.expirationDate ? `Exp Date: ${data.expirationDate}` : '',
+        ].filter(Boolean).join(' | ');
+
+        const receiveResponse = await fetch(`/api/vendor-pos/items/${item.id}/receive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receivedQuantity: data.quantity,
+            receivedDate: data.receivingDate,
+            notes,
+          }),
+        });
+        if (!receiveResponse.ok) {
+          const err = await receiveResponse.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to mark item as received in PO');
+        }
+      }
+
+      return scanResult;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/scans'] });
-      toast.success('P2 receiving record created successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success('P2 item received and record saved');
       handleClose();
     },
-    onError: () => {
-      toast.error('Failed to create receiving record');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to create receiving record');
     },
   });
 
@@ -116,10 +143,9 @@ export default function P2ReceivingDialog({
       !formData.manufactureDate ||
       !formData.expirationDate ||
       !formData.batchNumber ||
-      !formData.lotNumber ||
-      !formData.aluminumHeatNumber
+      !formData.lotNumber
     ) {
-      toast.error('Please fill in all required fields');
+      toast.error('Please fill in all required fields (Manufacture Date, Expiration Date, Batch Number, Lot Number)');
       return;
     }
 
@@ -452,7 +478,7 @@ export default function P2ReceivingDialog({
 
           {/* Aluminum Heat Number */}
           <div>
-            <Label htmlFor="aluminumHeatNumber">Aluminum Heat Number *</Label>
+            <Label htmlFor="aluminumHeatNumber">Aluminum Heat Number (optional)</Label>
             <Input
               id="aluminumHeatNumber"
               value={formData.aluminumHeatNumber}

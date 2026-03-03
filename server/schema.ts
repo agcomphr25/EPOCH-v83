@@ -3446,7 +3446,7 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   vendorUnit: text('vendor_unit'), // Unit for vendor (e.g., "roll")
   conversionFactor: real('conversion_factor'), // Purchase qty per vendor unit (e.g., 122 sqm/roll)
   lineTotal: real('line_total').notNull(),
-  receivedQuantity: integer('received_quantity').default(0),
+  receivedQuantity: real('received_quantity').default(0),
   receivedDate: date('received_date'),
   notes: text('notes'),
   customerPoId: integer('customer_po_id')
@@ -3873,7 +3873,7 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
     vendorUnit: z.string().optional().nullable(),
     conversionFactor: z.number().positive().optional().nullable(),
     lineTotal: z.number(),
-    receivedQuantity: z.number().int().default(0),
+    receivedQuantity: z.number().default(0),
     receivedDate: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     customerPoId: z.number().int().positive().optional().nullable(), // Optional link to customer PO (internal tracking only)
@@ -8014,7 +8014,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   location: text('location'), // Storage location/freezer #
   freezerNumber: integer('freezer_number'), // Freezer assignment number (1-5)
   conformanceDocumentLink: text('conformance_document_link'), // Link to conformance/traceability paperwork
-  quantityInStock: integer('quantity_in_stock').notNull().default(0),
+  quantityInStock: real('quantity_in_stock').notNull().default(0),
   squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric
   lowStockThreshold: integer('low_stock_threshold').default(10),
   barcode: text('barcode'), // Auto-generated for P2 items

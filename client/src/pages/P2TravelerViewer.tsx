@@ -575,8 +575,26 @@ export default function P2TravelerViewer() {
                                 )}
                                 {trace.fabricDetail.source && (
                                   <div>
-                                    <span className="text-muted-foreground text-xs">Source</span>
+                                    <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
                                     <p>{trace.fabricDetail.source}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.supplierPartNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                    <p className="font-mono">{trace.fabricDetail.supplierPartNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.internalControlNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">ICN</span>
+                                    <p className="font-mono font-semibold">{trace.fabricDetail.internalControlNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.barcode && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Barcode</span>
+                                    <p className="font-mono">{trace.fabricDetail.barcode}</p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.lotNumber && (
@@ -597,22 +615,28 @@ export default function P2TravelerViewer() {
                                     <p className="font-mono">{trace.fabricDetail.batchNumber}</p>
                                   </div>
                                 )}
-                                {trace.fabricDetail.internalControlNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">ICN</span>
-                                    <p className="font-mono">{trace.fabricDetail.internalControlNumber}</p>
-                                  </div>
-                                )}
                                 {trace.fabricDetail.supplierPoNumber && (
                                   <div>
-                                    <span className="text-muted-foreground text-xs">Supplier PO</span>
+                                    <span className="text-muted-foreground text-xs">Supplier PO #</span>
                                     <p className="font-mono">{trace.fabricDetail.supplierPoNumber}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.manufacturerPoNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Manufacturer PO #</span>
+                                    <p className="font-mono">{trace.fabricDetail.manufacturerPoNumber}</p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.manufactureDate && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Manufacture Date</span>
                                     <p>{format(new Date(trace.fabricDetail.manufactureDate), 'MMM d, yyyy')}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.receivedDate && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Received Date</span>
+                                    <p>{format(new Date(trace.fabricDetail.receivedDate), 'MMM d, yyyy')}</p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.expirationDate && (
@@ -629,10 +653,37 @@ export default function P2TravelerViewer() {
                                     <p>{trace.fabricDetail.location}</p>
                                   </div>
                                 )}
-                                {trace.fabricDetail.freezerNumber && (
+                                {trace.fabricDetail.freezerNumber != null && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Freezer #</span>
                                     <p>{trace.fabricDetail.freezerNumber}</p>
+                                  </div>
+                                )}
+                                {(trace.fabricDetail.quantityInStock != null) && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Qty In Stock</span>
+                                    <p>{trace.fabricDetail.quantityInStock}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.squareMeters != null && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Square Meters</span>
+                                    <p>{trace.fabricDetail.squareMeters}</p>
+                                  </div>
+                                )}
+                                {trace.fabricDetail.conformanceDocumentLink && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Conformance Document</span>
+                                    <p>
+                                      <a
+                                        href={trace.fabricDetail.conformanceDocumentLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline"
+                                      >
+                                        View Document
+                                      </a>
+                                    </p>
                                   </div>
                                 )}
                                 {trace.fabricDetail.status && (
@@ -643,7 +694,24 @@ export default function P2TravelerViewer() {
                                     </Badge>
                                   </div>
                                 )}
+                                {(trace.fabricDetail.depletedAt || trace.fabricDetail.depletedBy) && (
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Depleted</span>
+                                    <p className="text-red-600">
+                                      {trace.fabricDetail.depletedAt
+                                        ? format(new Date(trace.fabricDetail.depletedAt), 'MMM d, yyyy h:mm a')
+                                        : 'Yes'}
+                                      {trace.fabricDetail.depletedBy ? ` by ${trace.fabricDetail.depletedBy}` : ''}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
+                              {trace.fabricDetail.notes && (
+                                <div className="mt-3 pt-2 border-t border-dashed">
+                                  <span className="text-muted-foreground text-xs">Notes</span>
+                                  <p className="text-sm mt-1">{trace.fabricDetail.notes}</p>
+                                </div>
+                              )}
                             </div>
                           )}
                           {!trace.inventoryDetail && !trace.fabricDetail && (

@@ -903,7 +903,7 @@ export default function TravelerExecution() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
-                      Step {step.stepNumber / 10}
+                      Step {step.stepNumber}
                     </span>
                     {step.status === 'COMPLETED' && (
                       <CheckCircle className="h-4 w-4 text-green-500" />
@@ -1068,7 +1068,7 @@ export default function TravelerExecution() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>
-                      Step {currentStep.stepNumber / 10}: {currentStep.departmentName}
+                      Step {currentStep.stepNumber}: {currentStep.departmentName}
                     </CardTitle>
                     <CardDescription>
                       {currentStep.status === 'NOT_STARTED' && 'Not yet started'}

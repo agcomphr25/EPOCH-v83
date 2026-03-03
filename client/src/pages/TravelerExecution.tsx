@@ -440,7 +440,12 @@ export default function TravelerExecution() {
       const nextStep = steps.find((s) => s.status === 'NOT_STARTED');
       setCurrentStepId(inProgressStep?.id || nextStep?.id || steps[0].id);
       if (inProgressStep?.startedBy && !activeBadge) {
-        setActiveBadge(inProgressStep.startedBy);
+        const stored = inProgressStep.startedBy;
+        const isRawCode = /^EMP\d+$/i.test(stored);
+        setActiveBadge(stored);
+        if (!isRawCode) {
+          setActiveTechName(stored);
+        }
       }
     }
   }, [steps, currentStepId]);

@@ -252,6 +252,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       if (!travelerWithDetails) {
         return res.status(404).json({ error: 'Traveler not found' });
       }
+      if (travelerWithDetails.steps?.length) {
+        travelerWithDetails.steps = await resolveEmpCodes(travelerWithDetails.steps);
+      }
       return res.json(travelerWithDetails);
     }
 
@@ -599,12 +602,39 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
 // STEP ENDPOINTS
 // ============================================================================
 
+// Helper: resolve any raw EMP-code values in startedBy/completedBy to real names
+async function resolveEmpCodes(steps: any[]): Promise<any[]> {
+  const empCodePattern = /^EMP\d+$/i;
+  const codesToResolve = new Set<string>();
+  for (const step of steps) {
+    if (step.startedBy && empCodePattern.test(step.startedBy)) codesToResolve.add(step.startedBy);
+    if (step.completedBy && empCodePattern.test(step.completedBy)) codesToResolve.add(step.completedBy);
+  }
+  if (codesToResolve.size === 0) return steps;
+
+  const resolved = new Map<string, string>();
+  for (const code of codesToResolve) {
+    const emp = await db.select({ name: employees.name })
+      .from(employees)
+      .where(eq(employees.employeeCode, code))
+      .limit(1);
+    if (emp.length > 0) resolved.set(code, emp[0].name);
+  }
+  if (resolved.size === 0) return steps;
+
+  return steps.map((step) => ({
+    ...step,
+    startedBy: step.startedBy && resolved.has(step.startedBy) ? resolved.get(step.startedBy)! : step.startedBy,
+    completedBy: step.completedBy && resolved.has(step.completedBy) ? resolved.get(step.completedBy)! : step.completedBy,
+  }));
+}
+
 // Get steps for a traveler
 router.get('/:travelerId/steps', async (req: Request, res: Response) => {
   try {
     const { travelerId } = req.params;
     const steps = await storage.getTravelerSteps(travelerId);
-    res.json(steps);
+    res.json(await resolveEmpCodes(steps));
   } catch (error: any) {
     console.error('Error fetching traveler steps:', error);
     res.status(500).json({ error: 'Failed to fetch steps', message: error.message });
@@ -626,6 +656,15 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         .limit(1);
       if (emp.length > 0) {
         resolvedName = emp[0].name;
+      } else {
+        // Fallback: match by employeeCode (e.g. EMP003 typed/scanned directly)
+        const empByCode = await db.select({ name: employees.name })
+          .from(employees)
+          .where(eq(employees.employeeCode, badgeScan))
+          .limit(1);
+        if (empByCode.length > 0) {
+          resolvedName = empByCode[0].name;
+        }
       }
     }
 

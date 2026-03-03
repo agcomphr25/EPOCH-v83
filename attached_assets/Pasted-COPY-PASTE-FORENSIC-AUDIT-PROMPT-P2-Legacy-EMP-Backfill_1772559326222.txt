@@ -1,0 +1,126 @@
+COPY-PASTE FORENSIC AUDIT PROMPT
+P2 Legacy EMP Backfill Audit (Read-Only)
+
+Paste into Replit Agent:
+
+READ-ONLY FORENSIC AUDIT — P2 LEGACY EMP CODE BACKFILL
+
+Objective:
+Eliminate guessing. Inspect real schema, constraints, and data before performing any further UPDATE statements.
+
+DO NOT MODIFY ANY DATA.
+DO NOT RUN ANY UPDATE/DELETE.
+SELECT statements only.
+
+-----------------------------------------------------
+PHASE 1 — EMPLOYEES TABLE STRUCTURE
+-----------------------------------------------------
+
+1. List all columns in employees table with types:
+
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'employees'
+ORDER BY ordinal_position;
+
+2. Identify which column represents the human display name.
+Do not assume first_name/last_name.
+Return findings.
+
+-----------------------------------------------------
+PHASE 2 — TARGET TABLE STRUCTURE
+-----------------------------------------------------
+
+For each table below, show column definitions and nullability:
+
+- traveler_steps
+- p2_serialized_item_events
+- p2_serialized_item_traceability
+- p2_serialized_item_custom_data
+
+Run:
+
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = '<table_name>'
+ORDER BY ordinal_position;
+
+Return results grouped by table.
+
+-----------------------------------------------------
+PHASE 3 — COUNT REMAINING EMP ROWS
+-----------------------------------------------------
+
+For each table/column below, count rows still containing EMP codes:
+
+SELECT COUNT(*) FROM traveler_steps WHERE started_by LIKE 'EMP%';
+SELECT COUNT(*) FROM traveler_steps WHERE completed_by LIKE 'EMP%';
+SELECT COUNT(*) FROM p2_serialized_item_events WHERE performed_by LIKE 'EMP%';
+SELECT COUNT(*) FROM p2_serialized_item_traceability WHERE recorded_by LIKE 'EMP%';
+SELECT COUNT(*) FROM p2_serialized_item_custom_data WHERE recorded_by LIKE 'EMP%';
+
+Return counts clearly labeled.
+
+-----------------------------------------------------
+PHASE 4 — PREVIEW JOIN MATCHES
+-----------------------------------------------------
+
+For each affected table, preview 10 rows that would be candidates for update:
+
+Example for events:
+
+SELECT ev.performed_by,
+       e.*
+FROM p2_serialized_item_events ev
+LEFT JOIN employees e
+  ON ev.performed_by = e.employee_code
+WHERE ev.performed_by LIKE 'EMP%'
+LIMIT 10;
+
+Repeat similarly for:
+
+- traveler_steps.started_by
+- traveler_steps.completed_by
+- traceability.recorded_by
+- custom_data.recorded_by
+
+Return sample rows so we can see:
+
+- What employee columns actually exist
+- Whether preferred_name exists
+- Whether name is NULL
+- Whether join fails for any codes
+
+-----------------------------------------------------
+PHASE 5 — NULL RISK ANALYSIS
+-----------------------------------------------------
+
+Determine if any employees referenced by EMP codes
+have NULL in their name-related fields.
+
+Example:
+
+SELECT e.employee_code, e.*
+FROM employees e
+WHERE e.employee_code IN (
+  SELECT DISTINCT performed_by
+  FROM p2_serialized_item_events
+  WHERE performed_by LIKE 'EMP%'
+);
+
+Return any rows where potential name fields are NULL.
+
+-----------------------------------------------------
+FINAL OUTPUT FORMAT
+-----------------------------------------------------
+
+SECTION 1 — Employees table schema
+SECTION 2 — Target tables schema
+SECTION 3 — Remaining EMP row counts
+SECTION 4 — Sample join previews
+SECTION 5 — Null risk findings
+SECTION 6 — Recommended SAFE update expression (based strictly on actual schema)
+
+Again:
+READ ONLY.
+NO DATA MODIFICATION.

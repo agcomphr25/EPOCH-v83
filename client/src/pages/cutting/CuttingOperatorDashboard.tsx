@@ -920,6 +920,9 @@ export default function CuttingOperatorDashboard() {
                           <Badge className="bg-green-600 shrink-0">FIFO Next</Badge>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm">Roll {nextFifo.rollNumber}</p>
+                            {nextFifo.internalControlNumber && (
+                              <p className="text-xs font-mono text-blue-600">ICN: {nextFifo.internalControlNumber}</p>
+                            )}
                             <p className="text-xs text-muted-foreground truncate">
                               {nextFifo.freezerLocation ? `Freezer ${nextFifo.freezerLocation}` : nextFifo.location || 'No location'}
                               {nextFifo.expirationDate && ` • Exp: ${new Date(nextFifo.expirationDate).toLocaleDateString()}`}
@@ -953,6 +956,9 @@ export default function CuttingOperatorDashboard() {
                           <Badge className="bg-green-600 shrink-0">FIFO Next</Badge>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm">Roll {nextRoll.rollNumber}</p>
+                            {nextRoll.internalControlNumber && (
+                              <p className="text-xs font-mono text-blue-600">ICN: {nextRoll.internalControlNumber}</p>
+                            )}
                             <p className="text-xs text-muted-foreground truncate">
                               {nextRoll.freezerLocation ? `Freezer ${nextRoll.freezerLocation}` : nextRoll.location || 'No location'}
                               {nextRoll.expirationDate && ` • Exp: ${new Date(nextRoll.expirationDate).toLocaleDateString()}`}
@@ -1002,6 +1008,7 @@ export default function CuttingOperatorDashboard() {
                   <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
                     <TableRow>
                       <TableHead>Fabric Type</TableHead>
+                      <TableHead>ICN</TableHead>
                       <TableHead>Roll #</TableHead>
                       <TableHead>Lot #</TableHead>
                       <TableHead>Available</TableHead>
@@ -1016,6 +1023,7 @@ export default function CuttingOperatorDashboard() {
                       .map((fabric) => (
                       <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-fabric-${fabric.id}`}>
                         <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell className="text-xs font-mono text-blue-600">{fabric.internalControlNumber || '-'}</TableCell>
                         <TableCell className="text-muted-foreground">{fabric.rollNumber || '-'}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{fabric.lotNumber || '-'}</TableCell>
                         <TableCell>
@@ -1130,6 +1138,7 @@ export default function CuttingOperatorDashboard() {
                   <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
                     <TableRow>
                       <TableHead>Fabric Type</TableHead>
+                      <TableHead>ICN</TableHead>
                       <TableHead>Roll #</TableHead>
                       <TableHead>Lot #</TableHead>
                       <TableHead>Available</TableHead>
@@ -1150,12 +1159,14 @@ export default function CuttingOperatorDashboard() {
                           (f.commonName || '').toLowerCase().includes(search) ||
                           (f.rollNumber || '').toLowerCase().includes(search) ||
                           (f.lotNumber || '').toLowerCase().includes(search) ||
-                          (f.barcode || '').toLowerCase().includes(search)
+                          (f.barcode || '').toLowerCase().includes(search) ||
+                          (f.internalControlNumber || '').toLowerCase().includes(search)
                         );
                       })
                       .map((fabric) => (
                       <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-all-fabric-${fabric.id}`}>
                         <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell className="text-xs font-mono text-blue-600">{fabric.internalControlNumber || '-'}</TableCell>
                         <TableCell>{fabric.rollNumber || '-'}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{fabric.lotNumber || '-'}</TableCell>
                         <TableCell>
@@ -1475,6 +1486,9 @@ export default function CuttingOperatorDashboard() {
                           {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
                           <div>
                             <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
+                            {fabric.internalControlNumber && (
+                              <p className="text-xs font-mono text-blue-600 dark:text-blue-400">ICN: {fabric.internalControlNumber}</p>
+                            )}
                             <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
                               Freezer {fabric.freezerLocation || fabric.location || 'Unknown'}
                             </p>

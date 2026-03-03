@@ -767,12 +767,10 @@ router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
     
-    // Auto-generate barcode for ALL fabric items if not provided
     if (!validatedData.barcode) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
       
-      // Check if it's a P2 item for specific prefix
       let prefix = 'FAB';
       if (validatedData.productionLineId) {
         const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
@@ -782,6 +780,13 @@ router.post('/fabric-inventory', async (req, res) => {
       }
       
       validatedData.barcode = `${prefix}-${date}-${random}`;
+    }
+    
+    if (!validatedData.internalControlNumber) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const seq = Date.now().toString().slice(-6);
+      const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      validatedData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
     }
     
     const inventory = await storage.createCuttingFabricInventory(validatedData);

@@ -14116,7 +14116,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       stepCounter++;
-      const stepNumber = stepCounter * 10; // 10, 20, 30, etc.
+      const stepNumber = stepCounter; // 1, 2, 3, etc.
 
       // Create the step
       const step = await this.createTravelerStep({

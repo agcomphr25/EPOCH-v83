@@ -20,6 +20,7 @@ import {
 } from '../../schema';
 import { eq, and, desc, or, ilike, inArray, asc, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
+import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 
 const router = Router();
 
@@ -359,17 +360,25 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No active routing found for this part number' });
     }
 
-    // Generate a traveler from the routing
+    let resolvedDisplayName = employeeCode || 'p2-system';
+    if (employeeCode) {
+      const emp = await db.query.employees.findFirst({
+        where: eq(employees.employeeCode, employeeCode),
+      });
+      if (emp) {
+        const snapshot = await createEmployeeIdentitySnapshot(emp.id);
+        resolvedDisplayName = snapshot.displayName;
+      }
+    }
+
     const traveler = await storage.generateTravelerFromRouting(routing.id, {
       serialNumber: serializedItem.serialNumber,
       lotNumber: serializedItem.poNumber || undefined,
-      createdBy: employeeCode || 'p2-system',
+      createdBy: resolvedDisplayName,
     });
 
-    // Set status to IN_PROGRESS since P2 items are actively being worked
     await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
 
-    // Advance traveler steps to match the P2 serialized item's current stage
     const currentStageIndex = serializedItem.currentStageIndex || 0;
     if (currentStageIndex > 0) {
       const steps = await db
@@ -379,7 +388,6 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
         .orderBy(asc(travelerSteps.stepNumber));
 
       const now = new Date();
-      const completedBy = employeeCode || 'p2-system';
 
       for (let i = 0; i < steps.length && i < currentStageIndex; i++) {
         await db
@@ -387,7 +395,7 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
           .set({
             status: 'COMPLETED',
             completedAt: now,
-            completedBy,
+            completedBy: resolvedDisplayName,
           })
           .where(eq(travelerSteps.id, steps[i].id));
 
@@ -396,7 +404,7 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
           .set({
             status: 'COMPLETED',
             completedAt: now,
-            completedBy,
+            completedBy: resolvedDisplayName,
           })
           .where(eq(travelerTasks.travelerStepId, steps[i].id));
       }
@@ -407,14 +415,13 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
           .set({
             status: 'IN_PROGRESS',
             startedAt: new Date(),
-            startedBy: employeeCode || 'p2-system',
+            startedBy: resolvedDisplayName,
           })
           .where(eq(travelerSteps.id, steps[currentStageIndex].id));
       }
 
       console.log(`[P2Traveler] Advanced traveler to step ${currentStageIndex + 1} of ${steps.length} (matching P2 item stage)`);
     } else {
-      // First step - mark as IN_PROGRESS
       const steps = await db
         .select()
         .from(travelerSteps)
@@ -427,7 +434,7 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
           .set({
             status: 'IN_PROGRESS',
             startedAt: new Date(),
-            startedBy: employeeCode || 'p2-system',
+            startedBy: resolvedDisplayName,
           })
           .where(eq(travelerSteps.id, steps[0].id));
       }
@@ -465,7 +472,9 @@ router.post('/start-task', async (req: Request, res: Response) => {
       notes,
     } = req.body;
 
-    // Get serialized item to verify routing and department
+    const identitySnapshot = await createEmployeeIdentitySnapshot(parseInt(employeeId));
+    const displayName = identitySnapshot.displayName !== 'Unknown User' ? identitySnapshot.displayName : (employeeName || employeeCode);
+
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: eq(p2SerializedItems.id, serializedItemId),
     });
@@ -594,39 +603,36 @@ router.post('/start-task', async (req: Request, res: Response) => {
         traceabilityType: item.type,
         traceabilityLabel: item.label,
         traceabilityValue: item.value,
-        recordedBy: employeeCode,
+        recordedBy: displayName,
       }));
 
       await db.insert(p2SerializedItemTraceability).values(traceabilityRecords);
     }
 
-    // Save custom data
     if (customData && Object.keys(customData).length > 0) {
       await db.insert(p2SerializedItemCustomData).values({
         serializedItemId,
         department,
         customData,
-        recordedBy: employeeCode,
+        recordedBy: displayName,
       });
     }
 
-    // Save QC results
     if (qcResults && Array.isArray(qcResults) && qcResults.length > 0) {
       await db.insert(p2SerializedItemCustomData).values({
         serializedItemId,
         department,
         customData: { qcResults },
-        recordedBy: employeeCode,
+        recordedBy: displayName,
       });
 
-      // Log QC results event with pass/fail summary
       const passCount = qcResults.filter((r: any) => r.passed === true).length;
       const failCount = qcResults.filter((r: any) => r.passed === false).length;
       await db.insert(p2SerializedItemEvents).values({
         serializedItemId,
         barcode,
         eventType: 'NOTE',
-        performedBy: employeeCode,
+        performedBy: displayName,
         notes: `QC results recorded in ${department}: ${passCount} passed, ${failCount} failed`,
         metadata: { taskId: workTask.id, action: 'qc_results', qcResults },
       });
@@ -650,12 +656,11 @@ router.post('/start-task', async (req: Request, res: Response) => {
       }).where(eq(p2SerializedItems.id, serializedItemId));
     }
 
-    // Log task start event
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId,
       barcode,
       eventType: 'NOTE',
-      performedBy: employeeCode,
+      performedBy: displayName,
       notes: `Task started in ${department}`,
       metadata: { taskId: workTask.id, action: 'start_task' },
     });
@@ -682,7 +687,17 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       notes,
     } = req.body;
 
-    // Get work task
+    let completeDisplayName = employeeCode || 'unknown';
+    if (employeeCode) {
+      const emp = await db.query.employees.findFirst({
+        where: eq(employees.employeeCode, employeeCode),
+      });
+      if (emp) {
+        const snapshot = await createEmployeeIdentitySnapshot(emp.id);
+        completeDisplayName = snapshot.displayName;
+      }
+    }
+
     const workTask = await db.query.p2WorkTasks.findFirst({
       where: eq(p2WorkTasks.id, taskId),
     });
@@ -844,7 +859,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       if (!item.finalizedAt) {
         await db.update(p2SerializedItems).set({
           finalizedAt: new Date(),
-          finalizedBy: employeeCode,
+          finalizedBy: completeDisplayName,
           updatedAt: new Date(),
         }).where(eq(p2SerializedItems.id, serializedItem.id));
 
@@ -852,7 +867,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
           serializedItemId: serializedItem.id,
           barcode: serializedItem.barcode,
           eventType: 'NOTE',
-          performedBy: employeeCode,
+          performedBy: completeDisplayName,
           notes: 'Finalized identity (SKU/drawing/customer serial)',
           metadata: { sku: item.sku, drawingName: item.drawingName, customerSerialNumber: item.customerSerialNumber },
         });
@@ -896,7 +911,6 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       .set(updates)
       .where(eq(p2SerializedItems.id, serializedItem.id));
 
-    // Log transition event
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId: serializedItem.id,
       barcode: serializedItem.barcode,
@@ -905,7 +919,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       toDepartment: nextDepartment || 'COMPLETED',
       fromStageIndex: currentIndex,
       toStageIndex: nextIndex < departmentSequence.length ? nextIndex : null,
-      performedBy: employeeCode,
+      performedBy: completeDisplayName,
       notes: notes || `Completed ${currentDepartment} - Duration: ${durationMinutes} minutes`,
       metadata: { taskId, durationMinutes },
     });

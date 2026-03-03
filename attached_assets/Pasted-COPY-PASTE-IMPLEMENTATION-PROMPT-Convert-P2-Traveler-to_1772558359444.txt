@@ -1,0 +1,123 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+Convert P2 Traveler to Identity Layer (Proper Fix)
+
+Paste this into Replit Agent:
+
+IMPLEMENTATION TASK — CONVERT P2 TRAVELER TO IDENTITY LAYER (WRITE-TIME FIX)
+
+Objective:
+Eliminate EMP007-style display by fixing write-time behavior in P2 routes.
+
+We will:
+- Keep employeeCode where it is a true identifier field
+- Store resolved displayName in human-facing fields
+- Use Identity Layer utilities
+- Not refactor unrelated modules
+- Not break badge scan logic
+
+DO NOT modify frontend yet.
+DO NOT remove legacy columns.
+Only fix write paths.
+
+----------------------------------------------------
+PHASE 1 — IMPORT IDENTITY LAYER
+----------------------------------------------------
+
+In:
+
+server/src/routes/p2Traveler.ts
+
+Import:
+
+createEmployeeIdentitySnapshot
+
+from:
+
+server/identity/userIdentity
+
+----------------------------------------------------
+PHASE 2 — START-TASK ROUTE FIX
+----------------------------------------------------
+
+Locate:
+
+POST /api/p2-traveler/start-task
+
+Currently:
+- Receives employeeCode from request
+- Writes employeeCode directly into:
+    travelerSteps.startedBy
+    travelerSteps.completedBy
+    p2SerializedItemEvents.performedBy
+    p2SerializedItemTraceability.recordedBy
+    p2SerializedItemCustomData.recordedBy
+
+Modify logic:
+
+1. Use employeeCode to look up employee record.
+2. Call createEmployeeIdentitySnapshot(employeeId).
+3. Extract displayName from snapshot.
+4. Store displayName into all human-facing fields:
+    startedBy
+    completedBy
+    performedBy
+    recordedBy
+
+5. Continue storing employeeCode in:
+    p2WorkTasks.employeeCode (identifier field only)
+
+Do NOT store employeeCode in travelerSteps anymore.
+
+----------------------------------------------------
+PHASE 3 — GENERATE-TRAVELER ROUTE FIX
+----------------------------------------------------
+
+In:
+
+POST /api/p2-traveler/generate-traveler
+
+Where auto-advancing steps writes:
+
+travelerSteps.startedBy
+travelerSteps.completedBy
+
+Replace raw employeeCode writes with:
+
+identity.displayName
+
+----------------------------------------------------
+PHASE 4 — REMOVE AD-HOC VIEWER RESOLUTION
+----------------------------------------------------
+
+In:
+
+server/src/routes/p2TravelerViewer.ts
+
+The resolveName() function is currently a bandaid.
+
+After write-time fix:
+
+- Simplify resolveName() to just return value.
+- Or keep it defensive but expect DB already stores displayName.
+
+Do NOT JOIN employees here.
+Identity resolution must not happen at read time.
+
+----------------------------------------------------
+PHASE 5 — SAFETY
+----------------------------------------------------
+
+- Do not modify schema.
+- Do not remove employeeCode columns.
+- Do not change badge scanning logic.
+- Do not change API contracts.
+- Only change what is written to startedBy/completedBy/performedBy/recordedBy.
+
+----------------------------------------------------
+RETURN
+----------------------------------------------------
+
+- Modified route code sections
+- Confirmation employeeCode no longer written to travelerSteps.*
+- Confirmation Identity Layer used
+- Confirmation no other modules modified

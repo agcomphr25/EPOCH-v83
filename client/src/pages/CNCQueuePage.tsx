@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { OrderTooltip } from '@/components/OrderTooltip';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Settings,
   ArrowLeft,
   ArrowRight,
@@ -19,6 +25,7 @@ import {
   Zap,
   FileWarning,
   Printer,
+  QrCode,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -49,6 +56,7 @@ export default function CNCQueuePage() {
   );
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
   const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
+  const [showLabelDialog, setShowLabelDialog] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -498,6 +506,95 @@ export default function CNCQueuePage() {
       return;
     }
     progressToFinish.mutate(Array.from(selectedFinishOrders));
+  };
+
+  const createBarcodeLabels = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const response = await fetch('/api/barcode/create-labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to create labels';
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+          if (errorData.details) {
+            errorMessage += `: ${errorData.details}`;
+          }
+        } catch (e) {
+          errorMessage = `Failed to create labels (${response.status}: ${response.statusText})`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const newWindow = window.open(
+        url,
+        '_blank',
+        'width=800,height=600,scrollbars=yes,resizable=yes'
+      );
+
+      if (!newWindow) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `barcode-labels-${Date.now()}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 10000);
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      const totalLabels = selectedGunsimthOrders.size + selectedFinishOrders.size;
+      toast({
+        title: 'Barcode labels created',
+        description: `Barcode labels opened in new tab for ${totalLabels} orders`,
+      });
+      setShowLabelDialog(false);
+    },
+    onError: (error: any) => {
+      console.error('Label creation error:', error);
+      toast({
+        title: 'Error creating labels',
+        description: error.message || 'Failed to create barcode labels. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleCreateLabels = () => {
+    const allSelectedOrders = [
+      ...Array.from(selectedGunsimthOrders),
+      ...Array.from(selectedFinishOrders),
+    ];
+    if (allSelectedOrders.length === 0) {
+      toast({
+        title: 'No orders selected',
+        description: 'Please select at least one order',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setShowLabelDialog(true);
+  };
+
+  const handlePrintAllLabels = () => {
+    const allSelectedOrders = [
+      ...Array.from(selectedGunsimthOrders),
+      ...Array.from(selectedFinishOrders),
+    ];
+    createBarcodeLabels.mutate(allSelectedOrders);
   };
 
   // Print sales order summaries for selected orders
@@ -1155,7 +1252,7 @@ export default function CNCQueuePage() {
       </Card>
 
       {/* Floating Gunsmith Progression Button */}
-      {selectedGunsimthOrders.size > 0 && (
+      {selectedGunsimthOrders.size > 0 && !showLabelDialog && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1174,6 +1271,15 @@ export default function CNCQueuePage() {
                   size="sm"
                 >
                   Clear Selection
+                </Button>
+                <Button
+                  onClick={handleCreateLabels}
+                  disabled={createBarcodeLabels.isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Create Labels ({selectedGunsimthOrders.size})
                 </Button>
                 <Button
                   onClick={handleProgressToGunsmith}
@@ -1195,7 +1301,7 @@ export default function CNCQueuePage() {
       )}
 
       {/* Floating Finish Progression Button */}
-      {selectedFinishOrders.size > 0 && (
+      {selectedFinishOrders.size > 0 && !showLabelDialog && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1215,6 +1321,15 @@ export default function CNCQueuePage() {
                   Clear Selection
                 </Button>
                 <Button
+                  onClick={handleCreateLabels}
+                  disabled={createBarcodeLabels.isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Create Labels ({selectedFinishOrders.size})
+                </Button>
+                <Button
                   onClick={handleProgressToFinish}
                   disabled={
                     selectedFinishOrders.size === 0 ||
@@ -1232,6 +1347,106 @@ export default function CNCQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Label Selection Dialog */}
+      <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              Create Barcode Labels - {selectedGunsimthOrders.size + selectedFinishOrders.size} Orders Selected
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+              <h3 className="font-semibold mb-2">Selected Orders Summary:</h3>
+              <div className="grid gap-2">
+                {selectedGunsimthOrders.size > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-purple-600" />
+                      Gunsmith Queue
+                    </span>
+                    <Badge variant="outline">{selectedGunsimthOrders.size} orders</Badge>
+                  </div>
+                )}
+                {selectedFinishOrders.size > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      Finish Queue
+                    </span>
+                    <Badge variant="outline">{selectedFinishOrders.size} orders</Badge>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-semibold">Orders to Label:</h3>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {cncOrders
+                  .filter(
+                    (order: any) =>
+                      selectedGunsimthOrders.has(order.orderId) ||
+                      selectedFinishOrders.has(order.orderId)
+                  )
+                  .map((order: any) => {
+                    const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                    return (
+                      <Card
+                        key={order.orderId}
+                        className={`p-3 ${isOverdue ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : ''}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm">
+                            {getDisplayOrderId(order.orderId)}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={
+                              order.departmentType === 'gunsmith'
+                                ? 'text-purple-700 border-purple-300'
+                                : 'text-green-700 border-green-300'
+                            }
+                          >
+                            {order.departmentType === 'gunsmith' ? 'Gunsmith' : 'Finish'}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {getProductDisplayName(order)}
+                        </div>
+                        <div className={`text-xs mt-1 ${isOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                          Due: {format(new Date(order.dueDate), 'M/d/yy')}
+                        </div>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowLabelDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handlePrintAllLabels}
+                disabled={createBarcodeLabels.isPending}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                {createBarcodeLabels.isPending
+                  ? 'Generating...'
+                  : `Print All Labels (${selectedGunsimthOrders.size + selectedFinishOrders.size})`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sales Order Modal */}
       <SalesOrderModal

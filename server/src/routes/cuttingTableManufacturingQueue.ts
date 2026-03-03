@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems } from '../../schema';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs } from '../../schema';
 import { eq, and, or } from 'drizzle-orm';
 
 const router = express.Router();
@@ -574,6 +574,151 @@ router.post('/:id/generate-packet-labels', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error generating packet labels:', error);
     res.status(500).json({ error: 'Failed to generate packet labels' });
+  }
+});
+
+// Sync P2 production orders into manufacturing queue entries
+router.post('/sync-p2-demands', async (req: Request, res: Response) => {
+  try {
+    const { p2PoId } = req.body;
+    
+    // Build query for P2 production orders needing cutting
+    let whereConditions: any[];
+    if (p2PoId) {
+      whereConditions = [
+        eq(p2ProductionOrders.department, 'Cutting Table'),
+        eq(p2ProductionOrders.status, 'PENDING'),
+        eq(p2ProductionOrders.p2PoId, p2PoId),
+      ];
+    } else {
+      whereConditions = [
+        eq(p2ProductionOrders.department, 'Cutting Table'),
+        eq(p2ProductionOrders.status, 'PENDING'),
+      ];
+    }
+    
+    // Get all P2 production orders for cutting table
+    const p2Orders = await db
+      .select()
+      .from(p2ProductionOrders)
+      .where(and(...whereConditions));
+    
+    if (p2Orders.length === 0) {
+      return res.json({ message: 'No pending P2 cutting table demands found', created: 0 });
+    }
+    
+    // Group by PO + SKU to create consolidated queue entries
+    const demandMap: Record<string, { sku: string; partName: string; p2PoId: number; p2PoItemId: number | null; quantity: number; dueDate: Date | null }> = {};
+    
+    for (const order of p2Orders) {
+      const key = `${order.p2PoId}-${order.sku}`;
+      if (!demandMap[key]) {
+        demandMap[key] = {
+          sku: order.sku,
+          partName: order.partName,
+          p2PoId: order.p2PoId,
+          p2PoItemId: order.p2PoItemId,
+          quantity: 0,
+          dueDate: order.dueDate,
+        };
+      }
+      demandMap[key].quantity += (order.quantity || 1);
+    }
+    
+    // Get P2 PO details for notes
+    const poIds = [...new Set(Object.values(demandMap).map(d => d.p2PoId))];
+    const poDetails: Record<number, any> = {};
+    for (const poId of poIds) {
+      const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, poId)).limit(1);
+      if (po) poDetails[poId] = po;
+    }
+    
+    // Check existing manufacturing_queue entries to avoid duplicates
+    const existingEntries = await db
+      .select()
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.department, 'Cutting Table'));
+    
+    let created = 0;
+    let skipped = 0;
+    const results: any[] = [];
+    
+    for (const [key, demand] of Object.entries(demandMap)) {
+      // Find inventory item by part number
+      const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, demand.sku)).limit(1);
+      
+      if (!inventoryItem) {
+        results.push({ sku: demand.sku, status: 'skipped', reason: 'No matching inventory item' });
+        skipped++;
+        continue;
+      }
+      
+      // Check if a queue entry already exists for this PO + inventory item
+      const existing = existingEntries.find(e => 
+        e.p2PoId === demand.p2PoId && 
+        e.inventoryItemId === inventoryItem.id
+      );
+      
+      if (existing) {
+        results.push({ sku: demand.sku, status: 'exists', queueId: existing.id, qty: existing.quantityRequested });
+        skipped++;
+        continue;
+      }
+      
+      const poInfo = poDetails[demand.p2PoId];
+      const poNumber = poInfo?.poNumber || `PO-${demand.p2PoId}`;
+      
+      // Find matching packet BOM
+      const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.sku)).limit(1);
+      
+      const notesObj = {
+        source: 'P2_SYNC',
+        p2PoNumber: poNumber,
+        p2PoId: demand.p2PoId,
+        p2PoItemId: demand.p2PoItemId,
+        bomId: matchingBom?.id || null,
+        materialType: 'carbon_fiber',
+      };
+      
+      const [newEntry] = await db
+        .insert(manufacturingQueue)
+        .values({
+          inventoryItemId: inventoryItem.id,
+          department: 'Cutting Table',
+          quantityRequested: demand.quantity,
+          quantityCompleted: 0,
+          priority: 50,
+          status: 'PENDING',
+          dueDate: demand.dueDate,
+          notes: JSON.stringify(notesObj),
+          requestedBy: 'system',
+          p2PoId: demand.p2PoId,
+          p2PoItemId: demand.p2PoItemId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+      
+      results.push({ 
+        sku: demand.sku, 
+        partName: demand.partName,
+        status: 'created', 
+        queueId: newEntry.id, 
+        qty: demand.quantity,
+        bomLinked: !!matchingBom,
+      });
+      created++;
+    }
+    
+    res.json({
+      message: `Synced P2 demands: ${created} created, ${skipped} skipped`,
+      created,
+      skipped,
+      results,
+    });
+  } catch (error) {
+    console.error('Error syncing P2 demands:', error);
+    res.status(500).json({ error: 'Failed to sync P2 demands to cutting table' });
   }
 });
 

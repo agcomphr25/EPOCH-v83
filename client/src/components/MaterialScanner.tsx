@@ -286,7 +286,7 @@ export default function MaterialScanner({
       resetScanner();
       toast.success(`Matched: ${resolvedICN} — ${icnMatch.fabric || 'Fabric'}`);
     } else {
-      toast.error('No matching record found in fabric inventory. Please verify the ICN, barcode, or lot number.');
+      validateMutation.mutate(freeTextControlNumber.trim());
     }
   };
 

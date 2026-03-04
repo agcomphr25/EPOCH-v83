@@ -3311,11 +3311,14 @@ export function registerRoutes(app: Express): Server {
             .from(p2ProductionOrders)
             .where(and(eq(p2ProductionOrders.status, 'PENDING'), eq(p2ProductionOrders.p2PoId, poId)));
 
-          // Filter to orders that need cutting — either explicitly 'Cutting Table' or CF/FG Layup parts
+          // Filter to orders that need cutting — either explicitly 'Cutting Table'
+          // or Layup orders that are ACTUAL packet items (by name/SKU), not just any CF/FG part
           const cuttingOrders = p2Orders.filter(o => {
             if (o.department === 'Cutting Table') return true;
             if (o.department === 'Layup' || o.department === 'layup') {
-              return isCfPart(o.partName || '') || isFgPart(o.partName || '');
+              const name = (o.partName || '').toLowerCase();
+              const sku = (o.sku || '').toLowerCase();
+              return name.includes('packet') || sku.includes('packet') || o.sku === 'P706' || o.sku === 'P707';
             }
             return false;
           });

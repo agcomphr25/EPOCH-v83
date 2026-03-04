@@ -2109,13 +2109,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 OR (
                   po.department IN ('Layup', 'layup')
                   AND (
-                    LOWER(po.part_name) LIKE '%carbon fiber%'
-                    OR LOWER(po.part_name) LIKE '%carbon fibre%'
-                    OR LOWER(po.part_name) LIKE '% cf %'
-                    OR LOWER(po.part_name) LIKE 'cf %'
-                    OR LOWER(po.part_name) LIKE '%fiberglass%'
-                    OR LOWER(po.part_name) LIKE '%fibreglass%'
-                    OR LOWER(po.part_name) LIKE '%fiber glass%'
+                    bom.id IS NOT NULL
+                    OR LOWER(po.part_name) LIKE '%packet%'
+                    OR LOWER(po.sku) LIKE '%packet%'
+                    OR po.sku IN ('P706', 'P707')
                   )
                 )
               )`;

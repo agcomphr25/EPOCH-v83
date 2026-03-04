@@ -8594,7 +8594,7 @@ export class DatabaseStorage implements IStorage {
             } else if (key === 'supplier batch/lot/c #' || key.includes('batch/lot') || key.includes('lot/c')) {
               // This is the primary lot number for traceability
               result.lotNumber = value;
-            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #')) {
+            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #') || key === 'roll number') {
               result.rollNumber = value;
             } else if (key === 'manufacture date' || key.includes('manufacture date')) {
               result.manufactureDate = normalizeDate(value);

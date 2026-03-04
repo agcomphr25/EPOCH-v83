@@ -1068,6 +1068,42 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Inventory departments seed:', deptSeedErr.message);
       }
 
+      // Fix fabric inventory records where all traceability data was concatenated into supplier_part_number
+      // This happened when comma-separated notes were parsed incorrectly (the parser expected pipe-separated)
+      try {
+        const { sql: sqlFabricFix } = await import('drizzle-orm');
+        const fixResult = await db.execute(sqlFabricFix`
+          UPDATE cutting_fabric_inventory
+          SET
+            supplier_part_number = TRIM((regexp_match(supplier_part_number, '^([^,]+)'))[1]),
+            roll_number = COALESCE(
+              roll_number,
+              TRIM((regexp_match(supplier_part_number, 'Roll Number: *([^,|]+)'))[1])
+            ),
+            lot_number = COALESCE(
+              lot_number,
+              TRIM((regexp_match(supplier_part_number, 'Batch/Lot #: *([^,|]+)'))[1])
+            ),
+            expiration_date = CASE
+              WHEN expiration_date IS NULL AND TRIM((regexp_match(supplier_part_number, 'Expiration Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]) IS NOT NULL
+              THEN (TRIM((regexp_match(supplier_part_number, 'Expiration Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]))::date
+              ELSE expiration_date
+            END,
+            manufacture_date = CASE
+              WHEN manufacture_date IS NULL AND TRIM((regexp_match(supplier_part_number, 'Manufacture Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]) IS NOT NULL
+              THEN (TRIM((regexp_match(supplier_part_number, 'Manufacture Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]))::date
+              ELSE manufacture_date
+            END
+          WHERE supplier_part_number LIKE '%, Roll Number:%'
+        `);
+        const fixCount = (fixResult as any)?.rowCount ?? 0;
+        if (fixCount > 0) {
+          console.log(`✅ Fixed ${fixCount} fabric inventory record(s) with concatenated traceability in supplier_part_number`);
+        }
+      } catch (fabricFixErr: any) {
+        console.warn('⚠️ fabric_inventory concatenated field fix:', fabricFixErr.message);
+      }
+
       // Backfill square_meters for fabric inventory records created from PO receipt that are missing it
       try {
         const { sql: sqlFabricSqm } = await import('drizzle-orm');

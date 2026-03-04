@@ -811,7 +811,7 @@ export default function InventoryReceivingPage() {
               unitParts.push(`${label}: ${unitData[field]}`);
             }
           });
-          noteParts.push(`Unit ${idx + 1}: ${unitParts.join(', ')}`);
+          noteParts.push(`Unit ${idx + 1}: ${unitParts.join(' | ')}`);
         });
       } else {
         // Single unit - add traceability data to notes

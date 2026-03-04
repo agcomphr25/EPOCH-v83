@@ -255,15 +255,21 @@ export default function MaterialScanner({
     }
     
     if (icnMatch) {
+      const resolvedICN =
+        icnMatch.internalControlNumber ||
+        icnMatch.barcode ||
+        icnMatch.lotNumber ||
+        icnMatch.batchNumber ||
+        freeTextControlNumber.trim();
       onMaterialConsumed?.({
-        internalControlNumber: icnMatch.internalControlNumber || freeTextControlNumber.trim(),
+        internalControlNumber: resolvedICN,
         entryMethod: 'manual',
         travelerId,
         travelerStepId,
         fabricInventoryMatch: icnMatch,
         updatedLot: {
           id: icnMatch.id,
-          internalControlNumber: icnMatch.internalControlNumber,
+          internalControlNumber: resolvedICN,
           expirationDate: icnMatch.expirationDate,
           supplierLotNumber: icnMatch.batchNumber || icnMatch.lotNumber,
           fabricType: icnMatch.fabric,
@@ -278,9 +284,9 @@ export default function MaterialScanner({
         },
       });
       resetScanner();
-      toast.success(`Matched ICN: ${icnMatch.internalControlNumber} — ${icnMatch.fabric || 'Fabric'}`);
+      toast.success(`Matched: ${resolvedICN} — ${icnMatch.fabric || 'Fabric'}`);
     } else {
-      toast.error('No matching internal control number found in fabric inventory. Please verify the ICN.');
+      toast.error('No matching record found in fabric inventory. Please verify the ICN, barcode, or lot number.');
     }
   };
 
@@ -364,7 +370,7 @@ export default function MaterialScanner({
             {icnMatch && (
               <Alert className="border-green-200 bg-green-50">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertTitle className="text-green-800">Matched: {icnMatch.internalControlNumber}</AlertTitle>
+                <AlertTitle className="text-green-800">Matched: {icnMatch.internalControlNumber || icnMatch.barcode || icnMatch.lotNumber || icnMatch.batchNumber || icnMatch.rollNumber}</AlertTitle>
                 <AlertDescription className="text-green-700">
                   <div className="grid grid-cols-2 gap-1 mt-1 text-xs">
                     <span>Fabric: {icnMatch.fabric || '-'}</span>

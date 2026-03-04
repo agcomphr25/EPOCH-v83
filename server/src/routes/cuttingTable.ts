@@ -748,25 +748,30 @@ router.get('/fabric-inventory/by-material/:materialId', async (req, res) => {
 router.get('/fabric-inventory-by-icn/:icn', async (req, res) => {
   try {
     const { icn } = req.params;
+    const needle = icn.toLowerCase();
     const allInventory = await storage.getAllCuttingFabricInventory();
-    const matches = allInventory.filter(item => 
-      item.internalControlNumber && 
-      item.internalControlNumber.toLowerCase().includes(icn.toLowerCase())
-    );
-    
-    const exactMatch = allInventory.find(item => 
-      item.internalControlNumber && 
-      item.internalControlNumber.toLowerCase() === icn.toLowerCase()
-    );
-    
+
+    const identifierFields = ['internalControlNumber', 'barcode', 'lotNumber', 'batchNumber', 'rollNumber'] as const;
+
+    const matchesField = (item: any, exact: boolean) =>
+      identifierFields.some(f => {
+        const val = item[f];
+        if (!val) return false;
+        return exact
+          ? val.toLowerCase() === needle
+          : val.toLowerCase().includes(needle);
+      });
+
+    const exactMatch = allInventory.find(item => matchesField(item, true));
     if (exactMatch) {
       return res.json({ match: exactMatch, suggestions: [] });
     }
-    
-    if (matches.length > 0) {
-      return res.json({ match: null, suggestions: matches.slice(0, 10) });
+
+    const partialMatches = allInventory.filter(item => matchesField(item, false));
+    if (partialMatches.length > 0) {
+      return res.json({ match: null, suggestions: partialMatches.slice(0, 10) });
     }
-    
+
     res.json({ match: null, suggestions: [] });
   } catch (error) {
     console.error('Error fetching fabric inventory by ICN:', error);

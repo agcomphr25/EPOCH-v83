@@ -1,0 +1,30 @@
+index-BNXd79Wo.js:4861 React initialized: Object
+index-BNXd79Wo.js:4861 React hooks: Object
+index-BNXd79Wo.js:4858 App component is rendering...
+index-BNXd79Wo.js:4858 Environment: production
+index-BNXd79Wo.js:4858 Base URL: /
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNXd79Wo.js:1885 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-BNXd79Wo.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/Emp002 (timeout: 15000ms, deployment: true)
+/api/p2-traveler/badge-lookup/Emp002:1  Failed to load resource: the server responded with a status of 404 ()
+index-BNXd79Wo.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/Emp002: 404
+index-BNXd79Wo.js:4861 API error raw body: {"error":"Employee not found"}
+console.error @ index-BNXd79Wo.js:4861
+index-BNXd79Wo.js:4861 💥 API Request failed for /api/p2-traveler/badge-lookup/Emp002: Error: Employee not found
+    at Me (index-BNXd79Wo.js:235:6283)
+    at async Ee (index-BNXd79Wo.js:3221:135335)
+console.error @ index-BNXd79Wo.js:4861
+index-BNXd79Wo.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/EMP002 (timeout: 15000ms, deployment: true)
+index-BNXd79Wo.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/EMP002: 200
+index-BNXd79Wo.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP002/STR2600149 (timeout: 15000ms, deployment: true)
+index-BNXd79Wo.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP002/STR2600149: 200
+index-BNXd79Wo.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BNXd79Wo.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/fabric-inventory-by-icn/RW:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/fabric-inventory-by-icn/RWU:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/fabric-inventory-by-icn/RWU1:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/fabric-inventory-by-icn/RWU16:1  Failed to load resource: the server responded with a status of 401 ()

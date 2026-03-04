@@ -1319,13 +1319,10 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     @media print {
-      @page {
-        margin: 0;
-        size: 3.5in 2in;
-      }
+      @page { margin: 0.4in 0.5in; }
       .no-print { display: none !important; }
-      body { background: white; }
-      .label { border: none; box-shadow: none; }
+      body { background: white; padding: 0; }
+      .label { width: 100%; height: 100%; border: 2px solid #000; }
     }
     body {
       font-family: Arial, sans-serif;
@@ -1335,19 +1332,19 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 20px;
-      gap: 12px;
+      padding: 24px;
+      gap: 14px;
     }
     .controls {
       display: flex;
-      gap: 8px;
+      gap: 10px;
     }
     .btn {
-      padding: 8px 18px;
+      padding: 9px 20px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: bold;
     }
     .btn-print { background: #1a56db; color: white; }
@@ -1356,70 +1353,71 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     .btn-close:hover { background: #4b5563; }
     .label {
       background: white;
-      border: 1.5px solid #000;
-      width: 3.5in;
-      height: 2in;
-      padding: 10px 12px;
+      border: 2px solid #000;
+      width: 7in;
+      padding: 24px 28px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      gap: 16px;
     }
     .label-top {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 1px solid #000;
-      padding-bottom: 5px;
-      margin-bottom: 5px;
+      align-items: baseline;
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 10px;
     }
     .company {
-      font-size: 8px;
+      font-size: 15px;
       font-weight: bold;
       color: #000;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 1px;
     }
     .label-type {
-      font-size: 7px;
+      font-size: 13px;
       color: #000;
-      text-align: right;
     }
     .fabric-name {
-      font-size: 11px;
+      font-size: 20px;
       font-weight: bold;
       color: #000;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.25;
     }
     .fields {
       display: flex;
-      gap: 16px;
-      margin-top: 3px;
+      gap: 40px;
     }
     .field {
-      font-size: 8.5px;
+      font-size: 13px;
       color: #000;
-      line-height: 1.4;
+      line-height: 1.5;
     }
-    .field span {
+    .field-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field-value {
+      font-size: 16px;
       font-weight: bold;
     }
     .barcode-section {
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-top: 2px;
+      padding-top: 8px;
     }
     .barcode-section svg {
-      max-width: 100%;
+      width: 100%;
+      max-width: 6in;
     }
     .barcode-text {
-      font-size: 7px;
+      font-size: 12px;
       font-family: monospace;
       color: #000;
-      letter-spacing: 0.5px;
-      margin-top: 1px;
+      letter-spacing: 1px;
+      margin-top: 4px;
     }
   </style>
 </head>
@@ -1435,9 +1433,9 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     </div>
     <div class="fabric-name">${inventory.fabric || inventory.fabricPartNumber || 'Fabric Roll'}</div>
     <div class="fields">
-      ${inventory.rollNumber ? `<div class="field">Roll #<br><span>${inventory.rollNumber}</span></div>` : ''}
-      ${expFormatted ? `<div class="field">Expires<br><span>${expFormatted}</span></div>` : ''}
-      ${inventory.source ? `<div class="field">Source<br><span>${inventory.source}</span></div>` : ''}
+      ${inventory.rollNumber ? `<div class="field"><div class="field-label">Roll #</div><div class="field-value">${inventory.rollNumber}</div></div>` : ''}
+      ${expFormatted ? `<div class="field"><div class="field-label">Expires</div><div class="field-value">${expFormatted}</div></div>` : ''}
+      ${inventory.source ? `<div class="field"><div class="field-label">Source</div><div class="field-value">${inventory.source}</div></div>` : ''}
     </div>
     <div class="barcode-section">
       <svg id="barcode"></svg>
@@ -1447,8 +1445,8 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
       format: "CODE128",
-      width: 1.5,
-      height: 36,
+      width: 2.5,
+      height: 80,
       displayValue: false,
       margin: 0
     });

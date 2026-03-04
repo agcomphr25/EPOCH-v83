@@ -1167,100 +1167,58 @@ export default function OrderEntry() {
     }
   }, [features.action_length, features.bottom_metal, toast]);
 
-  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options
+  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options.
+  // Fires only when modelId changes; does not retrigger when the user selects individual feature values.
+  // isTikkaModel is determined from model.id so it is stable regardless of display name changes.
   useEffect(() => {
     if (!modelId || modelOptions.length === 0) return;
 
     const selectedModel = modelOptions.find((m) => m.id === modelId);
-    const modelName = selectedModel?.displayName || selectedModel?.name || '';
-    const isTikkaModel = modelName.toLowerCase().includes('tikka');
+    const isTikkaModel = selectedModel?.id.toLowerCase().includes('tikka') ?? false;
 
     const clearedFields: string[] = [];
     const updates: Record<string, undefined> = {};
 
-    // If Tikka model, clear any NON-Tikka selections
     if (isTikkaModel) {
-      const hasNonTikkaAction =
-        features.action_inlet &&
-        !features.action_inlet.toLowerCase().includes('tikka');
-      const hasNonTikkaBarrel =
-        features.barrel_inlet &&
-        !features.barrel_inlet.toLowerCase().includes('tikka');
-      const hasNonTikkaBottomMetal =
-        features.bottom_metal &&
-        !features.bottom_metal.toLowerCase().includes('tikka');
-
-      if (hasNonTikkaAction) {
+      if (features.action_inlet && !features.action_inlet.toLowerCase().includes('tikka')) {
         updates.action_inlet = undefined;
         clearedFields.push('Action Inlet');
       }
-      if (hasNonTikkaBarrel) {
+      if (features.barrel_inlet && !features.barrel_inlet.toLowerCase().includes('tikka')) {
         updates.barrel_inlet = undefined;
         clearedFields.push('Barrel Inlet');
       }
-      if (hasNonTikkaBottomMetal) {
+      if (features.bottom_metal && !features.bottom_metal.toLowerCase().includes('tikka')) {
         updates.bottom_metal = undefined;
         clearedFields.push('Bottom Metal');
-      }
-
-      if (clearedFields.length > 0) {
-        setFeatures((prev) => ({
-          ...prev,
-          ...updates,
-        }));
-
-        toast({
-          title: 'Options Updated',
-          description: `${clearedFields.join(', ')} cleared - Only Tikka options are available for this stock model.`,
-          variant: 'default',
-        });
       }
     } else {
-      // If not a Tikka model, clear any Tikka-specific selections
-      const hasTikkaAction =
-        features.action_inlet &&
-        features.action_inlet.toLowerCase().includes('tikka');
-      const hasTikkaBarrel =
-        features.barrel_inlet &&
-        features.barrel_inlet.toLowerCase().includes('tikka');
-      const hasTikkaBottomMetal =
-        features.bottom_metal &&
-        features.bottom_metal.toLowerCase().includes('tikka');
-
-      if (hasTikkaAction) {
+      if (features.action_inlet && features.action_inlet.toLowerCase().includes('tikka')) {
         updates.action_inlet = undefined;
         clearedFields.push('Action Inlet');
       }
-      if (hasTikkaBarrel) {
+      if (features.barrel_inlet && features.barrel_inlet.toLowerCase().includes('tikka')) {
         updates.barrel_inlet = undefined;
         clearedFields.push('Barrel Inlet');
       }
-      if (hasTikkaBottomMetal) {
+      if (features.bottom_metal && features.bottom_metal.toLowerCase().includes('tikka')) {
         updates.bottom_metal = undefined;
         clearedFields.push('Bottom Metal');
       }
-
-      if (clearedFields.length > 0) {
-        setFeatures((prev) => ({
-          ...prev,
-          ...updates,
-        }));
-
-        toast({
-          title: 'Options Updated',
-          description: `${clearedFields.join(', ')} cleared - Tikka options are not available for this stock model.`,
-          variant: 'default',
-        });
-      }
     }
-  }, [
-    modelId,
-    modelOptions,
-    features.action_inlet,
-    features.barrel_inlet,
-    features.bottom_metal,
-    toast,
-  ]);
+
+    if (clearedFields.length > 0) {
+      setFeatures((prev) => ({ ...prev, ...updates }));
+      toast({
+        title: 'Options Updated',
+        description: isTikkaModel
+          ? `${clearedFields.join(', ')} cleared - Only Tikka options are available for this stock model.`
+          : `${clearedFields.join(', ')} cleared - Tikka options are not available for this stock model.`,
+        variant: 'default',
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelId, modelOptions, toast]);
 
   // Business rule: M1A stock models - default Action Inlet, Barrel Inlet, Bottom Metal to Factory M1A and restrict Left handedness
   useEffect(() => {

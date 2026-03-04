@@ -3881,6 +3881,8 @@ export default function OrderEntry() {
                                 const isTikkaValue = (
                                   TIKKA_BARREL_OPTIONS as readonly string[]
                                 ).includes(opt.value);
+                                if (features.barrel_inlet === opt.value)
+                                  return true;
                                 if (isTikkaModel) return isTikkaValue;
                                 return !isTikkaValue;
                               }

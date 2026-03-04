@@ -34,10 +34,13 @@ export default function TraceabilityConfigModal({
   onSave,
   initialFields = [],
 }: TraceabilityConfigModalProps) {
-  const [selectedFields, setSelectedFields] = useState<string[]>(initialFields);
+  const validIds = TRACEABILITY_OPTIONS.map((o) => o.id);
+  const sanitize = (fields: string[]) => fields.filter((f) => validIds.includes(f));
+
+  const [selectedFields, setSelectedFields] = useState<string[]>(() => sanitize(initialFields));
 
   useEffect(() => {
-    setSelectedFields(initialFields);
+    setSelectedFields(sanitize(initialFields));
   }, [initialFields]);
 
   const handleToggle = (fieldId: string) => {

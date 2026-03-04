@@ -1068,6 +1068,29 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Inventory departments seed:', deptSeedErr.message);
       }
 
+      // Backfill square_meters for fabric inventory records created from PO receipt that are missing it
+      try {
+        const { sql: sqlFabricSqm } = await import('drizzle-orm');
+        const backfillResult = await db.execute(sqlFabricSqm`
+          UPDATE cutting_fabric_inventory cfi
+          SET square_meters = ii.purchase_quantity
+          FROM inventory_items ii
+          WHERE cfi.fabric_part_number = ii.ag_part_number
+            AND cfi.square_meters IS NULL
+            AND cfi.status = 'active'
+            AND cfi.quantity_in_stock > 0
+            AND LOWER(TRIM(ii.purchase_unit)) IN ('sq m', 'sqm', 'square meters', 'm2', 'm²')
+            AND ii.purchase_quantity IS NOT NULL
+            AND ii.purchase_quantity > 0
+        `);
+        const count = (backfillResult as any)?.rowCount ?? 0;
+        if (count > 0) {
+          console.log(`✅ Backfilled square_meters for ${count} fabric inventory record(s) from inventory item purchase quantities`);
+        }
+      } catch (fabricSqmErr: any) {
+        console.warn('⚠️ fabric_inventory square_meters backfill:', fabricSqmErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

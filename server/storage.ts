@@ -8669,6 +8669,11 @@ export class DatabaseStorage implements IStorage {
             // - rollNumber: Roll # column (Manufacture Roll #)
             // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
             // - expirationDate: Expiration Date column
+            const purchaseUnitNorm = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
+            const sqMeterUnits = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
+            const sqMetersPerRoll = sqMeterUnits.includes(purchaseUnitNorm) && inventoryItem.purchaseQuantity > 0
+              ? String(inventoryItem.purchaseQuantity)
+              : undefined;
             const fabricRecord = await db
               .insert(cuttingFabricInventory)
               .values({
@@ -8684,6 +8689,7 @@ export class DatabaseStorage implements IStorage {
                 receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
                 expirationDate: traceability.expirationDate || undefined,
                 quantityInStock: 1,
+                squareMeters: sqMetersPerRoll,
                 conformanceDocumentLink: cocLink || undefined,
                 notes: `Auto-created from PO receipt. Unit ${section.unitNum} of ${unitCount}. Original notes: ${section.data}`,
               })
@@ -8706,6 +8712,11 @@ export class DatabaseStorage implements IStorage {
           // - rollNumber: Roll # column (Manufacture Roll #)
           // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
           // - expirationDate: Expiration Date column
+          const purchaseUnitNormSingle = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
+          const sqMeterUnitsSingle = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
+          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && inventoryItem.purchaseQuantity > 0
+            ? String(inventoryItem.purchaseQuantity)
+            : undefined;
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
             .values({
@@ -8721,6 +8732,7 @@ export class DatabaseStorage implements IStorage {
               receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
               expirationDate: traceability.expirationDate || undefined,
               quantityInStock: receivedQuantity,
+              squareMeters: sqMetersPerRollSingle,
               conformanceDocumentLink: cocLink || undefined,
               notes: `Auto-created from PO receipt. Notes: ${notes}`,
             })

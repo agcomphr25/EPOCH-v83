@@ -661,7 +661,7 @@ export default function FabricInventoryPage() {
     }
     .label-info {
       font-size: 6px;
-      color: #333;
+      color: #000;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;

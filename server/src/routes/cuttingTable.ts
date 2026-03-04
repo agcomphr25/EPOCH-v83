@@ -1306,111 +1306,153 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
       : null;
 
     // Generate printable HTML with barcode
+    const expFormatted = inventory.expirationDate
+      ? new Date(inventory.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })
+      : null;
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Barcode Label - ${inventory.barcode}</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     @media print {
-      @page { 
+      @page {
         margin: 0;
-        size: 3.33in 4in;
+        size: 3.5in 2in;
       }
-      body { margin: 0; }
-      .no-print { display: none; }
+      .no-print { display: none !important; }
+      body { background: white; }
+      .label { border: none; box-shadow: none; }
     }
     body {
       font-family: Arial, sans-serif;
+      background: #e8e8e8;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
+      justify-content: center;
       min-height: 100vh;
-      margin: 0;
-      background: #f5f5f5;
+      padding: 20px;
+      gap: 12px;
     }
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .btn-print { background: #1a56db; color: white; }
+    .btn-print:hover { background: #1e40af; }
+    .btn-close { background: #6b7280; color: white; }
+    .btn-close:hover { background: #4b5563; }
     .label {
       background: white;
-      padding: 10px;
-      border: 2px solid #333;
-      width: 3.33in;
-      height: 4in;
-      text-align: center;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border: 1.5px solid #000;
+      width: 3.5in;
+      height: 2in;
+      padding: 10px 12px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
-    .label-header {
-      font-size: 13px;
+    .label-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid #000;
+      padding-bottom: 5px;
+      margin-bottom: 5px;
+    }
+    .company {
+      font-size: 8px;
       font-weight: bold;
-      margin-bottom: 6px;
-      color: #333;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
-    .label-info {
-      font-size: 9px;
-      margin: 2px 0;
-      color: #666;
-      line-height: 1.2;
+    .label-type {
+      font-size: 7px;
+      color: #000;
+      text-align: right;
     }
-    .barcode-container {
-      margin: 6px 0;
-      max-width: 100%;
+    .fabric-name {
+      font-size: 11px;
+      font-weight: bold;
+      color: #000;
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .barcode-container svg {
+    .fields {
+      display: flex;
+      gap: 16px;
+      margin-top: 3px;
+    }
+    .field {
+      font-size: 8.5px;
+      color: #000;
+      line-height: 1.4;
+    }
+    .field span {
+      font-weight: bold;
+    }
+    .barcode-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 2px;
+    }
+    .barcode-section svg {
       max-width: 100%;
-      height: auto;
     }
     .barcode-text {
-      font-size: 10px;
-      font-weight: bold;
-      margin-top: 4px;
+      font-size: 7px;
+      font-family: monospace;
+      color: #000;
       letter-spacing: 0.5px;
-      word-break: break-all;
-    }
-    .print-btn {
-      margin-top: 12px;
-      padding: 8px 16px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .print-btn:hover {
-      background: #0056b3;
+      margin-top: 1px;
     }
   </style>
 </head>
 <body>
+  <div class="controls no-print">
+    <button class="btn btn-print" onclick="window.print()">Print Label</button>
+    <button class="btn btn-close" onclick="window.close()">Close</button>
+  </div>
   <div class="label">
-    <div class="label-header">AG Composites - Fabric Inventory</div>
-    ${line ? `<div class="label-info">Production Line: <strong>${line.lineName}</strong></div>` : ''}
-    ${inventory.source ? `<div class="label-info">Source: ${inventory.source}</div>` : ''}
-    ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
-    ${inventory.rollNumber ? `<div class="label-info">Roll #: <strong>${inventory.rollNumber}</strong></div>` : ''}
-    ${inventory.expirationDate ? `<div class="label-info">Exp: <strong>${new Date(inventory.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</strong></div>` : ''}
-    ${inventory.conformanceDocumentLink ? `<div class="label-info">📄 Conformance Doc: <a href="${inventory.conformanceDocumentLink}" target="_blank" style="color: #007bff; text-decoration: none;">View Link</a></div>` : ''}
-    <div class="barcode-container">
-      <svg id="barcode"></svg>
+    <div class="label-top">
+      <div class="company">AG Composites</div>
+      <div class="label-type">Fabric Inventory${line ? ' &bull; ' + line.lineName : ''}</div>
     </div>
-    <div class="barcode-text">${inventory.barcode}</div>
-    <button class="print-btn no-print" onclick="window.print()">Print Label</button>
+    <div class="fabric-name">${inventory.fabric || inventory.fabricPartNumber || 'Fabric Roll'}</div>
+    <div class="fields">
+      ${inventory.rollNumber ? `<div class="field">Roll #<br><span>${inventory.rollNumber}</span></div>` : ''}
+      ${expFormatted ? `<div class="field">Expires<br><span>${expFormatted}</span></div>` : ''}
+      ${inventory.source ? `<div class="field">Source<br><span>${inventory.source}</span></div>` : ''}
+    </div>
+    <div class="barcode-section">
+      <svg id="barcode"></svg>
+      <div class="barcode-text">${inventory.barcode}</div>
+    </div>
   </div>
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
       format: "CODE128",
-      width: 1.2,
-      height: 40,
+      width: 1.5,
+      height: 36,
       displayValue: false,
-      margin: 2,
-      textMargin: 0
+      margin: 0
     });
-  </script>
+  <\/script>
 </body>
 </html>
     `;

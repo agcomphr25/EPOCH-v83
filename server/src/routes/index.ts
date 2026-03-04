@@ -3281,100 +3281,110 @@ export function registerRoutes(app: Express): Server {
       console.log(`Scheduled ${result.length} items for production`);
       
       // Auto-sync P2 cutting table demands for the affected POs
+      // Looks for PENDING production orders (any dept) where the part requires cutting (CF/FG parts)
       let cuttingTableSynced = 0;
       try {
+        const { ilike, or, sql: sqlFn } = await import('drizzle-orm');
         const affectedPoIds = [...new Set(result.map(r => r.poId))];
-        
+
+        // Pre-load packet inventory items keyed by material type
+        const cfPacketItem = await db.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.isPacket, true), ilike(inventoryItems.name, '%carbon fiber%')))
+          .limit(1).then(r => r[0] || null);
+        const fgPacketItem = await db.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.isPacket, true), or(ilike(inventoryItems.name, '%fiberglass%'), ilike(inventoryItems.name, '%fiber glass%'))))
+          .limit(1).then(r => r[0] || null);
+
+        const isCfPart = (name: string) => {
+          const n = name.toLowerCase();
+          return n.includes('carbon fiber') || n.includes('carbon fibre') || n.includes(' cf ') || n.startsWith('cf ');
+        };
+        const isFgPart = (name: string) => {
+          const n = name.toLowerCase();
+          return n.includes('fiberglass') || n.includes('fibreglass') || n.includes('fiber glass');
+        };
+
         for (const poId of affectedPoIds) {
+          // Fetch all PENDING orders for this PO
           const p2Orders = await db
             .select()
             .from(p2ProductionOrders)
-            .where(
-              and(
-                eq(p2ProductionOrders.department, 'Cutting Table'),
-                eq(p2ProductionOrders.status, 'PENDING'),
-                eq(p2ProductionOrders.p2PoId, poId)
-              )
-            );
-          
-          if (p2Orders.length === 0) continue;
-          
-          const demandMap: Record<string, { sku: string; partName: string; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null }> = {};
-          
-          for (const order of p2Orders) {
-            const key = `${order.p2PoId}-${order.p2PoItemId}-${order.sku}`;
+            .where(and(eq(p2ProductionOrders.status, 'PENDING'), eq(p2ProductionOrders.p2PoId, poId)));
+
+          // Filter to orders that need cutting — either explicitly 'Cutting Table' or CF/FG Layup parts
+          const cuttingOrders = p2Orders.filter(o => {
+            if (o.department === 'Cutting Table') return true;
+            if (o.department === 'Layup' || o.department === 'layup') {
+              return isCfPart(o.partName || '') || isFgPart(o.partName || '');
+            }
+            return false;
+          });
+
+          if (cuttingOrders.length === 0) continue;
+
+          // Aggregate demand by PO item + material type
+          const demandMap: Record<string, { materialType: 'carbon_fiber' | 'fiberglass'; packetItem: typeof cfPacketItem; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null; partName: string }> = {};
+
+          for (const order of cuttingOrders) {
+            const materialType = isFgPart(order.partName || '') ? 'fiberglass' : 'carbon_fiber';
+            const packetItem = materialType === 'fiberglass' ? fgPacketItem : cfPacketItem;
+            if (!packetItem) continue; // No packet inventory item configured for this material type
+
+            const key = `${order.p2PoId}-${order.p2PoItemId}-${materialType}`;
             if (!demandMap[key]) {
-              demandMap[key] = {
-                sku: order.sku,
-                partName: order.partName,
-                p2PoId: order.p2PoId,
-                p2PoItemId: order.p2PoItemId,
-                quantity: 0,
-                dueDate: order.dueDate,
-              };
+              demandMap[key] = { materialType, packetItem, p2PoId: order.p2PoId, p2PoItemId: order.p2PoItemId, quantity: 0, dueDate: order.dueDate, partName: order.partName || '' };
             }
             demandMap[key].quantity += (order.quantity || 1);
           }
-          
-          const existingEntries = await db
-            .select()
-            .from(manufacturingQueue)
-            .where(
-              and(
-                eq(manufacturingQueue.department, 'Cutting Table'),
-                eq(manufacturingQueue.p2PoId, poId)
-              )
-            );
-          
+
+          const existingEntries = await db.select().from(manufacturingQueue)
+            .where(and(eq(manufacturingQueue.department, 'Cutting Table'), eq(manufacturingQueue.p2PoId, poId)));
+
           for (const [, demand] of Object.entries(demandMap)) {
-            const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, demand.sku)).limit(1);
-            if (!inventoryItem) continue;
-            
-            const existing = existingEntries.find(e => 
-              e.p2PoId === demand.p2PoId && 
-              e.inventoryItemId === inventoryItem.id &&
+            const existing = existingEntries.find(e =>
+              e.p2PoId === demand.p2PoId &&
+              e.inventoryItemId === demand.packetItem!.id &&
               e.p2PoItemId === demand.p2PoItemId
             );
             if (existing) continue;
-            
+
             const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, demand.p2PoId)).limit(1);
             const poNumber = po?.poNumber || `PO-${demand.p2PoId}`;
-            
-            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.sku)).limit(1);
-            
+
+            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.packetItem!.agPartNumber)).limit(1);
+
             const notesObj = {
               source: 'P2_SYNC',
               p2PoNumber: poNumber,
               p2PoId: demand.p2PoId,
               p2PoItemId: demand.p2PoItemId,
               bomId: matchingBom?.id || null,
-              materialType: 'carbon_fiber',
+              materialType: demand.materialType,
+              partName: demand.partName,
             };
-            
-            await db
-              .insert(manufacturingQueue)
-              .values({
-                inventoryItemId: inventoryItem.id,
-                department: 'Cutting Table',
-                quantityRequested: demand.quantity,
-                quantityCompleted: 0,
-                priority: 50,
-                status: 'PENDING',
-                dueDate: demand.dueDate,
-                notes: JSON.stringify(notesObj),
-                requestedBy: 'system',
-                p2PoId: demand.p2PoId,
-                p2PoItemId: demand.p2PoItemId,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-            
+
+            await db.insert(manufacturingQueue).values({
+              inventoryItemId: demand.packetItem!.id,
+              department: 'Cutting Table',
+              quantityRequested: demand.quantity,
+              quantityCompleted: 0,
+              priority: 50,
+              status: 'PENDING',
+              dueDate: demand.dueDate,
+              notes: JSON.stringify(notesObj),
+              requestedBy: 'system',
+              p2PoId: demand.p2PoId,
+              p2PoItemId: demand.p2PoItemId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+
             cuttingTableSynced++;
           }
         }
-        
+
         if (cuttingTableSynced > 0) {
-          console.log(`Auto-synced ${cuttingTableSynced} cutting table stock packet demands`);
+          console.log(`Auto-synced ${cuttingTableSynced} cutting table packet demands from P2 control center`);
         }
       } catch (syncError) {
         console.error('Non-fatal: Failed to auto-sync cutting table demands:', syncError);

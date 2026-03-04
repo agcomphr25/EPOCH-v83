@@ -144,6 +144,7 @@ const publicRoutes = [
   '/api/part-routings',  // Part routing data needed by traveler execution
   '/api/routing-documents', // Routing documents needed by traveler execution
   '/api/material-lots',  // Material lot validation needed by traveler execution
+  '/api/cutting-table/fabric-inventory-by-icn', // ICN lookup for P2 traveler material scanner
   '/api/production/timers', // Production Timer Station - public for floor displays
 ];
 

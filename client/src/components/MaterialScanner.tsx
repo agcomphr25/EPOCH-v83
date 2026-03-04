@@ -337,7 +337,7 @@ export default function MaterialScanner({
             <Alert>
               <FileText className="h-4 w-4" />
               <AlertDescription>
-                Enter internal control number — must match an existing fabric inventory record
+                Enter internal control number — matches fabric inventory or material lot records
               </AlertDescription>
             </Alert>
             <div className="flex gap-2">
@@ -410,10 +410,10 @@ export default function MaterialScanner({
             )}
             
             {!icnMatch && !icnSearching && freeTextControlNumber.trim().length >= 2 && icnSuggestions.length === 0 && (
-              <Alert variant="destructive">
+              <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  No matching ICN found in fabric inventory. Please check the control number.
+                  No fabric inventory match found — submit to also check material lot records.
                 </AlertDescription>
               </Alert>
             )}

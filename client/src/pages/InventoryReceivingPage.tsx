@@ -136,6 +136,7 @@ function isP2Product(item: any): boolean {
 
 // Helper to get traceability info for an item from inventory
 const DEFAULT_TRACEABILITY_FIELDS = ['batchLotNumber', 'expirationDate', 'receivedDate'];
+const VALID_TRACEABILITY_FIELD_IDS = Object.keys(TRACEABILITY_FIELD_LABELS);
 
 function getItemTraceability(
   agPartNumber: string,
@@ -149,9 +150,10 @@ function getItemTraceability(
   );
   if (invItem) {
     const required = invItem.traceabilityRequired || false;
-    const fields = invItem.traceabilityFields && invItem.traceabilityFields.length > 0
+    const rawFields = invItem.traceabilityFields && invItem.traceabilityFields.length > 0
       ? invItem.traceabilityFields
       : required ? DEFAULT_TRACEABILITY_FIELDS : [];
+    const fields = rawFields.filter((f: string) => VALID_TRACEABILITY_FIELD_IDS.includes(f));
     return { required, fields };
   }
   return { required: false, fields: [] };

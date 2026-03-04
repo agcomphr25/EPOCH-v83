@@ -1175,25 +1175,6 @@ export default function OrderEntry() {
     }
   }, [features.action_length, features.bottom_metal, toast]);
 
-  // Safety guard: when the stock model changes, clear barrel_inlet if it is no longer valid
-  // for the new model (Tikka value on a non-Tikka model, or vice-versa).
-  // Runs only on modelId change; does not fire when the user selects barrel options.
-  useEffect(() => {
-    if (!modelId || modelOptions.length === 0) return;
-
-    const selectedModel = modelOptions.find((m) => m.id === modelId);
-    const isTikkaModel = selectedModel?.id.toLowerCase().includes('tikka') ?? false;
-
-    setFeatures((prev) => {
-      if (!prev.barrel_inlet) return prev;
-      const isTikkaValue = (TIKKA_BARREL_OPTIONS as readonly string[]).includes(prev.barrel_inlet);
-      if (isTikkaModel && !isTikkaValue) return { ...prev, barrel_inlet: undefined };
-      if (!isTikkaModel && isTikkaValue) return { ...prev, barrel_inlet: undefined };
-      return prev;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelId]);
-
   // Business rule: M1A stock models - default Action Inlet, Barrel Inlet, Bottom Metal to Factory M1A and restrict Left handedness
   useEffect(() => {
     if (!modelId || modelOptions.length === 0) return;

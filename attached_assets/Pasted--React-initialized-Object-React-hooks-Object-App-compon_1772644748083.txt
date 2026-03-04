@@ -1,0 +1,274 @@
+ React initialized: Object
+ React hooks: Object
+ App component is rendering...
+ Environment: production
+ Base URL: /
+/product-labels:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+/api/p2/control-center/stats:1  Failed to load resource: net::ERR_CONNECTION_CLOSED
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=af802f52c3250da73c6f416b4c47f2bb370e58132a5970bcab8f5e18d1d21d4d' failed: 
+(anonymous) @ index-BChqVFLZ.js:1527
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=af802f52c3250da73c6f416b4c47f2bb370e58132a5970bcab8f5e18d1d21d4d' failed: 
+(anonymous) @ index-BChqVFLZ.js:1527
+ 🌐 API Request to /api/p2/control-center/item-status/b91010b2-c034-439a-aad0-8f158d3c7698 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/b91010b2-c034-439a-aad0-8f158d3c7698: 200
+ 🌐 API Request to /api/p2/control-center/item-status/9dbc9188-bc5a-454a-9ce5-b56b77d75c05 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/9dbc9188-bc5a-454a-9ce5-b56b77d75c05: 200
+ 🌐 API Request to /api/p2/control-center/item-status/6545584e-ac0d-4703-b4cb-c39195835ee5 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/6545584e-ac0d-4703-b4cb-c39195835ee5: 200
+ 🌐 API Request to /api/p2/control-center/item-status/eacad600-0a95-461b-8f25-d66343658386 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/eacad600-0a95-461b-8f25-d66343658386: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ddf20f56-c516-4f88-ae99-2fb69c36dea4 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ddf20f56-c516-4f88-ae99-2fb69c36dea4: 200
+ 🌐 API Request to /api/p2/control-center/item-status/02cd6d98-d398-4615-b496-90d64792a1ef (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/02cd6d98-d398-4615-b496-90d64792a1ef: 200
+ 🌐 API Request to /api/p2/control-center/item-status/1c6bedd9-be5c-4373-9ec1-4c211297048a (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/1c6bedd9-be5c-4373-9ec1-4c211297048a: 200
+ 🌐 API Request to /api/p2/control-center/item-status/f264d1db-bd07-494d-9203-70c1e7522761 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/f264d1db-bd07-494d-9203-70c1e7522761: 200
+ 🌐 API Request to /api/p2/control-center/item-status/9171c039-27f5-48a0-a2ef-33a0b70aa690 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/9171c039-27f5-48a0-a2ef-33a0b70aa690: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ce9442cc-ce55-4d43-80c3-0ccd15d28d56 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ce9442cc-ce55-4d43-80c3-0ccd15d28d56: 200
+ 🌐 API Request to /api/p2/control-center/item-status/6c9cedf0-b37a-4150-8233-2908dca3e7f3 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/6c9cedf0-b37a-4150-8233-2908dca3e7f3: 200
+ 🌐 API Request to /api/p2/control-center/item-status/9a7260d2-659a-43c4-9c37-14f85c6f1662 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/9a7260d2-659a-43c4-9c37-14f85c6f1662: 200
+ 🌐 API Request to /api/p2/control-center/item-status/0e81a03f-0c9c-41d0-8f09-b5682673224f (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/0e81a03f-0c9c-41d0-8f09-b5682673224f: 200
+ 🌐 API Request to /api/p2/control-center/item-status/d2d1b789-2f29-4411-80b3-509ba5d59825 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/d2d1b789-2f29-4411-80b3-509ba5d59825: 200
+ 🌐 API Request to /api/p2/control-center/item-status/cc9ddb8d-48cf-4ee7-9bc8-7b44f67b2681 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/cc9ddb8d-48cf-4ee7-9bc8-7b44f67b2681: 200
+ 🌐 API Request to /api/p2/control-center/item-status/a0bd8928-bf01-4bf7-97ec-47c0b45d5691 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/a0bd8928-bf01-4bf7-97ec-47c0b45d5691: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5b09d082-a9ad-44a5-92ec-31791ed08bc3 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5b09d082-a9ad-44a5-92ec-31791ed08bc3: 200
+ 🌐 API Request to /api/p2/control-center/item-status/6ba41d2f-13cd-4798-a80d-e21bee7d170d (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/6ba41d2f-13cd-4798-a80d-e21bee7d170d: 200
+ 🌐 API Request to /api/p2/control-center/item-status/1fa6fdd7-8f36-47af-8303-605904394257 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/1fa6fdd7-8f36-47af-8303-605904394257: 200
+ 🌐 API Request to /api/p2/control-center/item-status/b8782d07-3628-482a-9caa-9d7fc9965dfb (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/b8782d07-3628-482a-9caa-9d7fc9965dfb: 200
+ 🌐 API Request to /api/p2/control-center/item-status/6c727736-e0bb-432b-8c2e-32bf1c62a320 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/6c727736-e0bb-432b-8c2e-32bf1c62a320: 200
+ 🌐 API Request to /api/p2/control-center/item-status/8f17f36c-0bf9-40eb-b24c-d4b83537ac6a (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/8f17f36c-0bf9-40eb-b24c-d4b83537ac6a: 200
+ 🌐 API Request to /api/p2/control-center/item-status/31b8ccd2-53d1-47a6-b895-6eb5fb92ebb7 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/31b8ccd2-53d1-47a6-b895-6eb5fb92ebb7: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5c6f44a3-e011-4a10-84f0-92e50b890576 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5c6f44a3-e011-4a10-84f0-92e50b890576: 200
+ 🌐 API Request to /api/p2/control-center/item-status/9d208521-fbd3-48bc-940e-8676d9a7ff16 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/9d208521-fbd3-48bc-940e-8676d9a7ff16: 200
+ 🌐 API Request to /api/p2/control-center/item-status/523f1a8b-c391-4790-a71b-56be54d99af6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/523f1a8b-c391-4790-a71b-56be54d99af6: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5f5a096b-876d-4444-a957-1a68b1518f81 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5f5a096b-876d-4444-a957-1a68b1518f81: 200
+ 🌐 API Request to /api/p2/control-center/item-status/e737f602-f03e-44d4-a22a-eab2bea63464 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/e737f602-f03e-44d4-a22a-eab2bea63464: 200
+ 🌐 API Request to /api/p2/control-center/item-status/33935653-d3a0-4c92-aadc-d74150e11546 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/33935653-d3a0-4c92-aadc-d74150e11546: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ac739e89-d05d-465a-bcf1-a25c0fd94ae8 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ac739e89-d05d-465a-bcf1-a25c0fd94ae8: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ee7c8563-61fd-470c-8e25-58ac8379c159 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ee7c8563-61fd-470c-8e25-58ac8379c159: 200
+ 🌐 API Request to /api/p2/control-center/item-status/15613ea7-af30-4c97-b430-09c649749a47 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/15613ea7-af30-4c97-b430-09c649749a47: 200
+ 🌐 API Request to /api/p2/control-center/item-status/fdd7837c-02ce-4dd7-bb18-7a77cdeab40b (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/fdd7837c-02ce-4dd7-bb18-7a77cdeab40b: 200
+ 🌐 API Request to /api/p2/control-center/item-status/56e178af-2c9e-46a0-bb04-e7fb44ee612c (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/56e178af-2c9e-46a0-bb04-e7fb44ee612c: 200
+ 🌐 API Request to /api/p2/control-center/item-status/7b407109-a133-4360-bbfb-9dc22e858077 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/7b407109-a133-4360-bbfb-9dc22e858077: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5bc87c6d-c88a-401c-badc-badb487d38d9 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5bc87c6d-c88a-401c-badc-badb487d38d9: 200
+ 🌐 API Request to /api/p2/control-center/item-status/a6cc9169-f9bd-48bb-b9eb-f74ea562c628 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/a6cc9169-f9bd-48bb-b9eb-f74ea562c628: 200
+ 🌐 API Request to /api/p2/control-center/item-status/54c0118f-502a-4644-94ba-db8371bc16dc (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/54c0118f-502a-4644-94ba-db8371bc16dc: 200
+ 🌐 API Request to /api/p2/control-center/item-status/90c0b250-0c63-4615-86bf-21a785d41cf5 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/90c0b250-0c63-4615-86bf-21a785d41cf5: 200
+ 🌐 API Request to /api/p2/control-center/item-status/63009475-23b0-44e0-8e29-ad68bd1d9aeb (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/63009475-23b0-44e0-8e29-ad68bd1d9aeb: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ffd39def-48d8-4779-b143-b066b23f8569 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ffd39def-48d8-4779-b143-b066b23f8569: 200
+ 🌐 API Request to /api/p2/control-center/item-status/6cd36894-6933-4cfb-8aa8-102fa4b6636a (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/6cd36894-6933-4cfb-8aa8-102fa4b6636a: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ef499624-5ee8-403c-92e1-2f71dd34d449 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ef499624-5ee8-403c-92e1-2f71dd34d449: 200
+ 🌐 API Request to /api/p2/control-center/item-status/d6cc442b-774f-4818-90e7-0d4754169696 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/d6cc442b-774f-4818-90e7-0d4754169696: 200
+ 🌐 API Request to /api/p2/control-center/item-status/8440c7a9-9f55-4eb8-838f-14ed10ce9b98 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/8440c7a9-9f55-4eb8-838f-14ed10ce9b98: 200
+ 🌐 API Request to /api/p2/control-center/item-status/7d121264-25a9-4dcc-bb77-29e0a733a6e7 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/7d121264-25a9-4dcc-bb77-29e0a733a6e7: 200
+ 🌐 API Request to /api/p2/control-center/item-status/89285b22-da01-46a9-9ea2-fc3302a25184 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/89285b22-da01-46a9-9ea2-fc3302a25184: 200
+ 🌐 API Request to /api/p2/control-center/item-status/81eed817-da37-4c71-aba4-9d254963e9db (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/81eed817-da37-4c71-aba4-9d254963e9db: 200
+ 🌐 API Request to /api/p2/control-center/item-status/f76c5fe8-7a1a-49cd-b6d2-80f614e3f7f4 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/f76c5fe8-7a1a-49cd-b6d2-80f614e3f7f4: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5323b61b-b200-4427-929a-bcd6b3c96d1d (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5323b61b-b200-4427-929a-bcd6b3c96d1d: 200
+ 🌐 API Request to /api/p2/control-center/item-status/d77e234b-3a37-4d5e-9daf-6bc39c6474c3 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/d77e234b-3a37-4d5e-9daf-6bc39c6474c3: 200
+ 🌐 API Request to /api/p2/control-center/item-status/fd7cd2d9-7f2e-454f-b122-15505ec95afe (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/fd7cd2d9-7f2e-454f-b122-15505ec95afe: 200
+ 🌐 API Request to /api/p2/control-center/item-status/1699e141-8803-4ab2-b9a1-ef4d984935d1 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/1699e141-8803-4ab2-b9a1-ef4d984935d1: 200
+ 🌐 API Request to /api/p2/control-center/item-status/49e166de-9d2f-4618-8f2a-28359557cbf3 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/49e166de-9d2f-4618-8f2a-28359557cbf3: 200
+ 🌐 API Request to /api/p2/control-center/item-status/b09fb346-adec-49a8-b249-61835d4e9626 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/b09fb346-adec-49a8-b249-61835d4e9626: 200
+ 🌐 API Request to /api/p2/control-center/item-status/3a5d0c1e-bd39-40b4-85b0-e07c360fe930 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/3a5d0c1e-bd39-40b4-85b0-e07c360fe930: 200
+ 🌐 API Request to /api/p2/control-center/item-status/3c5fcb30-e0d9-41de-b8cb-76e211c1e091 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/3c5fcb30-e0d9-41de-b8cb-76e211c1e091: 200
+ 🌐 API Request to /api/p2/control-center/item-status/bc8bf84f-a9e0-4dd4-8dda-e6cc8c737915 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/bc8bf84f-a9e0-4dd4-8dda-e6cc8c737915: 200
+ 🌐 API Request to /api/p2/control-center/item-status/5dde2bd5-ca7d-4502-ba9a-7238611524d2 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/5dde2bd5-ca7d-4502-ba9a-7238611524d2: 200
+ 🌐 API Request to /api/p2/control-center/item-status/026a587d-8d19-4ea8-b5fe-e35cda98157d (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/026a587d-8d19-4ea8-b5fe-e35cda98157d: 200
+ 🌐 API Request to /api/p2/control-center/item-status/76a6bfb8-3bfc-4bb4-85f1-4f6d0e7ce140 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/76a6bfb8-3bfc-4bb4-85f1-4f6d0e7ce140: 200
+ 🌐 API Request to /api/p2/control-center/item-status/1e304115-7819-4aef-a9e7-e4e39bf18e1e (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/1e304115-7819-4aef-a9e7-e4e39bf18e1e: 200
+ 🌐 API Request to /api/p2/control-center/item-status/2a59a3c9-2baa-455c-90d9-fdfd16c91fee (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/2a59a3c9-2baa-455c-90d9-fdfd16c91fee: 200
+ 🌐 API Request to /api/p2/control-center/item-status/67c53459-eba3-4d0f-b5d3-4a8903a0b8d1 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/67c53459-eba3-4d0f-b5d3-4a8903a0b8d1: 200
+ 🌐 API Request to /api/p2/control-center/item-status/a0d4281a-c6f3-4e8b-b809-04728a095a27 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/a0d4281a-c6f3-4e8b-b809-04728a095a27: 200
+ 🌐 API Request to /api/p2/control-center/item-status/90244be0-af8f-4c5e-9bcf-968ad7c9f7f3 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/90244be0-af8f-4c5e-9bcf-968ad7c9f7f3: 200
+ 🌐 API Request to /api/p2/control-center/item-status/91116d16-5772-4772-a248-1beef5ccfcc4 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/91116d16-5772-4772-a248-1beef5ccfcc4: 200
+ 🌐 API Request to /api/p2/control-center/item-status/3809a221-df53-4635-86d8-8f4f50c04823 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/3809a221-df53-4635-86d8-8f4f50c04823: 200
+ 🌐 API Request to /api/p2/control-center/item-status/c2d95154-98fe-4a27-b700-a415789a16b8 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/c2d95154-98fe-4a27-b700-a415789a16b8: 200
+ 🌐 API Request to /api/p2/control-center/item-status/fd0a4e6b-9531-4d27-8409-4509f61100e1 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/fd0a4e6b-9531-4d27-8409-4509f61100e1: 200
+ 🌐 API Request to /api/p2/control-center/item-status/4e51116b-19b2-4448-ae72-aa9873c2fead (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/4e51116b-19b2-4448-ae72-aa9873c2fead: 200
+ 🌐 API Request to /api/p2/control-center/item-status/25474a61-84f1-4b47-bf1a-4ae858ea5d28 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/25474a61-84f1-4b47-bf1a-4ae858ea5d28: 200
+ 🌐 API Request to /api/p2/control-center/item-status/23fb150f-227e-4c2b-b520-c801bb454433 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/23fb150f-227e-4c2b-b520-c801bb454433: 200
+ 🌐 API Request to /api/p2/control-center/item-status/76c74f32-2590-4380-8361-8dc9e9fc2eca (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/76c74f32-2590-4380-8361-8dc9e9fc2eca: 200
+ 🌐 API Request to /api/p2/control-center/item-status/c315465c-5b19-4896-9ea6-d490ed32f25b (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/c315465c-5b19-4896-9ea6-d490ed32f25b: 200
+ 🌐 API Request to /api/p2/control-center/item-status/31629529-4d7c-4f90-bdce-cc61b705efe2 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/31629529-4d7c-4f90-bdce-cc61b705efe2: 200
+ 🌐 API Request to /api/p2/control-center/item-status/77c27d51-8b44-475e-9cc7-db015f808048 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/77c27d51-8b44-475e-9cc7-db015f808048: 200
+ 🌐 API Request to /api/p2/control-center/item-status/a475e392-1738-4e7b-8f64-dd57253bffa0 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/a475e392-1738-4e7b-8f64-dd57253bffa0: 200
+ 🌐 API Request to /api/p2/control-center/item-status/3976d4b6-c002-429b-a63f-ec22d4669aaa (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/3976d4b6-c002-429b-a63f-ec22d4669aaa: 200
+ 🌐 API Request to /api/p2/control-center/item-status/f24ae871-199f-437e-868c-406f3d61fd59 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/f24ae871-199f-437e-868c-406f3d61fd59: 200
+ 🌐 API Request to /api/p2/control-center/item-status/f85e6361-f36c-4fb7-a566-c0b39b610010 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/f85e6361-f36c-4fb7-a566-c0b39b610010: 200
+ 🌐 API Request to /api/p2/control-center/item-status/bc744195-0e32-48dc-9b98-faef7c546040 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/bc744195-0e32-48dc-9b98-faef7c546040: 200
+ 🌐 API Request to /api/p2/control-center/item-status/4ffe3273-c532-4e38-a9ea-06a28b92f027 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/4ffe3273-c532-4e38-a9ea-06a28b92f027: 200
+ 🌐 API Request to /api/p2/control-center/item-status/67057e29-32f4-44c1-a9cb-6f8c5bb7b54b (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/67057e29-32f4-44c1-a9cb-6f8c5bb7b54b: 200
+ 🌐 API Request to /api/p2/control-center/item-status/ab9af056-a00d-47e7-9d28-0fb9d2098d3a (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/item-status/ab9af056-a00d-47e7-9d28-0fb9d2098d3a: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/vendor-pos?status=Sent: 200
+ 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/vendor-pos/21/items: 200
+ ✅ API Response from /api/vendor-pos/24/items: 200
+ ✅ API Response from /api/vendor-pos/4/items: 200
+ ✅ API Response from /api/vendor-pos/15/items: 200
+ ✅ API Response from /api/vendor-pos/11/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-BChqVFLZ.js:1885 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-BChqVFLZ.js:235 🌐 API Request to /api/employees?role=Receiving (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 ✅ API Response from /api/employees?role=Receiving: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/enhanced/inventory/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/groups (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/items-groups-map (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/groups: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/items-groups-map: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/enhanced/inventory/items: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/items/542/cost-history (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/items/542/cost-history: 200
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 🌐 API Request to /api/enhanced/inventory/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 ✅ API Response from /api/enhanced/inventory/items: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/items/301/cost-history (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/items/301/cost-history: 200
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 🌐 API Request to /api/enhanced/inventory/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 ✅ API Response from /api/enhanced/inventory/items: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/items/542/cost-history (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/items/542/cost-history: 200
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 🌐 API Request to /api/inventory/items/542/cost-history (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:1524 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BChqVFLZ.js:1524
+index-BChqVFLZ.js:235 ✅ API Response from /api/inventory/items/542/cost-history: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos?status=Sent: 200
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/21/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/20/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/18/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/15/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/11/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/10/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/7/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/6/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 🌐 API Request to /api/vendor-pos/4/items (timeout: 15000ms, deployment: true)
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/21/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/11/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/20/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/4/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/18/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/10/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/6/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/24/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/7/items: 200
+index-BChqVFLZ.js:235 ✅ API Response from /api/vendor-pos/15/items: 200
+/api/documents/upload:1  Failed to load resource: the server responded with a status of 400 ()

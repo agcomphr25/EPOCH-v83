@@ -2297,32 +2297,37 @@ export function registerRoutes(app: Express): Server {
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
-      const { storage } = await import('../../storage');
-      const pos = await storage.getAllP2PurchaseOrders();
-      const serializedItems = await storage.getP2SerializedItems({});
-      
-      const openPOs = pos.filter((po: any) => po.status !== 'COMPLETED').length;
-      const pendingBOMs = pos.filter((po: any) => !po.bomConfigured).length;
-      const scheduledItems = serializedItems.filter((s: any) => s.productionStatus === 'SCHEDULED').length;
-      const inProduction = serializedItems.filter((s: any) => 
-        s.productionStatus && !['PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED'].includes(s.productionStatus)
-      ).length;
-      
+      const { pool } = await import('../../db');
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const completedThisWeek = serializedItems.filter((s: any) => 
-        s.productionStatus === 'COMPLETED' && s.completedAt && new Date(s.completedAt) > oneWeekAgo
-      ).length;
-      
-      const pendingQC = serializedItems.filter((s: any) => s.productionStatus === 'FINAL_QC').length;
-      
+
+      const [poStats, itemStats] = await Promise.all([
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','CANCELED')) AS "openPOs",
+            COUNT(*) FILTER (WHERE bom_configured = false AND status NOT IN ('COMPLETED','CANCELED')) AS "pendingBOMs"
+          FROM p2_purchase_orders
+        `),
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'SCHEDULED') AS "scheduledItems",
+            COUNT(*) FILTER (WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED') AND status IS NOT NULL) AS "inProduction",
+            COUNT(*) FILTER (WHERE status = 'COMPLETED' AND completed_at > $1) AS "completedThisWeek",
+            COUNT(*) FILTER (WHERE status = 'FINAL_QC') AS "pendingQC"
+          FROM p2_serialized_items
+        `, [oneWeekAgo]),
+      ]);
+
+      const po = poStats.rows[0];
+      const si = itemStats.rows[0];
+
       res.json({
-        openPOs,
-        pendingBOMs,
-        scheduledItems,
-        inProduction,
-        completedThisWeek,
-        pendingQC
+        openPOs:          parseInt(po.openPOs, 10)          || 0,
+        pendingBOMs:      parseInt(po.pendingBOMs, 10)      || 0,
+        scheduledItems:   parseInt(si.scheduledItems, 10)   || 0,
+        inProduction:     parseInt(si.inProduction, 10)     || 0,
+        completedThisWeek:parseInt(si.completedThisWeek, 10)|| 0,
+        pendingQC:        parseInt(si.pendingQC, 10)        || 0,
       });
     } catch (_error) {
       console.error('P2 Control Center stats error:', _error);

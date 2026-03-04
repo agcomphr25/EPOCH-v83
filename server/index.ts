@@ -1041,6 +1041,57 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ production_program_runs linked log migration:', runLogErr.message);
       }
 
+      // Normalize legacy traceability field IDs in inventory_items for fabric items
+      // Old field IDs ("lot", "batch", "expDate", "part") don't match TRACEABILITY_FIELD_LABELS
+      // and cause the receiving form to show raw IDs instead of friendly labels
+      try {
+        const { sql: sqlTrace } = await import('drizzle-orm');
+        const legacyRows = await db.execute(sqlTrace`
+          SELECT id, traceability_fields
+          FROM inventory_items
+          WHERE is_fabric = true
+            AND traceability_fields IS NOT NULL
+            AND traceability_fields::text != '[]'
+            AND (
+              traceability_fields::text LIKE '%"lot"%'
+              OR traceability_fields::text LIKE '%"batch"%'
+              OR traceability_fields::text LIKE '%"expDate"%'
+              OR traceability_fields::text LIKE '%"part"%'
+            )
+        `);
+        
+        const legacyMap: Record<string, string> = {
+          lot: 'batchLotNumber',
+          batch: 'aluminumHeat',
+          expDate: 'expirationDate',
+          part: 'supplierPartNumber',
+        };
+        
+        let fixedCount = 0;
+        for (const row of legacyRows.rows as any[]) {
+          const fields: string[] = row.traceability_fields || [];
+          const normalized = Array.from(new Set(
+            fields.map((f: string) => legacyMap[f] || f)
+          ));
+          if (JSON.stringify(normalized) !== JSON.stringify(fields)) {
+            await db.execute(sqlTrace`
+              UPDATE inventory_items
+              SET traceability_fields = ${JSON.stringify(normalized)}::jsonb
+              WHERE id = ${row.id}
+            `);
+            fixedCount++;
+          }
+        }
+        
+        if (fixedCount > 0) {
+          console.log(`✅ Normalized legacy traceability field IDs on ${fixedCount} fabric inventory item(s)`);
+        } else {
+          console.log('✅ Fabric inventory item traceability fields are up to date');
+        }
+      } catch (traceFieldErr: any) {
+        console.warn('⚠️ Traceability field normalization:', traceFieldErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');

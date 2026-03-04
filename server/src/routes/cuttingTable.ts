@@ -2103,7 +2103,22 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               )
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
-              AND (inv.is_packet = true OR po.department = 'Cutting Table')`;
+              AND (
+                inv.is_packet = true
+                OR po.department = 'Cutting Table'
+                OR (
+                  po.department IN ('Layup', 'layup')
+                  AND (
+                    LOWER(po.part_name) LIKE '%carbon fiber%'
+                    OR LOWER(po.part_name) LIKE '%carbon fibre%'
+                    OR LOWER(po.part_name) LIKE '% cf %'
+                    OR LOWER(po.part_name) LIKE 'cf %'
+                    OR LOWER(po.part_name) LIKE '%fiberglass%'
+                    OR LOWER(po.part_name) LIKE '%fibreglass%'
+                    OR LOWER(po.part_name) LIKE '%fiber glass%'
+                  )
+                )
+              )`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `

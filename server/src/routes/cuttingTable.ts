@@ -1392,8 +1392,8 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     ${line ? `<div class="label-info">Production Line: <strong>${line.lineName}</strong></div>` : ''}
     ${inventory.source ? `<div class="label-info">Source: ${inventory.source}</div>` : ''}
     ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
-    ${inventory.batchNumber ? `<div class="label-info">Batch: ${inventory.batchNumber}</div>` : ''}
-    ${inventory.location ? `<div class="label-info">Location: ${inventory.location}</div>` : ''}
+    ${inventory.rollNumber ? `<div class="label-info">Roll #: <strong>${inventory.rollNumber}</strong></div>` : ''}
+    ${inventory.expirationDate ? `<div class="label-info">Exp: <strong>${new Date(inventory.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</strong></div>` : ''}
     ${inventory.conformanceDocumentLink ? `<div class="label-info">📄 Conformance Doc: <a href="${inventory.conformanceDocumentLink}" target="_blank" style="color: #007bff; text-decoration: none;">View Link</a></div>` : ''}
     <div class="barcode-container">
       <svg id="barcode"></svg>

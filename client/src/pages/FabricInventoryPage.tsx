@@ -730,7 +730,8 @@ export default function FabricInventoryPage() {
         <div class="label">
           <div class="label-content">
             <div class="label-title">${labelData.item.fabric || 'Fabric'}</div>
-            <div class="label-info">${labelData.item.batchNumber || ''} ${labelData.item.source ? '| ' + labelData.item.source : ''}</div>
+            ${labelData.item.rollNumber ? `<div class="label-info">Roll #: <strong>${labelData.item.rollNumber}</strong></div>` : ''}
+            ${labelData.item.expirationDate ? `<div class="label-info">Exp: <strong>${new Date(labelData.item.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</strong></div>` : ''}
             <div class="barcode-container">
               <svg id="barcode-${index}"></svg>
             </div>

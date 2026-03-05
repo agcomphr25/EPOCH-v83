@@ -236,6 +236,9 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       queryClient.invalidateQueries({
         queryKey: ['/api/p2-production-orders'],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/cutting-table/weekly-cutting-queue'],
+      });
       setGeneratingPoId(null);
     },
     onError: (error: any) => {

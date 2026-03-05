@@ -107,6 +107,8 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-cutting-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-production-orders'] });
       toast({
         title: 'BOM Saved',
         description: 'Bill of materials has been saved successfully.',

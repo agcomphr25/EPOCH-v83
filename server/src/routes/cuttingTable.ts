@@ -2105,16 +2105,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND (
                 inv.is_packet = true
-                OR po.department = 'Cutting Table'
-                OR (
-                  po.department IN ('Layup', 'layup')
-                  AND (
-                    bom.id IS NOT NULL
-                    OR LOWER(po.part_name) LIKE '%packet%'
-                    OR LOWER(po.sku) LIKE '%packet%'
-                    OR po.sku IN ('P706', 'P707')
-                  )
-                )
+                OR po.department ILIKE '%cutting%'
+                OR bom.id IS NOT NULL
+                OR LOWER(po.part_name) LIKE '%packet%'
+                OR LOWER(po.sku) LIKE '%packet%'
+                OR po.sku IN ('P706', 'P707')
               )`;
       
       const p2Result = showAll === 'true'

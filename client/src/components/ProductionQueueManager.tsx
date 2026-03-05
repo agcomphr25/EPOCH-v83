@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -441,6 +443,27 @@ export default function ProductionQueueManager() {
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
+  const generateOrderBarcodeDataUrl = (barcodeValue: string): string => {
+    if (!barcodeValue) return '';
+    const canvas = document.createElement('canvas');
+    const format = getBarcodeFormat(barcodeValue);
+    try {
+      JsBarcode(canvas, barcodeValue, {
+        format: format,
+        width: format === 'CODE128' ? 1.5 : 2,
+        height: 30,
+        displayValue: false,
+        background: '#ffffff',
+        lineColor: '#000000',
+        margin: 3,
+      });
+      return canvas.toDataURL('image/png', 1.0);
+    } catch (e) {
+      console.error('Barcode generation error:', e, barcodeValue);
+      return '';
+    }
+  };
+
   // Function to print barcode labels for multiple orders
   const printBarcodeLabelsForOrders = (orders: any[]) => {
     if (!orders || orders.length === 0) return;
@@ -455,12 +478,13 @@ export default function ProductionQueueManager() {
       return;
     }
 
-    // Generate HTML for all labels
+    // Pre-generate all barcode images before writing to the print window
     const labelsHTML = orders.map((order) => {
       const barcode = order.orderId || 'UNKNOWN';
       const customerName = order.customerName || 'No Customer';
       const stockModel = order.stockModelId || order.modelId || '';
       const dueDate = order.dueDate || '';
+      const barcodeDataUrl = generateOrderBarcodeDataUrl(barcode);
 
       return `
         <div class="avery-label">
@@ -470,7 +494,7 @@ export default function ProductionQueueManager() {
             ${stockModel ? `<div class="line3">${stockModel}</div>` : ''}
             ${dueDate ? `<div class="line4">Due: ${new Date(dueDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</div>` : ''}
             <div class="line5">
-              <canvas class="barcode-canvas" data-barcode="${barcode}"></canvas>
+              ${barcodeDataUrl ? `<img src="${barcodeDataUrl}" class="barcode-img" alt="barcode" />` : `<span style="font-size:5pt;color:#999">Barcode Error</span>`}
             </div>
           </div>
         </div>
@@ -481,7 +505,6 @@ export default function ProductionQueueManager() {
       <html>
         <head>
           <title>Barcode Labels</title>
-          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
           <style>
             body {
               margin: 0;
@@ -499,6 +522,7 @@ export default function ProductionQueueManager() {
               vertical-align: top;
               box-sizing: border-box;
               page-break-inside: avoid;
+              overflow: hidden;
               background: white;
             }
 
@@ -516,7 +540,6 @@ export default function ProductionQueueManager() {
               font-size: 8pt;
               font-weight: bold;
               color: #000;
-              margin-bottom: 2px;
               text-overflow: ellipsis;
               overflow: hidden;
               white-space: nowrap;
@@ -525,7 +548,6 @@ export default function ProductionQueueManager() {
             .line2 {
               font-size: 6pt;
               color: #000;
-              margin: 1px 0;
               text-overflow: ellipsis;
               overflow: hidden;
               white-space: nowrap;
@@ -534,31 +556,35 @@ export default function ProductionQueueManager() {
             .line3 {
               font-size: 6pt;
               color: #000;
-              margin: 1px 0;
+              text-overflow: ellipsis;
+              overflow: hidden;
+              white-space: nowrap;
             }
 
             .line4 {
               font-size: 5pt;
               color: #000;
-              margin: 1px 0;
             }
 
             .line5 {
-              text-align: center;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              flex-shrink: 0;
             }
 
-            .barcode-canvas {
+            .barcode-img {
               max-width: 100%;
-              height: auto;
+              height: 28px;
+              display: block;
             }
 
             @media print {
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              .avery-label {
-                border: none;
+              body { margin: 0; padding: 0; }
+              .avery-label { border: none; }
+              @page {
+                size: letter;
+                margin: 0.5in 0.1875in 0.5in 0.1875in;
               }
             }
           </style>
@@ -566,38 +592,9 @@ export default function ProductionQueueManager() {
         <body>
           ${labelsHTML}
           <script>
-            window.addEventListener('load', function() {
-              const canvases = document.querySelectorAll('.barcode-canvas');
-              canvases.forEach(canvas => {
-                const barcode = canvas.getAttribute('data-barcode');
-                const format = barcode.startsWith('P1-') || barcode.startsWith('P2-') ? 'CODE128' : 'CODE39';
-                const width = format === 'CODE128' ? 1.5 : 2;
-                try {
-                  JsBarcode(canvas, barcode, {
-                    format: format,
-                    width: width,
-                    height: 40,
-                    displayValue: false,
-                    fontSize: 10,
-                    textAlign: 'center',
-                    textPosition: 'bottom',
-                    textMargin: 2,
-                    fontOptions: '',
-                    font: 'monospace',
-                    background: '#ffffff',
-                    lineColor: '#000000',
-                    margin: 5,
-                  });
-                } catch (e) {
-                  console.error('Barcode generation error:', e);
-                }
-              });
-              
-              // Auto-print after barcodes are generated
-              setTimeout(() => {
-                window.print();
-              }, 500);
-            });
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 250);
+            };
           </script>
         </body>
       </html>

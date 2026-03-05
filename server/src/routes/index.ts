@@ -146,6 +146,7 @@ import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
 import emailTemplatesRoutes from './emailTemplates';
+import signOrderSettingsRoutes from './signOrderSettings';
 
 export function registerRoutes(app: Express): Server {
   // Temporary debug route - raw order data inspector
@@ -470,6 +471,9 @@ export function registerRoutes(app: Express): Server {
 
   // Email template governance routes
   app.use('/api/email-templates', emailTemplatesRoutes);
+
+  // Sign order page settings (GET is public, PUT requires auth)
+  app.use('/api/sign-order-settings', signOrderSettingsRoutes);
 
   // Marketing communications routes
   app.use('/api/marketing', marketingRoutes);
@@ -7625,8 +7629,8 @@ export function registerRoutes(app: Express): Server {
               [orderId]
             );
             
-            if (poResult.rows.length > 0) {
-              const poData = poResult.rows[0];
+            if (poResult.length > 0) {
+              const poData = poResult[0];
               // Extract unit number from orderId (e.g., ABC00199-0003 → unit #3)
               const unitMatch = orderId.match(/-(\d+)$/);
               const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
@@ -7749,7 +7753,7 @@ export function registerRoutes(app: Express): Server {
           
           page.drawText(labelText, {
             x: x + 8,
-            y: y + 50,
+            y: y + 59,
             size: isPOItem ? 10 : 11,
             font: helveticaBoldFont,
             color: rgb(0, 0, 0),
@@ -7902,8 +7906,8 @@ export function registerRoutes(app: Express): Server {
 
           page.drawText(labelLine, {
             x: x + 8,
-            y: y + 22,
-            size: 6, // Smaller to fit subcategory + paint name
+            y: isPOItem ? y + 11 : y + 47,
+            size: 6,
             font: helveticaFont,
             color: rgb(0, 0, 0),
           });
@@ -7964,15 +7968,9 @@ export function registerRoutes(app: Express): Server {
           if (isHighPriority || isLate) {
             barcodeHexColor = 'FF0000';
           } else {
-            const paintedOptions = [
-              'terraine',
-              'premium',
-              'standard',
-              'rattlesnake_rogue',
-            ];
-            const isPaintedOption = paintedOptions.some((option) =>
-              paintOption.toLowerCase().includes(option)
-            );
+            const isCarbonFinish = subcategory === 'CARBON' || subcategory === 'CARBON READY';
+            const isNonPaintedRogue = subcategory === 'ROGUE' && paintOption !== 'rattlesnake_rogue';
+            const isPaintedOption = !!paintOption && !isCarbonFinish && !isNonPaintedRogue;
             const isFiberglassModel = modelId.toLowerCase().startsWith('fg');
             if (isPaintedOption || isFiberglassModel) {
               barcodeHexColor = '0066FF';
@@ -7994,9 +7992,9 @@ export function registerRoutes(app: Express): Server {
             const pngImage = await pdfDoc.embedPng(barcodeBuffer as Buffer);
             page.drawImage(pngImage, {
               x: x + 8,
-              y: y + 18,
+              y: y + 17,
               width: 170,
-              height: 40,
+              height: 22,
             });
           } catch (barcodeError) {
             console.error(`Error generating barcode for ${barcodeText}:`, barcodeError);
@@ -8009,11 +8007,11 @@ export function registerRoutes(app: Express): Server {
             });
           }
 
-          // For P1 PO orders: Show customer name on separate line
+          // For P1 PO orders: Show customer name on separate line (above barcode)
           if (isPOItem && customerName) {
             page.drawText(customerName, {
               x: x + 8,
-              y: y + 16,
+              y: y + 47,
               size: 6,
               font: helveticaFont,
               color: rgb(0, 0, 0),
@@ -8023,7 +8021,7 @@ export function registerRoutes(app: Express): Server {
           // Draw special labels with appropriate colors on separate line below stock model
           if (specialLabels.length > 0) {
             let xOffset = x + 8;
-            const yPosition = isPOItem ? y + 10 : y + 16; // Adjust position for P1 PO orders
+            const yPosition = isPOItem ? y + 4 : y + 11;
 
             for (let i = 0; i < specialLabels.length; i++) {
               const label = specialLabels[i];
@@ -8064,7 +8062,7 @@ export function registerRoutes(app: Express): Server {
             }
             page.drawText(`Due: ${dueDate}`, {
               x: x + 8,
-              y: y + 10,
+              y: y + 4,
               size: 6,
               font: helveticaFont,
               color: rgb(0, 0, 0),

@@ -61,6 +61,7 @@ import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import MarketingCommunications from './pages/MarketingCommunications';
 import EmailTemplateEditor from './pages/EmailTemplateEditor';
+import SignOrderPageSettings from './pages/SignOrderPageSettings';
 import APJournalPage from './pages/APJournalPage';
 import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
@@ -679,6 +680,10 @@ function App() {
                   <Route
                     path="/email-templates"
                     component={EmailTemplateEditor}
+                  />
+                  <Route
+                    path="/sign-order-page-settings"
+                    component={SignOrderPageSettings}
                   />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route

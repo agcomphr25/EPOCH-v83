@@ -120,6 +120,7 @@ import {
   vendorPOItems,
   vendorPOSettings,
   companySettings,
+  signOrderPageSettings,
   optionalSettings,
   poOptionalSettings,
   vendorPoAttachments,
@@ -2172,6 +2173,10 @@ export interface IStorage {
   getTravelerStepMaterialConsumption(stepId: string): Promise<TravelerMaterialConsumption[]>;
   createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption>;
   deleteTravelerMaterialConsumption(id: string): Promise<void>;
+
+  // Sign Order Page Settings
+  getSignOrderPageSettings(): Promise<any | undefined>;
+  updateSignOrderPageSettings(data: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -19008,6 +19013,36 @@ export class DatabaseStorage implements IStorage {
     ).returning();
 
     return result.length;
+  }
+
+  async getSignOrderPageSettings(): Promise<any | undefined> {
+    const [settings] = await db
+      .select()
+      .from(signOrderPageSettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateSignOrderPageSettings(data: any): Promise<any> {
+    const [existingSettings] = await db
+      .select()
+      .from(signOrderPageSettings)
+      .limit(1);
+
+    if (existingSettings) {
+      const [updatedSettings] = await db
+        .update(signOrderPageSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(signOrderPageSettings.id, existingSettings.id))
+        .returning();
+      return updatedSettings;
+    } else {
+      const [newSettings] = await db
+        .insert(signOrderPageSettings)
+        .values(data)
+        .returning();
+      return newSettings;
+    }
   }
 }
 

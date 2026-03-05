@@ -26,6 +26,7 @@ import {
   Clock,
   Building2,
   Link2,
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -452,6 +453,10 @@ export default function EmployeeDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [portalUrl, setPortalUrl] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -589,6 +594,63 @@ export default function EmployeeDetail() {
       });
     },
   });
+
+  const { data: linkedUser } = useQuery<{
+    id: number;
+    username: string;
+    role: string;
+    isActive: boolean;
+    lastLogin: string | null;
+    passwordChangedAt: string | null;
+  } | null>({
+    queryKey: ['/api/employees', id, 'user-account'],
+    queryFn: async () => {
+      const res = await fetch(`/api/employees/${id}/user-account`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async ({ password, username }: { password: string; username?: string }) => {
+      const res = await fetch(`/api/employees/${id}/set-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, username }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to set password');
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'user-account'] });
+      setNewPassword('');
+      setConfirmPassword('');
+      setNewUsername('');
+      setShowPasswordForm(false);
+      toast({ title: 'Password updated', description: 'The employee can now log in with the new password.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleSetPassword = () => {
+    if (newPassword.length < 6) {
+      toast({ title: 'Error', description: 'Password must be at least 6 characters.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Error', description: 'Passwords do not match.', variant: 'destructive' });
+      return;
+    }
+    if (!linkedUser && !newUsername) {
+      toast({ title: 'Error', description: 'Enter a username to create a login account.', variant: 'destructive' });
+      return;
+    }
+    setPasswordMutation.mutate({ password: newPassword, username: newUsername || undefined });
+  };
 
   const grantCapabilityMutation = useMutation({
     mutationFn: async ({ capabilityId }: { capabilityId: number }) => {
@@ -995,6 +1057,90 @@ export default function EmployeeDetail() {
                     {generatePortalTokenMutation.isPending
                       ? 'Generating...'
                       : 'Generate Portal Link'}
+                  </Button>
+                )}
+              </div>
+
+              {/* System Login Password Section */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">System Login</Label>
+                  {linkedUser && (
+                    <span className="text-xs text-gray-500">
+                      @{linkedUser.username}
+                    </span>
+                  )}
+                </div>
+
+                {linkedUser ? (
+                  <div className="mt-2 space-y-1 text-xs text-gray-500">
+                    {linkedUser.lastLogin && (
+                      <p>Last login: {new Date(linkedUser.lastLogin).toLocaleDateString()}</p>
+                    )}
+                    {linkedUser.passwordChangedAt && (
+                      <p>Password set: {new Date(linkedUser.passwordChangedAt).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">No login account linked yet.</p>
+                )}
+
+                {showPasswordForm ? (
+                  <div className="mt-3 space-y-2">
+                    {!linkedUser && (
+                      <Input
+                        placeholder="Username"
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
+                        className="text-sm"
+                      />
+                    )}
+                    <Input
+                      type="password"
+                      placeholder="New password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="text-sm"
+                    />
+                    <Input
+                      type="password"
+                      placeholder="Confirm password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={handleSetPassword}
+                        disabled={setPasswordMutation.isPending}
+                      >
+                        {setPasswordMutation.isPending ? 'Saving...' : 'Set Password'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setShowPasswordForm(false);
+                          setNewPassword('');
+                          setConfirmPassword('');
+                          setNewUsername('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2"
+                    onClick={() => setShowPasswordForm(true)}
+                  >
+                    <KeyRound className="w-3 h-3 mr-1" />
+                    {linkedUser ? 'Reset Password' : 'Set Password'}
                   </Button>
                 )}
               </div>

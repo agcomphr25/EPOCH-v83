@@ -72,6 +72,7 @@ export default function StartProductionTimerModal({
   const [ovenNumber, setOvenNumber] = useState('');
   const [ovenSlot, setOvenSlot] = useState('');
   const [notes, setNotes] = useState('');
+  const [scannedBy, setScannedBy] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
 
@@ -108,6 +109,7 @@ export default function StartProductionTimerModal({
       setOvenNumber('');
       setOvenSlot('');
       setNotes('');
+      setScannedBy('');
     }
   }, [open, defaultSerialNumber, defaultProgramId]);
 
@@ -122,7 +124,7 @@ export default function StartProductionTimerModal({
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
-          ...(badgeId ? { badgeId } : {}),
+          ...(scannedBy.trim() ? { badgeId: scannedBy.trim() } : badgeId ? { badgeId } : {}),
           ...(travelerId ? { travelerId } : {}),
           ...(travelerStepId ? { travelerStepId } : {}),
           ...(travelerTaskId ? { travelerTaskId } : {}),
@@ -382,6 +384,17 @@ export default function StartProductionTimerModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Any additional notes..."
               rows={2}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="scannedBy">Employee Code</Label>
+            <Input
+              id="scannedBy"
+              value={scannedBy}
+              onChange={(e) => setScannedBy(e.target.value)}
+              placeholder="Scan or enter your badge/employee code"
+              autoComplete="off"
             />
           </div>
 

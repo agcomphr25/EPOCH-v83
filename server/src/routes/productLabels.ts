@@ -180,9 +180,9 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             const barcodeImage = await pdfDoc.embedPng(pngBuffer);
 
             const barcodeDisplayWidth = Math.min(labelInnerWidth - 10, 250);
-            const barcodeDisplayHeight = 44;
+            const barcodeDisplayHeight = 30;
             const barcodeX = centerX - barcodeDisplayWidth / 2;
-            const barcodeY = y + LABEL_HEIGHT - 62;
+            const barcodeY = y + LABEL_HEIGHT - 57;
 
             page.drawImage(barcodeImage, {
               x: barcodeX,

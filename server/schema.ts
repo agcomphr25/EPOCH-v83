@@ -13210,3 +13210,25 @@ export const insertJournalLineSchema = createInsertSchema(journalLines).omit({
 });
 export type JournalLine = typeof journalLines.$inferSelect;
 export type InsertJournalLine = z.infer<typeof insertJournalLineSchema>;
+
+// ─── Sign Order Page Settings (singleton) ────────────────────────────────────
+export const signOrderPageSettings = pgTable('sign_order_page_settings', {
+  id: serial('id').primaryKey(),
+  pageTitle: text('page_title').notNull().default('Review & Sign Sales Order'),
+  pageDescription: text('page_description').notNull().default('Please review the order details below carefully before signing.'),
+  signatureDisclaimer: text('signature_disclaimer').notNull().default('By signing below, you confirm that the order details above are correct and authorize AG Composites to begin production.'),
+  successMessage: text('success_message').notNull().default('Order signed successfully! Your order has been moved to the production queue.'),
+  alreadySignedTitle: text('already_signed_title').notNull().default('Order Already Signed'),
+  alreadySignedMessage: text('already_signed_message').notNull().default('Your order is in production.'),
+  invalidLinkMessage: text('invalid_link_message').notNull().default('Invalid or missing signature link. Please use the link from your email to sign your order.'),
+  orderNotFoundMessage: text('order_not_found_message').notNull().default('The order link is invalid or has expired. Please contact support.'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedBy: text('updated_by'),
+});
+
+export const insertSignOrderPageSettingsSchema = createInsertSchema(signOrderPageSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+export type SignOrderPageSettings = typeof signOrderPageSettings.$inferSelect;
+export type InsertSignOrderPageSettings = z.infer<typeof insertSignOrderPageSettingsSchema>;

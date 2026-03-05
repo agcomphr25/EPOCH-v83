@@ -1,0 +1,167 @@
+Copy-Paste Audit Prompt
+(Why Consolidated Needs shows PO vs Website but inventory items have no selector)
+Perform a full read-only forensic audit to determine how the system determines whether an item is ordered by PO or from a website.
+
+The Consolidated Needs widget shows indicators for:
+• Ordered by PO
+• Ordered via Website
+
+However, the Inventory Items interface does not appear to expose any UI control for selecting this behavior.
+
+The goal is to identify:
+
+1) Where the PO vs Website classification originates
+2) Which database column or logic determines it
+3) Whether the value is editable anywhere in the system
+4) Whether the Inventory Item edit modal is missing the field
+5) Whether the widget is using inferred logic instead of stored data
+
+Do NOT implement any changes yet.
+
+---------------------------------------
+PHASE 1 — Locate Consolidated Needs Widget
+---------------------------------------
+
+Find the component that renders the consolidated needs display.
+
+Search for:
+
+• ConsolidatedNeeds
+• NeedsWidget
+• NeedsSummary
+• "Ordered via Website"
+• "Ordered by PO"
+
+Identify:
+
+• Component file
+• Data source API endpoint
+• Any boolean flags like:
+  - isWebsite
+  - purchaseType
+  - procurementType
+  - vendorType
+
+Output the exact field used to determine the indicator.
+
+---------------------------------------
+PHASE 2 — Trace API Endpoint
+---------------------------------------
+
+Locate the backend endpoint that feeds the widget.
+
+Examples to search:
+
+/api/inventory/needs
+/api/inventory/consolidated-needs
+/api/mrp/*
+/api/inventory/reorder
+
+Identify:
+
+• Route file
+• Storage function
+• Query logic
+
+Output the SQL or Drizzle query used.
+
+Confirm which column determines procurement type.
+
+---------------------------------------
+PHASE 3 — Database Schema Audit
+---------------------------------------
+
+Locate the relevant columns in the schema.
+
+Search inventory tables for fields like:
+
+• purchase_type
+• procurement_type
+• order_source
+• website_url
+• vendor_type
+• website_vendor
+• direct_purchase
+• marketplace
+
+Tables to inspect:
+
+• inventory_items
+• vendor_items
+• vendors
+• purchase_orders
+• reorder_rules
+
+Output:
+
+• table name
+• column name
+• column type
+• enum values (if applicable)
+
+---------------------------------------
+PHASE 4 — Inventory Item UI Audit
+---------------------------------------
+
+Inspect the Inventory Item edit modal.
+
+Likely file:
+
+client/src/components/inventory/InventoryItemsCard.tsx
+
+Search for fields rendered in the edit dialog.
+
+Confirm whether any of the following appear:
+
+• procurement type
+• website purchase
+• purchase method
+• vendor type
+
+Determine if the field exists in the backend but is not exposed in the UI.
+
+---------------------------------------
+PHASE 5 — Write Path Audit
+---------------------------------------
+
+Trace how inventory items are saved.
+
+Locate routes:
+
+POST /inventory/items
+PUT /inventory/items/:id
+
+Check if any procurement/purchase-type field is written.
+
+Confirm whether:
+
+• The field exists but is never written
+• The field is inferred from vendor data
+• The widget is using heuristic logic
+
+---------------------------------------
+PHASE 6 — Root Cause
+---------------------------------------
+
+Determine which scenario applies:
+
+A) Procurement type column exists but UI never exposes it
+B) Procurement type derived from vendor.website_url
+C) Procurement type inferred from last purchase order
+D) Procurement type inferred from vendor configuration
+E) Widget logic is incorrect
+
+---------------------------------------
+PHASE 7 — Recommended Fix
+---------------------------------------
+
+Provide the minimal solution.
+
+Possible outcomes:
+
+• Add procurementType dropdown to Inventory Item edit modal
+• Derive automatically from vendor record
+• Store explicit enum on inventory_items
+• Adjust widget logic
+
+Return a full structured report before implementing changes.

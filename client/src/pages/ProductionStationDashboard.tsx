@@ -13,7 +13,7 @@ import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 import InlineCredentialModal from '@/components/auth/InlineCredentialModal';
 import { useActionAuth } from '@/hooks/useActionAuth';
 import { emitTimerEvent, subscribeToTimerEvents, type TimerEvent } from '@/lib/timerEvents';
-import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive, playAlertSound, triggerVibration } from '@/lib/timerNotificationEffects';
+import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive, playAlertSound, triggerVibration, primeVibration } from '@/lib/timerNotificationEffects';
 import { 
   getTimerNotificationPreferences, 
   setTimerNotificationPreferences,
@@ -490,6 +490,7 @@ export default function ProductionStationDashboard() {
   }, [toast]);
 
   const handleTimerEvent = useCallback((eventData: Omit<TimerEvent, 'timestamp'>) => {
+    primeVibration();
     const event: TimerEvent = {
       ...eventData,
       timestamp: new Date().toISOString(),
@@ -687,12 +688,15 @@ export default function ProductionStationDashboard() {
                         onCheckedChange={(checked) => {
                           const newPrefs = setTimerNotificationPreferences({ vibrationEnabled: checked });
                           setNotificationPrefs(newPrefs);
-                          if (checked) triggerVibration();
+                          if (checked) {
+                            primeVibration();
+                            triggerVibration();
+                          }
                         }}
                       />
                     </div>
                     <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                      Vibration works on mobile devices only
+                      Vibration on Android devices; audio pulse feedback on iOS
                     </p>
                   </div>
                 </>

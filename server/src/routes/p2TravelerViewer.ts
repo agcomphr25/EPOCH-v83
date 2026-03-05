@@ -19,6 +19,7 @@ import {
   p2DepartmentTransferSignatures,
   qcSubmissions,
   travelers,
+  routingDocuments,
   inventoryItems,
   cuttingFabricInventory,
   travelerSteps,
@@ -580,6 +581,28 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     const mergedTraceabilityData = [...traceabilityData, ...travelerFieldTraceability];
 
+    let routingDocs: any[] = [];
+    try {
+      const conditions = [];
+      if (routing?.id) {
+        conditions.push(eq(routingDocuments.partRoutingId, routing.id));
+      }
+      if (serializedItem.partNumber) {
+        conditions.push(eq(routingDocuments.partNumber, serializedItem.partNumber));
+      }
+      if (conditions.length > 0) {
+        routingDocs = await db.query.routingDocuments.findMany({
+          where: and(
+            or(...conditions),
+            eq(routingDocuments.isActive, true)
+          ),
+          orderBy: [desc(routingDocuments.createdAt)],
+        });
+      }
+    } catch (e) {
+      console.log('Routing documents not available:', (e as Error).message);
+    }
+
     return res.json({
       serializedItem,
       purchaseOrder,
@@ -604,6 +627,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       })),
       signatures,
       lotNumbers,
+      routingDocuments: routingDocs,
     });
   } catch (error: any) {
     console.error('Error getting traveler data:', error);

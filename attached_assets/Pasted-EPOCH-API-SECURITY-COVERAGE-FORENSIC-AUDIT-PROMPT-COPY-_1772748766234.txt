@@ -1,0 +1,316 @@
+EPOCH — API SECURITY COVERAGE FORENSIC AUDIT PROMPT (COPY-PASTE)
+This is a READ-ONLY FORENSIC API SECURITY AUDIT.
+
+Do NOT modify code.
+Do NOT install packages.
+Do NOT refactor anything.
+
+Your task is to produce a COMPLETE MAP of every API endpoint in the system and determine whether it is properly protected by authentication and authorization middleware.
+
+The goal is to identify:
+
+• endpoints missing authentication
+• endpoints missing authorization
+• endpoints unintentionally exposed via public route exemptions
+• endpoints that mutate data without protection
+
+You must analyze the repository in parallel and produce a structured forensic report.
+
+------------------------------------------------
+
+SECTION 1 — SERVER ROUTE DISCOVERY
+
+Locate all Express route definitions.
+
+Search for patterns:
+
+router.get(
+router.post(
+router.patch(
+router.put(
+router.delete(
+app.use('/api'
+express.Router()
+
+List every file that registers routes.
+
+Typical locations include:
+
+server/src/routes/*
+server/routes/*
+server/index.ts
+server/app.ts
+
+Produce a route file index:
+
+File Path | Router Prefix | Purpose
+
+Example:
+
+server/src/routes/auth.ts | /api/auth | authentication
+server/src/routes/inventory.ts | /api/inventory | inventory management
+
+------------------------------------------------
+
+SECTION 2 — GLOBAL AUTH MIDDLEWARE
+
+Locate where global middleware is applied.
+
+Identify:
+
+app.use(authenticateToken)
+app.use('/api', authenticateToken)
+
+Also identify public route exemptions such as:
+
+publicRoutes
+authExcludedRoutes
+openRoutes
+
+Document:
+
+which routes bypass authentication
+how bypass logic works
+which HTTP methods remain exposed
+
+------------------------------------------------
+
+SECTION 3 — ENDPOINT INVENTORY
+
+Produce a complete table of every endpoint.
+
+Columns:
+
+METHOD | PATH | FILE | LINE | AUTH MIDDLEWARE | ROLE CHECK | VALIDATION
+
+Example:
+
+POST | /api/inventory/parts-requests | server/src/routes/inventory.ts | 624 | authenticateToken | none | Zod schema
+
+Include:
+
+GET
+POST
+PATCH
+PUT
+DELETE
+
+------------------------------------------------
+
+SECTION 4 — AUTHENTICATION COVERAGE
+
+For each endpoint determine:
+
+Is authentication required?
+
+Check for middleware such as:
+
+authenticateToken
+sessionAwareAuth
+requireAuth
+softAuth
+
+Classify each endpoint:
+
+AUTH REQUIRED
+OPTIONAL AUTH
+NO AUTH
+
+------------------------------------------------
+
+SECTION 5 — AUTHORIZATION COVERAGE
+
+Check whether endpoints include role enforcement.
+
+Look for:
+
+requireRole
+requireAdminAccess
+requireEmployeeAccess
+authorizeApiRoute
+custom role checks
+
+Example:
+
+router.post('/users', requireAdminAccess)
+
+Classify endpoints:
+
+ADMIN ONLY
+ROLE-RESTRICTED
+AUTH ONLY
+NO AUTHORIZATION
+
+------------------------------------------------
+
+SECTION 6 — DATA MUTATION RISK ANALYSIS
+
+Identify endpoints that mutate data:
+
+POST
+PATCH
+PUT
+DELETE
+
+Check if they lack authentication.
+
+Produce table:
+
+METHOD | PATH | FILE | RISK
+
+Example:
+
+POST | /api/material-lots | server/src/routes/materialLots.ts | HIGH — no auth
+
+Severity rules:
+
+CRITICAL
+mutating endpoint with no authentication
+
+HIGH
+mutating endpoint with authentication but no role check
+
+MEDIUM
+read endpoint exposing sensitive data
+
+LOW
+read-only endpoint with proper auth
+
+------------------------------------------------
+
+SECTION 7 — PUBLIC ROUTE EXEMPTIONS
+
+Locate publicRoutes or similar logic.
+
+Example pattern:
+
+const publicRoutes = [
+  '/api/auth',
+  '/api/oauth'
+]
+
+Determine whether any of these routes contain:
+
+POST
+PATCH
+DELETE
+
+If so, flag them.
+
+Example finding:
+
+/api/material-lots is listed in publicRoutes but contains POST /create endpoint.
+
+------------------------------------------------
+
+SECTION 8 — ROUTE MIDDLEWARE STACK
+
+For each route analyze middleware order.
+
+Example:
+
+router.post(
+  '/inventory',
+  authenticateToken,
+  requireRole('admin'),
+  validateInventory,
+  handler
+)
+
+Detect routes where middleware order is wrong.
+
+Example risk:
+
+router.post('/inventory', handler, authenticateToken)
+
+------------------------------------------------
+
+SECTION 9 — VALIDATION COVERAGE
+
+Determine whether request validation exists.
+
+Look for:
+
+zod
+joi
+yup
+custom validators
+
+Flag endpoints that directly use:
+
+req.body
+req.params
+req.query
+
+without validation.
+
+------------------------------------------------
+
+SECTION 10 — SECURITY COVERAGE SUMMARY
+
+Produce summary metrics:
+
+Total endpoints
+Endpoints requiring auth
+Endpoints missing auth
+Endpoints with role checks
+Endpoints mutating data
+Mutating endpoints missing auth
+
+Example:
+
+Total endpoints: 142
+Auth protected: 118
+Missing auth: 24
+Mutating endpoints: 63
+Mutating endpoints missing auth: 9
+
+------------------------------------------------
+
+SECTION 11 — CRITICAL SECURITY GAPS
+
+List highest-risk endpoints.
+
+Table:
+
+Risk | Endpoint | File | Issue | Recommended Fix
+
+Example:
+
+CRITICAL | POST /api/material-lots | materialLots.ts | public mutating endpoint | add authenticateToken middleware
+
+------------------------------------------------
+
+SECTION 12 — PRIORITIZED FIX PLAN
+
+Produce top 10 fixes ranked by:
+
+severity
+ease of implementation
+exploitability
+
+------------------------------------------------
+
+SECTION 13 — SECURITY COVERAGE SCORE
+
+Score each category 1–10:
+
+Authentication Coverage
+Authorization Coverage
+Validation Coverage
+Mutation Protection
+Public Route Hygiene
+
+------------------------------------------------
+
+IMPORTANT RULES
+
+This is a READ-ONLY audit.
+
+Do not modify code.
+
+Do not propose refactors.
+
+Only analyze and report.
+
+The result must be a COMPLETE API SECURITY COVERAGE REPORT.

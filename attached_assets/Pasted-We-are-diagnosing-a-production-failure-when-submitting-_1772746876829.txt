@@ -1,0 +1,155 @@
+We are diagnosing a production failure when submitting a Parts Request.
+
+The UI shows:
+"Failed to submit parts request. Please try again."
+
+A screenshot shows the request modal with:
+- Part Number
+- Quantity
+- Urgency
+- Reason
+- Reason / Where Used
+
+The failure occurs when clicking "Submit Request".
+
+Perform a full read-only forensic audit to determine exactly why the request fails.
+
+DO NOT implement fixes yet.
+
+========================================
+PHASE 1 — FRONTEND REQUEST SUBMISSION
+========================================
+
+Locate the code responsible for submitting the parts request from the modal shown in the screenshot.
+
+Search for:
+- "Submit Request"
+- handleSubmitRequest
+- handleSubmitPartRequest
+- POST /api/inventory/parts-requests
+
+Identify:
+- File name
+- Function responsible for the request
+- Full payload sent to the API
+
+Output the exact payload structure including fields such as:
+- partNumber
+- partName
+- agPartNumber
+- requestedBy
+- quantity
+- urgency
+- reason
+- whereUsed
+- department
+- departmentId
+- notes
+
+Confirm:
+- Whether departmentId is included
+- Whether department is included
+- Whether any required fields may be null or undefined
+
+========================================
+PHASE 2 — API ROUTE HANDLER
+========================================
+
+Locate the backend endpoint:
+
+POST /api/inventory/parts-requests
+
+Identify:
+- File location
+- Route handler logic
+- Validation schema used (likely insertPartsRequestSchema)
+
+Output:
+- Full route handler code
+- Validation schema definition
+- Required vs optional fields
+
+Confirm:
+- Which fields are required
+- Whether departmentId is required
+- Whether department name is used instead
+- Whether the frontend payload matches schema expectations
+
+========================================
+PHASE 3 — DATABASE SCHEMA
+========================================
+
+Locate the parts_requests table definition.
+
+Output:
+- Full table schema
+- Column names
+- Nullability
+- Default values
+- Foreign keys
+
+Confirm:
+- Any NOT NULL columns not supplied by the frontend
+- Any foreign keys that could fail
+- Any mismatched column names
+
+========================================
+PHASE 4 — STORAGE / SERVICE LAYER
+========================================
+
+Locate any storage functions used by the route such as:
+
+- createPartsRequest
+- insertPartsRequest
+- storage.createPartsRequest
+
+Output:
+- Full function code
+- Any transformations of incoming payload
+- Any additional required fields enforced here
+
+========================================
+PHASE 5 — RUNTIME ERROR TRACE
+========================================
+
+Identify where the failure occurs.
+
+Check:
+- Server logs
+- Validation errors
+- Try/catch blocks
+- Database constraint errors
+
+Output:
+- Exact error message
+- Stack trace if available
+- Line of failure
+
+========================================
+PHASE 6 — ROOT CAUSE
+========================================
+
+Determine the exact cause of the failure.
+
+Possible causes include:
+- Missing departmentId
+- Validation schema mismatch
+- NOT NULL constraint violation
+- Foreign key constraint
+- Payload mismatch
+- Field name mismatch
+
+========================================
+PHASE 7 — PROPOSED FIX
+========================================
+
+Provide the minimal change required to resolve the issue.
+
+Output:
+1) File to modify
+2) Exact lines to change
+3) Correct payload structure
+4) Any schema changes required
+
+Do not implement changes yet.
+Return the full forensic report.

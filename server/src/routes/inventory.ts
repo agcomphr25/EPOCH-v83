@@ -625,21 +625,15 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
 
-    let agPartNumber = requestData.agPartNumber;
-    if (agPartNumber) {
-      const { eq } = await import('drizzle-orm');
-      const { inventoryItems } = await import('../../schema');
-      const exists = await db
-        .select({ agPartNumber: inventoryItems.agPartNumber })
-        .from(inventoryItems)
-        .where(eq(inventoryItems.agPartNumber, agPartNumber))
-        .limit(1);
-      if (!exists.length) {
-        agPartNumber = null;
-      }
-    }
+    const { partsRequests } = await import('../../schema');
+    const insertData = {
+      ...requestData,
+      agPartNumber: requestData.agPartNumber
+        ? sql`(SELECT ag_part_number FROM inventory_items WHERE ag_part_number = ${requestData.agPartNumber} LIMIT 1)`
+        : null,
+    };
 
-    const newRequest = await storage.createPartsRequest({ ...requestData, agPartNumber });
+    const [newRequest] = await db.insert(partsRequests).values(insertData as any).returning();
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);

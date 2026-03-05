@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
@@ -624,6 +624,18 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
+
+    if (!requestData.orderMethod && requestData.agPartNumber) {
+      const { inventoryItems } = await import('../../schema');
+      const [item] = await db
+        .select({ defaultOrderMethod: inventoryItems.defaultOrderMethod })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
+        .limit(1);
+      if (item?.defaultOrderMethod) {
+        requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+      }
+    }
 
     const { partsRequests } = await import('../../schema');
     const insertData = {

@@ -7965,7 +7965,8 @@ export function registerRoutes(app: Express): Server {
             barcodeHexColor = 'FF0000';
           } else {
             const isCarbonFinish = subcategory === 'CARBON' || subcategory === 'CARBON READY';
-            const isPaintedOption = !!paintOption && !isCarbonFinish;
+            const isNonPaintedRogue = subcategory === 'ROGUE' && paintOption !== 'rattlesnake_rogue';
+            const isPaintedOption = !!paintOption && !isCarbonFinish && !isNonPaintedRogue;
             const isFiberglassModel = modelId.toLowerCase().startsWith('fg');
             if (isPaintedOption || isFiberglassModel) {
               barcodeHexColor = '0066FF';

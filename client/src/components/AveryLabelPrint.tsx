@@ -58,9 +58,11 @@ export function AveryLabelPrint({
       return '#FF0000'; // Red
     }
 
-    // Blue for painted finishes (terrain/premium/standard/rogue) but NOT carbon/camo options
+    // Blue for terrain/premium/standard/rattlesnake_rogue + all FG models
+    // Black for carbon options, other rogue options, no paint
     const isCarbonFinish = !!paintOption && (paintOption.startsWith('carbon') || paintOption === 'neon_green_camo');
-    const isPaintedOption = !!paintOption && !isCarbonFinish;
+    const isNonPaintedRogue = !!paintOption && paintOption.endsWith('_rogue') && paintOption !== 'rattlesnake_rogue';
+    const isPaintedOption = !!paintOption && !isCarbonFinish && !isNonPaintedRogue;
     const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
 
     if (isPaintedOption || isFiberglassModel) {

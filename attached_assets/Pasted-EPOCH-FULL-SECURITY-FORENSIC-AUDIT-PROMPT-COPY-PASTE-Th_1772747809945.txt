@@ -1,0 +1,418 @@
+EPOCH — FULL SECURITY FORENSIC AUDIT PROMPT (COPY-PASTE)
+This is a READ-ONLY FORENSIC SECURITY AUDIT.
+
+Do NOT modify code.
+Do NOT install packages.
+Do NOT refactor anything.
+
+Your job is to perform a COMPLETE SECURITY REVIEW of the entire codebase.
+
+You must read the repository in parallel and trace security-sensitive paths end-to-end.
+
+This audit must cover:
+
+1) Authentication
+2) Password security
+3) Authorization
+4) Session / token handling
+5) API security
+6) Dependency vulnerabilities
+7) SQL injection risks
+8) Secret exposure
+9) Security headers
+10) Rate limiting
+11) Database privilege safety
+12) File upload safety
+13) Input validation
+14) Logging and audit trails
+
+The output must be a STRUCTURED FORENSIC REPORT.
+
+------------------------------------------------
+
+SECTION 1 — PROJECT SECURITY SURFACE
+
+Produce a directory tree (depth 4) of all files relevant to security including:
+
+auth
+login
+session
+middleware
+routes
+api
+jwt
+bcrypt
+password
+upload
+config
+database
+schema
+env
+server initialization
+
+Identify the following if present:
+
+auth routes
+login handlers
+password reset logic
+JWT creation
+session middleware
+API middleware
+file upload handlers
+.env usage
+database connection code
+
+------------------------------------------------
+
+SECTION 2 — AUTHENTICATION FLOW TRACE
+
+Locate the FULL login flow.
+
+Trace:
+
+login form
+API endpoint
+server auth handler
+password verification
+session / token creation
+user loading
+
+Document the exact path with file names and line numbers.
+
+Example format:
+
+CLIENT
+client/src/pages/Login.tsx
+function handleLogin()
+
+API
+POST /api/auth/login
+server/routes/auth.ts
+
+SERVER HANDLER
+verifyPassword()
+compare bcrypt hash
+create JWT or session
+
+SESSION STORAGE
+cookie / JWT / session store
+
+------------------------------------------------
+
+SECTION 3 — PASSWORD SECURITY ANALYSIS
+
+Locate where passwords are:
+
+stored
+hashed
+validated
+reset
+
+Determine:
+
+hashing algorithm
+bcrypt cost factor
+password minimum length
+complexity requirements
+password reset token security
+token expiration
+
+Report findings like:
+
+Password Hashing
+Algorithm: bcrypt
+Cost factor: 10
+
+Risk:
+Cost factor < 12 is considered weaker than modern standards.
+
+Also verify:
+
+passwords never logged
+passwords never returned to client
+no plaintext storage anywhere
+
+------------------------------------------------
+
+SECTION 4 — AUTHORIZATION / ROLE SECURITY
+
+Audit all middleware responsible for permissions.
+
+Look for patterns like:
+
+requireAuth
+requireAdmin
+role checks
+department checks
+userId comparisons
+
+Identify routes that modify data but do NOT check permissions.
+
+Example risks:
+
+POST /orders/update
+DELETE /inventory/:id
+PATCH /users/:id
+
+Report any endpoints missing role checks.
+
+------------------------------------------------
+
+SECTION 5 — API SECURITY REVIEW
+
+Scan every API route.
+
+Identify:
+
+GET
+POST
+PATCH
+DELETE
+
+Check whether each route has:
+
+authentication middleware
+authorization middleware
+input validation
+
+Flag routes that:
+
+accept arbitrary input
+lack validation
+lack auth checks
+
+------------------------------------------------
+
+SECTION 6 — INPUT VALIDATION
+
+Check whether the project uses:
+
+zod
+joi
+yup
+custom validators
+
+Trace validation usage.
+
+Determine if validation occurs:
+
+before database writes
+before business logic
+
+Flag any route where request.body is used directly.
+
+------------------------------------------------
+
+SECTION 7 — SQL INJECTION RISK
+
+Inspect database queries.
+
+Look for:
+
+string concatenation queries
+raw SQL
+unsafe interpolation
+
+Example:
+
+BAD
+`SELECT * FROM users WHERE email = '${email}'`
+
+SAFE
+parameterized queries
+ORM bindings
+Drizzle query builder
+
+Verify Drizzle usage prevents injection.
+
+------------------------------------------------
+
+SECTION 8 — SECRET EXPOSURE SCAN
+
+Search repository for potential secrets.
+
+Look for:
+
+JWT_SECRET
+DATABASE_URL
+API_KEY
+SECRET
+TOKEN
+PASSWORD
+
+Check whether secrets exist in:
+
+source code
+client code
+committed files
+
+Verify secrets come from environment variables.
+
+------------------------------------------------
+
+SECTION 9 — SESSION / TOKEN SECURITY
+
+Identify whether the app uses:
+
+JWT
+cookies
+sessions
+
+Verify:
+
+secure cookies
+httpOnly cookies
+sameSite protection
+token expiration
+refresh tokens
+
+Report risks such as:
+
+long-lived tokens
+no expiration
+tokens stored in localStorage
+
+------------------------------------------------
+
+SECTION 10 — SECURITY HEADERS
+
+Check server initialization.
+
+Determine whether Express uses:
+
+helmet()
+
+Verify presence of headers:
+
+Content-Security-Policy
+X-Frame-Options
+X-Content-Type-Options
+Strict-Transport-Security
+
+Report if headers are missing.
+
+------------------------------------------------
+
+SECTION 11 — RATE LIMITING
+
+Search for rate limiting middleware.
+
+Example:
+
+express-rate-limit
+
+Verify login endpoint protection.
+
+If none exists, report brute-force vulnerability.
+
+------------------------------------------------
+
+SECTION 12 — FILE UPLOAD SECURITY
+
+Locate upload endpoints.
+
+Check for:
+
+file type validation
+size limits
+storage location
+path traversal risks
+
+Verify user-supplied filenames are sanitized.
+
+------------------------------------------------
+
+SECTION 13 — DEPENDENCY SECURITY
+
+Read:
+
+package.json
+package-lock.json
+
+Identify:
+
+outdated dependencies
+auth libraries
+JWT libraries
+crypto libraries
+
+Flag known high-risk packages.
+
+------------------------------------------------
+
+SECTION 14 — DATABASE PRIVILEGE MODEL
+
+Inspect database connection configuration.
+
+Determine whether the application connects using:
+
+superuser
+limited user
+
+Report whether DB user has excessive privileges.
+
+------------------------------------------------
+
+SECTION 15 — LOGGING SECURITY
+
+Inspect logging.
+
+Verify logs do NOT contain:
+
+passwords
+tokens
+JWTs
+session IDs
+PII
+
+------------------------------------------------
+
+SECTION 16 — HIGH RISK FINDINGS
+
+Create a table:
+
+Risk Level | File | Issue | Description | Fix Recommendation
+
+Example:
+
+HIGH | server/routes/auth.ts | bcrypt cost too low | Cost factor = 8 | Increase to 12+
+
+------------------------------------------------
+
+SECTION 17 — SECURITY SCORECARD
+
+Provide a summary score:
+
+Authentication
+Authorization
+Password Security
+API Security
+Database Security
+Secrets Management
+Dependency Security
+
+Score each category 1–10.
+
+------------------------------------------------
+
+SECTION 18 — PRIORITIZED FIX LIST
+
+Provide the top 10 actions required to secure the system.
+
+Rank by:
+
+severity
+ease of fix
+exploit likelihood
+
+------------------------------------------------
+
+IMPORTANT RULES
+
+1) This is READ ONLY.
+2) Do NOT modify files.
+3) Do NOT install packages.
+4) Do NOT refactor code.
+5) Only produce analysis.
+
+The result must be a COMPLETE FORENSIC SECURITY REPORT.

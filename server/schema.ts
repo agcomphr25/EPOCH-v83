@@ -625,6 +625,7 @@ export const inventoryItems = pgTable('inventory_items', {
   hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
   assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
+  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
 });
 
 // Inventory Item Cost History - Tracks price changes over time

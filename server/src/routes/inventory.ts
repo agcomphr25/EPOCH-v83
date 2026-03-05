@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
@@ -624,7 +624,28 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
-    const newRequest = await storage.createPartsRequest(requestData);
+
+    if (!requestData.orderMethod && requestData.agPartNumber) {
+      const { inventoryItems } = await import('../../schema');
+      const [item] = await db
+        .select({ defaultOrderMethod: inventoryItems.defaultOrderMethod })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
+        .limit(1);
+      if (item?.defaultOrderMethod) {
+        requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+      }
+    }
+
+    const { partsRequests } = await import('../../schema');
+    const insertData = {
+      ...requestData,
+      agPartNumber: requestData.agPartNumber
+        ? sql`(SELECT ag_part_number FROM inventory_items WHERE ag_part_number = ${requestData.agPartNumber} LIMIT 1)`
+        : null,
+    };
+
+    const [newRequest] = await db.insert(partsRequests).values(insertData as any).returning();
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);
@@ -774,7 +795,25 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     };
     
     for (const request of requests) {
-      // Try to determine vendor: explicit assignment > inventory item default > unassigned
+      if (request.orderMethod === 'WEBSITE') {
+        const key = 'WEBSITE';
+        if (!vendorGroups[key]) {
+          vendorGroups[key] = {
+            vendorId: null,
+            vendorName: 'Website Orders',
+            orderMethod: 'WEBSITE',
+            websiteUrl: null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        vendorGroups[key].requests.push(request);
+        vendorGroups[key].totalQuantity += request.quantity;
+        vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
+        continue;
+      }
+
       let vendorId = request.vendorId;
       if (!vendorId && request.agPartNumber) {
         vendorId = itemVendorMap.get(request.agPartNumber) || null;
@@ -789,7 +828,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
             vendorId: vendor.id,
             vendorName: vendor.name,
             orderMethod: request.orderMethod || null,
-            websiteUrl: vendor.website || null,
+            websiteUrl: null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,
@@ -810,8 +849,8 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     const result = Object.values(vendorGroups)
       .filter(g => g.requests.length > 0)
       .sort((a, b) => {
-        if (a.vendorId === null) return 1; // Unassigned goes last
-        if (b.vendorId === null) return -1;
+        if (a.vendorName === 'Unassigned') return 1;
+        if (b.vendorName === 'Unassigned') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
     

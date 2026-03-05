@@ -578,6 +578,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ assigned_to_asset migration:', assetErr.message);
       }
 
+      try {
+        const { sql: sqlDom } = await import('drizzle-orm');
+        await db.execute(sqlDom`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS default_order_method TEXT`);
+        console.log('✅ Ensured inventory_items has default_order_method column');
+      } catch (domErr: any) {
+        console.warn('⚠️ default_order_method migration:', domErr.message);
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

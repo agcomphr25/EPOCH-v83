@@ -127,7 +127,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
-  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-status');
+  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
   const [isVendorAssignDialogOpen, setIsVendorAssignDialogOpen] = useState(false);
@@ -413,9 +413,9 @@ export default function ConsolidatedNeedsListPage() {
     
     // Filter by PO/Website
     if (vendorFilterTab === 'po') {
-      groups = groups.filter(g => g.orderMethod === 'PO' || (!g.websiteUrl && g.vendorId !== null));
+      groups = groups.filter(g => g.orderMethod !== 'WEBSITE');
     } else if (vendorFilterTab === 'website') {
-      groups = groups.filter(g => g.orderMethod === 'WEBSITE' || g.websiteUrl);
+      groups = groups.filter(g => g.orderMethod === 'WEBSITE');
     }
     
     return groups;
@@ -638,19 +638,19 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
-  const getOrderMethodBadge = (method: string | null, websiteUrl: string | null) => {
-    if (method === 'PO' || (!websiteUrl && method !== 'WEBSITE')) {
+  const getOrderMethodBadge = (method: string | null) => {
+    if (method === 'WEBSITE') {
       return (
-        <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 flex items-center gap-1">
-          <FileText className="w-3 h-3" />
-          PO
+        <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
+          <Globe className="w-3 h-3" />
+          Website
         </Badge>
       );
     }
     return (
-      <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
-        <Globe className="w-3 h-3" />
-        Website
+      <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 flex items-center gap-1">
+        <FileText className="w-3 h-3" />
+        PO
       </Badge>
     );
   };
@@ -880,7 +880,7 @@ export default function ConsolidatedNeedsListPage() {
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2">
                         {vendorGroup.vendorName}
-                        {getOrderMethodBadge(vendorGroup.orderMethod, vendorGroup.websiteUrl)}
+                        {getOrderMethodBadge(vendorGroup.orderMethod)}
                         {hasHighUrgency && (
                           <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
                             <AlertTriangle className="w-3 h-3 mr-1" />
@@ -897,36 +897,6 @@ export default function ConsolidatedNeedsListPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Quick Actions */}
-                    {vendorGroup.vendorId && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => exportVendorCSV(vendorGroup)}
-                          data-testid={`button-export-${vendorKey}`}
-                        >
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => copyOrderList(vendorGroup)}
-                          data-testid={`button-copy-${vendorKey}`}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        {vendorGroup.websiteUrl && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(vendorGroup.websiteUrl!, '_blank')}
-                            data-testid={`button-website-${vendorKey}`}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </>
-                    )}
                     {approvedCount > 0 && (
                       <>
                         <Button

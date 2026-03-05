@@ -89,6 +89,7 @@ interface InventoryFormData {
   hasTds: boolean;
   hasOtherDocs: boolean;
   assignedToAsset: string;
+  defaultOrderMethod: string;
 }
 
 const InventoryForm = ({
@@ -787,6 +788,23 @@ const InventoryForm = ({
           </Select>
           <p className="text-xs text-gray-500 mt-1">Assign this item to a specific asset/equipment</p>
         </div>
+        <div className="md:col-span-2">
+          <Label htmlFor="defaultOrderMethod">Default Order Method</Label>
+          <Select
+            value={formData.defaultOrderMethod || 'none'}
+            onValueChange={(value) => onSelectChange('defaultOrderMethod', value === 'none' ? '' : value)}
+          >
+            <SelectTrigger data-testid="select-defaultOrderMethod">
+              <SelectValue placeholder="Select default order method (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="PO">PO</SelectItem>
+              <SelectItem value="WEBSITE">Website</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Default procurement method for new parts requests</p>
+        </div>
         <div>
           <Label htmlFor="leadTimeDays">Lead Time</Label>
           <Input
@@ -1063,6 +1081,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     hasTds: false,
     hasOtherDocs: false,
     assignedToAsset: '',
+    defaultOrderMethod: '',
   });
 
   const [sdsFile, setSdsFile] = useState<File | null>(null);
@@ -1666,6 +1685,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         hasTds: formData.hasTds,
         hasOtherDocs: formData.hasOtherDocs,
         assignedToAsset: formData.assignedToAsset || null,
+        defaultOrderMethod: formData.defaultOrderMethod || null,
       };
 
       if (editingItem) {
@@ -1724,6 +1744,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasTds: item.hasTds || false,
       hasOtherDocs: item.hasOtherDocs || false,
       assignedToAsset: (item as any).assignedToAsset || '',
+      defaultOrderMethod: (item as any).defaultOrderMethod || '',
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);

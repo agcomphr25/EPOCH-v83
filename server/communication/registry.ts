@@ -304,7 +304,7 @@ const VENDOR_RFQ_TEMPLATE = {
       <div class="notice">
         <strong>Note:</strong> This is a Request for Quote only. No commitment to purchase is implied. Please reply to this email with your pricing and availability.
       </div>
-      <p>If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+      <p>If you have any questions, please contact us at laurie.tandy@agadvanced.com or call 256-723-8381.</p>
     </div>
     <div class="footer">
       <p>
@@ -312,7 +312,7 @@ const VENDOR_RFQ_TEMPLATE = {
         230 Hamer Road<br>
         Owens Cross Roads, AL 35763<br>
         Phone: 256-723-8381<br>
-        Email: sales@agcomposites.com
+        Email: laurie.tandy@agadvanced.com
       </p>
     </div>
   </div>
@@ -332,14 +332,14 @@ Desired Delivery Date: {{desired_delivery_date}}
 Note: This is a Request for Quote only. No commitment to purchase is implied.
 Please reply to this email with your pricing and availability.
 
-If you have any questions, please contact us at sales@agcomposites.com or call 256-723-8381.
+If you have any questions, please contact us at laurie.tandy@agadvanced.com or call 256-723-8381.
 
 ---
 AG Composites
 230 Hamer Road
 Owens Cross Roads, AL 35763
 Phone: 256-723-8381
-Email: sales@agcomposites.com`,
+Email: laurie.tandy@agadvanced.com`,
 };
 
 const VENDOR_PO_ISSUE_TEMPLATE = {

@@ -146,6 +146,7 @@ import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
 import emailTemplatesRoutes from './emailTemplates';
+import signOrderSettingsRoutes from './signOrderSettings';
 
 export function registerRoutes(app: Express): Server {
   // Temporary debug route - raw order data inspector
@@ -470,6 +471,9 @@ export function registerRoutes(app: Express): Server {
 
   // Email template governance routes
   app.use('/api/email-templates', emailTemplatesRoutes);
+
+  // Sign order page settings (GET is public, PUT requires auth)
+  app.use('/api/sign-order-settings', signOrderSettingsRoutes);
 
   // Marketing communications routes
   app.use('/api/marketing', marketingRoutes);

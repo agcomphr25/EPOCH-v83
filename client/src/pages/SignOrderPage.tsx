@@ -54,15 +54,34 @@ interface FollowupOrder {
   };
 }
 
+interface PageSettings {
+  pageTitle: string;
+  pageDescription: string;
+  signatureDisclaimer: string;
+  successMessage: string;
+  alreadySignedTitle: string;
+  alreadySignedMessage: string;
+  invalidLinkMessage: string;
+  orderNotFoundMessage: string;
+}
+
+const DEFAULTS: PageSettings = {
+  pageTitle: 'Review & Sign Sales Order',
+  pageDescription: 'Please review the order details below carefully before signing.',
+  signatureDisclaimer: 'By signing below, you confirm that the order details above are correct and authorize AG Composites to begin production.',
+  successMessage: 'Order signed successfully! Your order has been moved to the production queue.',
+  alreadySignedTitle: 'Order Already Signed',
+  alreadySignedMessage: 'Your order is in production.',
+  invalidLinkMessage: 'Invalid or missing signature link. Please use the link from your email to sign your order.',
+  orderNotFoundMessage: 'The order link is invalid or has expired. Please contact support.',
+};
+
 export default function SignOrderPage() {
-  // Support both NEW path-based routing (/sign-order/sig_XXXXXXXX) and LEGACY query params (?token=xxx)
   const [, pathParams] = useRoute('/sign-order/:identifier');
   const queryParams = new URLSearchParams(window.location.search);
   const legacyToken = queryParams.get('token');
   
-  // Determine which identifier to use and which API endpoint
   const { identifier, apiEndpoint, isPublicId } = useMemo(() => {
-    // Check for new path-based public signature ID (sig_XXXXXXXX format)
     if (pathParams?.identifier && pathParams.identifier.startsWith('sig_')) {
       return {
         identifier: pathParams.identifier,
@@ -70,7 +89,6 @@ export default function SignOrderPage() {
         isPublicId: true,
       };
     }
-    // Check for path param that looks like a legacy token (long random string)
     if (pathParams?.identifier && pathParams.identifier.length > 20) {
       return {
         identifier: pathParams.identifier,
@@ -78,7 +96,6 @@ export default function SignOrderPage() {
         isPublicId: false,
       };
     }
-    // Fall back to legacy query param token
     if (legacyToken) {
       return {
         identifier: legacyToken,
@@ -92,6 +109,12 @@ export default function SignOrderPage() {
   const { toast } = useToast();
   const signatureRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
+
+  const { data: pageSettings } = useQuery<PageSettings>({
+    queryKey: ['/api/sign-order-settings'],
+  });
+
+  const content = pageSettings || DEFAULTS;
 
   const { data: followupOrder, isLoading, error } = useQuery<FollowupOrder>({
     queryKey: [apiEndpoint],
@@ -107,14 +130,11 @@ export default function SignOrderPage() {
       const signatureData = signatureRef.current.toDataURL();
       
       try {
-        // For new public ID signing, we use a different endpoint that doesn't require token
-        // For legacy tokens, we still pass the token for backward compatibility
         return await apiRequest(`/api/followup-orders/${followupOrder?.id}/sign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             signatureData,
-            // For public ID route, pass the publicSignatureId; for legacy, pass token
             ...(isPublicId 
               ? { publicSignatureId: identifier }
               : { signatureToken: identifier }
@@ -122,7 +142,6 @@ export default function SignOrderPage() {
           }),
         });
       } catch (err: any) {
-        // Extract error message from response if available
         const errorMessage = err?.message || 'Failed to sign order. Please try again or contact support.';
         throw new Error(errorMessage);
       }
@@ -159,7 +178,7 @@ export default function SignOrderPage() {
           <CardHeader>
             <CardTitle className="text-red-600">Invalid Link</CardTitle>
             <CardDescription>
-              Invalid or missing signature link. Please use the link from your email to sign your order.
+              {content.invalidLinkMessage}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -185,7 +204,7 @@ export default function SignOrderPage() {
           <CardHeader>
             <CardTitle className="text-red-600">Order Not Found</CardTitle>
             <CardDescription>
-              The order link is invalid or has expired. Please contact support.
+              {content.orderNotFoundMessage}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -200,11 +219,11 @@ export default function SignOrderPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-6 w-6 text-green-600" />
-              <CardTitle className="text-green-600">Order Already Signed</CardTitle>
+              <CardTitle className="text-green-600">{content.alreadySignedTitle}</CardTitle>
             </div>
             <CardDescription>
               This order was signed on {new Date(followupOrder.signedAt!).toLocaleString()}.
-              Your order is in production.
+              {' '}{content.alreadySignedMessage}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -219,9 +238,9 @@ export default function SignOrderPage() {
       <div className="max-w-4xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Review & Sign Sales Order</CardTitle>
+            <CardTitle className="text-2xl">{content.pageTitle}</CardTitle>
             <CardDescription>
-              Please review the order details below carefully before signing.
+              {content.pageDescription}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -312,16 +331,13 @@ export default function SignOrderPage() {
                 {orderSummary.features && Object.entries(orderSummary.features).map(([key, value]) => {
                   if (!value || value === false || value === '' || (Array.isArray(value) && value.length === 0)) return null;
                   
-                  // Skip miscItems as it needs special handling below
                   if (key === 'miscItems') return null;
                   
-                  // Get display names from featureDisplayInfo if available
                   const featureInfo = followupOrder.featureDisplayInfo?.[key];
                   const displayKey = featureInfo?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   
                   let displayValue: string;
                   if (Array.isArray(value)) {
-                    // For arrays, map each value to its display name
                     displayValue = value.map(val => {
                       if (typeof val === 'string') {
                         return featureInfo?.selections?.[val] || val;
@@ -329,10 +345,8 @@ export default function SignOrderPage() {
                       return String(val);
                     }).join(', ');
                   } else if (typeof value === 'object') {
-                    // Skip complex objects that can't be displayed as simple strings
                     return null;
                   } else {
-                    // For single values, use the display name from selections
                     const valueStr = String(value);
                     displayValue = featureInfo?.selections?.[valueStr] || valueStr;
                   }
@@ -449,8 +463,7 @@ export default function SignOrderPage() {
             <div>
               <h3 className="text-lg font-semibold mb-4">Digital Signature</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                By signing below, you confirm that the order details above are correct and authorize
-                AG Composites to begin production.
+                {content.signatureDisclaimer}
               </p>
               
               <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
@@ -498,7 +511,7 @@ export default function SignOrderPage() {
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <p className="text-green-800 dark:text-green-200 font-medium">
-                    Order signed successfully! Your order has been moved to the production queue.
+                    {content.successMessage}
                   </p>
                 </div>
               </div>

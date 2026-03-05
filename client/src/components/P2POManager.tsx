@@ -226,6 +226,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     mutationFn: (purchaseOrderId: number) =>
       apiRequest(`/api/orders/production-orders/generate/${purchaseOrderId}`, {
         method: 'POST',
+        timeout: 120000,
       }),
     onSuccess: (data: any) => {
       const orderCount = Array.isArray(data) ? data.length : 0;
@@ -242,9 +243,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       setGeneratingPoId(null);
     },
     onError: (error: any) => {
+      const isTimeout = error?.name === 'AbortError' || error?.message?.includes('aborted');
       toast({
         title: 'BOM Explosion Failed',
-        description: error.message || 'Failed to generate production orders. Make sure the PO has items with valid BOMs.',
+        description: isTimeout 
+          ? 'The operation timed out. The server may still be processing — please wait a moment and refresh.'
+          : (error.message || 'Failed to generate production orders. Make sure the PO has items with valid BOMs.'),
         variant: 'destructive',
       });
       setGeneratingPoId(null);

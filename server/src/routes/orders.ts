@@ -1451,11 +1451,17 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const purchaseOrderId = parseInt(req.params.purchaseOrderId);
+      if (isNaN(purchaseOrderId)) {
+        return res.status(400).json({ error: 'Invalid purchase order ID' });
+      }
       const productionOrders =
         await storage.generateP2ProductionOrders(purchaseOrderId);
       res.status(201).json(productionOrders);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generate production orders error:', error);
+      if (error?.message?.includes('not found')) {
+        return res.status(404).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Failed to generate production orders' });
     }
   }

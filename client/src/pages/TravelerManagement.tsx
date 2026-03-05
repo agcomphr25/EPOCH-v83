@@ -630,6 +630,16 @@ export default function TravelerManagement() {
                               View Traveler
                             </Badge>
                           </Link>
+                          {!isTerminal && (
+                            <Badge
+                              className="cursor-pointer bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors px-3 py-1 inline-flex items-center gap-1"
+                              data-testid={`badge-edit-${traveler.id}`}
+                              onClick={() => handleEdit(traveler)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </Badge>
+                          )}
                           {(traveler.serialNumber || traveler.lotNumber) && (
                             <Link href={`/p2-traveler-viewer?barcode=${encodeURIComponent(traveler.serialNumber || traveler.lotNumber || '')}`}>
                               <Badge

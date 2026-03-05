@@ -58,19 +58,11 @@ export function AveryLabelPrint({
       return '#FF0000'; // Red
     }
 
-    // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
-    const paintedOptions = [
-      'terraine',
-      'premium',
-      'standard',
-      'rattlesnake_rogue',
-    ];
-    const isPaintedOption = paintedOptions.some((option) =>
-      paintOption?.toLowerCase().includes(option)
-    );
+    // Blue for painted stock (any paint option) or fiberglass models
+    const hasPaintOption = !!paintOption;
     const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
 
-    if (isPaintedOption || isFiberglassModel) {
+    if (hasPaintOption || isFiberglassModel) {
       return '#0066FF'; // Blue
     }
 

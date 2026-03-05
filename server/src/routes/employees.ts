@@ -1432,8 +1432,8 @@ router.post('/:id/set-password', async (req: Request, res: Response) => {
       const role = emp.rows[0].user_role || 'EMPLOYEE';
 
       const created = await pool.query(
-        `INSERT INTO users (username, password_hash, role, employee_id, is_active, password_changed_at, failed_login_attempts)
-         VALUES ($1, $2, $3, $4, true, NOW(), 0)
+        `INSERT INTO users (username, password, password_hash, role, employee_id, is_active, password_changed_at, failed_login_attempts)
+         VALUES ($1, $2, $2, $3, $4, true, NOW(), 0)
          RETURNING id, username, role, is_active as "isActive"`,
         [username, passwordHash, role, employeeId]
       );

@@ -1,0 +1,109 @@
+index-BiiYaI0z.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-BiiYaI0z.js:235
+o @ index-BiiYaI0z.js:51
+p @ index-BiiYaI0z.js:51
+start @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+NQ @ index-BiiYaI0z.js:51
+onSubscribe @ index-BiiYaI0z.js:51
+subscribe @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Get @ index-BiiYaI0z.js:38
+ioe @ index-BiiYaI0z.js:40
+PR @ index-BiiYaI0z.js:40
+UPt @ index-BiiYaI0z.js:40
+ED @ index-BiiYaI0z.js:40
+XTe @ index-BiiYaI0z.js:40
+O3 @ index-BiiYaI0z.js:38
+(anonymous) @ index-BiiYaI0z.js:40
+index-BiiYaI0z.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-BiiYaI0z.js:235
+o @ index-BiiYaI0z.js:51
+p @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Promise.then
+(anonymous) @ index-BiiYaI0z.js:51
+Promise.catch
+p @ index-BiiYaI0z.js:51
+start @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+NQ @ index-BiiYaI0z.js:51
+onSubscribe @ index-BiiYaI0z.js:51
+subscribe @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Get @ index-BiiYaI0z.js:38
+ioe @ index-BiiYaI0z.js:40
+PR @ index-BiiYaI0z.js:40
+UPt @ index-BiiYaI0z.js:40
+ED @ index-BiiYaI0z.js:40
+XTe @ index-BiiYaI0z.js:40
+O3 @ index-BiiYaI0z.js:38
+(anonymous) @ index-BiiYaI0z.js:40
+[Violation] 'click' handler took 1792ms
+index-BiiYaI0z.js:235 🌐 API Request to /api/orders/production-orders/generate/14 (timeout: 15000ms, deployment: true)
+index-BiiYaI0z.js:235 ✅ API Response from /api/orders/production-orders/generate/14: 201
+index-BiiYaI0z.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-BiiYaI0z.js:235
+o @ index-BiiYaI0z.js:51
+p @ index-BiiYaI0z.js:51
+start @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+NQ @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+setInterval
+XAe @ index-BiiYaI0z.js:51
+JAe @ index-BiiYaI0z.js:51
+onQueryUpdate @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+batch @ index-BiiYaI0z.js:51
+o4 @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+await in fetch
+NQ @ index-BiiYaI0z.js:51
+onSubscribe @ index-BiiYaI0z.js:51
+subscribe @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Get @ index-BiiYaI0z.js:38
+ioe @ index-BiiYaI0z.js:40
+PR @ index-BiiYaI0z.js:40
+UPt @ index-BiiYaI0z.js:40
+ED @ index-BiiYaI0z.js:40
+XTe @ index-BiiYaI0z.js:40
+O3 @ index-BiiYaI0z.js:38
+(anonymous) @ index-BiiYaI0z.js:40
+index-BiiYaI0z.js:235  GET https://agcompepoch.xyz/api/p2/control-center/stats 500 (Internal Server Error)
+(anonymous) @ index-BiiYaI0z.js:235
+o @ index-BiiYaI0z.js:51
+p @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Promise.then
+(anonymous) @ index-BiiYaI0z.js:51
+Promise.catch
+p @ index-BiiYaI0z.js:51
+start @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+NQ @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+setInterval
+XAe @ index-BiiYaI0z.js:51
+JAe @ index-BiiYaI0z.js:51
+onQueryUpdate @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+batch @ index-BiiYaI0z.js:51
+o4 @ index-BiiYaI0z.js:51
+fetch @ index-BiiYaI0z.js:51
+await in fetch
+NQ @ index-BiiYaI0z.js:51
+onSubscribe @ index-BiiYaI0z.js:51
+subscribe @ index-BiiYaI0z.js:51
+(anonymous) @ index-BiiYaI0z.js:51
+Get @ index-BiiYaI0z.js:38
+ioe @ index-BiiYaI0z.js:40
+PR @ index-BiiYaI0z.js:40
+UPt @ index-BiiYaI0z.js:40
+ED @ index-BiiYaI0z.js:40
+XTe @ index-BiiYaI0z.js:40
+O3 @ index-BiiYaI0z.js:38
+(anonymous) @ index-BiiYaI0z.js:40

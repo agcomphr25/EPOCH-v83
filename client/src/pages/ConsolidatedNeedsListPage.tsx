@@ -379,9 +379,9 @@ export default function ConsolidatedNeedsListPage() {
       if (!searchTerm.trim()) return true;
       const search = searchTerm.toLowerCase();
       return (
-        request.partNumber.toLowerCase().includes(search) ||
-        request.partName.toLowerCase().includes(search) ||
-        request.department.toLowerCase().includes(search) ||
+        (request.partNumber && request.partNumber.toLowerCase().includes(search)) ||
+        (request.partName && request.partName.toLowerCase().includes(search)) ||
+        (request.department && request.department.toLowerCase().includes(search)) ||
         (request.requestedBy && request.requestedBy.toLowerCase().includes(search))
       );
     });
@@ -403,9 +403,9 @@ export default function ConsolidatedNeedsListPage() {
       groups = groups.map(g => ({
         ...g,
         requests: g.requests.filter(r => 
-          r.partNumber.toLowerCase().includes(search) ||
-          r.partName.toLowerCase().includes(search) ||
-          r.department.toLowerCase().includes(search) ||
+          (r.partNumber && r.partNumber.toLowerCase().includes(search)) ||
+          (r.partName && r.partName.toLowerCase().includes(search)) ||
+          (r.department && r.department.toLowerCase().includes(search)) ||
           (r.requestedBy && r.requestedBy.toLowerCase().includes(search))
         )
       })).filter(g => g.requests.length > 0);
@@ -1086,7 +1086,11 @@ export default function ConsolidatedNeedsListPage() {
       </div>
 
       {/* Main View Tabs */}
-      <Tabs value={mainViewTab} onValueChange={(v) => setMainViewTab(v as typeof mainViewTab)}>
+      <Tabs value={mainViewTab} onValueChange={(v) => {
+        setMainViewTab(v as typeof mainViewTab);
+        setVendorFilterTab('all');
+        setSearchTerm('');
+      }}>
         <TabsList className="mb-4">
           <TabsTrigger value="by-status" data-testid="tab-by-status">
             <Package className="w-4 h-4 mr-2" />

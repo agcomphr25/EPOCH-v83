@@ -77,7 +77,7 @@ type FabricInventoryItem = {
   freezerLocation: string | null;
   barcode: string | null;
   barcodeValue: string;
-  status: 'available' | 'low' | 'expired' | 'expiring';
+  status: 'available' | 'low' | 'expired' | 'expiring' | 'depleted';
   lowStockThreshold: number;
   isFifoNext: boolean;
 };
@@ -223,13 +223,14 @@ export default function CuttingOperatorDashboard() {
       return data.map((item: any) => {
         const fabricName = item.fabric || 'Unknown';
         const squareMeters = parseFloat(item.squareMeters) || 0;
+        const isDepletedInDB = item.status === 'depleted';
         return {
           ...item,
           fabricType: fabricName,
           commonName: fabricName,
           barcode: item.barcode || null,
           barcodeValue: item.barcode || item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
-          status: getFabricStatus(squareMeters, item.expirationDate, item.lowStockThreshold || 10),
+          status: isDepletedInDB ? 'depleted' : getFabricStatus(squareMeters, item.expirationDate, item.lowStockThreshold || 10),
           isFifoNext: fifoByType[fabricName] === item.id,
           lowStockThreshold: item.lowStockThreshold || 10,
           freezerLocation: item.location || item.freezerLocation,

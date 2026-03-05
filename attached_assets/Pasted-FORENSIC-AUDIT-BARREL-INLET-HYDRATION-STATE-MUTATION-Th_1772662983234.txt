@@ -1,0 +1,152 @@
+FORENSIC AUDIT — BARREL_INLET HYDRATION + STATE MUTATION
+
+This is a READ-ONLY investigation. DO NOT modify any files.
+
+The production database confirms that orders store barrel_inlet correctly (example: EI353 has "tikka_factory_sporter_lite"), but when the order edit page loads the UI shows the field as blank.
+
+Goal: identify exactly where barrel_inlet is being lost between database load and rendered Select component.
+
+Perform a full trace.
+
+--------------------------------------------------
+
+SECTION 1 — DATA LOAD PATH
+
+Trace the entire path used to load an existing order into the OrderEntry component.
+
+List:
+
+1. API route used to fetch the order
+2. server route file + line numbers
+3. DB query used to fetch the order
+4. response JSON shape returned to the client
+
+Specifically confirm that the API response contains:
+
+features.barrel_inlet
+
+Show example response structure.
+
+--------------------------------------------------
+
+SECTION 2 — CLIENT HYDRATION
+
+Locate the code that hydrates the form when editing an order.
+
+Find where something like this occurs:
+
+setFeatures(order.features || {})
+
+Report:
+
+file
+line numbers
+exact code block
+
+Confirm whether barrel_inlet exists in the features object at that moment.
+
+--------------------------------------------------
+
+SECTION 3 — STATE MUTATION AFTER HYDRATION
+
+Search the entire repo for **any code that modifies features.barrel_inlet**.
+
+Include:
+
+setFeatures(...)
+setValue(...)
+react-hook-form setters
+useEffect hooks
+feature normalization logic
+model compatibility logic
+
+For each occurrence report:
+
+file
+line numbers
+exact code snippet
+when it runs (dependencies)
+
+--------------------------------------------------
+
+SECTION 4 — BARREL SELECT RENDERING
+
+Locate the Select component used for barrel inlet.
+
+Report:
+
+file
+line numbers
+value prop
+options source
+
+Example structure:
+
+<Select
+  value={features.barrel_inlet}
+>
+
+Also report the code that generates the options list and any filtering logic.
+
+--------------------------------------------------
+
+SECTION 5 — FILTER LOGIC ANALYSIS
+
+Trace the exact logic that filters barrel options based on stock model.
+
+Report:
+
+file
+line numbers
+exact filtering code
+
+Determine whether the current stored value
+"tikka_factory_sporter_lite"
+
+could be excluded from the options list during render.
+
+--------------------------------------------------
+
+SECTION 6 — TIMING / RENDER ORDER
+
+Explain the render sequence when editing an order:
+
+1. component mount
+2. modelOptions load
+3. order fetch
+4. setFeatures
+5. useEffect executions
+6. Select render
+
+Determine whether any useEffect could run before modelOptions loads and clear barrel_inlet.
+
+--------------------------------------------------
+
+SECTION 7 — ROOT CAUSE
+
+Provide a definitive answer to:
+
+Where exactly is barrel_inlet lost?
+
+Choose one of the following:
+
+A) API response missing value  
+B) Hydration not setting value  
+C) useEffect clearing value  
+D) Select options filtering out value  
+E) React state overwritten by another setter  
+
+Show the exact line of code responsible.
+
+--------------------------------------------------
+
+OUTPUT FORMAT
+
+Provide:
+
+1. file paths
+2. line numbers
+3. exact code snippets
+4. execution order
+
+Do not propose fixes yet. Only identify the root cause.

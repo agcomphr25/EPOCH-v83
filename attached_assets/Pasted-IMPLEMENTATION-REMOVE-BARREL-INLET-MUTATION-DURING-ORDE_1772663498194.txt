@@ -1,0 +1,67 @@
+IMPLEMENTATION — REMOVE BARREL_INLET MUTATION DURING ORDER HYDRATION
+
+Goal
+Fix the bug where barrel_inlet is cleared when an order edit page loads.
+
+Production database confirms the correct value exists (example: EI353 = "tikka_factory_sporter_lite"). The UI loads it correctly but then clears it during hydration due to a compatibility useEffect.
+
+Root cause
+The "barrel compatibility safety guard" useEffect mutates features.barrel_inlet during component initialization.
+
+Specifically this block:
+
+useEffect(() => {
+  if (!modelId || modelOptions.length === 0) return;
+
+  const selectedModel = modelOptions.find((m) => m.id === modelId);
+  const isTikkaModel = selectedModel?.id.toLowerCase().includes('tikka') ?? false;
+
+  setFeatures((prev) => {
+    if (!prev.barrel_inlet) return prev;
+
+    const isTikkaValue = TIKKA_BARREL_OPTIONS.includes(prev.barrel_inlet);
+
+    if (isTikkaModel && !isTikkaValue) return { ...prev, barrel_inlet: undefined };
+    if (!isTikkaModel && isTikkaValue)  return { ...prev, barrel_inlet: undefined };
+
+    return prev;
+  });
+
+}, [modelId]);
+
+This effect is unnecessary and causes race conditions during hydration.
+
+Required fix
+Delete this entire useEffect block from:
+
+client/src/components/OrderEntry.tsx
+
+No replacement logic should be added.
+
+Reason
+The barrel option rule is already enforced by the Select option filtering logic. The UI prevents invalid selections, so there is no need to mutate state after hydration.
+
+Expected behavior after fix
+1. Editing an order loads features.barrel_inlet exactly as stored.
+2. Dropdown options still restrict selections correctly.
+3. No state mutation occurs during load.
+
+Verification steps
+After implementing:
+
+1. Open an order with a Tikka model that already has a barrel inlet saved.
+2. Confirm the Barrel Inlet field shows the saved value.
+3. Reload the page and confirm the value persists.
+
+Constraints
+Do not modify:
+- API routes
+- database queries
+- Select dropdown filtering
+- featureDefs loading
+- loadExistingOrder()
+
+Only remove the safety guard useEffect that mutates barrel_inlet.
+
+Output
+Show the patch diff for OrderEntry.tsx and confirm the effect was removed.

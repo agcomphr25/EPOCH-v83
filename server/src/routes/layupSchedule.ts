@@ -6,6 +6,13 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 
+function normalizeMaterial(raw: string): string {
+  const lower = raw.toLowerCase().trim();
+  if (lower === 'carbon_fiber' || lower === 'carbon fiber') return 'Carbon Fiber';
+  if (lower === 'fiberglass') return 'Fiberglass';
+  return raw;
+}
+
 const router = Router();
 
 // Debug endpoint to check raw mold data
@@ -480,7 +487,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       const poProductMap = new Map(poProductsData.map(p => [p.id, p]));
       
       // Expand by quantity for scheduling
-      selectedPOItems.forEach(item => {
+      for (const item of selectedPOItems) {
         const poProductData = poProductMap.get(item.itemId);
         
         // Extract action length from po_products
@@ -497,10 +504,30 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Use material_canonical as single source of truth for P1 material
-        let material: string | null = (item as any).materialCanonical || null;
+        let material: string | null = null;
+
+        // 🔎 If this is a PO item, fetch authoritative material from DB
+        if (item.poNumber && item.itemId) {
+          const [poItem] = await db
+            .select({ specifications: purchaseOrderItems.specifications })
+            .from(purchaseOrderItems)
+            .where(eq(purchaseOrderItems.id, item.itemId))
+            .limit(1);
+
+          if (poItem?.specifications) {
+            const specs = poItem.specifications as any;
+            if (specs?.material) {
+              material = normalizeMaterial(specs.material);
+            }
+          }
+        }
+
+        // 🔁 Fallback ONLY if DB material not found
         if (!material) {
-          material = deriveCanonicalMaterial(item.stockModel || '') || null;
+          material =
+            (item as any).materialCanonical ||
+            deriveCanonicalMaterial(item.stockModel || '') ||
+            null;
         }
         
         for (let i = 0; i < item.quantity; i++) {
@@ -520,7 +547,7 @@ router.post('/generate', async (req: Request, res: Response) => {
             hasHeavyFill: false,
           });
         }
-      });
+      }
     }
     
     const allItems = [...regularOrders, ...poItems];

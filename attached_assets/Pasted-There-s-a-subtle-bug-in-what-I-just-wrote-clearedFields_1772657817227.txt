@@ -1,0 +1,92 @@
+There's a subtle bug in what I just wrote — clearedFields is populated inside the setFeatures functional updater, which executes asynchronously, so the toast check outside it always sees an empty array. Let me fix that:
+
+Here is the patch diff:
+
+--- a/client/src/components/OrderEntry.tsx
++++ b/client/src/components/OrderEntry.tsx
+@@ -1170,7 +1170,9 @@
+-  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options
++  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options.
++  // Fires only when modelId changes; does not retrigger when the user selects individual feature values.
++  // isTikkaModel is determined from model.id so it is stable regardless of display name changes.
+   useEffect(() => {
+     if (!modelId || modelOptions.length === 0) return;
+ 
+     const selectedModel = modelOptions.find((m) => m.id === modelId);
+-    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+-    const isTikkaModel = modelName.toLowerCase().includes('tikka');
++    const isTikkaModel = selectedModel?.id.toLowerCase().includes('tikka') ?? false;
+ 
+     const clearedFields: string[] = [];
+     const updates: Record<string, undefined> = {};
+ 
+-    // If Tikka model, clear any NON-Tikka selections
+     if (isTikkaModel) {
+-      const hasNonTikkaAction = features.action_inlet && !features.action_inlet.toLowerCase().includes('tikka');
+-      const hasNonTikkaBarrel = features.barrel_inlet && !features.barrel_inlet.toLowerCase().includes('tikka');
+-      const hasNonTikkaBottomMetal = features.bottom_metal && !features.bottom_metal.toLowerCase().includes('tikka');
+-      if (hasNonTikkaAction) { updates.action_inlet = undefined; clearedFields.push('Action Inlet'); }
+-      if (hasNonTikkaBarrel) { updates.barrel_inlet = undefined; clearedFields.push('Barrel Inlet'); }
+-      if (hasNonTikkaBottomMetal) { updates.bottom_metal = undefined; clearedFields.push('Bottom Metal'); }
+-      if (clearedFields.length > 0) {
+-        setFeatures((prev) => ({ ...prev, ...updates }));
+-        toast({ title: 'Options Updated', description: `... Only Tikka options ...`, variant: 'default' });
++      if (features.action_inlet && !features.action_inlet.toLowerCase().includes('tikka')) {
++        updates.action_inlet = undefined; clearedFields.push('Action Inlet');
++      }
++      if (features.barrel_inlet && !features.barrel_inlet.toLowerCase().includes('tikka')) {
++        updates.barrel_inlet = undefined; clearedFields.push('Barrel Inlet');
++      }
++      if (features.bottom_metal && !features.bottom_metal.toLowerCase().includes('tikka')) {
++        updates.bottom_metal = undefined; clearedFields.push('Bottom Metal');
+       }
+     } else {
+-      const hasTikkaAction = features.action_inlet && features.action_inlet.toLowerCase().includes('tikka');
+-      const hasTikkaBarrel = features.barrel_inlet && features.barrel_inlet.toLowerCase().includes('tikka');
+-      const hasTikkaBottomMetal = features.bottom_metal && features.bottom_metal.toLowerCase().includes('tikka');
+-      if (hasTikkaAction) { updates.action_inlet = undefined; clearedFields.push('Action Inlet'); }
+-      if (hasTikkaBarrel) { updates.barrel_inlet = undefined; clearedFields.push('Barrel Inlet'); }
+-      if (hasTikkaBottomMetal) { updates.bottom_metal = undefined; clearedFields.push('Bottom Metal'); }
+-      if (clearedFields.length > 0) {
+-        setFeatures((prev) => ({ ...prev, ...updates }));
+-        toast({ title: 'Options Updated', description: `... Tikka options are not available ...`, variant: 'default' });
++      if (features.action_inlet && features.action_inlet.toLowerCase().includes('tikka')) {
++        updates.action_inlet = undefined; clearedFields.push('Action Inlet');
++      }
++      if (features.barrel_inlet && features.barrel_inlet.toLowerCase().includes('tikka')) {
++        updates.barrel_inlet = undefined; clearedFields.push('Barrel Inlet');
++      }
++      if (features.bottom_metal && features.bottom_metal.toLowerCase().includes('tikka')) {
++        updates.bottom_metal = undefined; clearedFields.push('Bottom Metal');
+       }
+     }
+-  }, [
+-    modelId,
+-    modelOptions,
+-    features.action_inlet,
+-    features.barrel_inlet,   // ← removed
+-    features.bottom_metal,
+-    toast,
+-  ]);
++
++    if (clearedFields.length > 0) {
++      setFeatures((prev) => ({ ...prev, ...updates }));
++      toast({
++        title: 'Options Updated',
++        description: isTikkaModel
++          ? `${clearedFields.join(', ')} cleared - Only Tikka options are available for this stock model.`
++          : `${clearedFields.join(', ')} cleared - Tikka options are not available for this stock model.`,
++        variant: 'default',
++      });
++    }
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [modelId, modelOptions, toast]);
+Three changes made and why:
+
+isTikkaModel from model.id — selectedModel?.id.toLowerCase().includes('tikka') instead of reading displayName/name. Model IDs (alpine_hunter_tikka, cf_visigoth_tikka, privateer-tikka, etc.) are stable data-layer identifiers. Display names can be edited in the admin UI without breaking the rule.
+
+features.barrel_inlet removed from deps — the effect no longer fires when the user picks a barrel option. All three features.* deps are removed (not just barrel_inlet) so the effect exclusively fires on modelId changes, which is what requirement 3 requires.
+
+eslint-disable comment — added because intentionally omitting features.* from the dep array will trigger the exhaustive-deps lint rule. The comment makes the intent explicit rather than appearing to be an oversight.
+
+Intentional behaviour change: If the user is on a Tikka model and somehow lands a non-Tikka barrel_inlet in state (e.g., via programmatic duplicate), the clearing will not fire until the model is changed. The dropdown filter (which hides non-Tikka options for Tikka models visually) still prevents accidental selection through normal UI interaction.

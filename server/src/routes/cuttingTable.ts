@@ -748,25 +748,30 @@ router.get('/fabric-inventory/by-material/:materialId', async (req, res) => {
 router.get('/fabric-inventory-by-icn/:icn', async (req, res) => {
   try {
     const { icn } = req.params;
+    const needle = icn.toLowerCase();
     const allInventory = await storage.getAllCuttingFabricInventory();
-    const matches = allInventory.filter(item => 
-      item.internalControlNumber && 
-      item.internalControlNumber.toLowerCase().includes(icn.toLowerCase())
-    );
-    
-    const exactMatch = allInventory.find(item => 
-      item.internalControlNumber && 
-      item.internalControlNumber.toLowerCase() === icn.toLowerCase()
-    );
-    
+
+    const identifierFields = ['internalControlNumber', 'barcode', 'lotNumber', 'batchNumber', 'rollNumber'] as const;
+
+    const matchesField = (item: any, exact: boolean) =>
+      identifierFields.some(f => {
+        const val = item[f];
+        if (!val) return false;
+        return exact
+          ? val.toLowerCase() === needle
+          : val.toLowerCase().includes(needle);
+      });
+
+    const exactMatch = allInventory.find(item => matchesField(item, true));
     if (exactMatch) {
       return res.json({ match: exactMatch, suggestions: [] });
     }
-    
-    if (matches.length > 0) {
-      return res.json({ match: null, suggestions: matches.slice(0, 10) });
+
+    const partialMatches = allInventory.filter(item => matchesField(item, false));
+    if (partialMatches.length > 0) {
+      return res.json({ match: null, suggestions: partialMatches.slice(0, 10) });
     }
-    
+
     res.json({ match: null, suggestions: [] });
   } catch (error) {
     console.error('Error fetching fabric inventory by ICN:', error);
@@ -1301,111 +1306,151 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
       : null;
 
     // Generate printable HTML with barcode
+    const expFormatted = inventory.expirationDate
+      ? new Date(inventory.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })
+      : null;
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Barcode Label - ${inventory.barcode}</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     @media print {
-      @page { 
-        margin: 0;
-        size: 3.33in 4in;
-      }
-      body { margin: 0; }
-      .no-print { display: none; }
+      @page { margin: 0.4in 0.5in; }
+      .no-print { display: none !important; }
+      body { background: white; padding: 0; }
+      .label { width: 100%; height: 100%; border: 2px solid #000; }
     }
     body {
       font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      background: #f5f5f5;
-    }
-    .label {
-      background: white;
-      padding: 10px;
-      border: 2px solid #333;
-      width: 3.33in;
-      height: 4in;
-      text-align: center;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: #e8e8e8;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      gap: 14px;
     }
-    .label-header {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 6px;
-      color: #333;
+    .controls {
+      display: flex;
+      gap: 10px;
     }
-    .label-info {
-      font-size: 9px;
-      margin: 2px 0;
-      color: #666;
-      line-height: 1.2;
-    }
-    .barcode-container {
-      margin: 6px 0;
-      max-width: 100%;
-      overflow: hidden;
-    }
-    .barcode-container svg {
-      max-width: 100%;
-      height: auto;
-    }
-    .barcode-text {
-      font-size: 10px;
-      font-weight: bold;
-      margin-top: 4px;
-      letter-spacing: 0.5px;
-      word-break: break-all;
-    }
-    .print-btn {
-      margin-top: 12px;
-      padding: 8px 16px;
-      background: #007bff;
-      color: white;
+    .btn {
+      padding: 9px 20px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
       font-size: 14px;
+      font-weight: bold;
     }
-    .print-btn:hover {
-      background: #0056b3;
+    .btn-print { background: #1a56db; color: white; }
+    .btn-print:hover { background: #1e40af; }
+    .btn-close { background: #6b7280; color: white; }
+    .btn-close:hover { background: #4b5563; }
+    .label {
+      background: white;
+      border: 2px solid #000;
+      width: 7in;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .label-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 10px;
+    }
+    .company {
+      font-size: 15px;
+      font-weight: bold;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .label-type {
+      font-size: 13px;
+      color: #000;
+    }
+    .fabric-name {
+      font-size: 20px;
+      font-weight: bold;
+      color: #000;
+      line-height: 1.25;
+    }
+    .fields {
+      display: flex;
+      gap: 40px;
+    }
+    .field {
+      font-size: 13px;
+      color: #000;
+      line-height: 1.5;
+    }
+    .field-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field-value {
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .barcode-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 8px;
+    }
+    .barcode-section svg {
+      width: 100%;
+      max-width: 6in;
+    }
+    .barcode-text {
+      font-size: 12px;
+      font-family: monospace;
+      color: #000;
+      letter-spacing: 1px;
+      margin-top: 4px;
     }
   </style>
 </head>
 <body>
+  <div class="controls no-print">
+    <button class="btn btn-print" onclick="window.print()">Print Label</button>
+    <button class="btn btn-close" onclick="window.close()">Close</button>
+  </div>
   <div class="label">
-    <div class="label-header">AG Composites - Fabric Inventory</div>
-    ${line ? `<div class="label-info">Production Line: <strong>${line.lineName}</strong></div>` : ''}
-    ${inventory.source ? `<div class="label-info">Source: ${inventory.source}</div>` : ''}
-    ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
-    ${inventory.batchNumber ? `<div class="label-info">Batch: ${inventory.batchNumber}</div>` : ''}
-    ${inventory.location ? `<div class="label-info">Location: ${inventory.location}</div>` : ''}
-    ${inventory.conformanceDocumentLink ? `<div class="label-info">📄 Conformance Doc: <a href="${inventory.conformanceDocumentLink}" target="_blank" style="color: #007bff; text-decoration: none;">View Link</a></div>` : ''}
-    <div class="barcode-container">
-      <svg id="barcode"></svg>
+    <div class="label-top">
+      <div class="company">AG Composites</div>
+      <div class="label-type">Fabric Inventory${line ? ' &bull; ' + line.lineName : ''}</div>
     </div>
-    <div class="barcode-text">${inventory.barcode}</div>
-    <button class="print-btn no-print" onclick="window.print()">Print Label</button>
+    <div class="fabric-name">${inventory.fabric || inventory.fabricPartNumber || 'Fabric Roll'}</div>
+    <div class="fields">
+      ${inventory.rollNumber ? `<div class="field"><div class="field-label">Roll #</div><div class="field-value">${inventory.rollNumber}</div></div>` : ''}
+      ${expFormatted ? `<div class="field"><div class="field-label">Expires</div><div class="field-value">${expFormatted}</div></div>` : ''}
+      ${inventory.source ? `<div class="field"><div class="field-label">Source</div><div class="field-value">${inventory.source}</div></div>` : ''}
+    </div>
+    <div class="barcode-section">
+      <svg id="barcode"></svg>
+      <div class="barcode-text">${inventory.barcode}</div>
+    </div>
   </div>
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
       format: "CODE128",
-      width: 1.2,
-      height: 40,
+      width: 2.5,
+      height: 80,
       displayValue: false,
-      margin: 2,
-      textMargin: 0
+      margin: 0
     });
-  </script>
+  <\/script>
 </body>
 </html>
     `;
@@ -2058,7 +2103,14 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               )
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
-              AND (inv.is_packet = true OR po.department = 'Cutting Table')`;
+              AND (
+                inv.is_packet = true
+                OR po.department ILIKE '%cutting%'
+                OR bom.id IS NOT NULL
+                OR LOWER(po.part_name) LIKE '%packet%'
+                OR LOWER(po.sku) LIKE '%packet%'
+                OR po.sku IN ('P706', 'P707')
+              )`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `

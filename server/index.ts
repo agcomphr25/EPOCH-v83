@@ -144,6 +144,7 @@ const publicRoutes = [
   '/api/part-routings',  // Part routing data needed by traveler execution
   '/api/routing-documents', // Routing documents needed by traveler execution
   '/api/material-lots',  // Material lot validation needed by traveler execution
+  '/api/cutting-table/fabric-inventory-by-icn', // ICN lookup for P2 traveler material scanner
   '/api/production/timers', // Production Timer Station - public for floor displays
 ];
 
@@ -1041,6 +1042,57 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ production_program_runs linked log migration:', runLogErr.message);
       }
 
+      // Normalize legacy traceability field IDs in inventory_items for fabric items
+      // Old field IDs ("lot", "batch", "expDate", "part") don't match TRACEABILITY_FIELD_LABELS
+      // and cause the receiving form to show raw IDs instead of friendly labels
+      try {
+        const { sql: sqlTrace } = await import('drizzle-orm');
+        const legacyRows = await db.execute(sqlTrace`
+          SELECT id, traceability_fields
+          FROM inventory_items
+          WHERE is_fabric = true
+            AND traceability_fields IS NOT NULL
+            AND traceability_fields::text != '[]'
+            AND (
+              traceability_fields::text LIKE '%"lot"%'
+              OR traceability_fields::text LIKE '%"batch"%'
+              OR traceability_fields::text LIKE '%"expDate"%'
+              OR traceability_fields::text LIKE '%"part"%'
+            )
+        `);
+        
+        const legacyMap: Record<string, string> = {
+          lot: 'batchLotNumber',
+          batch: 'aluminumHeat',
+          expDate: 'expirationDate',
+          part: 'supplierPartNumber',
+        };
+        
+        let fixedCount = 0;
+        for (const row of legacyRows.rows as any[]) {
+          const fields: string[] = row.traceability_fields || [];
+          const normalized = Array.from(new Set(
+            fields.map((f: string) => legacyMap[f] || f)
+          ));
+          if (JSON.stringify(normalized) !== JSON.stringify(fields)) {
+            await db.execute(sqlTrace`
+              UPDATE inventory_items
+              SET traceability_fields = ${JSON.stringify(normalized)}::jsonb
+              WHERE id = ${row.id}
+            `);
+            fixedCount++;
+          }
+        }
+        
+        if (fixedCount > 0) {
+          console.log(`✅ Normalized legacy traceability field IDs on ${fixedCount} fabric inventory item(s)`);
+        } else {
+          console.log('✅ Fabric inventory item traceability fields are up to date');
+        }
+      } catch (traceFieldErr: any) {
+        console.warn('⚠️ Traceability field normalization:', traceFieldErr.message);
+      }
+
       // Seed default inventory departments if table is empty
       try {
         const { sql: sqlDept } = await import('drizzle-orm');
@@ -1066,6 +1118,65 @@ async function initializeBackgroundServices() {
         }
       } catch (deptSeedErr: any) {
         console.warn('⚠️ Inventory departments seed:', deptSeedErr.message);
+      }
+
+      // Fix fabric inventory records where all traceability data was concatenated into supplier_part_number
+      // This happened when comma-separated notes were parsed incorrectly (the parser expected pipe-separated)
+      try {
+        const { sql: sqlFabricFix } = await import('drizzle-orm');
+        const fixResult = await db.execute(sqlFabricFix`
+          UPDATE cutting_fabric_inventory
+          SET
+            supplier_part_number = TRIM((regexp_match(supplier_part_number, '^([^,]+)'))[1]),
+            roll_number = COALESCE(
+              roll_number,
+              TRIM((regexp_match(supplier_part_number, 'Roll Number: *([^,|]+)'))[1])
+            ),
+            lot_number = COALESCE(
+              lot_number,
+              TRIM((regexp_match(supplier_part_number, 'Batch/Lot #: *([^,|]+)'))[1])
+            ),
+            expiration_date = CASE
+              WHEN expiration_date IS NULL AND TRIM((regexp_match(supplier_part_number, 'Expiration Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]) IS NOT NULL
+              THEN (TRIM((regexp_match(supplier_part_number, 'Expiration Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]))::date
+              ELSE expiration_date
+            END,
+            manufacture_date = CASE
+              WHEN manufacture_date IS NULL AND TRIM((regexp_match(supplier_part_number, 'Manufacture Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]) IS NOT NULL
+              THEN (TRIM((regexp_match(supplier_part_number, 'Manufacture Date: *([0-9]{4}-[0-9]{2}-[0-9]{2})'))[1]))::date
+              ELSE manufacture_date
+            END
+          WHERE supplier_part_number LIKE '%, Roll Number:%'
+        `);
+        const fixCount = (fixResult as any)?.rowCount ?? 0;
+        if (fixCount > 0) {
+          console.log(`✅ Fixed ${fixCount} fabric inventory record(s) with concatenated traceability in supplier_part_number`);
+        }
+      } catch (fabricFixErr: any) {
+        console.warn('⚠️ fabric_inventory concatenated field fix:', fabricFixErr.message);
+      }
+
+      // Backfill square_meters for fabric inventory records created from PO receipt that are missing it
+      try {
+        const { sql: sqlFabricSqm } = await import('drizzle-orm');
+        const backfillResult = await db.execute(sqlFabricSqm`
+          UPDATE cutting_fabric_inventory cfi
+          SET square_meters = ii.purchase_quantity
+          FROM inventory_items ii
+          WHERE cfi.fabric_part_number = ii.ag_part_number
+            AND cfi.square_meters IS NULL
+            AND cfi.status = 'active'
+            AND cfi.quantity_in_stock > 0
+            AND LOWER(TRIM(ii.purchase_unit)) IN ('sq m', 'sqm', 'square meters', 'm2', 'm²')
+            AND ii.purchase_quantity IS NOT NULL
+            AND ii.purchase_quantity > 0
+        `);
+        const count = (backfillResult as any)?.rowCount ?? 0;
+        if (count > 0) {
+          console.log(`✅ Backfilled square_meters for ${count} fabric inventory record(s) from inventory item purchase quantities`);
+        }
+      } catch (fabricSqmErr: any) {
+        console.warn('⚠️ fabric_inventory square_meters backfill:', fabricSqmErr.message);
       }
 
       // Seed default health check types and config if not present

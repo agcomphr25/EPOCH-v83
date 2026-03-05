@@ -1,0 +1,347 @@
+READ-ONLY FORENSIC AUDIT — EPOCH SHIPPING TRACKER + SHIPMENT DATA MODEL
+
+This is a STRICTLY READ-ONLY audit. Do NOT modify any files.
+
+The goal is to fully understand how EPOCH currently determines:
+- stocks shipped per week
+- Wednesday → Tuesday week logic
+- the /shipping-tracker page
+- the backend service that calculates shipped quantities
+
+This audit will be used to build a new report:
+Forms & Reports → Shipping Summary
+
+The new report will:
+• reuse the same shipment calculation logic as /shipping-tracker
+• allow manual weekly additions for OEM shipments
+• allow manual weekly additions for Distributor shipments by customer
+• display multiple weeks historically
+• display YTD totals by category
+• allow clicking a week to view order detail
+
+Your job is ONLY to map the existing system.
+
+------------------------------------------------
+SECTION 1 — FILE DISCOVERY
+------------------------------------------------
+
+Search the entire repo and list all files that reference:
+
+shipping
+shipped
+shipment
+shipping-tracker
+stock shipped
+order shipped
+ship date
+shipped_at
+tracking
+carrier
+
+Return a structured list:
+
+PATH
+PURPOSE
+KEY FUNCTIONS
+
+Example:
+
+server/routes/shipping.ts
+client/pages/shippingTracker.tsx
+server/services/shippingService.ts
+
+
+------------------------------------------------
+SECTION 2 — SHIPPING TRACKER PAGE
+------------------------------------------------
+
+Locate the frontend page that renders:
+
+/shipping-tracker
+
+Most likely:
+
+client/src/pages/ShippingTracker.tsx
+or similar.
+
+Extract:
+
+1) API endpoints it calls
+2) week selector logic
+3) year selector logic
+4) where the "Stocks Shipped This Week" number comes from
+5) where the list of order IDs comes from
+
+Return:
+
+FILE
+LINE NUMBERS
+CODE SNIPPETS
+
+
+------------------------------------------------
+SECTION 3 — API ROUTES
+------------------------------------------------
+
+Locate the backend route used by the shipping tracker.
+
+Likely patterns:
+
+GET /api/shipping-tracker
+GET /api/shipping/week
+GET /api/orders/shipped
+GET /api/shipping-summary
+
+For each route:
+
+Return:
+
+ROUTE
+FILE
+FUNCTION
+SERVICE CALLS
+QUERY LOGIC
+
+
+------------------------------------------------
+SECTION 4 — WEEK CALCULATION LOGIC
+------------------------------------------------
+
+Determine exactly how EPOCH calculates weeks.
+
+We know shipping weeks run:
+
+Wednesday → Tuesday
+
+Find where this is implemented.
+
+Search for:
+
+getWeekNumber
+calculateWeek
+startOfWeek
+shippingWeek
+weekStart
+weekEnd
+
+Return:
+
+FILE
+FUNCTION
+ALGORITHM
+
+Example output:
+
+calculateShippingWeek(date)
+returns:
+
+{
+ weekNumber,
+ year,
+ startDate,
+ endDate
+}
+
+
+------------------------------------------------
+SECTION 5 — SHIPMENT DATA SOURCE
+------------------------------------------------
+
+Identify exactly what determines that a stock has shipped.
+
+Possible fields:
+
+orders.shippedAt
+orders.status = 'shipped'
+orders.completedAt
+traveler events
+shipping events
+barcode scan events
+
+Return:
+
+TABLE
+COLUMN
+MEANING
+
+
+------------------------------------------------
+SECTION 6 — ORDER TYPES
+------------------------------------------------
+
+Identify how the system differentiates:
+
+Regular orders
+OEM orders (from purchase orders)
+
+Search for:
+
+orderType
+sourceType
+poId
+purchaseOrderId
+oem
+customerType
+
+Return:
+
+FIELD
+VALUES
+WHERE USED
+
+
+------------------------------------------------
+SECTION 7 — PURCHASE ORDER SHIPMENTS
+------------------------------------------------
+
+Find how OEM shipments currently flow.
+
+Search for:
+
+purchase_orders
+purchase_order_items
+p1_po
+po_shipped
+oem
+
+Return:
+
+FILES
+ROUTES
+SERVICES
+DATABASE TABLES
+
+
+------------------------------------------------
+SECTION 8 — DATABASE TABLES
+------------------------------------------------
+
+Extract the full schema for all shipping-related tables:
+
+orders
+order_items
+purchase_orders
+purchase_order_items
+shipping events
+traveler events
+
+Return:
+
+TABLE
+COLUMN
+TYPE
+PURPOSE
+
+
+------------------------------------------------
+SECTION 9 — EXISTING SERVICE FUNCTION
+------------------------------------------------
+
+Identify the function used by /shipping-tracker to calculate:
+
+Stocks Shipped This Week
+
+Example candidates:
+
+getWeeklyShipmentTotals()
+calculateShippedStocks()
+getShippedOrdersByWeek()
+
+Return:
+
+FUNCTION NAME
+FILE
+QUERY
+INPUT PARAMETERS
+OUTPUT FORMAT
+
+
+------------------------------------------------
+SECTION 10 — PERFORMANCE / CACHING
+------------------------------------------------
+
+Determine if the shipping tracker uses:
+
+memoization
+cached queries
+materialized results
+
+Search for:
+
+cache
+memo
+redis
+inMemoryCache
+
+Return findings.
+
+
+------------------------------------------------
+SECTION 11 — DATA FLOW MAP
+------------------------------------------------
+
+Produce a complete flow diagram:
+
+User opens /shipping-tracker
+↓
+Frontend calls API
+↓
+API route
+↓
+Service function
+↓
+Database query
+↓
+Returned JSON
+
+
+------------------------------------------------
+SECTION 12 — EDGE CASES
+------------------------------------------------
+
+Identify potential edge cases:
+
+duplicate shipments
+partial shipments
+order edited after shipping
+timezone handling
+week rollover logic
+
+
+------------------------------------------------
+SECTION 13 — AUDIT SUMMARY
+------------------------------------------------
+
+Provide a final section:
+
+CURRENT SYSTEM SUMMARY
+
+1) Where shipping totals come from
+2) How weeks are calculated
+3) How shipped orders are detected
+4) Whether OEM shipments are automatically included
+5) Whether distributor shipments are identifiable
+
+
+------------------------------------------------
+IMPORTANT
+------------------------------------------------
+
+Do NOT modify any code.
+
+Only inspect files and produce a structured report.
+
+Return results in a clean multi-section format.
+
+This audit will be used to implement:
+
+Forms & Reports → Shipping Summary
+
+which will combine:
+
+Regular shipments (auto)
+OEM shipments (manual for now)
+Distributor shipments by customer (manual)
+Weekly history
+YTD totals
+Click-through order lists

@@ -1,0 +1,216 @@
+COPY-PASTE AUDIT PROMPT FOR REPLIT AGENT
+This is a READ-ONLY FORENSIC AUDIT. Do not modify files.
+
+Problem Description
+-------------------
+In the Order Entry page of EPOCH, when a user selects a "Barrel Contour" for a Tikka configuration, the UI appears to save it, but the value is NOT persisted. When the order is reloaded or edited later, the Barrel Contour is blank.
+
+Other nearby fields such as:
+- Action Inlet
+- Bottom Metal
+- Barrel Inlet
+- Rails
+persist correctly.
+
+The objective of this audit is to trace the Barrel Contour field from:
+
+UI selection
+→ frontend state
+→ API request
+→ server route
+→ storage layer
+→ database schema
+→ retrieval query
+→ UI rehydration
+
+and determine EXACTLY where the value is lost.
+
+Audit Requirements
+------------------
+
+Perform a complete trace and produce a structured report covering:
+
+SECTION 1 — UI COMPONENT
+Locate the Order Entry UI.
+
+Likely files:
+
+client/src/components/OrderEntry.tsx
+client/src/pages/OrderEntry.tsx
+client/src/components/order-entry/*
+client/src/components/orders/*
+
+Find:
+- Barrel Contour select/dropdown component
+- the state variable storing the value
+- the field name used in the form state
+- how it is added to the order payload
+
+Report:
+- state variable name
+- form field name
+- type/interface definition
+- where it is included in submit payload
+
+Example questions to answer:
+- Is the field named `barrelContour`, `barrel_contour`, or something else?
+- Does the field exist in the order object?
+
+SECTION 2 — API REQUEST
+Locate where the Order Entry page sends data to the backend.
+
+Find the POST or PUT request.
+
+Likely endpoints:
+
+POST /api/orders
+PUT /api/orders/:id
+PATCH /api/orders/:id
+
+Inspect the payload.
+
+Confirm whether Barrel Contour is included.
+
+Report:
+- payload JSON example
+- exact key name used
+
+SECTION 3 — SERVER ROUTE
+Locate the server route receiving the request.
+
+Likely files:
+
+server/src/routes/orders.ts
+server/src/routes/order-entry.ts
+server/src/routes/orderRoutes.ts
+
+Inspect:
+
+- request body parsing
+- destructuring of fields
+- validation schema (zod or similar)
+
+Determine whether Barrel Contour is:
+
+A) accepted
+B) ignored
+C) removed during validation
+
+SECTION 4 — STORAGE LAYER
+Trace the write path into the database.
+
+Likely files:
+
+server/src/storage/orders.ts
+server/src/services/orderService.ts
+server/src/db/orders.ts
+
+Find the INSERT and UPDATE statements.
+
+Report whether Barrel Contour is included in:
+
+insert(orders)
+update(orders)
+
+Check whether the value is accidentally excluded from the `updates` object.
+
+SECTION 5 — DATABASE SCHEMA
+Inspect the database schema.
+
+Likely files:
+
+server/src/db/schema.ts
+server/src/db/ordersSchema.ts
+drizzle schema definitions
+
+Verify whether the column exists.
+
+Look for:
+
+barrelContour
+barrel_contour
+contour
+barrel_profile
+
+Report:
+- column name
+- data type
+- nullable or not
+
+SECTION 6 — ORDER FETCH / HYDRATION
+Trace the code that loads existing orders for editing.
+
+Look for:
+
+GET /api/orders/:id
+
+Confirm whether Barrel Contour is selected and returned to the frontend.
+
+If the column exists but is not returned, identify where it is dropped.
+
+SECTION 7 — COMPARISON WITH BARREL INLET
+Barrel Inlet works correctly and is structurally similar.
+
+Perform a side-by-side comparison of:
+
+Barrel Inlet
+Barrel Contour
+
+Check:
+
+UI field name
+payload key
+API field
+DB column
+read query
+
+Identify any mismatch.
+
+SECTION 8 — ROOT CAUSE
+Determine which of the following is happening:
+
+1. Field never sent from frontend
+2. Field dropped by API validation
+3. Field not included in insert/update
+4. DB column missing
+5. Field not returned in GET
+6. UI not binding returned value
+
+Provide exact file + line numbers where the failure occurs.
+
+SECTION 9 — SURGICAL FIX
+Propose a minimal patch.
+
+The fix should include:
+
+1) frontend field mapping correction
+2) server route inclusion
+3) storage layer inclusion
+4) schema update (if needed)
+5) hydration fix (if needed)
+
+Provide exact code snippets for the fix.
+
+SECTION 10 — MIGRATION CHECK
+If the DB column is missing, propose a safe Drizzle migration.
+
+Output Format
+-------------
+
+Return the report in this format:
+
+FORENSIC AUDIT — BARREL CONTOUR PERSISTENCE
+
+SECTION 1 — UI STATE
+SECTION 2 — API PAYLOAD
+SECTION 3 — SERVER ROUTE
+SECTION 4 — STORAGE LAYER
+SECTION 5 — DATABASE SCHEMA
+SECTION 6 — FETCH / HYDRATION
+SECTION 7 — BARREL INLET COMPARISON
+SECTION 8 — ROOT CAUSE
+SECTION 9 — PATCH
+SECTION 10 — MIGRATION (if required)
+
+This audit must be READ-ONLY.
+Do not modify files.

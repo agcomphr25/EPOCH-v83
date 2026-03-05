@@ -146,6 +146,14 @@ interface OrderDraftData {
   altShipToAddress: { street: string; city: string; state: string; zipCode: string; country: string };
 }
 
+const TIKKA_BARREL_OPTIONS = [
+  'tikka_proof_sendero',
+  'tikka_proof_sendero_lite',
+  'tikka_factory_sporter_lite',
+  'tikka_hca_summit',
+  'tikka_hca_heavy',
+] as const;
+
 export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
   const { toast } = useToast();
@@ -1166,101 +1174,6 @@ export default function OrderEntry() {
       });
     }
   }, [features.action_length, features.bottom_metal, toast]);
-
-  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options
-  useEffect(() => {
-    if (!modelId || modelOptions.length === 0) return;
-
-    const selectedModel = modelOptions.find((m) => m.id === modelId);
-    const modelName = selectedModel?.displayName || selectedModel?.name || '';
-    const isTikkaModel = modelName.toLowerCase().includes('tikka');
-
-    const clearedFields: string[] = [];
-    const updates: Record<string, undefined> = {};
-
-    // If Tikka model, clear any NON-Tikka selections
-    if (isTikkaModel) {
-      const hasNonTikkaAction =
-        features.action_inlet &&
-        !features.action_inlet.toLowerCase().includes('tikka');
-      const hasNonTikkaBarrel =
-        features.barrel_inlet &&
-        !features.barrel_inlet.toLowerCase().includes('tikka');
-      const hasNonTikkaBottomMetal =
-        features.bottom_metal &&
-        !features.bottom_metal.toLowerCase().includes('tikka');
-
-      if (hasNonTikkaAction) {
-        updates.action_inlet = undefined;
-        clearedFields.push('Action Inlet');
-      }
-      if (hasNonTikkaBarrel) {
-        updates.barrel_inlet = undefined;
-        clearedFields.push('Barrel Inlet');
-      }
-      if (hasNonTikkaBottomMetal) {
-        updates.bottom_metal = undefined;
-        clearedFields.push('Bottom Metal');
-      }
-
-      if (clearedFields.length > 0) {
-        setFeatures((prev) => ({
-          ...prev,
-          ...updates,
-        }));
-
-        toast({
-          title: 'Options Updated',
-          description: `${clearedFields.join(', ')} cleared - Only Tikka options are available for this stock model.`,
-          variant: 'default',
-        });
-      }
-    } else {
-      // If not a Tikka model, clear any Tikka-specific selections
-      const hasTikkaAction =
-        features.action_inlet &&
-        features.action_inlet.toLowerCase().includes('tikka');
-      const hasTikkaBarrel =
-        features.barrel_inlet &&
-        features.barrel_inlet.toLowerCase().includes('tikka');
-      const hasTikkaBottomMetal =
-        features.bottom_metal &&
-        features.bottom_metal.toLowerCase().includes('tikka');
-
-      if (hasTikkaAction) {
-        updates.action_inlet = undefined;
-        clearedFields.push('Action Inlet');
-      }
-      if (hasTikkaBarrel) {
-        updates.barrel_inlet = undefined;
-        clearedFields.push('Barrel Inlet');
-      }
-      if (hasTikkaBottomMetal) {
-        updates.bottom_metal = undefined;
-        clearedFields.push('Bottom Metal');
-      }
-
-      if (clearedFields.length > 0) {
-        setFeatures((prev) => ({
-          ...prev,
-          ...updates,
-        }));
-
-        toast({
-          title: 'Options Updated',
-          description: `${clearedFields.join(', ')} cleared - Tikka options are not available for this stock model.`,
-          variant: 'default',
-        });
-      }
-    }
-  }, [
-    modelId,
-    modelOptions,
-    features.action_inlet,
-    features.barrel_inlet,
-    features.bottom_metal,
-    toast,
-  ]);
 
   // Business rule: M1A stock models - default Action Inlet, Barrel Inlet, Bottom Metal to Factory M1A and restrict Left handedness
   useEffect(() => {
@@ -3883,32 +3796,9 @@ export default function OrderEntry() {
                           const selectedModel = modelOptions.find(
                             (m) => m.id === modelId
                           );
-                          const modelName =
-                            selectedModel?.displayName ||
-                            selectedModel?.name ||
-                            '';
-                          const isTikkaModel = modelName
-                            .toLowerCase()
-                            .includes('tikka');
-                          const barrelFeature = featureDefs.find(
-                            (f) =>
-                              f.name === 'barrel_inlet' ||
-                              f.id === 'barrel_inlet'
-                          );
-                          const hasTikkaOptions = barrelFeature?.options?.some(
-                            (opt) =>
-                              opt.value.toLowerCase().includes('tikka') ||
-                              opt.label.toLowerCase().includes('tikka')
-                          );
-                          const hasNonTikkaOptions =
-                            barrelFeature?.options?.some(
-                              (opt) =>
-                                !opt.value.toLowerCase().includes('tikka') &&
-                                !opt.label.toLowerCase().includes('tikka') &&
-                                opt.value.trim() !== ''
-                            );
-
-                          if (isTikkaModel && hasNonTikkaOptions) {
+                          const isTikkaModel =
+                            selectedModel?.id?.toLowerCase().includes('tikka') || false;
+                          if (isTikkaModel) {
                             return (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                                 Tikka only
@@ -3954,62 +3844,35 @@ export default function OrderEntry() {
                         <SelectContent>
                           <SelectItem value="__NONE__">None</SelectItem>
                           {(() => {
-                            // Check if selected model is a Tikka model
                             const selectedModel = modelOptions.find(
                               (m) => m.id === modelId
                             );
-                            const modelName =
-                              selectedModel?.displayName ||
-                              selectedModel?.name ||
-                              '';
-                            const isTikkaModel = modelName
-                              .toLowerCase()
-                              .includes('tikka');
-
-                            return (
-                              featureDefs
-                                .find(
-                                  (f) =>
-                                    f.name === 'barrel_inlet' ||
-                                    f.id === 'barrel_inlet'
-                                )
-                                ?.options?.filter((option) => {
-                                  // Filter out empty options
-                                  if (
-                                    !option.value ||
-                                    option.value.trim() === ''
-                                  )
-                                    return false;
-
-                                  const isTikkaOption =
-                                    option.value
-                                      .toLowerCase()
-                                      .includes('tikka') ||
-                                    option.label
-                                      .toLowerCase()
-                                      .includes('tikka');
-
-                                  // Business rule: Tikka model shows ONLY Tikka options
-                                  if (isTikkaModel && !isTikkaOption) {
-                                    return false;
-                                  }
-
-                                  // Business rule: Non-Tikka model hides Tikka options
-                                  if (!isTikkaModel && isTikkaOption) {
-                                    return false;
-                                  }
-
+                            const isTikkaModel =
+                              selectedModel?.id?.toLowerCase().includes('tikka') || false;
+                            const barrelOptions =
+                              featureDefs.find(
+                                (f) =>
+                                  f.name === 'barrel_inlet' ||
+                                  f.id === 'barrel_inlet'
+                              )?.options ?? [];
+                            const filteredBarrelOptions = barrelOptions.filter(
+                              (opt) => {
+                                if (!opt.value || opt.value.trim() === '')
+                                  return false;
+                                const isTikkaValue = (
+                                  TIKKA_BARREL_OPTIONS as readonly string[]
+                                ).includes(opt.value);
+                                if (features.barrel_inlet === opt.value)
                                   return true;
-                                })
-                                ?.map((option) => (
-                                  <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                  >
-                                    {option.label}
-                                  </SelectItem>
-                                )) || []
+                                if (isTikkaModel) return isTikkaValue;
+                                return !isTikkaValue;
+                              }
                             );
+                            return filteredBarrelOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
                           })()}
                         </SelectContent>
                       </Select>

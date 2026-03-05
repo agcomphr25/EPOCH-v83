@@ -2297,32 +2297,37 @@ export function registerRoutes(app: Express): Server {
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
-      const { storage } = await import('../../storage');
-      const pos = await storage.getAllP2PurchaseOrders();
-      const serializedItems = await storage.getP2SerializedItems({});
-      
-      const openPOs = pos.filter((po: any) => po.status !== 'COMPLETED').length;
-      const pendingBOMs = pos.filter((po: any) => !po.bomConfigured).length;
-      const scheduledItems = serializedItems.filter((s: any) => s.productionStatus === 'SCHEDULED').length;
-      const inProduction = serializedItems.filter((s: any) => 
-        s.productionStatus && !['PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED'].includes(s.productionStatus)
-      ).length;
-      
+      const { pool } = await import('../../db');
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const completedThisWeek = serializedItems.filter((s: any) => 
-        s.productionStatus === 'COMPLETED' && s.completedAt && new Date(s.completedAt) > oneWeekAgo
-      ).length;
-      
-      const pendingQC = serializedItems.filter((s: any) => s.productionStatus === 'FINAL_QC').length;
-      
+
+      const [poStats, itemStats] = await Promise.all([
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','CANCELED')) AS "openPOs",
+            COUNT(*) FILTER (WHERE bom_configured = false AND status NOT IN ('COMPLETED','CANCELED')) AS "pendingBOMs"
+          FROM p2_purchase_orders
+        `),
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'SCHEDULED') AS "scheduledItems",
+            COUNT(*) FILTER (WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED') AND status IS NOT NULL) AS "inProduction",
+            COUNT(*) FILTER (WHERE status = 'COMPLETED' AND completed_at > $1) AS "completedThisWeek",
+            COUNT(*) FILTER (WHERE status = 'FINAL_QC') AS "pendingQC"
+          FROM p2_serialized_items
+        `, [oneWeekAgo]),
+      ]);
+
+      const po = poStats.rows[0];
+      const si = itemStats.rows[0];
+
       res.json({
-        openPOs,
-        pendingBOMs,
-        scheduledItems,
-        inProduction,
-        completedThisWeek,
-        pendingQC
+        openPOs:          parseInt(po.openPOs, 10)          || 0,
+        pendingBOMs:      parseInt(po.pendingBOMs, 10)      || 0,
+        scheduledItems:   parseInt(si.scheduledItems, 10)   || 0,
+        inProduction:     parseInt(si.inProduction, 10)     || 0,
+        completedThisWeek:parseInt(si.completedThisWeek, 10)|| 0,
+        pendingQC:        parseInt(si.pendingQC, 10)        || 0,
       });
     } catch (_error) {
       console.error('P2 Control Center stats error:', _error);
@@ -3126,8 +3131,10 @@ export function registerRoutes(app: Express): Server {
               const existingProdOrders = await db
                 .select()
                 .from(p2ProdTable)
-                .where(eq(p2ProdTable.p2PoId, poItem.poId))
-                .limit(1);
+                .where(eq(p2ProdTable.p2PoId, poItem.poId));
+
+              const hasCuttingDemands = existingProdOrders.some(o => o.department === 'Cutting Table');
+              const bomHasPacketItems = (bomItemsInput || []).some((item: any) => item.isManufactured);
 
               if (existingProdOrders.length === 0) {
                 console.log(`🔄 Auto-generating production orders for PO ${po?.poNumber} (including cutting table packet demands)...`);
@@ -3136,10 +3143,16 @@ export function registerRoutes(app: Express): Server {
                 console.log(`✅ Auto-generated ${prodOrders.length} production orders for PO ${po?.poNumber}`);
                 const cuttingOrders = prodOrders.filter(o => o.department === 'Cutting Table');
                 if (cuttingOrders.length > 0) {
-                  console.log(`  📋 ${cuttingOrders.length} cutting table packet demand(s) transferred to Cutting Table Control Center`);
+                  console.log(`  📋 ${cuttingOrders.length} cutting table packet demand(s) created`);
                 }
+              } else if (bomHasPacketItems && !hasCuttingDemands) {
+                console.log(`🔄 BOM has packet items but no cutting table demands exist for PO ${po?.poNumber} - generating packet demands...`);
+                const { storage } = await import('../../storage');
+                const prodOrders = await storage.generateP2ProductionOrders(poItem.poId);
+                const cuttingOrders = prodOrders.filter(o => o.department === 'Cutting Table');
+                console.log(`✅ Auto-generated ${cuttingOrders.length} cutting table packet demand(s) for PO ${po?.poNumber}`);
               } else {
-                console.log(`ℹ️ Production orders already exist for PO ${po?.poNumber} - skipping auto-generation`);
+                console.log(`ℹ️ Production orders already exist for PO ${po?.poNumber} (cutting demands: ${hasCuttingDemands}) - skipping auto-generation`);
               }
             } catch (prodError) {
               console.error(`⚠️ Failed to auto-generate production orders for PO ${po?.poNumber}:`, prodError);
@@ -3276,100 +3289,113 @@ export function registerRoutes(app: Express): Server {
       console.log(`Scheduled ${result.length} items for production`);
       
       // Auto-sync P2 cutting table demands for the affected POs
+      // Looks for PENDING production orders (any dept) where the part requires cutting (CF/FG parts)
       let cuttingTableSynced = 0;
       try {
+        const { ilike, or, sql: sqlFn } = await import('drizzle-orm');
         const affectedPoIds = [...new Set(result.map(r => r.poId))];
-        
+
+        // Pre-load packet inventory items keyed by material type
+        const cfPacketItem = await db.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.isPacket, true), ilike(inventoryItems.name, '%carbon fiber%')))
+          .limit(1).then(r => r[0] || null);
+        const fgPacketItem = await db.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.isPacket, true), or(ilike(inventoryItems.name, '%fiberglass%'), ilike(inventoryItems.name, '%fiber glass%'))))
+          .limit(1).then(r => r[0] || null);
+
+        const isCfPart = (name: string) => {
+          const n = name.toLowerCase();
+          return n.includes('carbon fiber') || n.includes('carbon fibre') || n.includes(' cf ') || n.startsWith('cf ');
+        };
+        const isFgPart = (name: string) => {
+          const n = name.toLowerCase();
+          return n.includes('fiberglass') || n.includes('fibreglass') || n.includes('fiber glass');
+        };
+
         for (const poId of affectedPoIds) {
+          // Fetch all PENDING orders for this PO
           const p2Orders = await db
             .select()
             .from(p2ProductionOrders)
-            .where(
-              and(
-                eq(p2ProductionOrders.department, 'Cutting Table'),
-                eq(p2ProductionOrders.status, 'PENDING'),
-                eq(p2ProductionOrders.p2PoId, poId)
-              )
-            );
-          
-          if (p2Orders.length === 0) continue;
-          
-          const demandMap: Record<string, { sku: string; partName: string; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null }> = {};
-          
-          for (const order of p2Orders) {
-            const key = `${order.p2PoId}-${order.p2PoItemId}-${order.sku}`;
+            .where(and(eq(p2ProductionOrders.status, 'PENDING'), eq(p2ProductionOrders.p2PoId, poId)));
+
+          // Filter to orders that need cutting — either explicitly 'Cutting Table'
+          // or Layup orders that are ACTUAL packet items (by name/SKU), not just any CF/FG part
+          const cuttingOrders = p2Orders.filter(o => {
+            if (o.department === 'Cutting Table') return true;
+            if (o.department === 'Layup' || o.department === 'layup') {
+              const name = (o.partName || '').toLowerCase();
+              const sku = (o.sku || '').toLowerCase();
+              return name.includes('packet') || sku.includes('packet') || o.sku === 'P706' || o.sku === 'P707';
+            }
+            return false;
+          });
+
+          if (cuttingOrders.length === 0) continue;
+
+          // Aggregate demand by PO item + material type
+          const demandMap: Record<string, { materialType: 'carbon_fiber' | 'fiberglass'; packetItem: typeof cfPacketItem; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null; partName: string }> = {};
+
+          for (const order of cuttingOrders) {
+            const materialType = isFgPart(order.partName || '') ? 'fiberglass' : 'carbon_fiber';
+            const packetItem = materialType === 'fiberglass' ? fgPacketItem : cfPacketItem;
+            if (!packetItem) continue; // No packet inventory item configured for this material type
+
+            const key = `${order.p2PoId}-${order.p2PoItemId}-${materialType}`;
             if (!demandMap[key]) {
-              demandMap[key] = {
-                sku: order.sku,
-                partName: order.partName,
-                p2PoId: order.p2PoId,
-                p2PoItemId: order.p2PoItemId,
-                quantity: 0,
-                dueDate: order.dueDate,
-              };
+              demandMap[key] = { materialType, packetItem, p2PoId: order.p2PoId, p2PoItemId: order.p2PoItemId, quantity: 0, dueDate: order.dueDate, partName: order.partName || '' };
             }
             demandMap[key].quantity += (order.quantity || 1);
           }
-          
-          const existingEntries = await db
-            .select()
-            .from(manufacturingQueue)
-            .where(
-              and(
-                eq(manufacturingQueue.department, 'Cutting Table'),
-                eq(manufacturingQueue.p2PoId, poId)
-              )
-            );
-          
+
+          const existingEntries = await db.select().from(manufacturingQueue)
+            .where(and(eq(manufacturingQueue.department, 'Cutting Table'), eq(manufacturingQueue.p2PoId, poId)));
+
           for (const [, demand] of Object.entries(demandMap)) {
-            const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, demand.sku)).limit(1);
-            if (!inventoryItem) continue;
-            
-            const existing = existingEntries.find(e => 
-              e.p2PoId === demand.p2PoId && 
-              e.inventoryItemId === inventoryItem.id &&
+            const existing = existingEntries.find(e =>
+              e.p2PoId === demand.p2PoId &&
+              e.inventoryItemId === demand.packetItem!.id &&
               e.p2PoItemId === demand.p2PoItemId
             );
             if (existing) continue;
-            
+
             const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, demand.p2PoId)).limit(1);
             const poNumber = po?.poNumber || `PO-${demand.p2PoId}`;
-            
-            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.sku)).limit(1);
-            
+
+            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.packetItem!.agPartNumber)).limit(1);
+
             const notesObj = {
               source: 'P2_SYNC',
               p2PoNumber: poNumber,
               p2PoId: demand.p2PoId,
               p2PoItemId: demand.p2PoItemId,
               bomId: matchingBom?.id || null,
-              materialType: 'carbon_fiber',
+              materialType: demand.materialType,
+              partName: demand.partName,
             };
-            
-            await db
-              .insert(manufacturingQueue)
-              .values({
-                inventoryItemId: inventoryItem.id,
-                department: 'Cutting Table',
-                quantityRequested: demand.quantity,
-                quantityCompleted: 0,
-                priority: 50,
-                status: 'PENDING',
-                dueDate: demand.dueDate,
-                notes: JSON.stringify(notesObj),
-                requestedBy: 'system',
-                p2PoId: demand.p2PoId,
-                p2PoItemId: demand.p2PoItemId,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-            
+
+            await db.insert(manufacturingQueue).values({
+              inventoryItemId: demand.packetItem!.id,
+              department: 'Cutting Table',
+              quantityRequested: demand.quantity,
+              quantityCompleted: 0,
+              priority: 50,
+              status: 'PENDING',
+              dueDate: demand.dueDate,
+              notes: JSON.stringify(notesObj),
+              requestedBy: 'system',
+              p2PoId: demand.p2PoId,
+              p2PoItemId: demand.p2PoItemId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+
             cuttingTableSynced++;
           }
         }
-        
+
         if (cuttingTableSynced > 0) {
-          console.log(`Auto-synced ${cuttingTableSynced} cutting table stock packet demands`);
+          console.log(`Auto-synced ${cuttingTableSynced} cutting table packet demands from P2 control center`);
         }
       } catch (syncError) {
         console.error('Non-fatal: Failed to auto-sync cutting table demands:', syncError);

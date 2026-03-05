@@ -8,13 +8,15 @@ import {
   bomLines,
   bomDefinitions,
   bomItems,
+  p2PurchaseOrderItems,
+  p2PurchaseOrders,
   insertBomSchema,
   insertBomRevisionSchema,
   insertBomLineSchema,
   insertBomDefinitionSchema,
   insertBomItemSchema
 } from '../../schema';
-import { eq, ilike, desc, count, or, and } from 'drizzle-orm';
+import { eq, ilike, desc, count, or, and, inArray, sql } from 'drizzle-orm';
 import { 
   explodeBOMRevisionWithRollups, 
   whereUsed, 
@@ -483,6 +485,80 @@ router.get('/revisions/:revId/tree', async (req, res) => {
 });
 
 // ========================================
+// P2 PO BOM ROUTES (BOMs created for P2 Purchase Orders)
+// ========================================
+
+router.get('/p2-po-boms', async (req, res) => {
+  try {
+    const search = (req.query.search as string) ?? '';
+
+    const allBomDefs = await db.select()
+      .from(bomDefinitions)
+      .where(eq(bomDefinitions.isActive, true))
+      .orderBy(desc(bomDefinitions.createdAt));
+
+    const poItemPartNumbers = await db.select({ partNumber: p2PurchaseOrderItems.partNumber })
+      .from(p2PurchaseOrderItems);
+    const poPartSet = new Set(poItemPartNumbers.map(p => p.partNumber).filter(Boolean));
+
+    const p2Boms = allBomDefs.filter(bom => 
+      bom.sku && poPartSet.has(bom.sku)
+    );
+
+    const filtered = search
+      ? p2Boms.filter(bom => {
+          const s = search.toLowerCase();
+          return (
+            bom.modelName?.toLowerCase().includes(s) ||
+            bom.sku?.toLowerCase().includes(s) ||
+            bom.description?.toLowerCase().includes(s)
+          );
+        })
+      : p2Boms;
+
+    res.json(filtered);
+  } catch (error) {
+    console.error('Get P2 PO BOMs error:', error);
+    res.status(500).json({ error: 'Failed to fetch P2 PO BOMs' });
+  }
+});
+
+router.get('/p2-po-boms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [bom] = await db.select()
+      .from(bomDefinitions)
+      .where(eq(bomDefinitions.id, id));
+
+    if (!bom) {
+      return res.status(404).json({ error: 'P2 PO BOM not found' });
+    }
+
+    const items = await db.select()
+      .from(bomItems)
+      .where(and(eq(bomItems.bomId, id), eq(bomItems.isActive, true)))
+      .orderBy(bomItems.assemblyLevel, bomItems.partName);
+
+    const poItems = bom.sku
+      ? await db.select({
+          poId: p2PurchaseOrderItems.poId,
+          poNumber: p2PurchaseOrders.poNumber,
+          partNumber: p2PurchaseOrderItems.partNumber,
+        })
+        .from(p2PurchaseOrderItems)
+        .innerJoin(p2PurchaseOrders, eq(p2PurchaseOrderItems.poId, p2PurchaseOrders.id))
+        .where(eq(p2PurchaseOrderItems.partNumber, bom.sku))
+      : [];
+
+    res.json({ ...bom, items, linkedPurchaseOrders: poItems });
+  } catch (error) {
+    console.error('Get P2 PO BOM error:', error);
+    res.status(500).json({ error: 'Failed to fetch P2 PO BOM' });
+  }
+});
+
+// ========================================
 // STOCK BOM MANAGEMENT ROUTES (Simple BOM System for Stocks)
 // ========================================
 
@@ -515,11 +591,10 @@ router.get('/stock-boms', async (req, res) => {
 router.get('/stock-boms/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const bomId = parseInt(id);
 
     const [bom] = await db.select()
       .from(bomDefinitions)
-      .where(eq(bomDefinitions.id, bomId));
+      .where(eq(bomDefinitions.id, id));
 
     if (!bom) {
       return res.status(404).json({ error: 'Stock BOM not found' });
@@ -527,7 +602,7 @@ router.get('/stock-boms/:id', async (req, res) => {
 
     const items = await db.select()
       .from(bomItems)
-      .where(and(eq(bomItems.bomId, bomId), eq(bomItems.isActive, true)))
+      .where(and(eq(bomItems.bomId, id), eq(bomItems.isActive, true)))
       .orderBy(bomItems.assemblyLevel, bomItems.partName);
 
     res.json({ ...bom, items });
@@ -563,7 +638,6 @@ router.post('/stock-boms', async (req, res) => {
 router.put('/stock-boms/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const bomId = parseInt(id);
     const bomData = insertBomDefinitionSchema.partial().parse(req.body);
 
     const [updatedBom] = await db.update(bomDefinitions)
@@ -571,7 +645,7 @@ router.put('/stock-boms/:id', async (req, res) => {
         ...bomData,
         updatedAt: new Date(),
       })
-      .where(eq(bomDefinitions.id, bomId))
+      .where(eq(bomDefinitions.id, id))
       .returning();
 
     if (!updatedBom) {
@@ -592,16 +666,15 @@ router.put('/stock-boms/:id', async (req, res) => {
 router.delete('/stock-boms/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const bomId = parseInt(id);
 
     await db.update(bomDefinitions)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(bomDefinitions.id, bomId));
+      .where(eq(bomDefinitions.id, id));
 
     // Also soft delete all items
     await db.update(bomItems)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(bomItems.bomId, bomId));
+      .where(eq(bomItems.bomId, id));
 
     res.json({ success: true });
   } catch (error) {
@@ -614,13 +687,12 @@ router.delete('/stock-boms/:id', async (req, res) => {
 router.post('/stock-boms/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
-    const bomId = parseInt(id);
     const itemData = insertBomItemSchema.parse(req.body);
 
     const [newItem] = await db.insert(bomItems)
       .values({
         ...itemData,
-        bomId,
+        bomId: id,
         updatedAt: new Date(),
       })
       .returning();
@@ -639,8 +711,6 @@ router.post('/stock-boms/:id/items', async (req, res) => {
 router.put('/stock-boms/:bomId/items/:itemId', async (req, res) => {
   try {
     const { bomId, itemId } = req.params;
-    const bomIdNum = parseInt(bomId);
-    const itemIdNum = parseInt(itemId);
     const itemData = insertBomItemSchema.partial().parse(req.body);
 
     const [updatedItem] = await db.update(bomItems)
@@ -648,7 +718,7 @@ router.put('/stock-boms/:bomId/items/:itemId', async (req, res) => {
         ...itemData,
         updatedAt: new Date(),
       })
-      .where(and(eq(bomItems.id, itemIdNum), eq(bomItems.bomId, bomIdNum)))
+      .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)))
       .returning();
 
     if (!updatedItem) {
@@ -669,12 +739,10 @@ router.put('/stock-boms/:bomId/items/:itemId', async (req, res) => {
 router.delete('/stock-boms/:bomId/items/:itemId', async (req, res) => {
   try {
     const { bomId, itemId } = req.params;
-    const bomIdNum = parseInt(bomId);
-    const itemIdNum = parseInt(itemId);
 
     await db.update(bomItems)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(and(eq(bomItems.id, itemIdNum), eq(bomItems.bomId, bomIdNum)));
+      .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)));
 
     res.json({ success: true });
   } catch (error) {
@@ -687,8 +755,7 @@ router.delete('/stock-boms/:bomId/items/:itemId', async (req, res) => {
 router.get('/stock-boms/:id/tree', async (req, res) => {
   try {
     const { id } = req.params;
-    const bomId = parseInt(id);
-    const tree = await buildStockBOMTree(bomId);
+    const tree = await buildStockBOMTree(id);
     res.json(tree);
   } catch (error) {
     console.error('Build stock BOM tree error:', error);

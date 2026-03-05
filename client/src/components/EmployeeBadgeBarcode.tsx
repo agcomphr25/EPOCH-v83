@@ -17,11 +17,11 @@ export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Pr
       try {
         JsBarcode(barcodeRef.current, badgeScanCode, {
           format: 'CODE128',
-          width: 2,
-          height: 60,
+          width: 1.2,
+          height: 35,
           displayValue: false,
-          fontSize: 14,
-          margin: 10,
+          fontSize: 12,
+          margin: 5,
         });
       } catch (error) {
         console.error('Error generating barcode:', error);
@@ -131,7 +131,7 @@ export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Pr
         <CardTitle className="text-lg">Employee Badge Barcode</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col items-center justify-center p-4 bg-white rounded border">
+        <div className="flex flex-col items-center justify-center p-3 bg-white rounded border">
           <p className="text-sm font-medium mb-2">{employeeName}</p>
           <svg ref={barcodeRef} data-testid="employee-barcode"></svg>
         </div>

@@ -8589,21 +8589,22 @@ export class DatabaseStorage implements IStorage {
             if (!value) continue;
             
             // Map known field labels to result fields (matching TRACEABILITY_FIELD_LABELS from receiving page)
-            if (key === 'supplier part number' || key.includes('supplier part')) {
+            // Also handles legacy field IDs stored directly in notes ("lot", "batch", "expdate", "part")
+            if (key === 'supplier part number' || key.includes('supplier part') || key === 'part') {
               result.supplierPartNumber = value;
-            } else if (key === 'supplier batch/lot/c #' || key.includes('batch/lot') || key.includes('lot/c')) {
+            } else if (key === 'supplier batch/lot/c #' || key.includes('batch/lot') || key.includes('lot/c') || key === 'lot') {
               // This is the primary lot number for traceability
               result.lotNumber = value;
-            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #')) {
+            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #') || key === 'roll number') {
               result.rollNumber = value;
             } else if (key === 'manufacture date' || key.includes('manufacture date')) {
               result.manufactureDate = normalizeDate(value);
-            } else if (key === 'expiration date' || key.includes('expiration')) {
+            } else if (key === 'expiration date' || key.includes('expiration') || key === 'expdate' || key === 'exp date') {
               result.expirationDate = normalizeDate(value);
             } else if (key === 'received date' || key.includes('received date')) {
               result.receivedDateStr = normalizeDate(value);
-            } else if (key === 'aluminum heat #' || key.includes('aluminum heat') || key.includes('heat #')) {
-              // Store aluminum heat as batch number (secondary identifier)
+            } else if (key === 'aluminum heat #' || key.includes('aluminum heat') || key.includes('heat #') || key === 'batch') {
+              // Store aluminum heat / batch as batch number (secondary identifier)
               result.batchNumber = value;
             }
           }
@@ -8669,6 +8670,11 @@ export class DatabaseStorage implements IStorage {
             // - rollNumber: Roll # column (Manufacture Roll #)
             // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
             // - expirationDate: Expiration Date column
+            const purchaseUnitNorm = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
+            const sqMeterUnits = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
+            const sqMetersPerRoll = sqMeterUnits.includes(purchaseUnitNorm) && inventoryItem.purchaseQuantity > 0
+              ? String(inventoryItem.purchaseQuantity)
+              : undefined;
             const fabricRecord = await db
               .insert(cuttingFabricInventory)
               .values({
@@ -8684,6 +8690,7 @@ export class DatabaseStorage implements IStorage {
                 receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
                 expirationDate: traceability.expirationDate || undefined,
                 quantityInStock: 1,
+                squareMeters: sqMetersPerRoll,
                 conformanceDocumentLink: cocLink || undefined,
                 notes: `Auto-created from PO receipt. Unit ${section.unitNum} of ${unitCount}. Original notes: ${section.data}`,
               })
@@ -8706,6 +8713,11 @@ export class DatabaseStorage implements IStorage {
           // - rollNumber: Roll # column (Manufacture Roll #)
           // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
           // - expirationDate: Expiration Date column
+          const purchaseUnitNormSingle = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
+          const sqMeterUnitsSingle = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
+          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && inventoryItem.purchaseQuantity > 0
+            ? String(inventoryItem.purchaseQuantity)
+            : undefined;
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
             .values({
@@ -8721,6 +8733,7 @@ export class DatabaseStorage implements IStorage {
               receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
               expirationDate: traceability.expirationDate || undefined,
               quantityInStock: receivedQuantity,
+              squareMeters: sqMetersPerRollSingle,
               conformanceDocumentLink: cocLink || undefined,
               notes: `Auto-created from PO receipt. Notes: ${notes}`,
             })

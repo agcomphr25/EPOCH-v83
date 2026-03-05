@@ -1,0 +1,30 @@
+index-MDL4fysy.js:4861 React initialized: Object
+index-MDL4fysy.js:4861 React hooks: Object
+index-MDL4fysy.js:4858 App component is rendering...
+index-MDL4fysy.js:4858 Environment: production
+index-MDL4fysy.js:4858 Base URL: /
+cutting-control-center/schedule:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-MDL4fysy.js:235 🌐 API Request to /api/robust-boms/stock-boms?search= (timeout: 15000ms, deployment: true)
+index-MDL4fysy.js:235 ✅ API Response from /api/robust-boms/stock-boms?search=: 200
+api/employees/15/employment-periods:1  Failed to load resource: the server responded with a status of 500 ()
+api/employees/15/employment-periods:1  Failed to load resource: the server responded with a status of 500 ()
+api/certifications:1  Failed to load resource: the server responded with a status of 500 ()
+api/certifications:1  Failed to load resource: the server responded with a status of 500 ()
+api/certifications:1  Failed to load resource: the server responded with a status of 500 ()
+api/certifications:1  Failed to load resource: the server responded with a status of 500 ()
+index-MDL4fysy.js:235 🌐 API Request to /api/users (timeout: 15000ms, deployment: true)
+index-MDL4fysy.js:235 ✅ API Response from /api/users: 200
+api/employees/14/employment-periods:1  Failed to load resource: the server responded with a status of 500 ()
+api/employees/14/employment-periods:1  Failed to load resource: the server responded with a status of 500 ()
+index-MDL4fysy.js:235 🌐 API Request to /api/robust-boms/stock-boms?search= (timeout: 15000ms, deployment: true)
+index-MDL4fysy.js:235 ✅ API Response from /api/robust-boms/stock-boms?search=: 200
+index-MDL4fysy.js:235 🌐 API Request to /api/robust-boms/stock-boms/20c2e273-4916-4f28-aae1-e99465ad2d0d (timeout: 15000ms, deployment: true)
+api/robust-boms/stock-boms/20c2e273-4916-4f28-aae1-e99465ad2d0d:1  Failed to load resource: the server responded with a status of 500 ()
+index-MDL4fysy.js:235 ✅ API Response from /api/robust-boms/stock-boms/20c2e273-4916-4f28-aae1-e99465ad2d0d: 500
+index-MDL4fysy.js:4861 API error raw body: {"error":"Failed to delete stock BOM"}
+console.error @ index-MDL4fysy.js:4861
+index-MDL4fysy.js:4861 💥 API Request failed for /api/robust-boms/stock-boms/20c2e273-4916-4f28-aae1-e99465ad2d0d: Error: Failed to delete stock BOM
+    at Me (index-MDL4fysy.js:235:6283)
+console.error @ index-MDL4fysy.js:4861

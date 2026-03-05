@@ -1,0 +1,105 @@
+IMPLEMENTATION PATCH — TIKKA BARREL INLET RULE
+
+Goal
+-----
+When a CSR selects a stock model whose ID contains "tikka", the Barrel Inlet dropdown must only allow these 5 values:
+
+tikka_proof_sendero
+tikka_proof_sendero_lite
+tikka_factory_sporter_lite
+tikka_hca_summit
+tikka_hca_heavy
+
+When the stock model is NOT a Tikka model, these 5 options must NOT appear.
+
+Do NOT use compatibility-clearing logic that runs on every field change.
+Instead, enforce the rule by filtering the dropdown options.
+
+Required Changes
+----------------
+
+1. Locate the Barrel Inlet dropdown rendering in:
+
+client/src/components/OrderEntry.tsx
+
+2. Delete the entire compatibility useEffect block that references:
+   - features.barrel_inlet
+   - features.action_inlet
+   - features.bottom_metal
+
+This effect currently attempts to clear incompatible options.
+Remove it completely.
+
+3. After selectedModel is determined, add Tikka detection:
+
+const selectedModel = modelOptions.find((m) => m.id === modelId);
+
+const isTikkaModel =
+  selectedModel?.id?.toLowerCase().includes("tikka") || false;
+
+4. Define the allowed Tikka barrel values:
+
+const TIKKA_BARREL_OPTIONS = [
+  "tikka_proof_sendero",
+  "tikka_proof_sendero_lite",
+  "tikka_factory_sporter_lite",
+  "tikka_hca_summit",
+  "tikka_hca_heavy",
+];
+
+5. Locate where the Barrel Inlet options array is built
+(probably named barrelOptions or featureOptions.barrel_inlet).
+
+Create a filtered list:
+
+const filteredBarrelOptions = barrelOptions.filter((opt) => {
+  if (isTikkaModel) {
+    return TIKKA_BARREL_OPTIONS.includes(opt.value);
+  }
+
+  return !TIKKA_BARREL_OPTIONS.includes(opt.value);
+});
+
+6. Update the Select dropdown to use filteredBarrelOptions
+instead of barrelOptions.
+
+<Select
+  value={features.barrel_inlet ?? ""}
+  onValueChange={(value) =>
+    setFeatures((prev) => ({
+      ...prev,
+      barrel_inlet: value,
+    }))
+  }
+>
+  {filteredBarrelOptions.map((opt) => (
+    <SelectItem key={opt.value} value={opt.value}>
+      {opt.label}
+    </SelectItem>
+  ))}
+</Select>
+
+7. Add a small safety guard so changing the stock model clears an invalid barrel inlet:
+
+useEffect(() => {
+  if (!features.barrel_inlet) return;
+
+  if (isTikkaModel && !TIKKA_BARREL_OPTIONS.includes(features.barrel_inlet)) {
+    setFeatures((prev) => ({ ...prev, barrel_inlet: undefined }));
+  }
+
+  if (!isTikkaModel && TIKKA_BARREL_OPTIONS.includes(features.barrel_inlet)) {
+    setFeatures((prev) => ({ ...prev, barrel_inlet: undefined }));
+  }
+}, [modelId]);
+
+Constraints
+-----------
+• Do NOT modify database schema.
+• Do NOT change API behavior.
+• Only update OrderEntry.tsx.
+• The dropdown must enforce the rule visually by filtering options.
+
+Return
+------
+Provide a clean diff patch showing exactly what lines were removed and added.

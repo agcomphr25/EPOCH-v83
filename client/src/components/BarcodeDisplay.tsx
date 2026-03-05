@@ -60,11 +60,12 @@ export function BarcodeDisplay({
       return '#FF0000'; // Red
     }
 
-    // Blue for painted stock (any paint option) or fiberglass models
-    const hasPaintOption = !!paintOption;
+    // Blue for painted finishes (terrain/premium/standard/rogue) but NOT carbon/camo options
+    const isCarbonFinish = !!paintOption && (paintOption.startsWith('carbon') || paintOption === 'neon_green_camo');
+    const isPaintedOption = !!paintOption && !isCarbonFinish;
     const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
 
-    if (hasPaintOption || isFiberglassModel) {
+    if (isPaintedOption || isFiberglassModel) {
       return '#0066FF'; // Blue
     }
 

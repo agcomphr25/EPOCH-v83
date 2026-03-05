@@ -547,11 +547,20 @@ export default function CNCQueuePage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+      } else {
+        // Auto-trigger print dialog once the PDF has rendered
+        setTimeout(() => {
+          try {
+            newWindow.print();
+          } catch (e) {
+            // ignore - user can manually print with Ctrl+P
+          }
+        }, 1000);
       }
 
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
-      }, 10000);
+      }, 60000);
 
       return { success: true };
     },

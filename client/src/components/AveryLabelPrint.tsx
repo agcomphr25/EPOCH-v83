@@ -346,16 +346,18 @@ export function AveryLabelPrint({
                   )
                   .join('')}
               </div>
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.print();
+                  }, 250);
+                };
+              </script>
             </body>
           </html>
         `);
         printWindow.document.close();
         printWindow.focus();
-
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 250);
       }
     }
   };

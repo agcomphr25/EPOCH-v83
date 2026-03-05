@@ -1,0 +1,189 @@
+We are diagnosing a UI bug in the Consolidated Needs page.
+
+Symptom:
+The page initially shows a list of requests grouped by vendor. After clicking some of the UI controls (for example switching between "By Status" and "By Vendor" or interacting with filters), the vendor list disappears and the UI shows "No requests found" even though the counters at the top still show Pending Parts.
+
+Goal:
+Perform a full read-only forensic audit to determine why the vendor list disappears and implement the minimal safe fix.
+
+IMPORTANT
+• Do NOT implement fixes until the root cause is identified.
+• Do NOT change backend endpoints unless the audit proves they are wrong.
+• Focus on state management and filtering logic in the frontend.
+
+--------------------------------
+PHASE 1 — Locate the Page
+--------------------------------
+
+Find the file:
+
+client/src/pages/ConsolidatedNeedsListPage.tsx
+
+Identify:
+
+• Component state variables
+• React Query hooks
+• UI mode toggles:
+  - "By Status"
+  - "By Vendor"
+
+Output all state variables used for:
+
+- grouping mode
+- filters
+- selected status
+- selected vendor
+- search text
+
+--------------------------------
+PHASE 2 — Inspect Data Source
+--------------------------------
+
+Find the React Query calls used by the page.
+
+Examples to search:
+
+useQuery([
+'/api/inventory/parts-requests'
+'/api/inventory/parts-requests/by-vendor'
+'/api/inventory/consolidated-needs'
+])
+
+Identify:
+
+• Which endpoint feeds "By Status"
+• Which endpoint feeds "By Vendor"
+
+Confirm whether switching the view triggers:
+
+- a new query
+- client-side filtering
+- both
+
+--------------------------------
+PHASE 3 — Vendor View Rendering
+--------------------------------
+
+Locate the JSX block that renders the vendor list.
+
+Search for text:
+
+"Requests by Vendor"
+
+Inspect:
+
+• The array used to render vendors
+• The condition used to show "No requests found"
+
+Example patterns to check:
+
+if (!vendorGroups.length)
+filteredRequests.length === 0
+Object.keys(groups).length === 0
+
+Output the exact condition.
+
+--------------------------------
+PHASE 4 — Filter Interaction
+--------------------------------
+
+Trace what happens when the user clicks:
+
+• "By Status"
+• "By Vendor"
+
+Find the event handlers.
+
+Examples:
+
+setViewMode()
+setGroupMode()
+setActiveTab()
+
+Confirm whether:
+
+• filters persist between modes
+• status filters are incorrectly applied to vendor groups
+• state is reset correctly
+
+--------------------------------
+PHASE 5 — Search + Status Filters
+--------------------------------
+
+Inspect how the search field affects the data.
+
+Search for logic like:
+
+const filteredRequests = requests.filter(...)
+const filteredVendorGroups = ...
+
+Check whether the filter is applied BEFORE grouping.
+
+Common bug pattern:
+
+requests filtered → grouping done on filtered list → groups become empty
+
+--------------------------------
+PHASE 6 — Derived State Bug Check
+--------------------------------
+
+Check whether vendor groups are stored in state or derived during render.
+
+Bad pattern to detect:
+
+const [vendorGroups, setVendorGroups] = useState([])
+
+Good pattern:
+
+const vendorGroups = useMemo(() => ..., [requests, filters])
+
+Confirm whether vendorGroups are recomputed after filter or mode changes.
+
+--------------------------------
+PHASE 7 — Backend Validation
+--------------------------------
+
+Confirm the backend endpoint still returns data.
+
+Inspect:
+
+GET /api/inventory/parts-requests/by-vendor
+
+Ensure the response still contains pending requests even after UI interaction.
+
+--------------------------------
+PHASE 8 — Root Cause
+--------------------------------
+
+Identify exactly which issue occurs:
+
+A) View toggle does not reset filters  
+B) Search filter incorrectly applied  
+C) Vendor groups cached in stale state  
+D) React Query cache mismatch between endpoints  
+E) Rendering condition incorrectly hides results  
+
+--------------------------------
+PHASE 9 — Minimal Fix
+--------------------------------
+
+Provide the smallest safe change.
+
+Examples:
+
+• Reset filters when switching view modes
+• Recompute vendor groups using useMemo
+• Adjust empty-state condition
+• Ensure grouping runs after filtering
+
+--------------------------------
+OUTPUT
+--------------------------------
+
+Return:
+
+1) Root cause
+2) Exact file and line numbers
+3) Minimal code change required
+4) Before / After code snippet
+5) Confirmation that both "By Status" and "By Vendor" views work correctly

@@ -876,7 +876,46 @@ router.get('/session', async (req, res) => {
  */
 router.post('/validate-credentials', loginRateLimiter, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, employeeCode } = req.body;
+
+    // Badge-only auth mode: accept employee code without a password
+    if (employeeCode && !username && !password) {
+      const empResult = await pool.query(
+        `SELECT e.id as emp_id, e.name,
+                u.id as user_id, u.username, u.role
+         FROM employees e
+         LEFT JOIN users u ON u.employee_id = e.id AND u.is_active = true
+         WHERE (LOWER(e.employee_code) = LOWER($1) OR LOWER(e.badge_scan_code) = LOWER($1))
+           AND e.is_active = true
+         LIMIT 1`,
+        [employeeCode]
+      );
+      if (empResult.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid employee code' });
+      }
+      const emp = empResult.rows[0];
+      if (!emp.user_id) {
+        return res.status(401).json({
+          error: 'No login account linked to this employee badge. Contact an administrator.',
+        });
+      }
+      const empUser = { id: emp.user_id, username: emp.username, role: emp.role || 'EMPLOYEE' };
+      const actionToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      await pool.query(
+        `INSERT INTO action_tokens (token, user_id, expires_at, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (token) DO UPDATE SET user_id = $2, expires_at = $3`,
+        [actionToken, empUser.id, expiresAt]
+      );
+      console.log(`[Auth] Badge action token issued for employee ${emp.name} → user ${empUser.username}`);
+      return res.json({
+        success: true,
+        token: actionToken,
+        expiresAt: expiresAt.toISOString(),
+        user: empUser,
+      });
+    }
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });

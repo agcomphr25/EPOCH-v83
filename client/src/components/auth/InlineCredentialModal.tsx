@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Lock, AlertCircle } from 'lucide-react';
+import { Loader2, Lock, AlertCircle, ScanBarcode } from 'lucide-react';
 
 interface InlineCredentialModalProps {
   isOpen: boolean;
@@ -31,16 +31,18 @@ export default function InlineCredentialModal({
   onSuccess,
   actionDescription = 'perform this action',
 }: InlineCredentialModalProps) {
+  const [mode, setMode] = useState<'badge' | 'password'>('badge');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [employeeCode, setEmployeeCode] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const validateMutation = useMutation({
-    mutationFn: async (credentials: { username: string; password: string }) => {
+    mutationFn: async (payload: { username: string; password: string } | { employeeCode: string }) => {
       const response = await fetch('/api/auth/validate-credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -54,6 +56,7 @@ export default function InlineCredentialModal({
       setError(null);
       setUsername('');
       setPassword('');
+      setEmployeeCode('');
       onSuccess(data.token, data.user, data.expiresAt);
       onClose();
     },
@@ -64,18 +67,27 @@ export default function InlineCredentialModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError('Please enter both username and password');
-      return;
-    }
     setError(null);
-    validateMutation.mutate({ username: username.trim(), password });
+    if (mode === 'badge') {
+      if (!employeeCode.trim()) {
+        setError('Please enter your employee code');
+        return;
+      }
+      validateMutation.mutate({ employeeCode: employeeCode.trim() });
+    } else {
+      if (!username.trim() || !password.trim()) {
+        setError('Please enter both username and password');
+        return;
+      }
+      validateMutation.mutate({ username: username.trim(), password });
+    }
   };
 
   const handleClose = () => {
     setError(null);
     setUsername('');
     setPassword('');
+    setEmployeeCode('');
     onClose();
   };
 
@@ -88,9 +100,32 @@ export default function InlineCredentialModal({
             Authentication Required
           </DialogTitle>
           <DialogDescription>
-            Please enter your credentials to {actionDescription}.
+            Please authenticate to {actionDescription}.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex gap-2 mb-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={mode === 'badge' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => { setMode('badge'); setError(null); }}
+          >
+            <ScanBarcode className="h-4 w-4 mr-1" />
+            Badge Code
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={mode === 'password' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => { setMode('password'); setError(null); }}
+          >
+            <Lock className="h-4 w-4 mr-1" />
+            Username & Password
+          </Button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -100,32 +135,50 @@ export default function InlineCredentialModal({
             </Alert>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="inline-username">Username</Label>
-            <Input
-              id="inline-username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              autoComplete="username"
-              autoFocus
-              disabled={validateMutation.isPending}
-            />
-          </div>
+          {mode === 'badge' ? (
+            <div className="space-y-2">
+              <Label htmlFor="inline-badge">Employee Badge Code</Label>
+              <Input
+                id="inline-badge"
+                type="text"
+                value={employeeCode}
+                onChange={(e) => setEmployeeCode(e.target.value)}
+                placeholder="Scan or enter your badge code"
+                autoComplete="off"
+                autoFocus
+                disabled={validateMutation.isPending}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="inline-username">Username</Label>
+                <Input
+                  id="inline-username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  autoComplete="username"
+                  autoFocus
+                  disabled={validateMutation.isPending}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="inline-password">Password</Label>
-            <Input
-              id="inline-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              disabled={validateMutation.isPending}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="inline-password">Password</Label>
+                <Input
+                  id="inline-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  disabled={validateMutation.isPending}
+                />
+              </div>
+            </>
+          )}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={handleClose} disabled={validateMutation.isPending}>

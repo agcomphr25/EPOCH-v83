@@ -61,8 +61,9 @@ export function useActionAuth() {
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
-    queryKey: ['currentUser'],
+    queryKey: ['/api/auth/session'],
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   useEffect(() => {

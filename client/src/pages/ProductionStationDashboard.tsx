@@ -5,14 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock, Smartphone, Volume1 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 import InlineCredentialModal from '@/components/auth/InlineCredentialModal';
 import { useActionAuth } from '@/hooks/useActionAuth';
 import { emitTimerEvent, subscribeToTimerEvents, type TimerEvent } from '@/lib/timerEvents';
-import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive } from '@/lib/timerNotificationEffects';
+import { startLoopingAlert, stopLoopingAlert, isLoopingAlertActive, playAlertSound, triggerVibration } from '@/lib/timerNotificationEffects';
 import { 
   getTimerNotificationPreferences, 
   setTimerNotificationPreferences,
@@ -426,6 +427,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
 
 export default function ProductionStationDashboard() {
   const [startModalOpen, setStartModalOpen] = useState(false);
+  const [showAlarmSettings, setShowAlarmSettings] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState<TimerNotificationPreferences>(() => getTimerNotificationPreferences());
   
   const { data: runs, isLoading, error } = useQuery<ProductionProgramRun[]>({
@@ -473,7 +475,7 @@ export default function ProductionStationDashboard() {
       
       if (shouldPlayAudibleAlert(event, prefs)) {
         const showBrowserNotif = shouldShowBrowserNotification(event, prefs);
-        startLoopingAlert(event.stepName || 'Step', showBrowserNotif);
+        startLoopingAlert(event.stepName || 'Step', showBrowserNotif, prefs.alertVolume, prefs.vibrationEnabled);
       }
       
       if (shouldShowToast(event, prefs)) {
@@ -601,20 +603,101 @@ export default function ProductionStationDashboard() {
               <Plus className="w-4 h-4 mr-1.5" />
               Start Timer
             </Button>
-            <Button
-              size="sm"
-              variant={notificationPrefs.audibleAlertsEnabled ? "outline" : "secondary"}
-              className={`h-9 px-2.5 md:px-3 ${notificationPrefs.audibleAlertsEnabled ? '' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-              onClick={toggleAudibleAlerts}
-              title={notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}
-            >
-              {notificationPrefs.audibleAlertsEnabled ? (
-                <Volume2 className="w-4 h-4 md:mr-1.5" />
-              ) : (
-                <VolumeX className="w-4 h-4 md:mr-1.5" />
+            <div className="relative">
+              <Button
+                size="sm"
+                variant={notificationPrefs.audibleAlertsEnabled ? "outline" : "secondary"}
+                className={`h-9 px-2.5 md:px-3 ${notificationPrefs.audibleAlertsEnabled ? '' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                onClick={() => setShowAlarmSettings(!showAlarmSettings)}
+                title="Alarm Settings"
+              >
+                {notificationPrefs.audibleAlertsEnabled ? (
+                  <Volume2 className="w-4 h-4 md:mr-1.5" />
+                ) : (
+                  <VolumeX className="w-4 h-4 md:mr-1.5" />
+                )}
+                <span className="hidden md:inline">Alarm</span>
+              </Button>
+              {showAlarmSettings && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowAlarmSettings(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-lg border bg-white dark:bg-slate-800 shadow-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-200">Alarm Settings</h4>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowAlarmSettings(false)}>
+                        ×
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="sound-toggle" className="text-sm flex items-center gap-2">
+                        <Volume2 className="h-4 w-4 text-slate-500" />
+                        Sound
+                      </Label>
+                      <Switch
+                        id="sound-toggle"
+                        checked={notificationPrefs.audibleAlertsEnabled}
+                        onCheckedChange={() => toggleAudibleAlerts()}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="volume-slider" className={`text-sm flex items-center gap-2 ${!notificationPrefs.audibleAlertsEnabled ? 'opacity-50' : ''}`}>
+                        <Volume1 className="h-4 w-4 text-slate-500" />
+                        Volume
+                      </Label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="volume-slider"
+                          type="range"
+                          min="0"
+                          max="100"
+                          disabled={!notificationPrefs.audibleAlertsEnabled}
+                          value={Math.round(notificationPrefs.alertVolume * 100)}
+                          onChange={(e) => {
+                            const vol = parseInt(e.target.value) / 100;
+                            const newPrefs = setTimerNotificationPreferences({ alertVolume: vol });
+                            setNotificationPrefs(newPrefs);
+                          }}
+                          className="flex-1 h-2 rounded-lg appearance-none cursor-pointer accent-blue-600 bg-slate-200 dark:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                        <span className={`text-xs font-mono w-8 text-right text-slate-600 dark:text-slate-300 ${!notificationPrefs.audibleAlertsEnabled ? 'opacity-50' : ''}`}>
+                          {Math.round(notificationPrefs.alertVolume * 100)}%
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs h-7"
+                        disabled={!notificationPrefs.audibleAlertsEnabled}
+                        onClick={() => playAlertSound(notificationPrefs.alertVolume)}
+                      >
+                        Test Sound
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="vibration-toggle" className="text-sm flex items-center gap-2">
+                        <Smartphone className="h-4 w-4 text-slate-500" />
+                        Vibration
+                      </Label>
+                      <Switch
+                        id="vibration-toggle"
+                        checked={notificationPrefs.vibrationEnabled}
+                        onCheckedChange={(checked) => {
+                          const newPrefs = setTimerNotificationPreferences({ vibrationEnabled: checked });
+                          setNotificationPrefs(newPrefs);
+                          if (checked) triggerVibration();
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                      Vibration works on mobile devices only
+                    </p>
+                  </div>
+                </>
               )}
-              <span className="hidden md:inline">{notificationPrefs.audibleAlertsEnabled ? 'Sound On' : 'Sound Off'}</span>
-            </Button>
+            </div>
             <div className="hidden sm:block text-right border-l pl-3 ml-1">
               <p className="text-lg font-mono font-semibold text-slate-700 dark:text-slate-200">
                 {new Date().toLocaleTimeString()}

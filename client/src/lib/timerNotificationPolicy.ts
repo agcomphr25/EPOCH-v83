@@ -6,12 +6,16 @@ export interface TimerNotificationPreferences {
   audibleAlertsEnabled: boolean;
   browserNotificationsEnabled: boolean;
   toastsEnabled: boolean;
+  alertVolume: number;
+  vibrationEnabled: boolean;
 }
 
 const defaultPreferences: TimerNotificationPreferences = {
   audibleAlertsEnabled: true,
   browserNotificationsEnabled: true,
   toastsEnabled: true,
+  alertVolume: 0.8,
+  vibrationEnabled: true,
 };
 
 export function getTimerNotificationPreferences(): TimerNotificationPreferences {

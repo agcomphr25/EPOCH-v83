@@ -35,6 +35,9 @@ import {
   Download,
   Plus,
   ScrollText,
+  Eye,
+  ExternalLink,
+  FileIcon,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
@@ -62,6 +65,7 @@ interface TravelerData {
   qcSubmissions: any[];
   signatures: any[];
   lotNumbers: any[];
+  routingDocuments: any[];
 }
 
 export default function P2TravelerViewer() {
@@ -79,6 +83,7 @@ export default function P2TravelerViewer() {
   const [searchedBarcode, setSearchedBarcode] = useState<string | null>(urlBarcode || null);
   const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [showLotDialog, setShowLotDialog] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<any | null>(null);
   const [newLotData, setNewLotData] = useState({
     customerName: '',
     poNumber: '',
@@ -1124,6 +1129,59 @@ export default function P2TravelerViewer() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
+                    {travelerData.routingDocuments && travelerData.routingDocuments.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-4">Routing Documents</h4>
+                        <div className="space-y-3">
+                          {travelerData.routingDocuments.map((doc: any) => (
+                            <div key={doc.id} className="border rounded-lg p-4 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                  <FileIcon className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <div>
+                                  <h5 className="font-medium">{doc.title}</h5>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Badge variant="outline" className="text-xs">
+                                      {(doc.document_type || doc.documentType || 'document').replace(/_/g, ' ')}
+                                    </Badge>
+                                    {doc.version && <span>v{doc.version}</span>}
+                                    {(doc.file_name || doc.fileName) && (
+                                      <span className="truncate max-w-[200px]">{doc.file_name || doc.fileName}</span>
+                                    )}
+                                  </div>
+                                  {doc.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{doc.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {(doc.file_url || doc.fileUrl) && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setPreviewDocument(doc)}
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => window.open(doc.file_url || doc.fileUrl, '_blank')}
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="font-semibold">Lot Assignments</h4>
@@ -1270,6 +1328,69 @@ export default function P2TravelerViewer() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!previewDocument} onOpenChange={(open) => { if (!open) setPreviewDocument(null); }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileIcon className="h-5 w-5" />
+              {previewDocument?.title}
+            </DialogTitle>
+            <DialogDescription>
+              {previewDocument?.description || (previewDocument?.file_name || previewDocument?.fileName || 'Document preview')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {previewDocument && (() => {
+              const fileUrl = previewDocument.file_url || previewDocument.fileUrl;
+              const fileName = (previewDocument.file_name || previewDocument.fileName || '').toLowerCase();
+              const fileType = (previewDocument.file_type || previewDocument.fileType || '').toLowerCase();
+              const isPdf = fileName.endsWith('.pdf') || fileType.includes('pdf');
+              const isImage = fileName.match(/\.(png|jpg|jpeg|gif|webp|svg|bmp)$/) || fileType.startsWith('image/');
+
+              if (isPdf) {
+                return (
+                  <iframe
+                    src={fileUrl}
+                    className="w-full h-full border rounded"
+                    title={previewDocument.title}
+                  />
+                );
+              }
+              if (isImage) {
+                return (
+                  <div className="w-full h-full flex items-center justify-center overflow-auto">
+                    <img
+                      src={fileUrl}
+                      alt={previewDocument.title}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                );
+              }
+              return (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-center">
+                  <FileIcon className="h-16 w-16 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    Preview not available for this file type.
+                  </p>
+                  <Button onClick={() => window.open(fileUrl, '_blank')}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in New Tab
+                  </Button>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewDocument(null)}>Close</Button>
+            <Button onClick={() => window.open(previewDocument?.file_url || previewDocument?.fileUrl, '_blank')}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open in New Tab
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

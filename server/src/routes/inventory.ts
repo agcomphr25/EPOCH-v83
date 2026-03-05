@@ -624,7 +624,22 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
-    const newRequest = await storage.createPartsRequest(requestData);
+
+    let agPartNumber = requestData.agPartNumber;
+    if (agPartNumber) {
+      const { eq } = await import('drizzle-orm');
+      const { inventoryItems } = await import('../../schema');
+      const exists = await db
+        .select({ agPartNumber: inventoryItems.agPartNumber })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, agPartNumber))
+        .limit(1);
+      if (!exists.length) {
+        agPartNumber = null;
+      }
+    }
+
+    const newRequest = await storage.createPartsRequest({ ...requestData, agPartNumber });
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);

@@ -142,12 +142,14 @@ export function AveryLabelPrint({
           year: '2-digit',
         });
 
-        const generateLabelContent = (index: number) => {
+        const generateLabelContent = (_index: number) => {
           // Check if this is a P1 PO order
           const isPOOrder = orderId.startsWith('PO-') || orderId.startsWith('P1-');
 
           // Get texture text for display
           const textureText = getTextureText();
+
+          const barcodeImg = `<img src="${img}" class="barcode-img" alt="barcode" />`;
 
           // P1 PO Order Label Layout
           if (isPOOrder) {
@@ -163,9 +165,7 @@ export function AveryLabelPrint({
               <div class="avery-label">
                 <div class="label-content">
                   <div class="line1">${displayPO}</div>
-                  <div class="line5">
-                    <canvas id="barcode-${index}" width="180" height="25"></canvas>
-                  </div>
+                  <div class="line5">${barcodeImg}</div>
                   ${materialAndModel ? `<div class="line3">${materialAndModel}</div>` : ''}
                   ${customerName ? `<div class="line2">${customerName}</div>` : ''}
                   ${textureText ? `<div class="line4">${textureText}</div>` : ''}
@@ -175,12 +175,6 @@ export function AveryLabelPrint({
           }
 
           // Regular Order Label Layout
-          // Format: "SA CF Chalkbranch" (Action Length + Stock Model)
-          const actionLengthModel =
-            actionLength && stockModel
-              ? `${actionLength} ${stockModel}`
-              : actionLength || stockModel || orderId;
-
           return `
             <div class="avery-label">
               <div class="label-content">
@@ -188,9 +182,7 @@ export function AveryLabelPrint({
                 ${customerName ? `<div class="line2">${customerName}</div>` : ''}
                 ${stockModel || paintOption ? `<div class="line3">${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}</div>` : ''}
                 ${textureText ? `<div class="line4">${textureText}</div>` : ''}
-                <div class="line5">
-                  <canvas id="barcode-${index}" width="180" height="25"></canvas>
-                </div>
+                <div class="line5">${barcodeImg}</div>
               </div>
             </div>
           `;
@@ -218,6 +210,7 @@ export function AveryLabelPrint({
                   float: left;
                   box-sizing: border-box;
                   page-break-inside: avoid;
+                  overflow: hidden;
                   background: white;
                   position: relative;
                 }
@@ -359,34 +352,10 @@ export function AveryLabelPrint({
         printWindow.document.close();
         printWindow.focus();
 
-        // After writing content, generate barcodes in the print window
         setTimeout(() => {
-          const format = getBarcodeFormat(barcode);
-          for (let i = 0; i < copies; i++) {
-            const canvas = printWindow.document.getElementById(
-              `barcode-${i}`
-            ) as HTMLCanvasElement;
-            if (canvas && barcode) {
-              try {
-                JsBarcode(canvas, barcode, {
-                  format: format,
-                  width: format === 'CODE128' ? 1.2 : 1.5,
-                  height: 25,
-                  displayValue: false,
-                  margin: 2,
-                  lineColor: getBarcodeColor(),
-                });
-              } catch (error) {
-                console.error(
-                  `Error generating barcode for label ${i}:`,
-                  error
-                );
-              }
-            }
-          }
           printWindow.print();
           printWindow.close();
-        }, 500);
+        }, 250);
       }
     }
   };

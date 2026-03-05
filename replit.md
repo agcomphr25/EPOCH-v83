@@ -26,7 +26,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Type Safety & Data Consistency**: Shared TypeScript schemas (Drizzle, Zod) and a `features` object as a single source of truth.
 - **Authentication**: Hybrid JWT + Session authentication with a 3-role (ADMIN, EMPLOYEE, OWNER) capability-based access control system.
 - **UI/UX**: Modern UI using ShadCN UI, Tailwind CSS, and Framer Motion.
-- **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
+- **BOM System**: Two BOM systems — (1) Robust BOMs (`boms`/`bom_revisions`/`bom_lines`) with revision control, (2) P2 BOM Wizard (`bom_definitions`/`bom_items`) for simpler definitions. Production order generation checks both systems (robust first, then P2 BOM Wizard fallback). All BOM PKs are UUIDs — never use parseInt().
 - **Order Management**: Atomic order ID reservation, rush fees, urgency/priority system, path-based signature email architecture, and card-before-save flow.
 - **Inventory & Production**: Parts list management, Purchase Orders, vendor POs, inventory CSV import, enhanced layup scheduling, and FIFO-based packet building with AS9100 traceability via barcode scanning. Includes dynamic inventory thresholds and demand-filtered BOM assignment.
 - **Quality Control**: Nonconformance Record System, Vendor Evaluation System, and Hard QC Stop enforcement with authorized deviation approval workflow.

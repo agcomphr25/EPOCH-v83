@@ -2318,8 +2318,8 @@ export function registerRoutes(app: Express): Server {
         `, [oneWeekAgo]),
       ]);
 
-      const po = poStats.rows[0];
-      const si = itemStats.rows[0];
+      const po = poStats[0] || poStats.rows?.[0];
+      const si = itemStats[0] || itemStats.rows?.[0];
 
       res.json({
         openPOs:          parseInt(po.openPOs, 10)          || 0,

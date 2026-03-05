@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { storage } from '../../storage';
 import { pool } from '../../db';
 import { emitHumanUpserted } from '../events/humanEvents';
@@ -1359,6 +1360,93 @@ router.get('/employee-capabilities/all', async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Get all employee capabilities error:', error);
     res.status(500).json({ error: 'Failed to fetch all employee capabilities' });
+  }
+});
+
+// GET linked user account for an employee
+router.get('/:id/user-account', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const result = await pool.query(
+      `SELECT id, username, role, is_active as "isActive", last_login as "lastLogin",
+              password_changed_at as "passwordChangedAt"
+       FROM users WHERE employee_id = $1 LIMIT 1`,
+      [employeeId]
+    );
+    if (result.rows.length === 0) {
+      return res.json(null);
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get employee user account error:', error);
+    res.status(500).json({ error: 'Failed to fetch user account' });
+  }
+});
+
+// POST set (or reset) password for an employee's linked user account
+router.post('/:id/set-password', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const { password, username } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Check if a user account already exists for this employee
+    const existing = await pool.query(
+      'SELECT id, username FROM users WHERE employee_id = $1 LIMIT 1',
+      [employeeId]
+    );
+
+    let userRow;
+
+    if (existing.rows.length > 0) {
+      // Update existing user's password
+      const updated = await pool.query(
+        `UPDATE users SET password_hash = $1, password_changed_at = NOW(), updated_at = NOW()
+         WHERE employee_id = $2
+         RETURNING id, username, role, is_active as "isActive"`,
+        [passwordHash, employeeId]
+      );
+      userRow = updated.rows[0];
+    } else {
+      // No linked user exists — create one
+      if (!username) {
+        return res.status(400).json({
+          error: 'No user account linked to this employee. Provide a username to create one.',
+        });
+      }
+
+      // Check the employee exists and get their name for role derivation
+      const emp = await pool.query(
+        'SELECT name, user_role FROM employees WHERE id = $1 LIMIT 1',
+        [employeeId]
+      );
+      if (emp.rows.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+
+      const role = emp.rows[0].user_role || 'EMPLOYEE';
+
+      const created = await pool.query(
+        `INSERT INTO users (username, password_hash, role, employee_id, is_active, password_changed_at, failed_login_attempts)
+         VALUES ($1, $2, $3, $4, true, NOW(), 0)
+         RETURNING id, username, role, is_active as "isActive"`,
+        [username, passwordHash, role, employeeId]
+      );
+      userRow = created.rows[0];
+    }
+
+    res.json({ success: true, user: userRow });
+  } catch (error: any) {
+    console.error('Set employee password error:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ error: 'That username is already taken' });
+    }
+    res.status(500).json({ error: 'Failed to set password' });
   }
 });
 

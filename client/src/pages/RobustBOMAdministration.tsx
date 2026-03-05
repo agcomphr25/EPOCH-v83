@@ -523,6 +523,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       });
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -1642,6 +1643,186 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
         )}
       </CardContent>
     </Card>
+
+    <P2POBOMsSection />
+    </>
+  );
+}
+
+function P2POBOMsSection() {
+  const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBom, setSelectedBom] = useState<any>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+
+  const { data: p2PoBoms, isLoading } = useQuery({
+    queryKey: ['/api/robust-boms/p2-po-boms', { search: searchTerm }],
+    queryFn: () => apiRequest(`/api/robust-boms/p2-po-boms?search=${encodeURIComponent(searchTerm)}`),
+  });
+
+  const { data: bomDetail, isLoading: isDetailLoading } = useQuery({
+    queryKey: ['/api/robust-boms/p2-po-boms', selectedBom?.id],
+    queryFn: () => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}`),
+    enabled: !!selectedBom?.id && isViewOpen,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>P2 Purchase Order BOMs</CardTitle>
+            <CardDescription>BOMs created through the P2 BOM Wizard for purchase order parts</CardDescription>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search P2 PO BOMs..."
+              className="pl-8 w-[300px]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">Loading P2 PO BOMs...</div>
+        ) : !p2PoBoms || p2PoBoms.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No P2 PO BOMs found. BOMs created through the P2 Control Center BOM Wizard will appear here.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Part Number / SKU</TableHead>
+                <TableHead>Model Name</TableHead>
+                <TableHead>Revision</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {p2PoBoms.map((bom: any) => (
+                <TableRow key={bom.id}>
+                  <TableCell className="font-medium">{bom.sku || '-'}</TableCell>
+                  <TableCell>{bom.modelName}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{bom.revision}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[300px] truncate">{bom.description || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {bom.createdAt ? new Date(bom.createdAt).toLocaleDateString() : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedBom(bom);
+                        setIsViewOpen(true);
+                      }}
+                      title="View BOM details"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        <Sheet open={isViewOpen} onOpenChange={(open) => {
+          setIsViewOpen(open);
+          if (!open) setSelectedBom(null);
+        }}>
+          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>P2 PO BOM Details</SheetTitle>
+              <SheetDescription>
+                {selectedBom?.sku} - {selectedBom?.modelName}
+              </SheetDescription>
+            </SheetHeader>
+            {isDetailLoading ? (
+              <div className="mt-6 text-center text-muted-foreground">Loading...</div>
+            ) : bomDetail ? (
+              <div className="mt-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Part Number</label>
+                    <p className="font-medium">{bomDetail.sku || '-'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Model Name</label>
+                    <p className="font-medium">{bomDetail.modelName}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Revision</label>
+                    <p>{bomDetail.revision}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <p>{bomDetail.description || '-'}</p>
+                  </div>
+                </div>
+
+                {bomDetail.linkedPurchaseOrders && bomDetail.linkedPurchaseOrders.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Linked Purchase Orders</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {bomDetail.linkedPurchaseOrders.map((po: any, idx: number) => (
+                        <Badge key={idx} variant="secondary">
+                          PO #{po.poNumber}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="font-semibold mb-2">BOM Items ({bomDetail.items?.length || 0})</h4>
+                  {bomDetail.items && bomDetail.items.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Part Name</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Qty</TableHead>
+                          <TableHead>First Dept</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bomDetail.items.map((item: any) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{item.partName}</TableCell>
+                            <TableCell>
+                              <Badge variant={item.itemType === 'manufactured' ? 'default' : 'outline'}>
+                                {item.itemType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>{item.firstDept}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
+                              {item.notes || '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No items configured yet</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </SheetContent>
+        </Sheet>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1805,7 +1986,7 @@ function StockBOMsTab() {
   });
 
   const updateBomMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
       apiRequest(`/api/robust-boms/stock-boms/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
@@ -1818,7 +1999,7 @@ function StockBOMsTab() {
   });
 
   const deleteBomMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/robust-boms/stock-boms/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiRequest(`/api/robust-boms/stock-boms/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
       toast({ title: 'Success', description: 'Stock BOM deleted successfully' });

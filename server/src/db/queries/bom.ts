@@ -211,7 +211,7 @@ export async function buildBOMTree(revisionId: string) {
  * Build simplified Stock BOM structure (for stock models with optional items and labor)
  * Returns structure with material costs, labor costs, and optional item flags
  */
-export async function buildStockBOMTree(bomDefinitionId: number) {
+export async function buildStockBOMTree(bomDefinitionId: string) {
   const query = sql`
     SELECT 
       bi.id,

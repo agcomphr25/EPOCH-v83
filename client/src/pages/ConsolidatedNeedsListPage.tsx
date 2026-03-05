@@ -127,7 +127,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
-  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-status');
+  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
   const [isVendorAssignDialogOpen, setIsVendorAssignDialogOpen] = useState(false);

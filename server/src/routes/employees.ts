@@ -1373,10 +1373,10 @@ router.get('/:id/user-account', async (req: Request, res: Response) => {
        FROM users WHERE employee_id = $1 LIMIT 1`,
       [employeeId]
     );
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return res.json(null);
     }
-    res.json(result.rows[0]);
+    res.json(result[0]);
   } catch (error) {
     console.error('Get employee user account error:', error);
     res.status(500).json({ error: 'Failed to fetch user account' });
@@ -1403,7 +1403,7 @@ router.post('/:id/set-password', async (req: Request, res: Response) => {
 
     let userRow;
 
-    if (existing.rows.length > 0) {
+    if (existing.length > 0) {
       // Update existing user's password
       const updated = await pool.query(
         `UPDATE users SET password_hash = $1, password_changed_at = NOW(), updated_at = NOW()
@@ -1411,7 +1411,7 @@ router.post('/:id/set-password', async (req: Request, res: Response) => {
          RETURNING id, username, role, is_active as "isActive"`,
         [passwordHash, employeeId]
       );
-      userRow = updated.rows[0];
+      userRow = updated[0];
     } else {
       // No linked user exists — create one
       if (!username) {
@@ -1425,11 +1425,11 @@ router.post('/:id/set-password', async (req: Request, res: Response) => {
         'SELECT name, user_role FROM employees WHERE id = $1 LIMIT 1',
         [employeeId]
       );
-      if (emp.rows.length === 0) {
+      if (emp.length === 0) {
         return res.status(404).json({ error: 'Employee not found' });
       }
 
-      const role = emp.rows[0].user_role || 'EMPLOYEE';
+      const role = emp[0].user_role || 'EMPLOYEE';
 
       const created = await pool.query(
         `INSERT INTO users (username, password, password_hash, role, employee_id, is_active, password_changed_at, failed_login_attempts)
@@ -1437,7 +1437,7 @@ router.post('/:id/set-password', async (req: Request, res: Response) => {
          RETURNING id, username, role, is_active as "isActive"`,
         [username, passwordHash, role, employeeId]
       );
-      userRow = created.rows[0];
+      userRow = created[0];
     }
 
     res.json({ success: true, user: userRow });

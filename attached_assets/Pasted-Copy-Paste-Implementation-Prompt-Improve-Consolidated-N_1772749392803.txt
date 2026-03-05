@@ -1,0 +1,100 @@
+Copy-Paste Implementation Prompt
+Improve Consolidated Needs batching for Website orders.
+
+Goal:
+Automatically group all WEBSITE procurement requests into a single batch instead of grouping them by vendor.
+
+This reflects real purchasing behavior where multiple items are ordered together in a single website checkout (Amazon, McMaster, etc.).
+
+---------------------------------------
+STEP 1 — Locate grouping logic
+---------------------------------------
+
+Open:
+
+server/src/routes/inventory.ts
+
+Find the endpoint:
+
+GET /api/inventory/parts-requests/by-vendor
+
+Locate the code that groups parts requests by vendor.
+
+It likely resembles:
+
+const groups = {}
+
+for (const request of requests) {
+  const vendorId = request.vendorId
+  if (!groups[vendorId]) {
+    groups[vendorId] = { ... }
+  }
+}
+
+---------------------------------------
+STEP 2 — Modify grouping key
+---------------------------------------
+
+Change the grouping key logic.
+
+Replace vendor grouping with:
+
+let groupKey
+
+if (request.orderMethod === 'WEBSITE') {
+  groupKey = 'WEBSITE'
+} else {
+  groupKey = request.vendorId
+}
+
+---------------------------------------
+STEP 3 — Update group metadata
+---------------------------------------
+
+When groupKey === 'WEBSITE', set vendor display name:
+
+vendorName = "Website Orders"
+
+Example:
+
+if (groupKey === 'WEBSITE') {
+  vendorName = "Website Orders"
+}
+
+---------------------------------------
+STEP 4 — Preserve existing behavior
+---------------------------------------
+
+Ensure:
+
+PO orders still group by vendorId
+Vendor-based batching remains unchanged
+Only WEBSITE orders are consolidated
+
+---------------------------------------
+STEP 5 — Verify
+---------------------------------------
+
+Test cases:
+
+Case 1
+3 WEBSITE requests from different vendors
+→ appear under a single "Website Orders" group
+
+Case 2
+PO requests from vendors
+→ remain grouped by vendor
+
+Case 3
+Mixed PO + WEBSITE
+→ two groups appear
+
+---------------------------------------
+OUTPUT
+---------------------------------------
+
+Return:
+
+1. Modified code snippet
+2. Final grouping logic
+3. Confirmation that existing vendor grouping is unaffected

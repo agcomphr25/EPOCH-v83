@@ -795,7 +795,25 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     };
     
     for (const request of requests) {
-      // Try to determine vendor: explicit assignment > inventory item default > unassigned
+      if (request.orderMethod === 'WEBSITE') {
+        const key = 'WEBSITE';
+        if (!vendorGroups[key]) {
+          vendorGroups[key] = {
+            vendorId: null,
+            vendorName: 'Website Orders',
+            orderMethod: 'WEBSITE',
+            websiteUrl: null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        vendorGroups[key].requests.push(request);
+        vendorGroups[key].totalQuantity += request.quantity;
+        vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
+        continue;
+      }
+
       let vendorId = request.vendorId;
       if (!vendorId && request.agPartNumber) {
         vendorId = itemVendorMap.get(request.agPartNumber) || null;
@@ -831,8 +849,8 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     const result = Object.values(vendorGroups)
       .filter(g => g.requests.length > 0)
       .sort((a, b) => {
-        if (a.vendorId === null) return 1; // Unassigned goes last
-        if (b.vendorId === null) return -1;
+        if (a.vendorName === 'Unassigned') return 1;
+        if (b.vendorName === 'Unassigned') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
     

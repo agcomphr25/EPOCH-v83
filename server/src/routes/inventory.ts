@@ -798,7 +798,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
             vendorId: vendor.id,
             vendorName: vendor.name,
             orderMethod: request.orderMethod || null,
-            websiteUrl: vendor.website || null,
+            websiteUrl: null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,

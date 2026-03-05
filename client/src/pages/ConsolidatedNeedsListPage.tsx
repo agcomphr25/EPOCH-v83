@@ -413,9 +413,9 @@ export default function ConsolidatedNeedsListPage() {
     
     // Filter by PO/Website
     if (vendorFilterTab === 'po') {
-      groups = groups.filter(g => g.orderMethod === 'PO' || (!g.websiteUrl && g.vendorId !== null));
+      groups = groups.filter(g => g.orderMethod !== 'WEBSITE');
     } else if (vendorFilterTab === 'website') {
-      groups = groups.filter(g => g.orderMethod === 'WEBSITE' || g.websiteUrl);
+      groups = groups.filter(g => g.orderMethod === 'WEBSITE');
     }
     
     return groups;
@@ -638,19 +638,19 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
-  const getOrderMethodBadge = (method: string | null, websiteUrl: string | null) => {
-    if (method === 'PO' || (!websiteUrl && method !== 'WEBSITE')) {
+  const getOrderMethodBadge = (method: string | null) => {
+    if (method === 'WEBSITE') {
       return (
-        <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 flex items-center gap-1">
-          <FileText className="w-3 h-3" />
-          PO
+        <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
+          <Globe className="w-3 h-3" />
+          Website
         </Badge>
       );
     }
     return (
-      <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
-        <Globe className="w-3 h-3" />
-        Website
+      <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 flex items-center gap-1">
+        <FileText className="w-3 h-3" />
+        PO
       </Badge>
     );
   };
@@ -880,7 +880,7 @@ export default function ConsolidatedNeedsListPage() {
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2">
                         {vendorGroup.vendorName}
-                        {getOrderMethodBadge(vendorGroup.orderMethod, vendorGroup.websiteUrl)}
+                        {getOrderMethodBadge(vendorGroup.orderMethod)}
                         {hasHighUrgency && (
                           <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
                             <AlertTriangle className="w-3 h-3 mr-1" />

@@ -897,36 +897,6 @@ export default function ConsolidatedNeedsListPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Quick Actions */}
-                    {vendorGroup.vendorId && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => exportVendorCSV(vendorGroup)}
-                          data-testid={`button-export-${vendorKey}`}
-                        >
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => copyOrderList(vendorGroup)}
-                          data-testid={`button-copy-${vendorKey}`}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        {vendorGroup.websiteUrl && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(vendorGroup.websiteUrl!, '_blank')}
-                            data-testid={`button-website-${vendorKey}`}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </>
-                    )}
                     {approvedCount > 0 && (
                       <>
                         <Button

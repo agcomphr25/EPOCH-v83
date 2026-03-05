@@ -157,11 +157,6 @@ export default function ConsolidatedNeedsListPage() {
   });
   const vendors = vendorsResponse?.data ?? [];
 
-  // Get parts requests grouped by vendor
-  const { data: vendorGroups = [], isLoading: isLoadingVendorGroups } = useQuery<VendorGroup[]>({
-    queryKey: ['/api/inventory/parts-requests/by-vendor'],
-  });
-
   // Update parts request mutation
   const updateRequestMutation = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<PartsRequest> }) => {
@@ -172,7 +167,6 @@ export default function ConsolidatedNeedsListPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       toast({
         title: 'Success',
         description: 'Request updated successfully.',
@@ -201,7 +195,6 @@ export default function ConsolidatedNeedsListPage() {
     },
     onSuccess: (response: { success: boolean; updatedCount: number; skippedCount?: number; message?: string }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       
       if (response.skippedCount && response.skippedCount > 0) {
         toast({
@@ -247,7 +240,6 @@ export default function ConsolidatedNeedsListPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/batches'] });
       toast({
         title: 'Order Batch Created',
@@ -278,7 +270,6 @@ export default function ConsolidatedNeedsListPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       toast({ title: 'Request Rejected', description: 'The parts request has been rejected.' });
       setIsActionDialogOpen(false);
       setSelectedRequest(null);
@@ -379,9 +370,9 @@ export default function ConsolidatedNeedsListPage() {
       if (!searchTerm.trim()) return true;
       const search = searchTerm.toLowerCase();
       return (
-        request.partNumber.toLowerCase().includes(search) ||
-        request.partName.toLowerCase().includes(search) ||
-        request.department.toLowerCase().includes(search) ||
+        (request.partNumber && request.partNumber.toLowerCase().includes(search)) ||
+        (request.partName && request.partName.toLowerCase().includes(search)) ||
+        (request.department && request.department.toLowerCase().includes(search)) ||
         (request.requestedBy && request.requestedBy.toLowerCase().includes(search))
       );
     });
@@ -393,33 +384,90 @@ export default function ConsolidatedNeedsListPage() {
   const receivedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'RECEIVED')), [filteredRequests]);
   const deliveredRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'DELIVERED_TO_DEPT')), [filteredRequests]);
 
-  // Filter vendor groups
+  const vendorMap = useMemo(() => {
+    const map = new Map<number, Vendor>();
+    vendors.forEach(v => map.set(v.id, v));
+    return map;
+  }, [vendors]);
+
+  const vendorGroups = useMemo(() => {
+    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'];
+    const activeRequests = filteredRequests.filter(r => activeStatuses.includes(r.status));
+
+    const groups: Record<string, VendorGroup> = {};
+
+    groups['unassigned'] = {
+      vendorId: null,
+      vendorName: 'Unassigned',
+      orderMethod: null,
+      websiteUrl: null,
+      requests: [],
+      totalQuantity: 0,
+      totalEstimatedCost: 0,
+    };
+
+    for (const request of activeRequests) {
+      if (request.orderMethod === 'WEBSITE') {
+        const key = 'WEBSITE';
+        if (!groups[key]) {
+          groups[key] = {
+            vendorId: null,
+            vendorName: 'Website Orders',
+            orderMethod: 'WEBSITE',
+            websiteUrl: null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        groups[key].requests.push(request);
+        groups[key].totalQuantity += request.quantity;
+        groups[key].totalEstimatedCost += request.estimatedCost || 0;
+        continue;
+      }
+
+      const vendorId = request.vendorId;
+      if (vendorId && vendorMap.has(vendorId)) {
+        const vendor = vendorMap.get(vendorId)!;
+        const key = `vendor-${vendorId}`;
+        if (!groups[key]) {
+          groups[key] = {
+            vendorId: vendor.id,
+            vendorName: vendor.name,
+            orderMethod: request.orderMethod || null,
+            websiteUrl: vendor.website || null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        groups[key].requests.push(request);
+        groups[key].totalQuantity += request.quantity;
+        groups[key].totalEstimatedCost += request.estimatedCost || 0;
+      } else {
+        groups['unassigned'].requests.push(request);
+        groups['unassigned'].totalQuantity += request.quantity;
+        groups['unassigned'].totalEstimatedCost += request.estimatedCost || 0;
+      }
+    }
+
+    return Object.values(groups)
+      .filter(g => g.requests.length > 0)
+      .sort((a, b) => {
+        if (a.vendorName === 'Unassigned') return 1;
+        if (b.vendorName === 'Unassigned') return -1;
+        return a.vendorName.localeCompare(b.vendorName);
+      });
+  }, [filteredRequests, vendorMap]);
+
   const filteredVendorGroups = useMemo(() => {
-    let groups = vendorGroups;
-    
-    // Filter by search term
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      groups = groups.map(g => ({
-        ...g,
-        requests: g.requests.filter(r => 
-          r.partNumber.toLowerCase().includes(search) ||
-          r.partName.toLowerCase().includes(search) ||
-          r.department.toLowerCase().includes(search) ||
-          (r.requestedBy && r.requestedBy.toLowerCase().includes(search))
-        )
-      })).filter(g => g.requests.length > 0);
-    }
-    
-    // Filter by PO/Website
     if (vendorFilterTab === 'po') {
-      groups = groups.filter(g => g.orderMethod !== 'WEBSITE');
+      return vendorGroups.filter(g => g.orderMethod !== 'WEBSITE');
     } else if (vendorFilterTab === 'website') {
-      groups = groups.filter(g => g.orderMethod === 'WEBSITE');
+      return vendorGroups.filter(g => g.orderMethod === 'WEBSITE');
     }
-    
-    return groups;
-  }, [vendorGroups, searchTerm, vendorFilterTab]);
+    return vendorGroups;
+  }, [vendorGroups, vendorFilterTab]);
 
   const toggleExpanded = (partNumber: string) => {
     setExpandedParts((prev) => {
@@ -785,7 +833,7 @@ export default function ConsolidatedNeedsListPage() {
   };
 
   const renderVendorGroupedView = () => {
-    if (isLoadingVendorGroups) {
+    if (isLoading) {
       return (
         <div className="text-center py-8">
           <p className="text-muted-foreground">Loading vendor groups...</p>
@@ -1086,7 +1134,10 @@ export default function ConsolidatedNeedsListPage() {
       </div>
 
       {/* Main View Tabs */}
-      <Tabs value={mainViewTab} onValueChange={(v) => setMainViewTab(v as typeof mainViewTab)}>
+      <Tabs value={mainViewTab} onValueChange={(v) => {
+        setMainViewTab(v as typeof mainViewTab);
+        setVendorFilterTab('all');
+      }}>
         <TabsList className="mb-4">
           <TabsTrigger value="by-status" data-testid="tab-by-status">
             <Package className="w-4 h-4 mr-2" />

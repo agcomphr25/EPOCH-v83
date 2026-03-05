@@ -1,0 +1,182 @@
+Prompt 1 — Simplify Consolidated Needs Architecture
+We are refactoring the Consolidated Needs page to make the architecture simpler, more predictable, and easier to maintain.
+
+Goal:
+Use a single dataset and derive all views (status and vendor) from it. Remove duplicate filtering logic and ensure the counters and lists always match.
+
+IMPORTANT
+• Perform a safe refactor.
+• Do NOT modify backend endpoints.
+• Do NOT change database schema.
+• Only modify the frontend page.
+
+--------------------------------
+STEP 1 — Locate the page
+--------------------------------
+
+Open:
+
+client/src/pages/ConsolidatedNeedsListPage.tsx
+
+--------------------------------
+STEP 2 — Identify queries
+--------------------------------
+
+Find all React Query hooks in this file.
+
+Example patterns:
+
+useQuery(['/api/inventory/parts-requests'])
+useQuery(['/api/inventory/parts-requests/by-vendor'])
+
+Keep ONLY the request list query:
+
+/api/inventory/parts-requests
+
+Remove any vendor-grouped query usage from the UI.
+
+--------------------------------
+STEP 3 — Establish single data source
+--------------------------------
+
+Create the main query:
+
+const { data: requests = [] } = useQuery({
+  queryKey: ['/api/inventory/parts-requests']
+})
+
+All counters, filters, and groupings must derive from this dataset.
+
+--------------------------------
+STEP 4 — Implement unified filtering
+--------------------------------
+
+Create a filter state object:
+
+const [filters, setFilters] = useState({
+  search: '',
+  status: null
+})
+
+Implement a filter function:
+
+function applyFilters(requests, filters) {
+  return requests.filter(r => {
+
+    if (filters.status && r.status !== filters.status)
+      return false
+
+    if (filters.search) {
+      const s = filters.search.toLowerCase()
+
+      const partNumber = (r.partNumber ?? '').toLowerCase()
+      const partName = (r.partName ?? '').toLowerCase()
+      const vendorName = (r.vendorName ?? '').toLowerCase()
+
+      if (
+        !partNumber.includes(s) &&
+        !partName.includes(s) &&
+        !vendorName.includes(s)
+      ) return false
+    }
+
+    return true
+  })
+}
+
+--------------------------------
+STEP 5 — Create filtered dataset
+--------------------------------
+
+const filteredRequests = useMemo(
+  () => applyFilters(requests, filters),
+  [requests, filters]
+)
+
+--------------------------------
+STEP 6 — Create vendor grouping
+--------------------------------
+
+function groupByVendor(requests) {
+  const map = {}
+
+  for (const r of requests) {
+
+    const key =
+      r.orderMethod === 'WEBSITE'
+        ? 'Website Orders'
+        : r.vendorName ?? 'Unassigned'
+
+    if (!map[key]) {
+      map[key] = {
+        vendor: key,
+        vendorId: r.vendorId,
+        requests: []
+      }
+    }
+
+    map[key].requests.push(r)
+  }
+
+  return Object.values(map)
+}
+
+const vendorGroups = useMemo(
+  () => groupByVendor(filteredRequests),
+  [filteredRequests]
+)
+
+--------------------------------
+STEP 7 — Compute counters
+--------------------------------
+
+const statusCounts = useMemo(() => ({
+  pending: requests.filter(r => r.status === 'PENDING').length,
+  approved: requests.filter(r => r.status === 'APPROVED').length,
+  ordered: requests.filter(r => r.status === 'ORDERED').length,
+  received: requests.filter(r => r.status === 'RECEIVED').length
+}), [requests])
+
+--------------------------------
+STEP 8 — Simplify view state
+--------------------------------
+
+Use a single view mode state:
+
+const [viewMode, setViewMode] = useState('status')
+
+Values:
+
+'status'
+'vendor'
+
+--------------------------------
+STEP 9 — Render logic
+--------------------------------
+
+If viewMode === 'status'
+  render filteredRequests
+
+If viewMode === 'vendor'
+  render vendorGroups
+
+--------------------------------
+STEP 10 — Validation
+--------------------------------
+
+Verify:
+
+• counters match displayed data
+• vendor grouping updates when filters change
+• no "No requests found" mismatch with counters
+• search and status filters work in both views
+
+--------------------------------
+OUTPUT
+--------------------------------
+
+Return:
+
+1. updated ConsolidatedNeedsListPage.tsx
+2. list of removed queries
+3. confirmation all views derive from the same dataset

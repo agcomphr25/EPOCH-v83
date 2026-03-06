@@ -805,6 +805,7 @@ export interface IStorage {
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
   getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
+  getPartsRequestsByUser(username: string): Promise<PartsRequest[]>;
   getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
 
   // Departments CRUD
@@ -5757,6 +5758,17 @@ export class DatabaseStorage implements IStorage {
       .from(partsRequests)
       .where(and(
         eq(partsRequests.departmentId, departmentId),
+        eq(partsRequests.isActive, true)
+      ))
+      .orderBy(desc(partsRequests.requestDate));
+  }
+
+  async getPartsRequestsByUser(username: string): Promise<PartsRequest[]> {
+    return await db
+      .select()
+      .from(partsRequests)
+      .where(and(
+        eq(partsRequests.requestedBy, username),
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.requestDate));

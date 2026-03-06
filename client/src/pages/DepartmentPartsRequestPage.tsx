@@ -115,8 +115,7 @@ export default function DepartmentPartsRequestPage() {
   });
 
   const { data: userRequests = [], isLoading: requestsLoading } = useQuery<PartsRequest[]>({
-    queryKey: ['/api/inventory/parts-requests/department', effectiveDepartmentId],
-    enabled: !!effectiveDepartmentId,
+    queryKey: ['/api/inventory/parts-requests/my'],
   });
 
   const isOutOfDepartment = (item: InventoryItem): boolean => {
@@ -146,7 +145,7 @@ export default function DepartmentPartsRequestPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/inventory/parts-requests/department', effectiveDepartmentId]
+        queryKey: ['/api/inventory/parts-requests/my']
       });
       queryClient.invalidateQueries({
         queryKey: [showAllParts && isAdmin && selectedDepartment
@@ -178,7 +177,7 @@ export default function DepartmentPartsRequestPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/inventory/parts-requests/department', effectiveDepartmentId]
+        queryKey: ['/api/inventory/parts-requests/my']
       });
       toast({
         title: 'Request Cancelled',
@@ -569,6 +568,9 @@ export default function DepartmentPartsRequestPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Part
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Department
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Qty Requested
                     </th>
@@ -601,6 +603,9 @@ export default function DepartmentPartsRequestPage() {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100" data-testid={`text-request-part-${request.id}`}>
                         <div>{request.partName}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {request.department}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-requested-${request.id}`}>
                         {request.quantity}

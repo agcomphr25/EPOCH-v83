@@ -621,19 +621,53 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+// Resolve a free-text source string to a vendors.id via case-insensitive name match.
+// Future improvement: replace with inventory_items.source_vendor_id (FK) once schema migration is done.
+async function resolveSourceVendorId(sourceText: string | null | undefined, db: any): Promise<number | null> {
+  if (!sourceText?.trim()) return null;
+  const normalized = sourceText.trim().toLowerCase();
+  const { vendors } = await import('../../schema');
+  const { sql: sqlFn } = await import('drizzle-orm');
+  const [vendor] = await db
+    .select({ id: vendors.id })
+    .from(vendors)
+    .where(sqlFn`LOWER(${vendors.name}) = ${normalized}`)
+    .limit(1);
+  return vendor?.id ?? null;
+}
+
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
 
-    if (!requestData.orderMethod && requestData.agPartNumber) {
+    if (requestData.agPartNumber) {
       const { inventoryItems } = await import('../../schema');
       const [item] = await db
-        .select({ defaultOrderMethod: inventoryItems.defaultOrderMethod })
+        .select({
+          vendorId: inventoryItems.vendorId,
+          source: inventoryItems.source,
+          defaultOrderMethod: inventoryItems.defaultOrderMethod,
+        })
         .from(inventoryItems)
         .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
         .limit(1);
-      if (item?.defaultOrderMethod) {
-        requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+
+      if (item) {
+        // Auto-set orderMethod from item default if not provided
+        if (!requestData.orderMethod && item.defaultOrderMethod) {
+          requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+        }
+
+        // Auto-assign vendor from source or item vendor if not provided.
+        // Future improvement: a supplier_items table or source_vendor_id FK would replace this lookup.
+        if (!requestData.vendorId) {
+          const sourceVendorId = await resolveSourceVendorId(item.source, db);
+          if (sourceVendorId) {
+            requestData.vendorId = sourceVendorId;
+          } else if (item.vendorId) {
+            requestData.vendorId = item.vendorId;
+          }
+        }
       }
     }
 

@@ -796,7 +796,7 @@ export interface IStorage {
   removeGroupFromVendorScope(vendorId: number, groupId: number): Promise<void>;
 
   // Parts Requests CRUD
-  getAllPartsRequests(): Promise<PartsRequest[]>;
+  getAllPartsRequests(): Promise<any[]>;
   getPartsRequest(id: number): Promise<PartsRequest | undefined>;
   createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest>;
   updatePartsRequest(
@@ -5686,12 +5686,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Parts Requests CRUD
-  async getAllPartsRequests(): Promise<PartsRequest[]> {
-    return await db
-      .select()
+  async getAllPartsRequests(): Promise<any[]> {
+    const results = await db
+      .select({
+        request: partsRequests,
+        invId: inventoryItems.id,
+        invName: inventoryItems.name,
+        invSource: inventoryItems.source,
+        invVendorId: inventoryItems.vendorId,
+        invUsageUnit: inventoryItems.usageUnit,
+      })
       .from(partsRequests)
+      .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
+
+    return results.map(r => ({
+      ...r.request,
+      inventoryItem: r.invId ? {
+        id: r.invId,
+        agPartNumber: r.request.agPartNumber,
+        name: r.invName,
+        source: r.invSource,
+        vendorId: r.invVendorId,
+        usageUnit: r.invUsageUnit,
+      } : undefined,
+    }));
   }
 
   async getPartsRequest(id: number): Promise<PartsRequest | undefined> {

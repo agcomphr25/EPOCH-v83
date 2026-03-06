@@ -637,15 +637,7 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
       }
     }
 
-    const { partsRequests } = await import('../../schema');
-    const insertData = {
-      ...requestData,
-      agPartNumber: requestData.agPartNumber
-        ? sql`(SELECT ag_part_number FROM inventory_items WHERE ag_part_number = ${requestData.agPartNumber} LIMIT 1)`
-        : null,
-    };
-
-    const [newRequest] = await db.insert(partsRequests).values(insertData as any).returning();
+    const newRequest = await storage.createPartsRequest(requestData);
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);

@@ -1,0 +1,168 @@
+Copy-Paste Prompt for the Agent
+
+Context
+
+We discovered a reporting error in the /payment-analytics page.
+
+The UI tracks payments by transaction source (Phone vs Online).
+
+However, declined credit card attempts are being counted as successful payments in the analytics report.
+
+Example:
+
+Order FC1290 appears twice in the report even though one of the transactions was declined.
+
+The report should only count successful charges, not declined attempts.
+
+Goal
+
+Perform a read-only forensic audit of the /payment-analytics data pipeline to determine:
+
+Where declined transactions are being included
+
+How transaction status is stored
+
+What query logic must change to exclude them
+
+Do not implement fixes yet.
+
+Phase 1 — Identify Data Sources
+
+Locate the exact files used by the /payment-analytics page.
+
+Identify:
+
+Frontend page file (likely PaymentAnalytics.tsx or similar)
+
+API endpoint it calls
+
+Backend route that serves the data
+
+Database tables used for payment analytics
+
+Provide:
+
+File paths
+
+Function names
+
+API routes
+
+Phase 2 — Trace the Data Pipeline
+
+Starting from the UI page:
+
+Trace the full flow:
+
+PaymentAnalytics UI
+→ API request
+→ server route
+→ database query
+→ aggregation logic
+→ response returned
+
+Show the exact SQL or query builder logic used to fetch transactions.
+
+Identify:
+
+whether the query reads from:
+
+payments
+
+creditCardTransactions
+
+both
+
+Phase 3 — Identify Transaction Status Fields
+
+Determine how payment success or failure is stored.
+
+Identify fields such as:
+
+status
+
+transactionStatus
+
+responseCode
+
+approved
+
+isSuccessful
+
+result
+
+Show where these fields are populated when Accept.Blue returns a result.
+
+Provide:
+
+file path
+
+line numbers
+
+Phase 4 — Determine Why Declines Are Included
+
+Identify the exact condition currently used by /payment-analytics.
+
+For example:
+
+counting all rows in creditCardTransactions
+
+counting any transaction attempt
+
+not filtering by success status
+
+Show the exact code responsible.
+
+Phase 5 — Identify Correct Success Criteria
+
+Determine what condition should define a successful payment.
+
+Based on the Accept.Blue integration:
+
+Identify which of the following indicates success:
+
+result === 'Approved'
+
+response_code === '00'
+
+status === 'success'
+
+approved === true
+
+Confirm the correct field using the Accept.Blue response handling code.
+
+Phase 6 — Minimal Fix Plan
+
+Without implementing changes, propose the minimal safe change needed so /payment-analytics counts only successful charges.
+
+This likely involves adding a filter such as:
+
+WHERE transaction_status = 'APPROVED'
+
+or equivalent.
+
+The fix must:
+
+exclude declined attempts
+
+not break historical analytics
+
+not affect refunds or voids
+
+Output Format
+
+Provide a structured report with:
+
+File paths
+
+Function names
+
+Query logic
+
+Transaction status fields
+
+Root cause
+
+Minimal fix recommendation
+
+Do not modify code yet.

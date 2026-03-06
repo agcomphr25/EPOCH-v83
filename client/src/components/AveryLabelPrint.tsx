@@ -202,7 +202,6 @@ export function AveryLabelPrint({
                   margin: 0;
                   padding: 0.03in;
                   display: block;
-                  float: left;
                   box-sizing: border-box;
                   page-break-inside: avoid;
                   overflow: hidden;
@@ -301,6 +300,16 @@ export function AveryLabelPrint({
                   display: block;
                 }
 
+                /* Grid layout: 3 cols x 10 rows with exact Avery 8160 column gap of 0.125" */
+                .labels-container {
+                  display: grid;
+                  grid-template-columns: repeat(3, 2.625in);
+                  column-gap: 0.125in;
+                  row-gap: 0;
+                  width: 8.125in; /* 3*2.625 + 2*0.125 = 8.125in (matches content area) */
+                  margin: 0 auto;
+                }
+
                 @media print {
                   body { margin: 0; padding: 0; }
                   .avery-label {
@@ -309,18 +318,15 @@ export function AveryLabelPrint({
                     width: 2.625in;
                     height: 1in;
                   }
-
+                  .labels-container {
+                    margin: 0;
+                    width: 100%;
+                  }
                   /* Avery 8160: 3 cols x 10 rows, 30 per sheet */
                   @page {
                     size: letter;
                     margin: 0.5in 0.1875in 0.5in 0.1875in;
                   }
-                }
-
-                .labels-container {
-                  width: 8.125in;
-                  margin: 0 auto;
-                  overflow: hidden;
                 }
 
                 /* Preview styles */

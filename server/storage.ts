@@ -2900,6 +2900,33 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async generateNextP2OrderIds(prefix: string, count: number): Promise<{ startSequence: number; endSequence: number }> {
+    const P2_ORDER_PREFIX = "";
+
+    const upsertResult = await db.execute(sql`
+      INSERT INTO p2_order_id_sequences (year_month_prefix, current_sequence, updated_at)
+      VALUES (${prefix}, ${count}, NOW())
+      ON CONFLICT (year_month_prefix) DO UPDATE SET
+        current_sequence = p2_order_id_sequences.current_sequence + ${count},
+        updated_at = NOW()
+      RETURNING current_sequence
+    `);
+
+    let endSequence: number;
+    if (upsertResult && upsertResult.rows && upsertResult.rows.length > 0) {
+      endSequence = Number(upsertResult.rows[0].current_sequence);
+    } else {
+      const fallback = await db.execute(sql`
+        SELECT current_sequence FROM p2_order_id_sequences WHERE year_month_prefix = ${prefix}
+      `);
+      endSequence = fallback?.rows?.[0] ? Number(fallback.rows[0].current_sequence) : count;
+    }
+
+    const startSequence = endSequence - count + 1;
+    console.log(`✓ Reserved P2 order IDs: ${P2_ORDER_PREFIX}${formatOrderId(prefix, startSequence)} through ${P2_ORDER_PREFIX}${formatOrderId(prefix, endSequence)}`);
+    return { startSequence, endSequence };
+  }
+
   // Get all finalized orders
   async getCancelledOrders(): Promise<AllOrder[]> {
     // Select only the columns that actually exist in the all_orders table
@@ -13009,28 +13036,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const currentPrefix = getCurrentYearMonthPrefix(now);
 
-    const seqResult = await db.execute(sql`
-      INSERT INTO order_id_sequences (year_month_prefix, current_sequence, last_used_at, created_at, updated_at)
-      VALUES (${currentPrefix}, ${pendingOrders.length}, NOW(), NOW(), NOW())
-      ON CONFLICT (year_month_prefix) DO UPDATE SET
-        current_sequence = order_id_sequences.current_sequence + ${pendingOrders.length},
-        last_used_at = NOW(),
-        updated_at = NOW()
-      RETURNING current_sequence
-    `);
-
-    let endSequence: number;
-    if (seqResult && seqResult.rows && seqResult.rows.length > 0) {
-      endSequence = Number(seqResult.rows[0].current_sequence);
-    } else {
-      const fallback = await db.execute(sql`
-        SELECT current_sequence FROM order_id_sequences WHERE year_month_prefix = ${currentPrefix}
-      `);
-      endSequence = fallback?.rows?.[0] ? Number(fallback.rows[0].current_sequence) : pendingOrders.length;
-    }
-
-    const startSequence = endSequence - pendingOrders.length + 1;
-    console.log(`✓ Reserved order IDs: ${formatOrderId(currentPrefix, startSequence)} through ${formatOrderId(currentPrefix, endSequence)}`);
+    const { startSequence, endSequence } = await this.generateNextP2OrderIds(currentPrefix, pendingOrders.length);
 
     const BATCH_SIZE = 500;
     const productionOrders: P2ProductionOrder[] = [];

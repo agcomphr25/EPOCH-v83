@@ -1,0 +1,216 @@
+Copy-Paste Implementation Prompt (Safe Structural Fix)
+This is a SURGICAL IMPLEMENTATION TASK.
+
+Goal:
+Separate the sequence counters used by P1 customer orders and P2 production orders so they never share the same counter again.
+
+Currently both systems use the same table:
+
+order_id_sequences
+
+This caused FC customer orders to jump from FC062 → FC1290 when a large P2 batch finalized.
+
+We will introduce a dedicated sequence table for P2 production orders and update the P2 generator to use it.
+
+IMPORTANT RULES
+
+1) Do NOT modify existing customer order numbering.
+2) Do NOT rename any existing order IDs.
+3) Do NOT reset order_id_sequences.
+4) Only modify the P2 generation logic.
+5) Historical data must remain valid.
+
+--------------------------------------------------
+STEP 1 — CREATE NEW SEQUENCE TABLE
+--------------------------------------------------
+
+Add a new table to server/schema.ts.
+
+Name:
+
+p2_order_id_sequences
+
+Schema:
+
+- year_month_prefix TEXT PRIMARY KEY
+- current_sequence INTEGER NOT NULL DEFAULT 0
+- updated_at TIMESTAMP
+
+Example structure:
+
+p2_order_id_sequences
+---------------------
+year_month_prefix TEXT (PK)
+current_sequence INTEGER
+updated_at TIMESTAMP
+
+This table will track sequences ONLY for P2 production orders.
+
+--------------------------------------------------
+STEP 2 — CREATE P2 GENERATOR FUNCTION
+--------------------------------------------------
+
+In server/storage.ts create a new function:
+
+generateNextP2OrderIds(prefix: string, count: number)
+
+Behavior:
+
+1) Use an atomic UPSERT exactly like the existing generator
+2) Increment by the batch size
+3) Return the starting and ending sequence numbers
+
+Pseudo logic:
+
+INSERT INTO p2_order_id_sequences (year_month_prefix, current_sequence)
+VALUES (prefix, count)
+ON CONFLICT (year_month_prefix)
+DO UPDATE SET
+  current_sequence = p2_order_id_sequences.current_sequence + count
+RETURNING current_sequence
+
+Compute:
+
+startSequence = returnedSequence - count + 1
+endSequence = returnedSequence
+
+Return both values.
+
+--------------------------------------------------
+STEP 3 — UPDATE P2 FINALIZATION LOGIC
+--------------------------------------------------
+
+Locate the batch code inside:
+
+server/storage.ts
+
+Function:
+
+finalizeP2PurchaseOrder()
+
+Currently this section reserves order numbers using:
+
+order_id_sequences
+
+Replace ONLY this portion to call:
+
+generateNextP2OrderIds()
+
+Example flow:
+
+prefix = getCurrentYearMonthPrefix(now)
+
+const { startSequence, endSequence } =
+    await generateNextP2OrderIds(prefix, pendingOrders.length)
+
+Then assign IDs:
+
+prefix + padded(sequence)
+
+Example:
+
+FC001
+FC002
+FC003
+
+But generated from the P2 table.
+
+--------------------------------------------------
+STEP 4 — KEEP CUSTOMER ORDERS UNCHANGED
+--------------------------------------------------
+
+Confirm that the following functions remain untouched:
+
+generateNextOrderId()
+
+Routes using it:
+
+POST /api/orders/finalized
+POST /api/orders/draft
+POST /api/website-order-import
+POST /api/rts-sales
+
+These must continue using:
+
+order_id_sequences
+
+--------------------------------------------------
+STEP 5 — VERIFY PREFIX FORMATTER
+--------------------------------------------------
+
+Confirm that the existing function:
+
+formatOrderId(prefix, sequence)
+
+is reused for P2 IDs so formatting remains consistent.
+
+--------------------------------------------------
+STEP 6 — ADD OPTIONAL PREFIX (SAFE)
+--------------------------------------------------
+
+Add a configurable constant near the generator:
+
+P2_ORDER_PREFIX = ""
+
+Leave empty for now so existing P2 IDs remain compatible.
+
+Later this could become:
+
+"P2-"
+
+but DO NOT change current IDs yet.
+
+--------------------------------------------------
+STEP 7 — ADD DATABASE MIGRATION
+--------------------------------------------------
+
+Create migration to add table:
+
+CREATE TABLE p2_order_id_sequences (
+  year_month_prefix TEXT PRIMARY KEY,
+  current_sequence INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+--------------------------------------------------
+STEP 8 — TEST SCENARIOS
+--------------------------------------------------
+
+Confirm:
+
+Scenario 1
+Create new customer order
+
+Expected:
+FC063 → FC064
+
+Scenario 2
+Finalize P2 batch of 1000
+
+Expected:
+P2 IDs increment internally
+
+BUT
+
+Next customer order should be:
+
+FC065
+
+NOT FC1065
+
+Scenario 3
+Concurrent P2 batches
+
+Expected:
+No collisions due to atomic UPSERT.
+
+--------------------------------------------------
+STEP 9 — FINAL REPORT
+--------------------------------------------------
+
+Return summary:
+
+• Files modified
+• New table created
+• Updated functions
+• Confirmation customer order numbering unchanged

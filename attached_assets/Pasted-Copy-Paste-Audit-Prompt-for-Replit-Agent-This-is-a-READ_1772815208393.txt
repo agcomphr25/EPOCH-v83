@@ -1,0 +1,198 @@
+Copy-Paste Audit Prompt for Replit Agent
+This is a READ-ONLY FORENSIC AUDIT.
+
+Do NOT modify any code.
+
+The goal is to identify why order numbers with prefix "FC" jumped from FC062 to FC1290.
+
+We need to locate the order number generator, determine how sequence numbers are produced, and identify what caused the jump.
+
+--------------------------------------------------
+PHASE 1 — FIND ORDER NUMBER GENERATION LOGIC
+--------------------------------------------------
+
+Search the entire repo for all occurrences of:
+
+orderNumber
+order_number
+generateOrderNumber
+nextOrderNumber
+sequence
+prefix
+FC
+formatOrderNumber
+
+Return the following:
+
+• File path
+• Function name
+• Full code block responsible for generating order numbers
+
+Focus especially on:
+
+server/src/routes
+server/src/services
+server/src/utils
+server/storage
+database helpers
+
+--------------------------------------------------
+PHASE 2 — TRACE ORDER CREATION PIPELINE
+--------------------------------------------------
+
+Find every location where orders are created.
+
+Search for:
+
+createOrder
+insert(all_orders
+db.insert(all_orders
+POST /orders
+POST /orders/draft
+finalizeOrder
+convertDraftToOrder
+
+For each route:
+
+Return:
+
+• file path
+• route path
+• code where orderNumber is assigned
+• any function called to generate it
+
+We need the FULL pipeline from request → order number creation → DB insert.
+
+--------------------------------------------------
+PHASE 3 — IDENTIFY SEQUENCE SOURCE
+--------------------------------------------------
+
+Determine how the numeric portion is generated.
+
+Possible sources:
+
+• PostgreSQL sequence
+• MAX(order_number) + 1
+• counter table
+• memory variable
+• prefix-specific counters
+• timestamp logic
+
+Return the exact logic.
+
+Example formats to look for:
+
+FC + padStart()
+prefix + String(number).padStart()
+SELECT MAX(...)
+nextval(...)
+order_counter table
+
+--------------------------------------------------
+PHASE 4 — DATABASE STATE CHECK
+--------------------------------------------------
+
+Inspect the database schema for the orders table.
+
+Return:
+
+schema for:
+all_orders
+orders
+order_drafts
+
+Look specifically for:
+
+order_number
+orderNumber
+prefix
+sequence fields
+
+Then determine:
+
+• Are order numbers stored as TEXT or numeric?
+• Is there a UNIQUE constraint?
+• Is there a sequence tied to the column?
+
+--------------------------------------------------
+PHASE 5 — DETECT HIGH NUMBER SOURCE
+--------------------------------------------------
+
+Search for any order whose numeric value exceeds 1000.
+
+Look for:
+
+FC1000+
+FC1200+
+FC1290
+
+Identify:
+
+• which route created it
+• when it was created
+• what logic produced it
+
+If the system uses:
+
+MAX(order_number) + 1
+
+Then a single high number would permanently advance the counter.
+
+--------------------------------------------------
+PHASE 6 — CHECK PREFIX-SPECIFIC LOGIC
+--------------------------------------------------
+
+Determine if sequences are tracked PER PREFIX or globally.
+
+Example patterns:
+
+correct behavior:
+FC062
+AF014
+EI003
+
+incorrect behavior:
+global counter used for all prefixes
+
+Find the code that determines:
+
+prefix = ?
+
+Then find how the numeric value is calculated.
+
+--------------------------------------------------
+PHASE 7 — POSSIBLE ROOT CAUSES
+--------------------------------------------------
+
+Identify if the jump could be caused by:
+
+• importing historical orders
+• manual order number entry
+• sequence reset
+• fallback logic when prefix lookup fails
+• draft → final conversion bug
+• order cloning
+• bad parseInt logic
+
+Example bug pattern:
+
+parseInt("FC062") = NaN
+fallback → global sequence
+
+--------------------------------------------------
+PHASE 8 — REPORT
+--------------------------------------------------
+
+Produce a structured report:
+
+SECTION 1 — Order Number Generator Location  
+SECTION 2 — Full Creation Pipeline  
+SECTION 3 — Sequence Logic  
+SECTION 4 — Database Constraints  
+SECTION 5 — Source of FC1290  
+SECTION 6 — Root Cause Analysis  
+SECTION 7 — Recommended Fix (no code changes yet)
+
+DO NOT change any code.
+
+This is a diagnostic audit only.

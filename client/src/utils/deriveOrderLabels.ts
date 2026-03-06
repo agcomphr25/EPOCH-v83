@@ -60,6 +60,7 @@ const MATERIAL_PREFIX_MAP: Record<string, string> = {
   fg_: 'Fiberglass',
   m1a_: 'M1A',
   apr_: 'APR',
+  mesa_: 'Fiberglass',
 };
 
 function deriveMaterial(order: any, debugReasons: string[]): string {
@@ -97,10 +98,21 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
     }
   }
 
-  if (modelId.toLowerCase().includes('tikka')) {
-    debugReasons.push(`material inferred from modelId containing "tikka": "${modelId}"`);
-    return 'Tikka';
+  const lowerModelId = modelId.toLowerCase();
+
+  // Tikka variants: FG ones end with _fg, all others (non-Mesa) are Carbon Fiber
+  if (lowerModelId.includes('tikka')) {
+    if (lowerModelId.endsWith('_fg') || lowerModelId.includes('_fg_')) {
+      debugReasons.push(`material inferred from tikka model with _fg suffix: "${modelId}"`);
+      return 'Fiberglass';
+    }
+    if (!lowerModelId.startsWith('mesa_')) {
+      debugReasons.push(`material inferred from bare tikka model (non-mesa, non-fg) → Carbon Fiber: "${modelId}"`);
+      return 'Carbon Fiber';
+    }
   }
+
+  // Do NOT return 'Tikka' as a material — Tikka is a platform/variant, not a fabric type.
 
   if (displayName) {
     const dn = displayName.toLowerCase();
@@ -120,10 +132,6 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
       debugReasons.push(`material inferred from displayName containing "fg/fiberglass": "${displayName}"`);
       return 'Fiberglass';
     }
-    if (dn.includes('tikka')) {
-      debugReasons.push(`material inferred from displayName containing "tikka": "${displayName}"`);
-      return 'Tikka';
-    }
   }
 
   debugReasons.push(`material fallback to "Standard" — modelId: "${modelId}", displayName: "${displayName}"`);
@@ -136,7 +144,6 @@ function normalizeMaterialLabel(raw: string): string {
   if (lower === 'fiberglass' || lower === 'fg') return 'Fiberglass';
   if (lower === 'm1a') return 'M1A';
   if (lower === 'apr') return 'APR';
-  if (lower === 'tikka') return 'Tikka';
   return raw;
 }
 

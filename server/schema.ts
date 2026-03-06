@@ -720,7 +720,7 @@ export const partsRequests = pgTable('parts_requests', {
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
   department: text('department'), // Department name (legacy text field)
-  departmentId: integer('department_id').references(() => departments.id), // FK to departments table
+  departmentId: integer('department_id').references(() => inventoryDepartments.id, { onDelete: 'set null' }), // FK to inventory_departments
   quantity: integer('quantity').notNull(),
   urgency: text('urgency').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
   supplier: text('supplier'),
@@ -6506,6 +6506,12 @@ export const insertOrderIdSequenceSchema = createInsertSchema(
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const p2OrderIdSequences = pgTable('p2_order_id_sequences', {
+  yearMonthPrefix: text('year_month_prefix').primaryKey(),
+  currentSequence: integer('current_sequence').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export type InsertOrderIdSequence = z.infer<typeof insertOrderIdSequenceSchema>;

@@ -7547,60 +7547,66 @@ export function registerRoutes(app: Express): Server {
       const notFoundOrders: string[] = [];
       
       for (const orderId of orderIds) {
-        // Try to get order from finalized orders first, then drafts, then production_orders
+        // Check production_orders table FIRST (takes precedence over all_orders, matching getAllOrders() dedup logic)
+        // This prevents a production order from being misidentified as a different all_orders entry with the same ID
         let order: any = null;
         try {
-          order = await storage.getFinalizedOrderById(orderId);
+          const productionOrderResult = await pool.query(
+            `SELECT 
+              order_id,
+              customer_id,
+              customer_name,
+              po_number,
+              item_name,
+              item_id,
+              specifications,
+              material_canonical,
+              order_date,
+              due_date,
+              production_status,
+              current_department,
+              created_at,
+              updated_at
+            FROM production_orders
+            WHERE order_id = $1
+            LIMIT 1`,
+            [orderId]
+          );
+          
+          if (productionOrderResult && productionOrderResult.length > 0) {
+            const po = productionOrderResult[0];
+            let specs: any = {};
+            try {
+              specs = typeof po.specifications === 'string' ? JSON.parse(po.specifications) : (po.specifications || {});
+            } catch (_e) {
+              specs = {};
+            }
+            console.log(`🔍 Found production order for label: ${orderId}`);
+            order = {
+              orderId: po.order_id,
+              customerId: po.customer_id,
+              customerName: po.customer_name,
+              currentDepartment: po.current_department,
+              orderDate: po.order_date,
+              dueDate: po.due_date,
+              status: 'in_production',
+              stockModelId: specs.stockModel || specs.stock_model || po.item_id || 'unknown',
+              modelId: specs.stockModel || specs.stock_model || po.item_id || 'unknown',
+              fbOrderNumber: po.po_number,
+              isP1Order: orderId.startsWith('P1-'),
+              isPOItem: true,
+              features: specs,
+              actionLength: specs.actionLength || specs.action_length,
+              material_canonical: po.material_canonical || '',
+            };
+          }
+
+          // Fall back to all_orders and drafts only if not in production_orders
+          if (!order) {
+            order = await storage.getFinalizedOrderById(orderId);
+          }
           if (!order) {
             order = await storage.getOrderDraft(orderId);
-          }
-          
-          // If not found in regular orders, check production_orders table (P1 orders and PO items)
-          if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
-            console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
-            const productionOrderResult = await pool.query(
-              `SELECT 
-                order_id,
-                customer_id,
-                customer_name,
-                po_number,
-                item_name,
-                item_id,
-                specifications,
-                material_canonical,
-                order_date,
-                due_date,
-                production_status,
-                current_department,
-                created_at,
-                updated_at
-              FROM production_orders
-              WHERE order_id = $1
-              LIMIT 1`,
-              [orderId]
-            );
-            
-            if (productionOrderResult && productionOrderResult.length > 0) {
-              const po = productionOrderResult[0];
-              console.log(`✅ Found production order:`, po);
-              order = {
-                orderId: po.order_id,
-                customerId: po.customer_id,
-                customerName: po.customer_name,
-                currentDepartment: po.current_department,
-                orderDate: po.order_date,
-                dueDate: po.due_date,
-                status: 'in_production',
-                stockModelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-                modelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-                fbOrderNumber: po.po_number,
-                isP1Order: orderId.startsWith('P1-'),
-                isPOItem: orderId.startsWith('PO-'),
-                features: po.specifications || {},
-                actionLength: po.specifications?.actionLength || po.specifications?.action_length,
-                material_canonical: po.material_canonical || '',
-              };
-            }
           }
         } catch (_error) {
           console.warn(`Could not find order ${orderId}:`, _error);
@@ -7693,16 +7699,16 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
 
-          // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
+          // Calculate label position (3x10 grid) - Avery 8160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications per official template
+          // Avery 8160 specifications per official template
           const pageHeight = 792; // 11" * 72 points/inch
-          const topMargin = 40.5; // 9/16" * 72 points/inch - exact Avery 5160 top margin specification
-          const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
+          const topMargin = 36; // 0.5" * 72 points/inch - exact Avery 8160 top margin
+          const leftMargin = 13.5; // 0.1875" * 72 points/inch - left margin for Avery 8160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
-          const rowSpacing = 0; // No gap between rows on Avery 5160
+          const rowSpacing = 0; // No gap between rows on Avery 8160
           const columnGap = 9; // 0.125" * 72 points/inch (horizontal gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
           // PDF coordinates: origin at bottom-left, so subtract from page height
@@ -7740,8 +7746,8 @@ export function registerRoutes(app: Express): Server {
           const isPOItem = (order as any).isPOItem || order.orderId.startsWith('P1-');
           
           if (isPOItem) {
-            const poNumber = (order as any).poNumber || order.orderId;
-            labelText = `PO#${poNumber}`;
+            const fullOrderId = order.orderId.replace(/^(PO-|P1-)/, '');
+            labelText = `PO#${fullOrderId}`;
             
             // Extract customer name for separate line
             customerName = (order as any).poCustomerName || order.customerName || (order as any).customerName;
@@ -8525,8 +8531,13 @@ export function registerRoutes(app: Express): Server {
         FROM payments p
         LEFT JOIN all_orders o ON p.order_id = o.order_id
         LEFT JOIN customers c ON CASE WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer ELSE NULL END = c.id
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
         WHERE p.payment_date >= $1 AND p.payment_date <= $2
           AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
         ORDER BY p.payment_date DESC
       `;
       

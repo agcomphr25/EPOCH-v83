@@ -586,6 +586,26 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ default_order_method migration:', domErr.message);
       }
 
+      try {
+        const { sql: sqlFkFix } = await import('drizzle-orm');
+        // Drop the wrong FK (points to "departments" table which is empty/unused)
+        await db.execute(sqlFkFix`
+          ALTER TABLE parts_requests
+            DROP CONSTRAINT IF EXISTS parts_requests_department_id_fkey
+        `);
+        // Add the correct FK pointing to inventory_departments (what the UI uses)
+        await db.execute(sqlFkFix`
+          ALTER TABLE parts_requests
+            ADD CONSTRAINT parts_requests_department_id_fkey
+            FOREIGN KEY (department_id) REFERENCES inventory_departments(id)
+            ON DELETE SET NULL
+            NOT VALID
+        `);
+        console.log('✅ Fixed parts_requests department_id FK to reference inventory_departments');
+      } catch (fkErr: any) {
+        console.warn('⚠️ parts_requests department FK migration:', fkErr.message);
+      }
+
       // Ensure routing_document_links table exists
       try {
         const { sql: sqlTag2 } = await import('drizzle-orm');

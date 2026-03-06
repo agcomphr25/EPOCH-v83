@@ -17,7 +17,7 @@ export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Pr
       try {
         JsBarcode(barcodeRef.current, badgeScanCode, {
           format: 'CODE128',
-          width: 1.2,
+          width: 0.8,
           height: 35,
           displayValue: false,
           fontSize: 12,

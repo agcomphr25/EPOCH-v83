@@ -6508,6 +6508,12 @@ export const insertOrderIdSequenceSchema = createInsertSchema(
   updatedAt: true,
 });
 
+export const p2OrderIdSequences = pgTable('p2_order_id_sequences', {
+  yearMonthPrefix: text('year_month_prefix').primaryKey(),
+  currentSequence: integer('current_sequence').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export type InsertOrderIdSequence = z.infer<typeof insertOrderIdSequenceSchema>;
 export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 

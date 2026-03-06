@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearch, useLocation } from 'wouter';
 import {
   Card,
@@ -56,6 +56,8 @@ export default function EnhancedInventoryMRPPage() {
   const [isOutsideProcessingModalOpen, setIsOutsideProcessingModalOpen] = useState(false);
   const [initialPartNumber, setInitialPartNumber] = useState<string | null>(null);
 
+  const expandedPanelRef = useRef<HTMLDivElement>(null);
+
   // Auto-open inventory modal if partNumber is in URL
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -65,6 +67,13 @@ export default function EnhancedInventoryMRPPage() {
       setIsInventoryItemsModalOpen(true);
     }
   }, [searchParams]);
+
+  // Scroll expanded panel into view when a card is activated
+  useEffect(() => {
+    if (activeCard && expandedPanelRef.current) {
+      expandedPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeCard]);
 
   const handleCardClick = (cardType: string) => {
     if (cardType === 'inventory-items') {
@@ -492,7 +501,7 @@ export default function EnhancedInventoryMRPPage() {
 
       {/* Expanded Card Content */}
       {activeCard && (
-        <div className="mt-8">
+        <div className="mt-8" ref={expandedPanelRef}>
           <Card className="border-t-4 border-t-blue-500">
             <CardHeader>
               <div className="flex justify-between items-center">

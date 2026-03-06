@@ -1,0 +1,230 @@
+Copy-Paste Implementation Prompt
+
+(Inventory Event Engine – Safe Phase 1)
+
+IMPLEMENTATION TASK — INVENTORY EVENT ENGINE (PHASE 1)
+
+Goal:
+Create a centralized Inventory Event Engine that records all inventory movements and updates inventory balances.
+
+Important constraints:
+1. Do NOT modify the cutting table / material lot system.
+2. Do NOT remove any legacy fields.
+3. Do NOT refactor existing modules yet.
+4. Only introduce a new service and connect it to vendor PO receiving.
+
+This phase establishes the foundation without affecting current workflows.
+
+--------------------------------------------------
+
+SECTION 1 — CREATE INVENTORY EVENT SERVICE
+
+Create a new file:
+
+server/src/services/inventoryEventService.ts
+
+This service will expose one function:
+
+createInventoryEvent()
+
+Interface:
+
+createInventoryEvent({
+  agPartNumber: string
+  eventType: 'receipt' | 'receipt_pending' | 'putaway' | 'consumption' | 'transfer' | 'adjustment' | 'return' | 'issue'
+  quantity: number
+  unitOfMeasure?: string
+  fromLocation?: string | null
+  toLocation?: string | null
+  referenceType?: string
+  referenceId?: number | string
+  costPerUnit?: number
+  performedBy?: string
+  notes?: string
+  metadata?: any
+  transactionDate?: Date
+})
+
+--------------------------------------------------
+
+SECTION 2 — EVENT ENGINE BEHAVIOR
+
+When createInventoryEvent() runs:
+
+STEP 1
+Insert a record into inventory_transactions
+
+Fields:
+
+ag_part_number
+transaction_type
+quantity
+unit_of_measure
+from_location
+to_location
+reference_type
+reference_id
+cost_per_unit
+total_cost
+performed_by
+notes
+metadata
+transaction_date
+
+STEP 2
+Update inventory_balances
+
+Rules:
+
+If eventType = receipt or putaway
+    quantity_on_hand += quantity
+    quantity_available += quantity
+
+If eventType = consumption or issue
+    quantity_on_hand -= quantity
+    quantity_available -= quantity
+
+If eventType = transfer
+    subtract from from_location
+    add to to_location
+
+If eventType = receipt_pending
+    only record transaction
+    DO NOT update balances
+
+If eventType = adjustment
+    quantity_on_hand += quantity
+    quantity_available += quantity
+
+Balances must UPSERT:
+
+If no inventory_balances row exists for this ag_part_number and location
+    create one
+
+--------------------------------------------------
+
+SECTION 3 — DEFAULT LOCATIONS
+
+Define default constants inside the service:
+
+RECEIVING_LOCATION = "RECEIVING"
+MAIN_WAREHOUSE_LOCATION = "WAREHOUSE-MAIN"
+
+These can later become configurable.
+
+--------------------------------------------------
+
+SECTION 4 — CONNECT VENDOR PO RECEIVING
+
+Locate:
+
+storage.recordVendorPOReceipt()
+
+After this block:
+
+UPDATE vendor_po_items
+SET received_quantity, received_date
+
+Insert call to the new event service.
+
+Example:
+
+createInventoryEvent({
+  agPartNumber: poLineItem.agPartNumber,
+  eventType: "receipt_pending",
+  quantity: receivedQuantity,
+  unitOfMeasure: inventoryItem.purchaseUnit,
+  toLocation: "RECEIVING",
+  referenceType: "VENDOR_PO",
+  referenceId: poLineItem.vendorPoId,
+  costPerUnit: poLineItem.unitPrice,
+  performedBy: createdBy,
+  transactionDate: receivedDate,
+  notes: notes
+})
+
+This records the receipt but keeps stock in the RECEIVING bucket until put-away.
+
+--------------------------------------------------
+
+SECTION 5 — DO NOT MODIFY THESE SYSTEMS
+
+The following systems must remain untouched:
+
+material_lot_transactions
+cutting_fabric_inventory
+inventory_scans
+legacy inventory_items.on_hand fields
+
+They will integrate with the event engine later.
+
+--------------------------------------------------
+
+SECTION 6 — ADD HELPER: PUT AWAY FUNCTION
+
+Create helper:
+
+putAwayInventory({
+  agPartNumber,
+  quantity,
+  fromLocation = "RECEIVING",
+  toLocation
+})
+
+This should call createInventoryEvent() with eventType = "putaway".
+
+This will allow traceability / QC staff to release material into stock later.
+
+--------------------------------------------------
+
+SECTION 7 — ADD LOGGING
+
+Each inventory event should log:
+
+console.info("Inventory Event", {
+  part: agPartNumber,
+  type: eventType,
+  qty: quantity,
+  location: toLocation || fromLocation
+})
+
+This will help verify system behavior.
+
+--------------------------------------------------
+
+SECTION 8 — VALIDATION
+
+Validate:
+
+quantity cannot be zero
+agPartNumber must exist in inventory_items
+negative quantities only allowed for consumption or adjustment
+
+--------------------------------------------------
+
+SECTION 9 — TEST SCENARIO
+
+After implementation verify:
+
+1. Receive vendor PO line item
+2. inventory_transactions row created
+3. inventory_balances NOT changed
+4. location = RECEIVING
+
+Then manually run putAwayInventory()
+
+Verify:
+
+inventory_balances increases
+quantity_available updates
+
+--------------------------------------------------
+
+DELIVERABLE
+
+Provide summary:
+
+files created
+files modified
+example transaction record
+example balance update

@@ -8577,6 +8577,27 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(vendorPOItems.id, poLineItemId));
 
+    // Record inventory event — receipt_pending lands in RECEIVING location
+    // and does NOT update inventory_balances until put-away
+    try {
+      const { createInventoryEvent } = await import('./src/services/inventoryEventService.js');
+      await createInventoryEvent({
+        agPartNumber: poLineItem.agPartNumber,
+        eventType: 'receipt_pending',
+        quantity: receivedQuantity,
+        unitOfMeasure: inventoryItem?.purchaseUnit ?? undefined,
+        toLocation: 'RECEIVING',
+        referenceType: 'VENDOR_PO',
+        referenceId: poLineItem.vendorPoId,
+        costPerUnit: poLineItem.unitPrice,
+        performedBy: createdBy != null ? String(createdBy) : 'system',
+        transactionDate: receivedDate,
+        notes: notes ?? undefined,
+      });
+    } catch (eventErr) {
+      console.error('Inventory event recording failed (non-fatal):', eventErr);
+    }
+
     // If this is a FABRIC item for Cutting Table (must be marked as fabric AND used in PL1 or PL2), create fabric inventory records
     let fabricInventoryRecords: any[] = [];
     let fabricInventoryWarnings: string[] = [];

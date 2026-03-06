@@ -7746,8 +7746,8 @@ export function registerRoutes(app: Express): Server {
           const isPOItem = (order as any).isPOItem || order.orderId.startsWith('P1-');
           
           if (isPOItem) {
-            const poNumber = (order as any).poNumber || order.orderId;
-            labelText = `PO#${poNumber}`;
+            const fullOrderId = order.orderId.replace(/^(PO-|P1-)/, '');
+            labelText = `PO#${fullOrderId}`;
             
             // Extract customer name for separate line
             customerName = (order as any).poCustomerName || order.customerName || (order as any).customerName;

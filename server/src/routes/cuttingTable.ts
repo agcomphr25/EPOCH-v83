@@ -2064,9 +2064,9 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       `);
       const p2Counts = (p2CountResult as any).rows?.[0] || p2CountResult?.[0];
       console.log('📊 P2 production orders diagnostic:', JSON.stringify(p2Counts));
-      // Query P2 production orders table - only items that are packets or have a packet BOM
+      // Query P2 production orders table - only items that are actual packets
+      // Packet identification: is_packet flag, matching cutting_packet_bom, 'packet' keyword in name/sku, or specific SKUs (P706, P707)
       // Match inventory by sku (AG part number) first, then fall back to part_name matching
-      // Department = 'Cutting Table' is the primary filter since generateP2ProductionOrders always sets it for packets
       const p2Query = `
             SELECT DISTINCT ON (po.id)
               po.id,
@@ -2105,7 +2105,6 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND (
                 inv.is_packet = true
-                OR po.department ILIKE '%cutting%'
                 OR bom.id IS NOT NULL
                 OR LOWER(po.part_name) LIKE '%packet%'
                 OR LOWER(po.sku) LIKE '%packet%'
@@ -2193,6 +2192,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           id: `p2-${item.id}`,
           orderId: item.poNumber ? `PO-${item.poNumber}-${item.id}` : `P2-${item.id}`,
           stockModel: item.itemName,
+          sku: item.sku,
           source: 'P2',
           orderType: 'p2_po',
           materialType,
@@ -2273,7 +2273,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 // Schedule packet to cutting queue
 router.post('/schedule-to-cutting', async (req, res) => {
   try {
-    const { orderId, bomId, quantity, priority, dueDate, source, materialType, notes } = req.body;
+    const { orderId, bomId, quantity, priority, dueDate, source, materialType, packetName: requestedPacketName, notes } = req.body;
     
     if (!quantity) {
       return res.status(400).json({ error: 'Quantity is required' });
@@ -2324,14 +2324,14 @@ router.post('/schedule-to-cutting', async (req, res) => {
     const { manufacturingQueue, inventoryItems } = await import('../../schema');
     const { pool } = await import('../../db');
     
-    // Determine packet name based on material type - handle P2 material types
-    const packetName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+    const packetName = requestedPacketName || (
+                       materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
                        materialType === 'mesa' ? 'Mesa Packet' :
                        materialType === 'p2_disruptor' ? 'Disruptor Packet' :
                        materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
                        materialType === 'p2_antenna' ? 'Antenna Cover Packet' :
-                       materialType === 'p2_antenna_cover' ? 'Antenna Cover Packet' : 'Stock Packet';
+                       materialType === 'p2_antenna_cover' ? 'Antenna Cover Packet' : 'Stock Packet');
     
     // Try to find existing packet inventory item - use exact match first
     let inventoryItemId: number | null = null;
@@ -2396,7 +2396,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       priority: priority || 50,
       status: 'PENDING',
       dueDate: dueDate ? new Date(dueDate) : null,
-      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2' }),
+      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2', packetName }),
       requestedBy: 'system',
       createdAt: new Date(),
       updatedAt: new Date(),

@@ -250,6 +250,7 @@ export default function CuttingWeeklySchedule() {
           dueDate: new Date(currentWeek).toISOString(),
           source: 'MANUAL',
           materialType: data.materialType,
+          packetName: data.packetType,
           notes: data.description || `Scheduled ${data.quantity} ${data.packetType} packets`,
         }),
       });
@@ -673,11 +674,13 @@ export default function CuttingWeeklySchedule() {
                   
                   // Build display description with multiple fallbacks
                   const getDescription = () => {
-                    // 1. Try JSON userNotes first
+                    // 1. Try packetName from notes first (most accurate)
+                    if (notes.packetName) return notes.packetName;
+                    // 2. Try JSON userNotes
                     if (notes.userNotes) return notes.userNotes;
-                    // 2. Try JSON orderId
+                    // 3. Try JSON orderId
                     if (notes.orderId) return notes.orderId;
-                    // 3. Try part name from the item
+                    // 4. Try part name from the item
                     if (item.partName) return item.partName;
                     // 4. Try material type from parsed notes
                     if (notes.materialType) {

@@ -327,9 +327,9 @@ export default function CuttingBomAssignment() {
         return;
       }
       
-      // Only add to packetsNeedingBom if it's flagged as a packet in inventory
-      // Items without isPacket=true are regular inventory items that don't need packet BOMs
-      if (item.isPacket !== true) return;
+      const itemIsPacket = item.isPacket === true || 
+        (item.source === 'P2' && (nameLower.includes('packet') || (item.sku || '').toLowerCase().includes('packet')));
+      if (!itemIsPacket) return;
       
       // Check if any BOM exists with partial match before adding to needsBom list
       const hasPartialBomMatch = packetBOMs.some(bom => {

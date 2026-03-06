@@ -76,9 +76,10 @@ export default function EmployeeBadgeConfiguration() {
   useEffect(() => {
     if (barcodeRef.current && selectedReprintEmployee?.badgeScanCode) {
       try {
-        JsBarcode(barcodeRef.current, selectedReprintEmployee.badgeScanCode, {
+        const barcodeValue = selectedReprintEmployee.badgeScanCode.replace(/-/g, '');
+        JsBarcode(barcodeRef.current, barcodeValue, {
           format: 'CODE128',
-          width: 1,
+          width: 1.5,
           height: 80,
           displayValue: false,
           fontSize: 16,

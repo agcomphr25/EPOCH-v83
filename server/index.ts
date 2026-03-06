@@ -1207,6 +1207,21 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ fabric_inventory square_meters backfill:', fabricSqmErr.message);
       }
 
+      // Ensure p2_order_id_sequences table exists (separate sequence counter for P2 production orders)
+      try {
+        const { sql: sqlP2Seq } = await import('drizzle-orm');
+        await db.execute(sqlP2Seq`
+          CREATE TABLE IF NOT EXISTS p2_order_id_sequences (
+            year_month_prefix text PRIMARY KEY,
+            current_sequence integer NOT NULL DEFAULT 0,
+            updated_at timestamp NOT NULL DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured p2_order_id_sequences table exists');
+      } catch (p2SeqErr: any) {
+        console.warn('⚠️ p2_order_id_sequences migration:', p2SeqErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

@@ -706,6 +706,21 @@ router.delete('/parts-requests/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Get parts requests by the current user (all departments)
+router.get('/parts-requests/my', async (req: Request, res: Response) => {
+  try {
+    const username = (req as any).session?.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const requests = await storage.getPartsRequestsByUser(username);
+    res.json(requests);
+  } catch (error) {
+    console.error('Get user parts requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch user parts requests' });
+  }
+});
+
 // Get parts requests by department
 router.get('/parts-requests/department/:departmentId', async (req: Request, res: Response) => {
   try {

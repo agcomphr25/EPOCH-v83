@@ -7547,60 +7547,66 @@ export function registerRoutes(app: Express): Server {
       const notFoundOrders: string[] = [];
       
       for (const orderId of orderIds) {
-        // Try to get order from finalized orders first, then drafts, then production_orders
+        // Check production_orders table FIRST (takes precedence over all_orders, matching getAllOrders() dedup logic)
+        // This prevents a production order from being misidentified as a different all_orders entry with the same ID
         let order: any = null;
         try {
-          order = await storage.getFinalizedOrderById(orderId);
+          const productionOrderResult = await pool.query(
+            `SELECT 
+              order_id,
+              customer_id,
+              customer_name,
+              po_number,
+              item_name,
+              item_id,
+              specifications,
+              material_canonical,
+              order_date,
+              due_date,
+              production_status,
+              current_department,
+              created_at,
+              updated_at
+            FROM production_orders
+            WHERE order_id = $1
+            LIMIT 1`,
+            [orderId]
+          );
+          
+          if (productionOrderResult && productionOrderResult.length > 0) {
+            const po = productionOrderResult[0];
+            let specs: any = {};
+            try {
+              specs = typeof po.specifications === 'string' ? JSON.parse(po.specifications) : (po.specifications || {});
+            } catch (_e) {
+              specs = {};
+            }
+            console.log(`🔍 Found production order for label: ${orderId}`);
+            order = {
+              orderId: po.order_id,
+              customerId: po.customer_id,
+              customerName: po.customer_name,
+              currentDepartment: po.current_department,
+              orderDate: po.order_date,
+              dueDate: po.due_date,
+              status: 'in_production',
+              stockModelId: specs.stockModel || specs.stock_model || po.item_id || 'unknown',
+              modelId: specs.stockModel || specs.stock_model || po.item_id || 'unknown',
+              fbOrderNumber: po.po_number,
+              isP1Order: orderId.startsWith('P1-'),
+              isPOItem: true,
+              features: specs,
+              actionLength: specs.actionLength || specs.action_length,
+              material_canonical: po.material_canonical || '',
+            };
+          }
+
+          // Fall back to all_orders and drafts only if not in production_orders
+          if (!order) {
+            order = await storage.getFinalizedOrderById(orderId);
+          }
           if (!order) {
             order = await storage.getOrderDraft(orderId);
-          }
-          
-          // If not found in regular orders, check production_orders table (P1 orders and PO items)
-          if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
-            console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
-            const productionOrderResult = await pool.query(
-              `SELECT 
-                order_id,
-                customer_id,
-                customer_name,
-                po_number,
-                item_name,
-                item_id,
-                specifications,
-                material_canonical,
-                order_date,
-                due_date,
-                production_status,
-                current_department,
-                created_at,
-                updated_at
-              FROM production_orders
-              WHERE order_id = $1
-              LIMIT 1`,
-              [orderId]
-            );
-            
-            if (productionOrderResult && productionOrderResult.length > 0) {
-              const po = productionOrderResult[0];
-              console.log(`✅ Found production order:`, po);
-              order = {
-                orderId: po.order_id,
-                customerId: po.customer_id,
-                customerName: po.customer_name,
-                currentDepartment: po.current_department,
-                orderDate: po.order_date,
-                dueDate: po.due_date,
-                status: 'in_production',
-                stockModelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-                modelId: po.item_id || po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-                fbOrderNumber: po.po_number,
-                isP1Order: orderId.startsWith('P1-'),
-                isPOItem: orderId.startsWith('PO-'),
-                features: po.specifications || {},
-                actionLength: po.specifications?.actionLength || po.specifications?.action_length,
-                material_canonical: po.material_canonical || '',
-              };
-            }
           }
         } catch (_error) {
           console.warn(`Could not find order ${orderId}:`, _error);

@@ -720,7 +720,7 @@ export const partsRequests = pgTable('parts_requests', {
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
   department: text('department'), // Department name (legacy text field)
-  departmentId: integer('department_id').references(() => departments.id), // FK to departments table
+  departmentId: integer('department_id').references(() => inventoryDepartments.id, { onDelete: 'set null' }), // FK to inventory_departments
   quantity: integer('quantity').notNull(),
   urgency: text('urgency').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
   supplier: text('supplier'),

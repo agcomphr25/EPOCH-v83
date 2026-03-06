@@ -97,10 +97,14 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
     }
   }
 
-  if (modelId.toLowerCase().includes('tikka')) {
-    debugReasons.push(`material inferred from modelId containing "tikka": "${modelId}"`);
-    return 'Tikka';
+  // Check for fiberglass Tikka variants that end with _fg suffix (e.g. alpine_hunter_tikka_fg, privateer-tikka_fg)
+  if (modelId.toLowerCase().includes('tikka') && (modelId.toLowerCase().endsWith('_fg') || modelId.toLowerCase().includes('_fg_'))) {
+    debugReasons.push(`material inferred from tikka model with _fg suffix: "${modelId}"`);
+    return 'Fiberglass';
   }
+
+  // Do NOT return 'Tikka' as a material — Tikka is a platform/variant, not a fabric type.
+  // Tikka orders without a CF/FG prefix will fall through to 'Standard' below.
 
   if (displayName) {
     const dn = displayName.toLowerCase();
@@ -120,10 +124,6 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
       debugReasons.push(`material inferred from displayName containing "fg/fiberglass": "${displayName}"`);
       return 'Fiberglass';
     }
-    if (dn.includes('tikka')) {
-      debugReasons.push(`material inferred from displayName containing "tikka": "${displayName}"`);
-      return 'Tikka';
-    }
   }
 
   debugReasons.push(`material fallback to "Standard" — modelId: "${modelId}", displayName: "${displayName}"`);
@@ -136,7 +136,6 @@ function normalizeMaterialLabel(raw: string): string {
   if (lower === 'fiberglass' || lower === 'fg') return 'Fiberglass';
   if (lower === 'm1a') return 'M1A';
   if (lower === 'apr') return 'APR';
-  if (lower === 'tikka') return 'Tikka';
   return raw;
 }
 

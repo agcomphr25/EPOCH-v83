@@ -951,24 +951,24 @@ export default function BarcodeQueuePage() {
 
                                   {/* Material Type and Action Badges */}
                                   <div className="flex gap-2 flex-wrap">
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${
-                                        materialType === 'Carbon Fiber'
-                                          ? 'border-gray-800 text-gray-800 bg-gray-100'
-                                          : materialType === 'Fiberglass'
-                                            ? 'border-amber-600 text-amber-700 bg-amber-50'
-                                            : materialType === 'Tikka'
-                                              ? 'border-purple-600 text-purple-700 bg-purple-50'
+                                    {materialType !== 'Tikka' && (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-xs ${
+                                          materialType === 'Carbon Fiber'
+                                            ? 'border-gray-800 text-gray-800 bg-gray-100'
+                                            : materialType === 'Fiberglass'
+                                              ? 'border-amber-600 text-amber-700 bg-amber-50'
                                               : materialType === 'M1A'
                                                 ? 'border-green-600 text-green-700 bg-green-50'
                                                 : materialType === 'APR'
                                                   ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
                                                   : 'border-blue-600 text-blue-700 bg-blue-50'
-                                      }`}
-                                    >
-                                      {materialType}
-                                    </Badge>
+                                        }`}
+                                      >
+                                        {materialType}
+                                      </Badge>
+                                    )}
                                     {isTikka && (
                                       <Badge
                                         variant="outline"
@@ -1275,24 +1275,24 @@ export default function BarcodeQueuePage() {
 
                                       {/* Material Type and Action Badges */}
                                       <div className="flex gap-2 flex-wrap">
-                                        <Badge
-                                          variant="outline"
-                                          className={`text-xs ${
-                                            materialType === 'Carbon Fiber'
-                                              ? 'border-gray-800 text-gray-800 bg-gray-100'
-                                              : materialType === 'Fiberglass'
-                                                ? 'border-amber-600 text-amber-700 bg-amber-50'
-                                                : materialType === 'Tikka'
-                                                  ? 'border-purple-600 text-purple-700 bg-purple-50'
+                                        {materialType !== 'Tikka' && (
+                                          <Badge
+                                            variant="outline"
+                                            className={`text-xs ${
+                                              materialType === 'Carbon Fiber'
+                                                ? 'border-gray-800 text-gray-800 bg-gray-100'
+                                                : materialType === 'Fiberglass'
+                                                  ? 'border-amber-600 text-amber-700 bg-amber-50'
                                                   : materialType === 'M1A'
                                                     ? 'border-green-600 text-green-700 bg-green-50'
                                                     : materialType === 'APR'
                                                       ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
                                                       : 'border-blue-600 text-blue-700 bg-blue-50'
-                                          }`}
-                                        >
-                                          {materialType}
-                                        </Badge>
+                                            }`}
+                                          >
+                                            {materialType}
+                                          </Badge>
+                                        )}
                                         {isTikka && (
                                           <Badge
                                             variant="outline"

@@ -7693,16 +7693,16 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
 
-          // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
+          // Calculate label position (3x10 grid) - Avery 8160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications per official template
+          // Avery 8160 specifications per official template
           const pageHeight = 792; // 11" * 72 points/inch
-          const topMargin = 40.5; // 9/16" * 72 points/inch - exact Avery 5160 top margin specification
-          const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
+          const topMargin = 36; // 0.5" * 72 points/inch - exact Avery 8160 top margin
+          const leftMargin = 13.5; // 0.1875" * 72 points/inch - left margin for Avery 8160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
-          const rowSpacing = 0; // No gap between rows on Avery 5160
+          const rowSpacing = 0; // No gap between rows on Avery 8160
           const columnGap = 9; // 0.125" * 72 points/inch (horizontal gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
           // PDF coordinates: origin at bottom-left, so subtract from page height

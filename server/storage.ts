@@ -8442,11 +8442,10 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
     }
 
-    // Validate unit price
-    if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
-      throw new Error(
-        `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
-      );
+    // Validate unit price — soft check only; $0 items skip COGS but still get received
+    const hasValidPrice = !!(poLineItem.unitPrice && poLineItem.unitPrice > 0);
+    if (!hasValidPrice) {
+      console.warn(`⚠️ PO line item ${poLineItemId} has no unit price — COGS calculation will be skipped.`);
     }
 
     // Get the vendor PO to get vendorId
@@ -8481,6 +8480,7 @@ export class DatabaseStorage implements IStorage {
 
     // Check if we have full COGS configuration
     const hasFullCogsConfig = 
+      hasValidPrice &&
       inventoryItem &&
       inventoryItem.purchaseQuantity && 
       inventoryItem.purchaseQuantity > 0 &&
@@ -8589,7 +8589,7 @@ export class DatabaseStorage implements IStorage {
         toLocation: 'RECEIVING',
         referenceType: 'VENDOR_PO',
         referenceId: poLineItem.vendorPoId,
-        costPerUnit: poLineItem.unitPrice,
+        costPerUnit: hasValidPrice ? poLineItem.unitPrice : undefined,
         performedBy: createdBy != null ? String(createdBy) : 'system',
         transactionDate: receivedDate,
         notes: notes ?? undefined,

@@ -2064,9 +2064,9 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       `);
       const p2Counts = (p2CountResult as any).rows?.[0] || p2CountResult?.[0];
       console.log('📊 P2 production orders diagnostic:', JSON.stringify(p2Counts));
-      // Query P2 production orders table - only items that are packets or have a packet BOM
+      // Query P2 production orders table - only items that are actual packets
+      // Packet identification: is_packet flag, matching cutting_packet_bom, 'packet' keyword in name/sku, or specific SKUs (P706, P707)
       // Match inventory by sku (AG part number) first, then fall back to part_name matching
-      // Department = 'Cutting Table' is the primary filter since generateP2ProductionOrders always sets it for packets
       const p2Query = `
             SELECT DISTINCT ON (po.id)
               po.id,
@@ -2105,7 +2105,6 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND (
                 inv.is_packet = true
-                OR po.department ILIKE '%cutting%'
                 OR bom.id IS NOT NULL
                 OR LOWER(po.part_name) LIKE '%packet%'
                 OR LOWER(po.sku) LIKE '%packet%'

@@ -21,5 +21,9 @@ export function deriveCanonicalMaterial(stockModelId: string): string {
   if (lower.includes('fiberglass') || lower.includes('_fg')) return 'Fiberglass';
   if (lower.startsWith('mesa_')) return 'Fiberglass';
 
+  // Tikka variants without a cf_/fg_ prefix: if they end with _fg they're Fiberglass (caught above).
+  // All other bare Tikka models (privateer-tikka, alpine_hunter_tikka, etc.) are Carbon Fiber.
+  if (lower.includes('tikka') && !lower.startsWith('mesa_')) return 'Carbon Fiber';
+
   return '';
 }

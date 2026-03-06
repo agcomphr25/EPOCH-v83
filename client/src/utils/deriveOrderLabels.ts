@@ -60,6 +60,7 @@ const MATERIAL_PREFIX_MAP: Record<string, string> = {
   fg_: 'Fiberglass',
   m1a_: 'M1A',
   apr_: 'APR',
+  mesa_: 'Fiberglass',
 };
 
 function deriveMaterial(order: any, debugReasons: string[]): string {
@@ -97,14 +98,21 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
     }
   }
 
-  // Check for fiberglass Tikka variants that end with _fg suffix (e.g. alpine_hunter_tikka_fg, privateer-tikka_fg)
-  if (modelId.toLowerCase().includes('tikka') && (modelId.toLowerCase().endsWith('_fg') || modelId.toLowerCase().includes('_fg_'))) {
-    debugReasons.push(`material inferred from tikka model with _fg suffix: "${modelId}"`);
-    return 'Fiberglass';
+  const lowerModelId = modelId.toLowerCase();
+
+  // Tikka variants: FG ones end with _fg, all others (non-Mesa) are Carbon Fiber
+  if (lowerModelId.includes('tikka')) {
+    if (lowerModelId.endsWith('_fg') || lowerModelId.includes('_fg_')) {
+      debugReasons.push(`material inferred from tikka model with _fg suffix: "${modelId}"`);
+      return 'Fiberglass';
+    }
+    if (!lowerModelId.startsWith('mesa_')) {
+      debugReasons.push(`material inferred from bare tikka model (non-mesa, non-fg) → Carbon Fiber: "${modelId}"`);
+      return 'Carbon Fiber';
+    }
   }
 
   // Do NOT return 'Tikka' as a material — Tikka is a platform/variant, not a fabric type.
-  // Tikka orders without a CF/FG prefix will fall through to 'Standard' below.
 
   if (displayName) {
     const dn = displayName.toLowerCase();

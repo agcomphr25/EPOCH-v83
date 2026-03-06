@@ -1,0 +1,125 @@
+Copy-Paste Implementation Prompt
+
+Context
+
+We completed a forensic audit of the /payment-analytics page.
+
+Root cause:
+
+Declined credit card attempts are being counted as successful payments because the analytics query reads only from the payments table.
+
+The payments table stores a row for every payment attempt (approved or declined).
+
+The actual success/failure status is stored in the credit_card_transactions table:
+
+status = 'completed'   → approved transaction
+status = 'failed'      → declined transaction
+
+The analytics query currently does not join or filter using this table, which causes declined attempts to appear as successful payments.
+
+Goal
+
+Modify the /api/finance/payment-analytics SQL query so that declined credit card attempts are excluded from the report, while leaving all other payment types unchanged.
+
+This must be done by joining credit_card_transactions and filtering on status = 'completed' for credit card payments only.
+
+Implementation Tasks
+1️⃣ Locate the analytics route
+
+File:
+
+server/src/routes/index.ts
+
+Locate the handler for:
+
+GET /api/finance/payment-analytics
+
+(around line ~8498)
+
+2️⃣ Modify the SQL query
+
+Find the query that currently reads:
+
+FROM payments p
+LEFT JOIN all_orders o ...
+LEFT JOIN customers c ...
+
+Add a join to the credit_card_transactions table:
+
+LEFT JOIN credit_card_transactions cct
+  ON cct.payment_id = p.id
+3️⃣ Filter out declined credit card transactions
+
+Modify the WHERE clause so that:
+
+Credit card payments are included only if the transaction succeeded
+
+Other payment types (aaaa, agr, etc.) remain unaffected
+
+Add this condition:
+
+AND (
+  p.payment_type != 'credit_card'
+  OR cct.status = 'completed'
+)
+
+The resulting query should follow this structure:
+
+SELECT ...
+FROM payments p
+LEFT JOIN all_orders o ON ...
+LEFT JOIN customers c ON ...
+LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
+WHERE p.payment_date >= $1
+  AND p.payment_date <= $2
+  AND p.payment_type IN ('credit_card','aaaa','agr')
+  AND (
+       p.payment_type != 'credit_card'
+       OR cct.status = 'completed'
+  )
+ORDER BY p.payment_date DESC
+4️⃣ Do NOT modify any other logic
+
+Do NOT change:
+
+Accept.Blue integration
+
+processTransactionResult()
+
+payments insertion logic
+
+payment processing routes
+
+other finance reports
+
+Only adjust the analytics query.
+
+Verification Steps
+
+After implementing:
+
+Attempt a declined credit card transaction.
+
+Attempt a successful credit card transaction.
+
+Load /payment-analytics.
+
+Expected behavior:
+
+Declined attempt does not appear
+
+Approved payment appears
+
+Online (aaaa) and AGR payments still appear
+
+Output
+
+Provide:
+
+file path
+
+updated SQL query
+
+exact line numbers modified
+
+confirmation that declined transactions are excluded from analytics

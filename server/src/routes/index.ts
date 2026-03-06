@@ -8531,8 +8531,13 @@ export function registerRoutes(app: Express): Server {
         FROM payments p
         LEFT JOIN all_orders o ON p.order_id = o.order_id
         LEFT JOIN customers c ON CASE WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer ELSE NULL END = c.id
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
         WHERE p.payment_date >= $1 AND p.payment_date <= $2
           AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
         ORDER BY p.payment_date DESC
       `;
       

@@ -78,7 +78,7 @@ export default function EmployeeBadgeConfiguration() {
       try {
         JsBarcode(barcodeRef.current, selectedReprintEmployee.badgeScanCode, {
           format: 'CODE128',
-          width: 2,
+          width: 1,
           height: 80,
           displayValue: false,
           fontSize: 16,

@@ -35,13 +35,23 @@ function getDepartmentVariants(department: string): string[] {
 }
 
 // GET /api/p2-traveler/badge-lookup/:employeeCode
-// Look up employee by badge code and return name
+// Look up employee by badge code (badge_scan_code UUID or employee_code)
 router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) => {
   try {
     const { employeeCode } = req.params;
-    const employee = await db.query.employees.findFirst({
-      where: eq(employees.employeeCode, employeeCode),
+    // Normalize input: strip hyphens so badges printed with/without hyphens both work
+    const normalized = employeeCode.replace(/-/g, '');
+
+    // Try badge_scan_code first (what physical badges encode), then employee_code fallback
+    let employee = await db.query.employees.findFirst({
+      where: sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`,
     });
+
+    if (!employee) {
+      employee = await db.query.employees.findFirst({
+        where: eq(employees.employeeCode, employeeCode),
+      });
+    }
 
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -64,10 +74,16 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     const { employeeCode } = req.params;
     const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get employee
-    const employee = await db.query.employees.findFirst({
-      where: eq(employees.employeeCode, employeeCode),
+    // Get employee — check badge_scan_code (what physical badges encode) then employee_code
+    const normalized = employeeCode.replace(/-/g, '');
+    let employee = await db.query.employees.findFirst({
+      where: sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`,
     });
+    if (!employee) {
+      employee = await db.query.employees.findFirst({
+        where: eq(employees.employeeCode, employeeCode),
+      });
+    }
 
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found' });

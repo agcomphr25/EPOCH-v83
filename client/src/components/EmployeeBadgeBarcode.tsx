@@ -15,10 +15,11 @@ export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Pr
   useEffect(() => {
     if (barcodeRef.current && badgeScanCode) {
       try {
-        JsBarcode(barcodeRef.current, badgeScanCode, {
+        const barcodeValue = badgeScanCode.replace(/-/g, '');
+        JsBarcode(barcodeRef.current, barcodeValue, {
           format: 'CODE128',
-          width: 0.8,
-          height: 35,
+          width: 1.2,
+          height: 50,
           displayValue: false,
           fontSize: 12,
           margin: 5,

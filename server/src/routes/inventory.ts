@@ -709,7 +709,7 @@ router.delete('/parts-requests/:id', async (req: Request, res: Response) => {
 // Get parts requests by the current user (all departments)
 router.get('/parts-requests/my', async (req: Request, res: Response) => {
   try {
-    const username = (req as any).session?.user?.username;
+    const username = req.user?.username;
     if (!username) {
       return res.status(401).json({ error: 'Not authenticated' });
     }

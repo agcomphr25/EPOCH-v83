@@ -1,0 +1,214 @@
+COPY-PASTE PROMPT
+Explain Queue Visibility (Domain Truth Inspector)
+We are adding a new diagnostic feature called "Explain Queue Visibility".
+
+This feature will analyze why an order IS or IS NOT visible in a given department queue.
+
+It must use the same rules that the system uses to determine queue membership.
+
+This is a read-only diagnostic feature.
+
+Do NOT modify production workflow logic.
+
+------------------------------------------------
+PART 1 — CREATE QUEUE RULE ENGINE
+------------------------------------------------
+
+Create a new shared utility:
+
+server/src/services/queueVisibilityService.ts
+
+This service determines whether an order should appear in a queue.
+
+Function:
+
+evaluateQueueVisibility(order, department)
+
+Inputs:
+order object from all_orders
+target department
+
+Return structure:
+
+{
+  department,
+  visible: boolean,
+  checks: [
+    {
+      rule: "department_match",
+      description: "Order department matches queue",
+      expected: department,
+      actual: order.current_department,
+      result: true | false
+    },
+    {
+      rule: "not_scrapped",
+      description: "Order not scrapped",
+      actual: order.status,
+      result: true | false
+    },
+    {
+      rule: "not_cancelled",
+      description: "Order not cancelled",
+      actual: order.is_cancelled,
+      result: true | false
+    },
+    {
+      rule: "scrap_date_null",
+      description: "Scrap date not set",
+      actual: order.scrap_date,
+      result: true | false
+    }
+  ],
+  explanation: string
+}
+
+Rules:
+
+1. order.current_department must equal department
+2. order.status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+3. order.scrap_date must be null
+4. order.is_cancelled must not be true
+
+Generate explanation text.
+
+Examples:
+
+"Order not visible because status = FULFILLED"
+
+"Order not visible because current_department = Shipping QC"
+
+------------------------------------------------
+PART 2 — ADD API ENDPOINT
+------------------------------------------------
+
+Create endpoint:
+
+GET /api/admin/explain-queue/:orderId/:department
+
+Location:
+
+server/src/routes/admin/explainQueueVisibility.ts
+
+Steps:
+
+1. load order from all_orders
+2. run evaluateQueueVisibility(order, department)
+3. return result
+
+Example response:
+
+{
+  "department": "Finish",
+  "visible": false,
+  "checks": [
+    {
+      "rule": "department_match",
+      "result": false,
+      "expected": "Finish",
+      "actual": "Shipping QC"
+    }
+  ],
+  "explanation": "Order is in Shipping QC, not Finish"
+}
+
+------------------------------------------------
+PART 3 — INTEGRATE INTO DOMAIN TRUTH INSPECTOR
+------------------------------------------------
+
+Update:
+
+client/src/pages/admin/DomainTruthInspector.tsx
+
+Add a new section:
+
+Queue Visibility Explanation
+
+Add dropdown:
+
+Select Department
+
+Options come from the shared DEPARTMENTS constant.
+
+When a department is selected:
+
+Call:
+
+/api/admin/explain-queue/{orderId}/{department}
+
+Display:
+
+Queue Visibility Result
+
+Example UI:
+
+Finish Queue
+✖ Not Visible
+
+Reason:
+Order is currently in Shipping QC
+
+Checks:
+
+Department Match ❌
+Not Scrapped ✔
+Not Cancelled ✔
+Scrap Date Null ✔
+
+------------------------------------------------
+PART 4 — ADD QUICK BUTTONS
+------------------------------------------------
+
+Below the department dropdown add quick buttons:
+
+Explain Finish Queue
+Explain Paint Queue
+Explain Shipping Queue
+
+Each triggers the evaluation automatically.
+
+------------------------------------------------
+PART 5 — LINK WITH QUEUE INTEGRITY MONITOR
+------------------------------------------------
+
+When clicking an order ID inside Queue Integrity Monitor:
+
+Append department parameter.
+
+Example:
+
+/admin/domain-truth?orderId=EI185&queue=Finish
+
+The Domain Truth Inspector should auto-run:
+
+explainQueueVisibility(orderId, queue)
+
+------------------------------------------------
+PART 6 — UI IMPROVEMENTS
+------------------------------------------------
+
+Display checks with icons:
+
+✔ passed rule
+❌ failed rule
+
+Highlight the failing rule.
+
+Example:
+
+❌ Department Match
+Expected: Finish
+Actual: Shipping QC
+
+------------------------------------------------
+PART 7 — TESTING
+------------------------------------------------
+
+Verify:
+
+1. Order currently in Finish → visible = true
+2. Order in Shipping QC → Finish visibility = false
+3. Scrapped order → invisible
+4. Cancelled order → invisible
+
+Ensure no production logic is modified.

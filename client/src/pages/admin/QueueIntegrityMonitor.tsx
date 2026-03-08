@@ -65,9 +65,12 @@ const SEVERITY_CONFIG = {
   },
 } as const;
 
-function OrderIdLink({ id }: { id: string }) {
+function OrderIdLink({ id, dept }: { id: string; dept?: string }) {
+  const href = dept
+    ? `/admin/domain-truth?orderId=${encodeURIComponent(id)}&queue=${encodeURIComponent(dept)}`
+    : `/admin/domain-truth?orderId=${encodeURIComponent(id)}`;
   return (
-    <Link href={`/admin/domain-truth?orderId=${encodeURIComponent(id)}`}>
+    <Link href={href}>
       <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 rounded px-2 py-0.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 cursor-pointer transition-colors underline underline-offset-2">
         {id}
       </span>
@@ -158,7 +161,7 @@ function DeptRow({ dept }: { dept: DeptResult }) {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {dept.missingOrders.map((id) => (
-                      <OrderIdLink key={id} id={id} />
+                      <OrderIdLink key={id} id={id} dept={dept.department} />
                     ))}
                   </div>
                 </div>
@@ -173,7 +176,7 @@ function DeptRow({ dept }: { dept: DeptResult }) {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {dept.unexpectedOrders.map((id) => (
-                      <OrderIdLink key={id} id={id} />
+                      <OrderIdLink key={id} id={id} dept={dept.department} />
                     ))}
                   </div>
                 </div>

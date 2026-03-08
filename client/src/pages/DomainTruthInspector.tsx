@@ -30,6 +30,7 @@ import {
   LogIn,
   LogOut,
   HelpCircle,
+  Eye,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -45,6 +46,21 @@ const DEPARTMENT_FLOW = [
   'Shipping QC',
   'Shipping',
 ];
+
+const DEPARTMENTS = [
+  'Production Queue',
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'Shipping QC',
+  'Shipping',
+] as const;
+
+const QUICK_BUTTONS = ['Finish', 'Paint', 'Shipping'] as const;
 
 function SectionCard({
   title,
@@ -178,16 +194,23 @@ const FLIGHT_EVENT_CONFIG = {
 export default function DomainTruthInspector() {
   const [inputId, setInputId] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState('');
+  const [explainActiveDept, setExplainActiveDept] = useState<string | null>(null);
   const [location] = useLocation();
 
-  // Auto-populate from ?orderId= query param (e.g. linked from Queue Integrity Monitor)
+  // Auto-populate from ?orderId= and optional ?queue= query params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get('orderId');
+    const queueUrl = params.get('queue');
     if (fromUrl) {
       const id = fromUrl.trim().toUpperCase();
       setInputId(id);
       setActiveId(id);
+    }
+    if (queueUrl) {
+      setSelectedDept(queueUrl);
+      setExplainActiveDept(queueUrl);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
@@ -203,6 +226,16 @@ export default function DomainTruthInspector() {
     queryKey: ['/api/admin/order-flight-recorder', activeId],
     queryFn: () => apiRequest(`/api/admin/order-flight-recorder/${activeId}`),
     enabled: !!activeId,
+    retry: false,
+  });
+
+  const { data: explainData, isLoading: explainLoading } = useQuery<any>({
+    queryKey: ['/api/admin/explain-queue', activeId, explainActiveDept],
+    queryFn: () =>
+      apiRequest(
+        `/api/admin/explain-queue/${activeId}/${encodeURIComponent(explainActiveDept!)}`
+      ),
+    enabled: !!activeId && !!explainActiveDept,
     retry: false,
   });
 
@@ -624,6 +657,128 @@ export default function DomainTruthInspector() {
                   ))}
                 </div>
               )}
+            </SectionCard>
+
+            {/* ─── 9. Queue Visibility Explanation ─── */}
+            <SectionCard title="9 — Queue Visibility Explanation" icon={Eye} defaultOpen={!!explainActiveDept}>
+              <div className="space-y-4">
+                {/* Controls */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-48">
+                    <label className="text-xs font-semibold text-gray-500 block mb-1">Select Department</label>
+                    <select
+                      value={selectedDept}
+                      onChange={(e) => setSelectedDept(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">— choose a department —</option>
+                      {DEPARTMENTS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={!selectedDept || !activeId}
+                    onClick={() => setExplainActiveDept(selectedDept)}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1.5" />
+                    Explain
+                  </Button>
+                </div>
+
+                {/* Quick buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_BUTTONS.map((dept) => (
+                    <button
+                      key={dept}
+                      disabled={!activeId}
+                      onClick={() => {
+                        setSelectedDept(dept);
+                        setExplainActiveDept(dept);
+                      }}
+                      className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-300 dark:hover:border-indigo-700 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Explain {dept} Queue
+                    </button>
+                  ))}
+                </div>
+
+                {/* Result */}
+                {explainLoading && (
+                  <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Evaluating {explainActiveDept} queue…
+                  </div>
+                )}
+
+                {explainData && !explainLoading && (
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    {/* Verdict banner */}
+                    <div
+                      className={`px-4 py-3 flex items-center gap-3 ${
+                        explainData.visible
+                          ? 'bg-green-50 dark:bg-green-950/20 border-b border-green-100 dark:border-green-900'
+                          : 'bg-red-50 dark:bg-red-950/20 border-b border-red-100 dark:border-red-900'
+                      }`}
+                    >
+                      {explainData.visible ? (
+                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className={`text-sm font-semibold ${explainData.visible ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}`}>
+                          {explainData.department} Queue — {explainData.visible ? 'Visible' : 'Not Visible'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">{explainData.explanation}</p>
+                      </div>
+                    </div>
+
+                    {/* Checks */}
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {explainData.checks.map((check: any, i: number) => (
+                        <div
+                          key={i}
+                          className={`px-4 py-2.5 flex items-start gap-3 ${
+                            !check.result ? 'bg-red-50/50 dark:bg-red-950/10' : ''
+                          }`}
+                        >
+                          {check.result ? (
+                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm font-medium ${check.result ? 'text-gray-700 dark:text-gray-300' : 'text-red-700 dark:text-red-400'}`}>
+                              {check.description}
+                            </span>
+                            <div className="flex flex-wrap gap-3 mt-0.5">
+                              {check.expected !== undefined && (
+                                <span className="text-xs text-gray-400">
+                                  Expected: <span className="font-mono text-gray-600 dark:text-gray-300">{check.expected ?? 'null'}</span>
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400">
+                                Actual: <span className={`font-mono ${check.result ? 'text-gray-600 dark:text-gray-300' : 'text-red-600 dark:text-red-400 font-semibold'}`}>
+                                  {String(check.actual ?? 'null')}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`text-xs font-semibold flex-shrink-0 ${check.result ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {check.result ? '✔ Pass' : '✖ Fail'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!explainActiveDept && !explainData && (
+                  <p className="text-xs text-gray-400 italic">Select a department above to explain why this order is or is not visible in that queue.</p>
+                )}
+              </div>
             </SectionCard>
 
             {/* ─── 8. Order Flight Recorder ─── */}

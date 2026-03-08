@@ -756,4 +756,34 @@ router.get(
   }
 );
 
+// GET /api/admin/explain-queue/:orderId/:department
+router.get(
+  '/explain-queue/:orderId/:department',
+  authenticateToken,
+  requireRole('admin'),
+  async (req: Request, res: Response) => {
+    const { orderId, department } = req.params;
+    try {
+      const rows = (await pool.query(
+        `SELECT * FROM all_orders WHERE order_id = $1 LIMIT 1`,
+        [orderId.toUpperCase()]
+      )) as any[];
+
+      if (!rows.length) {
+        return res.status(404).json({ error: `Order ${orderId} not found in all_orders` });
+      }
+
+      const { evaluateQueueVisibility } = await import('../services/queueVisibilityService');
+      const result = evaluateQueueVisibility(rows[0], department);
+      res.json(result);
+    } catch (error) {
+      console.error('Explain queue visibility error:', error);
+      res.status(500).json({
+        error: 'Failed to evaluate queue visibility',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
 export default router;

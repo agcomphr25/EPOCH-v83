@@ -1,10 +1,15 @@
+import { and, eq, gt, lt } from 'drizzle-orm';
+import { db } from '../../db';
 import { pool } from '../../db';
+import { metricSnapshots, type MetricSnapshotRow } from '../../schema';
 import { METRIC_FUNCTIONS, type MetricSlug } from './metricsService';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type SnapshotPeriod = 'live' | 'hourly' | 'daily';
 
+// Service return type — augments the raw DB row with a computed `fromCache` flag
+// and a scalar `value` extracted from the JSONB blob.
 export interface MetricSnapshot {
   metricSlug: string;
   period: SnapshotPeriod;
@@ -16,7 +21,7 @@ export interface MetricSnapshot {
 }
 
 // ─── TTL configuration per period ──────────────────────────────────────────────
-// 'live'   → 60 s  (still cuts DB load for concurrent widget renders)
+// 'live'   → 60 s  (cuts DB load across concurrent widget renders)
 // 'hourly' → 1 h   (reserved for future heavy aggregates)
 // 'daily'  → 24 h  (reserved for future nightly roll-ups)
 
@@ -26,8 +31,25 @@ const TTL_SECONDS: Record<SnapshotPeriod, number> = {
   daily:  86_400,
 };
 
+// ─── rowToSnapshot ─────────────────────────────────────────────────────────────
+// Converts a typed MetricSnapshotRow (Drizzle select result) into the service's
+// MetricSnapshot shape. Centralises the mapping in one place.
+
+function rowToSnapshot(row: MetricSnapshotRow, fromCache: boolean): MetricSnapshot {
+  const valueJson = (row.valueJson ?? {}) as Record<string, unknown>;
+  return {
+    metricSlug: row.metricSlug,
+    period:     row.period as SnapshotPeriod,
+    value:      typeof valueJson.value === 'number' ? valueJson.value : 0,
+    valueJson,
+    computedAt: row.computedAt,
+    expiresAt:  row.expiresAt,
+    fromCache,
+  };
+}
+
 // ─── getSnapshot ───────────────────────────────────────────────────────────────
-// Returns a cached snapshot if it exists and has not expired.
+// Returns a fresh cached snapshot via Drizzle ORM typed select.
 // Returns null on a cache miss (expired or never computed).
 
 export async function getSnapshot(
@@ -35,29 +57,20 @@ export async function getSnapshot(
   period: SnapshotPeriod = 'live',
 ): Promise<MetricSnapshot | null> {
   try {
-    const rows = await pool.query(
-      `SELECT metric_slug, period, value_json, computed_at, expires_at
-       FROM metric_snapshots
-       WHERE metric_slug = $1
-         AND period      = $2
-         AND expires_at  > NOW()`,
-      [slug, period],
-    ) as any[];
+    const rows: MetricSnapshotRow[] = await db
+      .select()
+      .from(metricSnapshots)
+      .where(
+        and(
+          eq(metricSnapshots.metricSlug, slug),
+          eq(metricSnapshots.period, period),
+          gt(metricSnapshots.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
 
     if (!rows.length) return null;
-
-    const row = rows[0];
-    const valueJson = row.value_json as Record<string, unknown>;
-
-    return {
-      metricSlug: row.metric_slug,
-      period:     row.period as SnapshotPeriod,
-      value:      typeof valueJson.value === 'number' ? valueJson.value : 0,
-      valueJson,
-      computedAt: new Date(row.computed_at),
-      expiresAt:  new Date(row.expires_at),
-      fromCache:  true,
-    };
+    return rowToSnapshot(rows[0], true);
   } catch (err: any) {
     console.warn(`[snapshot] getSnapshot(${slug}, ${period}) failed:`, err.message);
     return null;
@@ -66,7 +79,7 @@ export async function getSnapshot(
 
 // ─── refreshSnapshot ───────────────────────────────────────────────────────────
 // Computes the metric live and upserts the result into metric_snapshots.
-// Always returns the freshly computed snapshot.
+// Uses raw SQL for the upsert to leverage ON CONFLICT DO UPDATE cleanly.
 // Throws if the slug is unknown or computation fails.
 
 export async function refreshSnapshot(
@@ -104,8 +117,8 @@ export async function refreshSnapshot(
 }
 
 // ─── getOrComputeSnapshot ──────────────────────────────────────────────────────
-// The primary call site: checks cache first, falls back to live compute + store.
-// fromCache tells the caller whether the DB or live SQL was hit.
+// The primary call site: cache-hit path first, falls back to live compute + store.
+// `fromCache` on the return tells the caller which path was taken.
 
 export async function getOrComputeSnapshot(
   slug: string,
@@ -117,15 +130,16 @@ export async function getOrComputeSnapshot(
 }
 
 // ─── purgeExpiredSnapshots ─────────────────────────────────────────────────────
-// Housekeeping: remove rows that have definitely expired.
-// Called at server startup and can be scheduled periodically.
+// Housekeeping: remove rows whose expires_at has passed.
+// Called at server startup via metrics.ts; can also be scheduled periodically.
 
 export async function purgeExpiredSnapshots(): Promise<number> {
   try {
-    const rows = await pool.query(
-      `DELETE FROM metric_snapshots WHERE expires_at < NOW() RETURNING id`,
-    ) as any[];
-    return rows.length;
+    const deleted = await db
+      .delete(metricSnapshots)
+      .where(lt(metricSnapshots.expiresAt, new Date()))
+      .returning({ id: metricSnapshots.id });
+    return deleted.length;
   } catch (err: any) {
     console.warn('[snapshot] purgeExpiredSnapshots failed:', err.message);
     return 0;

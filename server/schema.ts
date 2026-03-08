@@ -13260,3 +13260,20 @@ export const insertMetricsRegistrySchema = createInsertSchema(metricsRegistry).o
 });
 export type MetricsRegistry = typeof metricsRegistry.$inferSelect;
 export type InsertMetricsRegistry = z.infer<typeof insertMetricsRegistrySchema>;
+
+// ─── Metric Snapshots ──────────────────────────────────────────────────────────
+export const metricSnapshots = pgTable('metric_snapshots', {
+  id: serial('id').primaryKey(),
+  metricSlug: text('metric_slug').notNull(),
+  period: text('period').notNull().default('live'),
+  valueJson: jsonb('value_json').notNull(),
+  computedAt: timestamp('computed_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+
+export const insertMetricSnapshotsSchema = createInsertSchema(metricSnapshots).omit({
+  id: true,
+  computedAt: true,
+});
+export type MetricSnapshotRow = typeof metricSnapshots.$inferSelect;
+export type InsertMetricSnapshot = z.infer<typeof insertMetricSnapshotsSchema>;

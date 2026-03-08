@@ -30,6 +30,7 @@ import InventoryDashboardPage from './pages/InventoryDashboardPage';
 import InventoryManagerPage from './pages/InventoryManagerPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
 import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
+import MaterialReadinessDashboard from './pages/MaterialReadinessDashboard';
 import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
@@ -542,6 +543,10 @@ function App() {
                   <Route
                     path="/inventory/enhanced-mrp"
                     component={EnhancedInventoryMRPPage}
+                  />
+                  <Route
+                    path="/production/material-readiness"
+                    component={MaterialReadinessDashboard}
                   />
                   <Route
                     path="/inventory/parts-request"

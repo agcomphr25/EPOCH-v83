@@ -2125,7 +2125,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),
     purchaseUnit: z.string().optional().nullable(),
-    usageQuantityPerUnit: z.number().min(0).optional().nullable(),
+    consumptionRate: z.number().min(0).optional().nullable(),
     usageUnit: z.string().optional().nullable(),
     cogsPerUnit: z.number().min(0).optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),

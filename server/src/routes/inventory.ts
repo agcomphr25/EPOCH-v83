@@ -1765,9 +1765,11 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
             case 'usage quantity per unit':
             case 'usageqtyperunit':
             case 'usagequantityperunit':
-              // Issue #2: Add Usage Quantity Per Unit support
+            case 'consumption rate':
+            case 'consumptionrate':
+              // Maps CSV "Usage Quantity Per Unit" column to consumptionRate (the real DB column)
               const usageQty = parseFloat(value);
-              itemData.usageQuantityPerUnit = !isNaN(usageQty) ? usageQty : null;
+              itemData.consumptionRate = !isNaN(usageQty) ? usageQty : null;
               break;
             case 'usage unit':
             case 'usageunit':
@@ -2003,7 +2005,7 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
         escapeCSV(item.secondarySupplierPartNumber),
         escapeCSV(item.costPer),
         escapeCSV(item.purchaseUnit),
-        escapeCSV(item.usageQuantityPerUnit),
+        escapeCSV(item.consumptionRate),
         escapeCSV(item.usageUnit),
         escapeCSV(item.cogsPerUnit),
         escapeCSV(item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : ''),
@@ -2543,7 +2545,7 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
         agPartNumber: inventoryItems.agPartNumber,
         usageUnit: inventoryItems.usageUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        consumptionRate: inventoryItems.consumptionRate,
       })
       .from(inventoryItems);
 
@@ -2588,7 +2590,7 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
             
             const usageUom = itemData?.usageUnit || 'EA';
             const purchaseUom = itemData?.purchaseUnit || 'EA';
-            const conversionFactor = itemData?.usageQuantityPerUnit || 1;
+            const conversionFactor = itemData?.consumptionRate || 1;
 
             // Validate conversion factor to prevent divide-by-zero
             if (conversionFactor <= 0) {

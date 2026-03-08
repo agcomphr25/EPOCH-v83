@@ -1,0 +1,205 @@
+COPY-PASTE PROMPT
+IMPLEMENT DOMAIN TRUTH INSPECTOR
+We are implementing a new internal debugging tool for EPOCH called the Domain Truth Inspector.
+
+This tool will live at:
+
+/admin/domain-truth
+
+The purpose of the inspector is to allow administrators to inspect the true system state of any object (initially Orders) and understand why it appears or does not appear in department queues.
+
+This is an INTERNAL ADMIN TOOL.
+
+Do not change existing business logic.
+Do not modify queue behavior.
+Only add read-only diagnostic capabilities.
+
+------------------------------------------------
+STEP 1 — CREATE ADMIN API ROUTE
+------------------------------------------------
+
+Create a new admin API route:
+
+GET /api/admin/domain-truth/order/:orderId
+
+Location:
+
+server/src/routes/admin/domainTruth.ts
+
+Register it in the server router.
+
+------------------------------------------------
+STEP 2 — FETCH CORE ORDER STATE
+------------------------------------------------
+
+The route must load the full order state from:
+
+all_orders
+
+by order_id.
+
+Fields required:
+
+order_id
+status
+current_department
+scrap_date
+is_cancelled
+is_flattop
+features
+model_id
+created_at
+due_date
+customer_id
+department_history
+shipped_date
+is_paid
+
+Also join:
+
+customers (customer name)
+
+------------------------------------------------
+STEP 3 — LOAD RELATED DATA
+------------------------------------------------
+
+Load the following related data for the same order_id:
+
+payments
+kickbacks
+admin_audit_log
+audit_events
+order_department_transitions
+
+If a legacy record exists in:
+
+orders
+
+include that record for comparison.
+
+------------------------------------------------
+STEP 4 — COMPUTE QUEUE ELIGIBILITY
+------------------------------------------------
+
+Compute which department queues the order should appear in.
+
+Eligibility conditions:
+
+order.current_department == department
+AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+AND scrap_date IS NULL
+AND is_cancelled != true
+
+Return evaluation results.
+
+Example response:
+
+queueEvaluation: {
+  department: "Finish",
+  visible: true,
+  checks: [
+    { rule: "department match", result: true },
+    { rule: "not scrapped", result: true },
+    { rule: "not cancelled", result: true },
+    { rule: "scrap_date null", result: true }
+  ]
+}
+
+------------------------------------------------
+STEP 5 — DETECT ROUTING FLAGS
+------------------------------------------------
+
+Detect routing conditions:
+
+if is_flattop == true → mark "skip CNC/Gunsmith"
+
+if features.rail_accessory contains "no_rail"
+→ mark "skip Gunsmith"
+
+Return these flags in:
+
+routingFlags[]
+
+------------------------------------------------
+STEP 6 — DETECT SYSTEM WARNINGS
+------------------------------------------------
+
+Add automated warnings for inconsistencies.
+
+Examples:
+
+if status == 'FINALIZED' AND is_cancelled == true
+→ warning: "cancel flag mismatch"
+
+if scrap_date IS NOT NULL AND status != 'SCRAPPED'
+→ warning: "scrap state mismatch"
+
+if current_department_id != null AND current_department text mismatch
+→ warning: "department FK mismatch"
+
+if order exists in all_orders but not in orders
+→ warning: "legacy order table mismatch"
+
+Return in:
+
+systemWarnings[]
+
+------------------------------------------------
+STEP 7 — RETURN FULL INSPECTOR PAYLOAD
+------------------------------------------------
+
+Return structured JSON:
+
+{
+  order,
+  customer,
+  payments,
+  kickbacks,
+  auditEvents,
+  adminAuditLog,
+  departmentTransitions,
+  queueEvaluation,
+  routingFlags,
+  systemWarnings
+}
+
+------------------------------------------------
+STEP 8 — CREATE ADMIN UI PAGE
+------------------------------------------------
+
+Create React page:
+
+client/src/pages/admin/DomainTruthInspector.tsx
+
+Route:
+
+/admin/domain-truth
+
+UI features:
+
+Search box for order_id
+
+When searched:
+fetch /api/admin/domain-truth/order/:orderId
+
+Display sections:
+
+1) Core State
+2) Queue Eligibility
+3) Routing Flags
+4) Department History
+5) Event History
+6) Dependencies
+7) System Warnings
+
+Use simple panels/cards.
+
+This is a debugging tool — not production UI.
+
+------------------------------------------------
+STEP 9 — ADD NAVIGATION
+------------------------------------------------
+
+Add link to admin menu:
+
+Admin → System Tools → Domain Truth Inspector

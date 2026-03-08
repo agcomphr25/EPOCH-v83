@@ -331,6 +331,12 @@ export default function Navigation() {
       description: 'Monitor and test critical system components daily',
     },
     {
+      path: '/admin/domain-truth',
+      label: 'Domain Truth Inspector',
+      icon: Database,
+      description: 'Read-only diagnostic tool — inspect true system state and queue eligibility for any order',
+    },
+    {
       path: '/pdf-templates',
       label: 'PDF Templates',
       icon: FileText,

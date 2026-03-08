@@ -72,6 +72,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/historical-data',
   '/finish-qc-completed-report',
   '/gateway-reports',
+  '/metrics-sandbox',
   '/inventory/enhanced-mrp',
   '/production/material-readiness',
   '/inventory/parts-request',
@@ -178,6 +179,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/customers',
       '/tickets',
       '/gateway-reports',
+      '/metrics-sandbox',
       '/layup-scheduler',
       '/all-orders',
       '/order-department-transfer',
@@ -485,6 +487,7 @@ export function hasRouteAccess(
 const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
+  '/metrics-sandbox': ['ADMIN', 'OWNER'],
   '/due-date-capacity': ['ADMIN', 'OWNER'],
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/production/material-readiness': ['ADMIN', 'INVENTORY_MANAGER', 'OWNER'],

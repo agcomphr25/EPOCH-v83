@@ -1,0 +1,121 @@
+Copy-Paste Prompt — Add Remaining Metrics (Task #1)
+
+This extends metricsService.ts and the registry.
+
+Writing
+
+You are implementing additional metric functions for the EPOCH metrics system.
+
+IMPORTANT:
+This extends the existing metrics platform. Do not change existing metric functions or endpoints.
+
+OBJECTIVE
+
+Add the following metrics to metricsService.ts and register them in the metric registry.
+
+Metrics to implement:
+
+p2_open_pos
+p2_pending_boms
+p2_items_in_production
+p2_items_pending_qc
+p2_items_completed_week
+cutting_table_active_items
+open_credit_memos
+open_tickets
+
+STEP 1 — ADD FUNCTIONS
+
+File:
+server/src/services/metricsService.ts
+
+Add functions following the existing pattern.
+
+Examples:
+
+export async function getP2OpenPOs() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_purchase_orders WHERE status NOT IN ('completed','cancelled') );
+return Number(result.rows[0].count);
+}
+
+export async function getP2PendingBOMs() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_purchase_orders WHERE bom_configured = false );
+return Number(result.rows[0].count);
+}
+
+export async function getP2ItemsInProduction() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_serialized_items WHERE status NOT IN ('completed','cancelled') );
+return Number(result.rows[0].count);
+}
+
+export async function getP2ItemsPendingQC() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_serialized_items WHERE status = 'FINAL_QC' );
+return Number(result.rows[0].count);
+}
+
+export async function getP2ItemsCompletedWeek() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_serialized_items WHERE status = 'COMPLETED' AND completed_at > NOW() - INTERVAL '7 days' );
+return Number(result.rows[0].count);
+}
+
+export async function getCuttingTableActiveItems() {
+const result = await pool.query( SELECT COUNT(*) FROM p2_production_orders WHERE status IN ('pending','in_progress') );
+return Number(result.rows[0].count);
+}
+
+export async function getOpenCreditMemos() {
+const result = await pool.query( SELECT COUNT(*) FROM credit_memos WHERE status = 'active' );
+return Number(result.rows[0].count);
+}
+
+export async function getOpenTickets() {
+const result = await pool.query( SELECT COUNT(*) FROM tickets WHERE status NOT IN ('closed','resolved') );
+return Number(result.rows[0].count);
+}
+
+STEP 2 — REGISTER FUNCTIONS
+
+Add these to the METRIC_FUNCTIONS dispatch map.
+
+Example:
+
+p2_open_pos: getP2OpenPOs,
+p2_pending_boms: getP2PendingBOMs,
+p2_items_in_production: getP2ItemsInProduction,
+p2_items_pending_qc: getP2ItemsPendingQC,
+p2_items_completed_week: getP2ItemsCompletedWeek,
+cutting_table_active_items: getCuttingTableActiveItems,
+open_credit_memos: getOpenCreditMemos,
+open_tickets: getOpenTickets,
+
+STEP 3 — ADD TO REGISTRY
+
+Add entries to REGISTRY array in metrics.ts.
+
+Example entry:
+
+{
+slug: "p2_open_pos",
+name: "Open P2 Purchase Orders",
+description: "Active P2 purchase orders not completed or cancelled",
+category: "p2",
+unit: "count",
+calculation_function: "getP2OpenPOs",
+default_visual: "metric_stat"
+}
+
+Repeat for each metric.
+
+STEP 4 — VERIFY API
+
+Test endpoints:
+
+/api/metrics/p2_open_pos
+/api/metrics/p2_items_pending_qc
+/api/metrics/open_tickets
+
+Confirm snapshot caching works.
+
+OUTPUT
+
+Return list of metrics added and endpoints verified.

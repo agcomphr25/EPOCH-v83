@@ -113,6 +113,81 @@ export async function getOpenInventoryShortages(): Promise<number> {
   return rows[0]?.count ?? 0;
 }
 
+export async function getP2OpenPOs(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_purchase_orders
+     WHERE status NOT IN ('COMPLETED', 'CANCELED')`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getP2PendingBOMs(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_purchase_orders
+     WHERE bom_configured = false
+       AND status NOT IN ('COMPLETED', 'CANCELED')`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getP2ItemsInProduction(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_serialized_items
+     WHERE status NOT IN ('PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED', 'CANCELED')
+       AND status IS NOT NULL`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getP2ItemsPendingQC(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_serialized_items
+     WHERE status = 'FINAL_QC'`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getP2ItemsCompletedWeek(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_serialized_items
+     WHERE status = 'COMPLETED'
+       AND completed_at > NOW() - INTERVAL '7 days'`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getCuttingTableActiveItems(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM p2_production_orders
+     WHERE status IN ('pending', 'in_progress', 'queued', 'PENDING')`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getOpenCreditMemos(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM credit_memos
+     WHERE status = 'active'`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+export async function getOpenTickets(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM tickets
+     WHERE status NOT IN ('closed', 'resolved')`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
 export type MetricSlug =
   | 'cnc_queue_size'
   | 'gunsmith_queue_size'
@@ -124,18 +199,34 @@ export type MetricSlug =
   | 'barcode_queue_size'
   | 'paint_queue_size'
   | 'shipping_queue_size'
-  | 'open_inventory_shortages';
+  | 'open_inventory_shortages'
+  | 'p2_open_pos'
+  | 'p2_pending_boms'
+  | 'p2_items_in_production'
+  | 'p2_items_pending_qc'
+  | 'p2_items_completed_week'
+  | 'cutting_table_active_items'
+  | 'open_credit_memos'
+  | 'open_tickets';
 
 export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
-  cnc_queue_size:           getCNCQueueSize,
-  gunsmith_queue_size:      getGunsmithQueueSize,
-  finish_queue_size:        getFinishQueueSize,
-  orders_in_production:     getOrdersInProduction,
-  orders_completed_today:   getOrdersCompletedToday,
-  p1_queue_size:            getP1QueueSize,
-  layup_queue_size:         getLayupQueueSize,
-  barcode_queue_size:       getBarcodeQueueSize,
-  paint_queue_size:         getPaintQueueSize,
-  shipping_queue_size:      getShippingQueueSize,
-  open_inventory_shortages: getOpenInventoryShortages,
+  cnc_queue_size:            getCNCQueueSize,
+  gunsmith_queue_size:       getGunsmithQueueSize,
+  finish_queue_size:         getFinishQueueSize,
+  orders_in_production:      getOrdersInProduction,
+  orders_completed_today:    getOrdersCompletedToday,
+  p1_queue_size:             getP1QueueSize,
+  layup_queue_size:          getLayupQueueSize,
+  barcode_queue_size:        getBarcodeQueueSize,
+  paint_queue_size:          getPaintQueueSize,
+  shipping_queue_size:       getShippingQueueSize,
+  open_inventory_shortages:  getOpenInventoryShortages,
+  p2_open_pos:               getP2OpenPOs,
+  p2_pending_boms:           getP2PendingBOMs,
+  p2_items_in_production:    getP2ItemsInProduction,
+  p2_items_pending_qc:       getP2ItemsPendingQC,
+  p2_items_completed_week:   getP2ItemsCompletedWeek,
+  cutting_table_active_items: getCuttingTableActiveItems,
+  open_credit_memos:         getOpenCreditMemos,
+  open_tickets:              getOpenTickets,
 };

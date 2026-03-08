@@ -495,6 +495,44 @@ const InventoryForm = ({
       </div>
     </div>
 
+    {/* Calculated Values Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">Calculated Values</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label>Cost per Usage Unit</Label>
+          <div
+            className="mt-1 flex items-center h-9 px-3 rounded-md border border-input bg-muted text-sm font-medium"
+            data-testid="display-costPerUsageUnit"
+          >
+            {(() => {
+              const costPer = parseFloat(formData.costPer);
+              const purchaseQty = parseFloat(formData.purchaseQuantity);
+              if (!costPer || !purchaseQty || isNaN(costPer) || isNaN(purchaseQty)) {
+                return <span className="text-muted-foreground">—</span>;
+              }
+              const val = costPer / purchaseQty;
+              const unit = formData.usageUnit || '';
+              return `$${val.toFixed(4)}${unit ? ` / ${unit}` : ''}`;
+            })()}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Purchase Cost ÷ Purchase Quantity</p>
+        </div>
+        <div>
+          <Label>COGS per Item</Label>
+          <div
+            className="mt-1 flex items-center h-9 px-3 rounded-md border border-input bg-muted text-sm font-medium"
+            data-testid="display-cogsPerItem-calc"
+          >
+            {formData.cogsPerUnit
+              ? `$${parseFloat(formData.cogsPerUnit).toFixed(4)}`
+              : <span className="text-muted-foreground">—</span>}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Cost per Usage Unit × Usage Per Item</p>
+        </div>
+      </div>
+    </div>
+
     {/* Production Line Utilization Section */}
     <div className="space-y-4">
       <h4 className="text-md font-semibold border-b pb-2">

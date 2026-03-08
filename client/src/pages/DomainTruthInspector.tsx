@@ -241,8 +241,11 @@ export default function DomainTruthInspector() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = inputId.trim();
-    if (trimmed) setActiveId(trimmed);
+    const trimmed = inputId.trim().toUpperCase();
+    if (trimmed) {
+      setInputId(trimmed);
+      setActiveId(trimmed);
+    }
   };
 
   const order = data?.order;

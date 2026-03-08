@@ -28,7 +28,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -84,6 +86,8 @@ interface InventoryFormData {
   hasOtherDocs: boolean;
   assignedToAsset: string;
   defaultOrderMethod: string;
+  purchaseUnitId: string;
+  usageUnitId: string;
 }
 
 const InventoryForm = ({
@@ -142,6 +146,16 @@ const InventoryForm = ({
 }) => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+  const { data: allUnits = [] } = useQuery<Array<{ id: number; symbol: string; family: string; family_id: number }>>({
+    queryKey: ['/api/units'],
+  });
+
+  const unitsByFamily = allUnits.reduce((acc, unit) => {
+    if (!acc[unit.family]) acc[unit.family] = [];
+    acc[unit.family].push(unit);
+    return acc;
+  }, {} as Record<string, typeof allUnits>);
 
   const checkDuplicate = useCallback(async (partNumber: string) => {
     if (!partNumber.trim()) {
@@ -497,6 +511,32 @@ const InventoryForm = ({
           </p>
         </div>
         <div>
+          <Label htmlFor="purchaseUnitId">Purchase Unit</Label>
+          <Select
+            value={formData.purchaseUnitId || ''}
+            onValueChange={(value) => {
+              const unit = allUnits.find(u => u.id.toString() === value);
+              onSelectChange('purchaseUnitId', value);
+              if (unit) onSelectChange('purchaseUnit', unit.symbol);
+            }}
+          >
+            <SelectTrigger id="purchaseUnitId" data-testid="select-purchaseUnitId">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(unitsByFamily).map(([family, units]) => (
+                <SelectGroup key={family}>
+                  <SelectLabel className="capitalize">{family}</SelectLabel>
+                  {units.map(u => (
+                    <SelectItem key={u.id} value={u.id.toString()}>{u.symbol}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Measurement unit for purchasing (must match usage unit family)</p>
+        </div>
+        <div>
           <Label htmlFor="purchaseQuantity">Purchase Quantity</Label>
           <Input
             id="purchaseQuantity"
@@ -592,37 +632,27 @@ const InventoryForm = ({
           <p className="text-xs text-gray-500 mt-1">Amount of this material required to produce one finished unit</p>
         </div>
         <div>
-          <Label htmlFor="usageUnit">Usage Unit</Label>
+          <Label htmlFor="usageUnitId">Usage Unit</Label>
           <Select
-            value={formData.usageUnit}
-            onValueChange={(value) => onSelectChange('usageUnit', value)}
+            value={formData.usageUnitId || ''}
+            onValueChange={(value) => {
+              const unit = allUnits.find(u => u.id.toString() === value);
+              onSelectChange('usageUnitId', value);
+              if (unit) onSelectChange('usageUnit', unit.symbol);
+            }}
           >
-            <SelectTrigger id="usageUnit" data-testid="select-usageUnit">
+            <SelectTrigger id="usageUnitId" data-testid="select-usageUnit">
               <SelectValue placeholder="Select unit" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="hr">hr (hour)</SelectItem>
-              <SelectItem value="min">min (minute)</SelectItem>
-              <SelectItem value="oz">oz (ounce)</SelectItem>
-              <SelectItem value="lb">lb (pound)</SelectItem>
-              <SelectItem value="g">g (gram)</SelectItem>
-              <SelectItem value="kg">kg (kilogram)</SelectItem>
-              <SelectItem value="ml">ml (milliliter)</SelectItem>
-              <SelectItem value="L">L (liter)</SelectItem>
-              <SelectItem value="gal">gal (gallon)</SelectItem>
-              <SelectItem value="qt">qt (quart)</SelectItem>
-              <SelectItem value="pt">pt (pint)</SelectItem>
-              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
-              <SelectItem value="ft">ft (foot)</SelectItem>
-              <SelectItem value="in">in (inch)</SelectItem>
-              <SelectItem value="m">m (meter)</SelectItem>
-              <SelectItem value="cm">cm (centimeter)</SelectItem>
-              <SelectItem value="mm">mm (millimeter)</SelectItem>
-              <SelectItem value="ea">ea (each)</SelectItem>
-              <SelectItem value="pc">pc (piece)</SelectItem>
-              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
-              <SelectItem value="sq in">sq in (square inch)</SelectItem>
-              <SelectItem value="sq m">sq m (square meter)</SelectItem>
+              {Object.entries(unitsByFamily).map(([family, units]) => (
+                <SelectGroup key={family}>
+                  <SelectLabel className="capitalize">{family}</SelectLabel>
+                  {units.map(u => (
+                    <SelectItem key={u.id} value={u.id.toString()}>{u.symbol}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">
@@ -983,6 +1013,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     purchaseQuantity: '',
     consumptionRate: '',
     usageUnit: '',
+    purchaseUnitId: '',
+    usageUnitId: '',
     cogsPerUnit: '',
     orderDate: '',
     department: '',
@@ -1461,6 +1493,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       purchaseQuantity: '',
       consumptionRate: '',
       usageUnit: '',
+      purchaseUnitId: '',
+      usageUnitId: '',
       cogsPerUnit: '',
       orderDate: '',
       department: '',
@@ -1589,6 +1623,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           ? parseFloat(formData.consumptionRate)
           : null,
         usageUnit: formData.usageUnit || null,
+        purchaseUnitId: formData.purchaseUnitId ? parseInt(formData.purchaseUnitId) : null,
+        usageUnitId: formData.usageUnitId ? parseInt(formData.usageUnitId) : null,
         cogsPerUnit: formData.cogsPerUnit !== ''
           ? parseFloat(formData.cogsPerUnit)
           : null,
@@ -1641,6 +1677,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       vendorUnit: item.vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
       purchaseUnit: item.purchaseUnit || '',
+      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
       purchaseQuantity: item.purchaseQuantity
         ? item.purchaseQuantity.toString()
         : '',
@@ -1648,6 +1685,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         ? item.consumptionRate.toString()
         : '',
       usageUnit: item.usageUnit || '',
+      usageUnitId: (item as any).usageUnitId?.toString() || '',
       cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
         ? new Date(item.orderDate).toISOString().split('T')[0]

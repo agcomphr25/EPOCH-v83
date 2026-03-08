@@ -626,6 +626,8 @@ export const inventoryItems = pgTable('inventory_items', {
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
   assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
   defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
+  purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK → units (measurement unit for purchasing)
+  usageUnitId: integer('usage_unit_id').references(() => units.id), // FK → units (measurement unit for consumption)
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -13277,3 +13279,27 @@ export const insertMetricSnapshotsSchema = createInsertSchema(metricSnapshots).o
 });
 export type MetricSnapshotRow = typeof metricSnapshots.$inferSelect;
 export type InsertMetricSnapshot = z.infer<typeof insertMetricSnapshotsSchema>;
+
+// ─── Unit Families ──────────────────────────────────────────────────────────
+export const unitFamilies = pgTable('unit_families', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertUnitFamilySchema = createInsertSchema(unitFamilies).omit({ id: true, createdAt: true });
+export type UnitFamily = typeof unitFamilies.$inferSelect;
+export type InsertUnitFamily = z.infer<typeof insertUnitFamilySchema>;
+
+// ─── Units ──────────────────────────────────────────────────────────────────
+export const units = pgTable('units', {
+  id: serial('id').primaryKey(),
+  symbol: text('symbol').notNull().unique(),
+  familyId: integer('family_id').notNull().references(() => unitFamilies.id),
+  conversionToBase: real('conversion_to_base').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertUnitSchema = createInsertSchema(units).omit({ id: true, createdAt: true });
+export type Unit = typeof units.$inferSelect;
+export type InsertUnit = z.infer<typeof insertUnitSchema>;

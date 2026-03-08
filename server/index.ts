@@ -1222,6 +1222,85 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_order_id_sequences migration:', p2SeqErr.message);
       }
 
+      // Ensure unit_families + units tables exist and are seeded
+      try {
+        const { sql } = await import('drizzle-orm');
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS unit_families (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS units (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL UNIQUE,
+            family_id INTEGER NOT NULL REFERENCES unit_families(id),
+            conversion_to_base REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sql`
+          ALTER TABLE inventory_items
+            ADD COLUMN IF NOT EXISTS purchase_unit_id INTEGER REFERENCES units(id),
+            ADD COLUMN IF NOT EXISTS usage_unit_id INTEGER REFERENCES units(id)
+        `);
+        // Seed families
+        await db.execute(sql`
+          INSERT INTO unit_families (name) VALUES
+            ('mass'), ('volume'), ('length'), ('count'), ('time'), ('area')
+          ON CONFLICT (name) DO NOTHING
+        `);
+        // Seed units
+        await db.execute(sql`
+          INSERT INTO units (symbol, family_id, conversion_to_base) VALUES
+            ('g',     (SELECT id FROM unit_families WHERE name='mass'),   1),
+            ('kg',    (SELECT id FROM unit_families WHERE name='mass'),   1000),
+            ('lb',    (SELECT id FROM unit_families WHERE name='mass'),   453.592),
+            ('oz',    (SELECT id FROM unit_families WHERE name='mass'),   28.3495),
+            ('ml',    (SELECT id FROM unit_families WHERE name='volume'), 1),
+            ('l',     (SELECT id FROM unit_families WHERE name='volume'), 1000),
+            ('gal',   (SELECT id FROM unit_families WHERE name='volume'), 3785.41),
+            ('qt',    (SELECT id FROM unit_families WHERE name='volume'), 946.353),
+            ('pt',    (SELECT id FROM unit_families WHERE name='volume'), 473.176),
+            ('fl oz', (SELECT id FROM unit_families WHERE name='volume'), 29.5735),
+            ('mm',    (SELECT id FROM unit_families WHERE name='length'), 1),
+            ('cm',    (SELECT id FROM unit_families WHERE name='length'), 10),
+            ('m',     (SELECT id FROM unit_families WHERE name='length'), 1000),
+            ('ft',    (SELECT id FROM unit_families WHERE name='length'), 304.8),
+            ('in',    (SELECT id FROM unit_families WHERE name='length'), 25.4),
+            ('ea',    (SELECT id FROM unit_families WHERE name='count'),  1),
+            ('pc',    (SELECT id FROM unit_families WHERE name='count'),  1),
+            ('hr',    (SELECT id FROM unit_families WHERE name='time'),   1),
+            ('min',   (SELECT id FROM unit_families WHERE name='time'),   0.016667),
+            ('sq mm', (SELECT id FROM unit_families WHERE name='area'),   1),
+            ('sq cm', (SELECT id FROM unit_families WHERE name='area'),   100),
+            ('sq m',  (SELECT id FROM unit_families WHERE name='area'),   1000000),
+            ('sq ft', (SELECT id FROM unit_families WHERE name='area'),   92903.04),
+            ('sq in', (SELECT id FROM unit_families WHERE name='area'),   645.16)
+          ON CONFLICT (symbol) DO NOTHING
+        `);
+        // Backfill unit IDs from existing text columns
+        await db.execute(sql`
+          UPDATE inventory_items ii
+          SET usage_unit_id = u.id
+          FROM units u
+          WHERE ii.usage_unit_id IS NULL AND ii.usage_unit IS NOT NULL
+            AND LOWER(ii.usage_unit) = LOWER(u.symbol)
+        `);
+        await db.execute(sql`
+          UPDATE inventory_items ii
+          SET purchase_unit_id = u.id
+          FROM units u
+          WHERE ii.purchase_unit_id IS NULL AND ii.purchase_unit IS NOT NULL
+            AND LOWER(ii.purchase_unit) = LOWER(u.symbol)
+        `);
+        console.log('✅ Ensured unit_families/units tables exist and inventory_items backfilled');
+      } catch (unitErr: any) {
+        console.warn('⚠️ unit_families migration:', unitErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

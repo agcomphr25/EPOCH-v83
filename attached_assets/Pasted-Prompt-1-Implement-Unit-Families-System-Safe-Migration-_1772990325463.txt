@@ -1,0 +1,262 @@
+Prompt 1 — Implement Unit Families System (Safe Migration)
+Writing
+
+You are implementing a Unit Families system for EPOCH to prevent invalid unit conversions and simplify inventory item configuration.
+
+This must be implemented as a safe additive change that does NOT break existing data or inventory logic.
+
+This is a full implementation task. Follow the instructions exactly.
+
+OBJECTIVE
+
+Create a Unit Family architecture so that unit conversions only occur within the same measurement family.
+
+Example families:
+
+mass
+volume
+length
+count
+area
+
+This prevents invalid conversions such as:
+
+lb → meter
+g → gallon
+
+Only conversions within the same family are allowed.
+
+SECTION 1 — DATABASE SCHEMA
+
+Create two new tables.
+
+unit_families
+
+columns:
+
+id uuid primary key default gen_random_uuid()
+name text not null unique
+created_at timestamp default now()
+
+Example rows:
+
+mass
+volume
+length
+count
+area
+
+units
+
+columns:
+
+id uuid primary key default gen_random_uuid()
+symbol text not null unique
+family_id uuid not null references unit_families(id)
+conversion_to_base numeric not null
+created_at timestamp default now()
+
+conversion_to_base definition:
+
+This represents conversion to the base unit of the family.
+
+Example for MASS:
+
+g = 1
+kg = 1000
+lb = 453.592
+oz = 28.3495
+
+Example for LENGTH:
+
+m = 1
+cm = 0.01
+ft = 0.3048
+in = 0.0254
+
+SECTION 2 — SEED DATA
+
+Create a migration or seed script that inserts:
+
+Families:
+
+mass
+volume
+length
+count
+
+Units:
+
+MASS
+g
+kg
+lb
+oz
+
+VOLUME
+ml
+l
+gal
+qt
+
+LENGTH
+mm
+cm
+m
+ft
+in
+
+COUNT
+ea
+
+Use correct conversion_to_base values.
+
+SECTION 3 — INVENTORY ITEM MODEL UPDATE
+
+Modify inventory_items schema:
+
+Current columns:
+
+purchase_unit text
+usage_unit text
+
+Replace with:
+
+purchase_unit_id uuid references units(id)
+usage_unit_id uuid references units(id)
+
+IMPORTANT:
+
+Do NOT drop existing columns yet.
+
+Instead:
+
+add the new columns
+
+backfill them
+
+keep old columns for compatibility
+
+SECTION 4 — BACKFILL SCRIPT
+
+Write a migration that:
+
+maps existing unit strings to the units table.
+
+Example:
+
+if purchase_unit = 'lb'
+→ purchase_unit_id = id of unit 'lb'
+
+if usage_unit = 'g'
+→ usage_unit_id = id of unit 'g'
+
+SECTION 5 — VALIDATION RULE
+
+Add server validation:
+
+purchase_unit.family_id MUST equal usage_unit.family_id
+
+If mismatch:
+
+throw error:
+
+"Purchase unit and usage unit must belong to the same measurement family."
+
+SECTION 6 — CONVERSION SERVICE
+
+Create a shared utility:
+
+server/src/utils/unitConversionService.ts
+
+Function:
+
+convertUnits(
+value: number,
+fromUnitId: string,
+toUnitId: string
+)
+
+Steps:
+
+fetch both units
+
+confirm same family_id
+
+convert using conversion_to_base
+
+formula:
+
+value_in_base = value * from.conversion_to_base
+result = value_in_base / to.conversion_to_base
+
+SECTION 7 — UPDATE EXISTING COGS CALCULATION
+
+Modify existing cost calculation logic so that:
+
+cost_per_usage_unit =
+(purchase_cost / purchase_quantity)
+converted from purchase_unit → usage_unit using convertUnits()
+
+Ensure all existing behavior still works.
+
+SECTION 8 — API
+
+Create endpoint:
+
+GET /api/units
+
+returns:
+
+family
+symbol
+id
+
+Used by dropdowns.
+
+SECTION 9 — FRONTEND UPDATE
+
+Inventory item editor:
+
+Replace unit text fields with dropdowns populated from /api/units.
+
+Group units by family.
+
+Display example:
+
+Mass
+g
+kg
+lb
+oz
+
+Volume
+ml
+l
+gal
+
+SECTION 10 — SAFETY
+
+Do NOT:
+
+drop old columns
+break PO receiving
+break COGS calculation
+
+Ensure old fields still populate until full migration is complete.
+
+OUTPUT
+
+Provide:
+
+all schema changes
+
+migration scripts
+
+new conversion service
+
+API route
+
+frontend dropdown implementation
+
+validation logic

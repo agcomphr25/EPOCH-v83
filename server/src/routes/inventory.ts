@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 import { sql, eq } from 'drizzle-orm';
+import { validateSameFamily } from '../utils/unitConversionService';
 import {
   calculateMaterialDemand,
   calculateMaterialShortages,
@@ -206,6 +207,15 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       updates.hasOtherDocs = true;
     }
     
+    if (updates.purchaseUnitId && updates.usageUnitId) {
+      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
@@ -287,6 +297,15 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
       itemData.hasOtherDocs = true;
     }
     
+    if (itemData.purchaseUnitId && itemData.usageUnitId) {
+      const familyCheck = await validateSameFamily(itemData.purchaseUnitId, itemData.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     const newItem = await storage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
@@ -491,6 +510,15 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
       updates.hasOtherDocs = true;
     }
     
+    if (updates.purchaseUnitId && updates.usageUnitId) {
+      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);

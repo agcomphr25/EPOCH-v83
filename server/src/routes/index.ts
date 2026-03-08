@@ -148,6 +148,7 @@ import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
 import metricsRoutes from './metrics';
 import { widgetTypesRouter, dashboardsRouter } from './widgets';
+import unitsRouter from './units';
 import emailTemplatesRoutes from './emailTemplates';
 import signOrderSettingsRoutes from './signOrderSettings';
 
@@ -603,6 +604,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/metrics', metricsRoutes);
   app.use('/api/widgets', widgetTypesRouter);
   app.use('/api/dashboards', dashboardsRouter);
+  app.use('/api/units', unitsRouter);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

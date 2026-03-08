@@ -175,19 +175,18 @@ async function upsertBalance(
       .update(inventoryBalances)
       .set({
         quantityOnHand: sql`${inventoryBalances.quantityOnHand} + ${delta}`,
-        quantityAvailable: sql`${inventoryBalances.quantityAvailable} + ${delta}`,
+        quantityAvailable: sql`GREATEST(0, (${inventoryBalances.quantityOnHand} + ${delta}) - ${inventoryBalances.quantityAllocated})`,
         updatedAt: new Date(),
       })
       .where(eq(inventoryBalances.id, existing.id));
   } else {
     const onHand = Math.max(0, delta);
-    const available = Math.max(0, delta);
     await db.insert(inventoryBalances).values({
       agPartNumber,
       locationId,
       quantityOnHand: onHand,
       quantityAllocated: 0,
-      quantityAvailable: available,
+      quantityAvailable: onHand,
     });
   }
 }

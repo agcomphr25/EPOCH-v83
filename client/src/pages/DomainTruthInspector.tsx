@@ -813,6 +813,23 @@ export default function DomainTruthInspector() {
                 <p className="text-sm text-gray-400 italic">No recorded events found for this order.</p>
               ) : (
                 <div className="relative">
+                  {/* Order identity header */}
+                  <div className="flex items-center gap-4 mb-3 text-xs font-mono">
+                    <span>
+                      <span className="text-gray-400">Order:</span>{' '}
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {flightData?.resolvedId ?? flightData?.orderId}
+                      </span>
+                    </span>
+                    {flightData?.orderId && flightData?.resolvedId && flightData.orderId !== flightData.resolvedId && (
+                      <span>
+                        <span className="text-gray-400">FB Order:</span>{' '}
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                          {flightData.orderId}
+                        </span>
+                      </span>
+                    )}
+                  </div>
                   {/* Event count summary */}
                   <p className="text-xs text-gray-400 mb-4">
                     {flightEvents.length} event{flightEvents.length !== 1 ? 's' : ''} recorded across all sources

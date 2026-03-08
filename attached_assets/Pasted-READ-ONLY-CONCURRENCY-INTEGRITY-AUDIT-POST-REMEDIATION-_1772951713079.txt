@@ -1,0 +1,279 @@
+READ-ONLY CONCURRENCY + INTEGRITY AUDIT — POST-REMEDIATION CHECK
+
+Objective
+Verify that the recent fixes (atomic order allocation, non-negative inventory constraint,
+MRP demand optimization, index creation, transaction quantity standardization,
+and BOM CTE cleanup) are correctly implemented and safe under concurrency.
+
+This audit is STRICTLY READ-ONLY.
+
+DO NOT modify code.
+DO NOT modify database records.
+DO NOT run migrations.
+
+Only inspect the codebase and schema.
+
+Produce a structured report covering the sections below.
+
+------------------------------------------------
+
+SECTION 1 — ATOMIC ORDER ALLOCATION
+
+Locate:
+
+server/src/services/productionOrderAllocationService.ts
+
+Confirm that:
+
+• allocateForOrder() is wrapped in a single db.transaction().
+• All allocateInventory() calls use the same transaction object (tx).
+• allocateInventory() supports an optional tx parameter.
+• No independent db.transaction() calls occur inside allocateInventory when tx is provided.
+• The rollback loop previously used for partial allocations has been removed.
+
+Report:
+
+• Whether allocations are now fully atomic.
+• Any remaining paths that could produce partial allocations.
+
+------------------------------------------------
+
+SECTION 2 — INVENTORY NON-NEGATIVE GUARANTEE
+
+Inspect:
+
+inventoryEventService.ts
+inventoryAllocationService.ts
+
+Confirm that:
+
+• quantity_on_hand updates use GREATEST(0, quantity_on_hand + delta)
+• quantity_available recomputes after every update.
+• No code path can push quantity_on_hand below zero.
+
+Inspect schema:
+
+inventory_balances
+
+Verify the existence of:
+
+CHECK (quantity_on_hand >= 0)
+
+If missing, report.
+
+------------------------------------------------
+
+SECTION 3 — TRANSACTION SIGN CONSISTENCY
+
+Inspect:
+
+inventoryAllocationService.ts
+inventoryEventService.ts
+
+Confirm that all inventory_transactions inserts follow this rule:
+
+quantity is always positive magnitude.
+
+Verify transaction types include:
+
+allocation
+deallocation
+consumption
+receipt
+putaway
+transfer
+adjustment
+return
+
+Confirm no code inserts negative quantities.
+
+------------------------------------------------
+
+SECTION 4 — MRP DEMAND ENGINE
+
+Inspect:
+
+server/src/services/mrpMaterialPlanning.ts
+
+Confirm:
+
+• calculateMaterialDemand() executed only once per request.
+• calculateMaterialShortages(demands, sku) uses the provided demands parameter.
+• No secondary demand calculation occurs.
+
+Verify the demand formula:
+
+SUM(order_quantity × bom_quantity)
+
+If order_quantity is hardcoded to 1, document it.
+
+------------------------------------------------
+
+SECTION 5 — MATERIAL READINESS API
+
+Inspect:
+
+server/src/routes/mrp.ts
+
+Confirm:
+
+• Only one demand query is executed.
+• API remains read-only.
+• Response schema matches:
+
+{
+  max_buildable_units,
+  materials[],
+  blocking_materials[]
+}
+
+Verify the materials array includes:
+
+ag_part_number
+name
+on_hand
+allocated
+available
+required
+shortage
+
+------------------------------------------------
+
+SECTION 6 — DATABASE INDEXES
+
+Inspect the database schema and confirm existence of:
+
+idx_all_orders_status
+idx_all_orders_model_id
+idx_bom_definitions_sku
+idx_bom_items_bom_id
+idx_inventory_transactions_part
+
+Verify indexes are used in query plans for:
+
+MRP demand calculation
+Material readiness API
+
+If possible, run EXPLAIN on the MRP demand query and report whether indexes are used.
+
+------------------------------------------------
+
+SECTION 7 — BOM RESOLUTION LOGIC
+
+Inspect:
+
+server/src/services/mrpMaterialPlanning.ts
+
+Confirm the dead join condition was removed:
+
+bd.id::text = ao.bom_definition_id::text
+
+Verify only the SKU-based resolution remains:
+
+bom_definitions.sku = all_orders.model_id
+
+Report whether any legacy code still references bom_definition_id.
+
+------------------------------------------------
+
+SECTION 8 — CONCURRENCY SAFETY
+
+Review allocation code paths for race conditions.
+
+Confirm:
+
+• SELECT ... FOR UPDATE row locks are used when reading inventory_balances.
+• Allocation occurs inside the same transaction that performs the update.
+• No read-before-write logic exists outside the transaction boundary.
+
+Report whether two concurrent allocation requests could over-allocate the same material.
+
+------------------------------------------------
+
+SECTION 9 — INVENTORY INTEGRITY INVARIANTS
+
+Verify that the system maintains the invariant:
+
+quantity_available =
+quantity_on_hand
+- quantity_allocated
+
+Confirm that every update path preserves this invariant:
+
+receipt
+putaway
+transfer
+adjustment
+allocation
+deallocation
+consumption
+
+Report any violations.
+
+------------------------------------------------
+
+SECTION 10 — FULL DATA FLOW VALIDATION
+
+Trace the following lifecycle:
+
+Vendor PO received
+→ receipt_pending transaction created
+
+Putaway
+→ inventory_balances updated
+
+Order status FINALIZED → IN_PROGRESS
+→ allocation occurs
+
+Production event
+→ consumption event created
+
+Confirm the correct transaction_type and balance updates occur at each stage.
+
+------------------------------------------------
+
+SECTION 11 — PERFORMANCE RISK CHECK
+
+Review queries used by:
+
+MRP demand calculation
+material readiness API
+allocation engine
+
+Look for:
+
+N+1 queries
+full table scans
+missing indexes
+large result materialization
+
+Estimate expected performance at:
+
+10,000 orders
+100 BOM items
+10,000 inventory rows
+
+------------------------------------------------
+
+SECTION 12 — FINAL PRODUCTION READINESS SCORE
+
+Score the following subsystems from 1–10:
+
+Inventory event engine
+Allocation engine
+MRP planning engine
+Material readiness API
+Dashboard UI
+
+Highlight:
+
+• Critical issues (must fix)
+• Concurrency risks
+• Data integrity risks
+• Performance risks
+
+Provide a final recommendation:
+
+READY FOR PRODUCTION
+or
+REQUIRES ADDITIONAL FIXES

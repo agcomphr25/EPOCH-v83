@@ -13239,3 +13239,24 @@ export const insertSignOrderPageSettingsSchema = createInsertSchema(signOrderPag
 });
 export type SignOrderPageSettings = typeof signOrderPageSettings.$inferSelect;
 export type InsertSignOrderPageSettings = z.infer<typeof insertSignOrderPageSettingsSchema>;
+
+// ─── Metrics Registry ─────────────────────────────────────────────────────────
+export const metricsRegistry = pgTable('metrics_registry', {
+  id: serial('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description'),
+  category: text('category').notNull().default('general'),
+  unit: text('unit').notNull().default('count'),
+  calculationFunction: text('calculation_function').notNull(),
+  defaultVisual: text('default_visual').notNull().default('stat_card'),
+  isLive: boolean('is_live').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertMetricsRegistrySchema = createInsertSchema(metricsRegistry).omit({
+  id: true,
+  createdAt: true,
+});
+export type MetricsRegistry = typeof metricsRegistry.$inferSelect;
+export type InsertMetricsRegistry = z.infer<typeof insertMetricsRegistrySchema>;

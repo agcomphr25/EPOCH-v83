@@ -1,0 +1,149 @@
+PROMPT 1 — Create the Metrics Infrastructure (Foundation)
+
+Use this first. It creates the metrics service, registry, and API without changing existing dashboards.
+
+Writing
+
+You are implementing the first phase of a Metrics Layer in the EPOCH codebase.
+
+IMPORTANT:
+This is an additive change. Do NOT modify or remove any existing endpoints, dashboards, or queries yet.
+
+Your goal is to introduce a new architecture layer that centralizes metric calculations.
+
+OBJECTIVE
+
+Implement the following components:
+
+metricsService
+
+metric registry table
+
+metrics API endpoint
+
+base metric function structure
+
+STEP 1 — CREATE METRICS SERVICE
+
+Create a new file:
+
+server/src/services/metricsService.ts
+
+This service will contain reusable metric calculation functions.
+
+Initial functions to implement:
+
+getCNCQueueSize()
+getGunsmithQueueSize()
+getFinishQueueSize()
+getOrdersInProduction()
+getOrdersCompletedToday()
+
+Use existing operational tables already discovered in the audit:
+
+all_orders
+production_orders
+production_steps
+
+Example implementation style:
+
+export async function getCNCQueueSize() {
+return pool.query( SELECT COUNT(*) FROM all_orders WHERE current_department = 'CNC' AND status != 'CANCELLED' );
+}
+
+Do NOT embed route logic here.
+Only pure metric calculation functions.
+
+STEP 2 — CREATE METRIC REGISTRY TABLE
+
+Add a new table definition.
+
+File:
+server/schema.ts (or wherever DB schema is defined)
+
+Table name:
+
+metrics_registry
+
+Columns:
+
+id (uuid)
+slug (text unique)
+name (text)
+description (text)
+category (text)
+unit (text)
+calculation_function (text)
+default_visual (text)
+is_live (boolean)
+created_at (timestamp)
+
+Example rows (seed data):
+
+cnc_queue_size
+gunsmith_queue_size
+finish_queue_size
+orders_in_production
+orders_completed_today
+
+STEP 3 — CREATE METRICS API ROUTE
+
+Create a new route file:
+
+server/src/routes/metrics.ts
+
+Endpoint:
+
+GET /api/metrics/
+
+Flow:
+
+look up metric in metrics_registry
+
+read calculation_function
+
+call the corresponding function in metricsService
+
+return result
+
+Example response format:
+
+{
+metric: "cnc_queue_size",
+value: 63,
+unit: "orders"
+}
+
+STEP 4 — REGISTER ROUTE
+
+Add the metrics route to the main router index.
+
+File likely:
+
+server/src/routes/index.ts
+
+Mount it under:
+
+/api/metrics
+
+STEP 5 — DO NOT MODIFY EXISTING ROUTES
+
+All existing endpoints must remain untouched.
+
+The new metrics API is additive and will be used by widgets later.
+
+OUTPUT
+
+After implementation produce a report:
+
+FILES CREATED
+FILES MODIFIED
+METRICS IMPLEMENTED
+API ENDPOINTS AVAILABLE
+
+Example:
+
+/api/metrics/cnc_queue_size
+/api/metrics/orders_completed_today
+
+Do not add caching yet.

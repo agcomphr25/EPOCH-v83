@@ -146,6 +146,7 @@ import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
 import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
+import metricsRoutes from './metrics';
 import emailTemplatesRoutes from './emailTemplates';
 import signOrderSettingsRoutes from './signOrderSettings';
 
@@ -598,6 +599,7 @@ export function registerRoutes(app: Express): Server {
 
   // Executive Rundown routes (Glenn-only, access-restricted)
   app.use('/api/executive/rundown', executiveRundownRoutes);
+  app.use('/api/metrics', metricsRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

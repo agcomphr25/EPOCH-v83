@@ -1,0 +1,162 @@
+IMPLEMENTATION TASK — CONVERT ENHANCED MRP DETAIL PANELS TO MODALS
+
+Goal
+Replace the current scroll-to-bottom panel behavior in /inventory/enhanced-mrp with modal dialogs for a cleaner UX.
+
+This refactor should reuse the existing shadcn/ui Dialog pattern already used by:
+
+• Inventory Items
+• Vendor POs
+• PO Settings
+• Outside Processing
+
+Do not change the six child components themselves.
+
+Only modify the parent page.
+
+STEP 1 — MODIFY PAGE FILE
+
+File:
+
+client/src/pages/EnhancedInventoryMRPPage.tsx
+
+STEP 2 — REMOVE SCROLL PANEL STATE
+
+Delete the following:
+
+const [activeCard, setActiveCard] = useState<string | null>(null);
+const expandedPanelRef = useRef<HTMLDivElement>(null);
+
+Delete the entire scrolling useEffect:
+
+useEffect(() => {
+  if (activeCard && expandedPanelRef.current) {
+    expandedPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}, [activeCard]);
+
+STEP 3 — ADD MODAL STATE VARIABLES
+
+Add the following state variables near the existing modal states:
+
+const [isBalancesModalOpen, setIsBalancesModalOpen] = useState(false);
+const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
+const [isProgressiveAllocModalOpen, setIsProgressiveAllocModalOpen] = useState(false);
+const [isMrpCalculationModalOpen, setIsMrpCalculationModalOpen] = useState(false);
+const [isMrpShortagesModalOpen, setIsMrpShortagesModalOpen] = useState(false);
+const [isPOSuggestionsModalOpen, setIsPOSuggestionsModalOpen] = useState(false);
+
+STEP 4 — UPDATE handleCardClick()
+
+Replace the old fallback setActiveCard() logic with modal open calls.
+
+Add cases:
+
+else if (cardType === 'inventory-balances') {
+  setIsBalancesModalOpen(true);
+}
+else if (cardType === 'inventory-transactions') {
+  setIsTransactionsModalOpen(true);
+}
+else if (cardType === 'progressive-allocation') {
+  setIsProgressiveAllocModalOpen(true);
+}
+else if (cardType === 'mrp-calculation') {
+  setIsMrpCalculationModalOpen(true);
+}
+else if (cardType === 'mrp-shortages') {
+  setIsMrpShortagesModalOpen(true);
+}
+else if (cardType === 'po-suggestions') {
+  setIsPOSuggestionsModalOpen(true);
+}
+
+Remove the setActiveCard(...) fallback completely.
+
+STEP 5 — REMOVE BOTTOM PANEL
+
+Delete the entire block at the bottom of the page:
+
+{activeCard && (
+  <div className="mt-8" ref={expandedPanelRef}>
+    ...
+  </div>
+)}
+
+This includes:
+
+• Card wrapper
+• CardHeader
+• CardContent
+• all conditional component renders
+
+STEP 6 — ADD NEW MODAL DIALOGS
+
+After the existing modal dialogs, add six new ones.
+
+Example structure:
+
+<Dialog open={isBalancesModalOpen} onOpenChange={setIsBalancesModalOpen}>
+  <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Inventory Balances</DialogTitle>
+    </DialogHeader>
+    <InventoryBalancesCard />
+  </DialogContent>
+</Dialog>
+
+Create identical dialogs for:
+
+• InventoryBalancesCard
+• InventoryTransactionsCard
+• ProgressiveAllocationCard
+• MRPCalculationCard
+• MRPShortagesCard
+• POSuggestionsCard
+
+Use the same modal sizing as existing dialogs:
+
+max-w-7xl max-h-[90vh] overflow-y-auto
+
+STEP 7 — VERIFY CHILD COMPONENT IMPORTS
+
+Ensure these imports exist:
+
+import InventoryBalancesCard from "@/components/inventory/InventoryBalancesCard";
+import InventoryTransactionsCard from "@/components/inventory/InventoryTransactionsCard";
+import ProgressiveAllocationCard from "@/components/inventory/ProgressiveAllocationCard";
+import MRPCalculationCard from "@/components/inventory/MRPCalculationCard";
+import MRPShortagesCard from "@/components/inventory/MRPShortagesCard";
+import POSuggestionsCard from "@/components/inventory/POSuggestionsCard";
+
+Do not modify these files.
+
+STEP 8 — TEST BEHAVIOR
+
+Confirm:
+
+Clicking a card opens a modal instead of scrolling.
+
+Modal closes with ESC.
+
+Modal closes with X.
+
+Modal content scrolls internally.
+
+Page background does not scroll.
+
+Data loads correctly via existing TanStack queries.
+
+EXPECTED RESULT
+
+New UX flow:
+
+Card click
+→ Dialog opens centered
+→ Child component renders inside modal
+→ Data loads normally
+→ User closes modal
+
+The page itself never scrolls.
+
+This creates a much cleaner dashboard interaction model.

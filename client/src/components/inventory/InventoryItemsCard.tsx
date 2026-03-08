@@ -11,7 +11,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Calculator,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -40,12 +39,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+
 import { Badge } from '@/components/ui/badge';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
@@ -476,32 +470,16 @@ const InventoryForm = ({
           </p>
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="cogsPerUnit">COGS per Unit ($)</Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Calculator className="w-4 h-4 text-blue-500" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Auto-calculated from conversion data</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <Label>COGS per Item</Label>
+          <div
+            className="mt-1 flex items-center h-9 px-3 rounded-md border border-input bg-muted text-sm font-medium"
+            data-testid="display-cogsPerUnit"
+          >
+            {formData.cogsPerUnit
+              ? `$${parseFloat(formData.cogsPerUnit).toFixed(4)}`
+              : <span className="text-muted-foreground">—</span>}
           </div>
-          <Input
-            id="cogsPerUnit"
-            name="cogsPerUnit"
-            type="number"
-            step="0.01"
-            value={formData.cogsPerUnit}
-            onChange={onChange}
-            placeholder="0.68"
-            data-testid="input-cogsPerUnit"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Auto-calculated or manually editable
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Auto-calculated from cost and usage inputs</p>
         </div>
         <div>
           <Label htmlFor="orderDate">Order Date</Label>

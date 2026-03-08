@@ -24,11 +24,9 @@ router.get('/material-readiness', async (req: Request, res: Response) => {
   try {
     const sku = req.query.sku as string | undefined;
 
-    // ── 1. Run demand + shortage calculations in parallel ─────────────────────
-    const [demands, shortages] = await Promise.all([
-      calculateMaterialDemand(sku),
-      calculateMaterialShortages(undefined, sku),
-    ]);
+    // ── 1. Calculate demand once, then derive shortages from it ───────────────
+    const demands = await calculateMaterialDemand(sku);
+    const shortages = await calculateMaterialShortages(demands, sku);
 
     // ── 2. Build capacity (requires a specific SKU) ───────────────────────────
     let maxBuildableUnits = 0;

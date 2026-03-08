@@ -1,0 +1,201 @@
+READ-ONLY UI/UX AUDIT — ENHANCED MRP PANEL MODAL REFACTOR
+
+Objective
+Understand how the Enhanced MRP dashboard currently renders and navigates its detail cards (MRP Calculation, Material Shortages, Inventory Transactions, etc.) and design a modal-based interaction model instead of the current behavior that scrolls to a section at the bottom of the page.
+
+This is a STRICTLY READ-ONLY AUDIT.
+
+DO NOT modify code.
+DO NOT implement UI changes yet.
+Only inspect and report.
+
+SECTION 1 — ENTRY PAGE DISCOVERY
+
+Locate the page responsible for the Enhanced MRP interface.
+
+Likely paths:
+
+client/src/pages/inventory/EnhancedMRPPage.tsx
+client/src/pages/EnhancedMRPPage.tsx
+client/src/pages/inventory/EnhancedMRP.tsx
+
+Report:
+
+• exact file path
+• main React component name
+• what route loads it (ex: /inventory/enhanced-mrp)
+
+SECTION 2 — CARD COMPONENT STRUCTURE
+
+Identify where the MRP cards are rendered.
+
+Examples:
+
+MRP Calculation
+Material Shortages
+Inventory Transactions
+Build Capacity
+Demand Forecast
+
+For each card determine:
+
+• component file
+• props passed into it
+• onClick handler
+• whether it calls scrollIntoView or changes a state variable
+
+Example patterns to check for:
+
+document.getElementById(...).scrollIntoView()
+
+or
+
+setActiveSection("transactions")
+
+Report the exact mechanism.
+
+SECTION 3 — DETAIL PANELS AT BOTTOM OF PAGE
+
+Locate the sections that appear when the cards are clicked.
+
+Identify:
+
+• component names
+• conditional rendering logic
+• which state variable controls visibility
+
+Example:
+
+activeSection === "transactions"
+
+Report the full rendering pattern.
+
+SECTION 4 — SCROLLING BEHAVIOR
+
+Search for these patterns:
+
+scrollIntoView
+window.scrollTo
+anchor navigation (#transactions)
+useRef scroll calls
+
+Explain exactly why clicking a card scrolls the page.
+
+SECTION 5 — DATA FLOW
+
+Trace how data flows from:
+
+API → MRP Page → Card → Detail Section
+
+Identify which API endpoints feed the data.
+
+Likely endpoints:
+
+/api/mrp/material-readiness
+/api/inventory/transactions
+/api/inventory/balances
+/api/mrp/calculation
+
+Report:
+
+• where the fetch happens
+• how the results are stored in state
+• which components consume them
+
+SECTION 6 — MODAL INFRASTRUCTURE ALREADY IN THE APP
+
+Search the codebase for reusable modal systems such as:
+
+Dialog (shadcn/ui)
+Modal
+Drawer
+Sheet
+
+Likely paths:
+
+client/src/components/ui/dialog.tsx
+client/src/components/ui/modal.tsx
+
+Determine:
+
+• which modal system the project standard uses
+• whether portals are used
+• if there is a global modal manager
+
+SECTION 7 — FEASIBILITY OF MODAL REFACTOR
+
+Determine the smallest refactor required to convert the UX from:
+
+Card click → scroll to bottom section
+
+to:
+
+Card click → open modal containing that section.
+
+Confirm whether the bottom components can be reused inside modals without breaking layout.
+
+SECTION 8 — PROPOSED UX STRUCTURE
+
+Design the recommended modal interaction.
+
+Example:
+
+MRP Calculation card → opens modal with calculation table
+Material Shortages card → opens shortage analysis modal
+Inventory Transactions card → opens transaction history modal
+
+Each modal should:
+
+• open centered
+• be scrollable internally
+• close with ESC or X
+• not scroll the background page
+
+SECTION 9 — COMPONENT REFACTOR PLAN
+
+Produce a clear refactor plan including:
+
+New state variables required
+
+Example:
+
+const [activeModal, setActiveModal] = useState<null | "mrp" | "shortages" | "transactions">(null)
+
+Components to move into modal containers.
+
+Files that must be modified.
+
+SECTION 10 — PERFORMANCE AND DATA LOADING
+
+Confirm whether modal content should:
+
+A) reuse already-fetched data
+B) fetch data when modal opens
+
+Recommend the better approach for responsiveness.
+
+SECTION 11 — EDGE CASES
+
+Identify potential UI problems:
+
+• mobile screen size
+• long tables inside modal
+• nested scroll containers
+• keyboard accessibility
+• modal stacking
+
+SECTION 12 — FINAL DELIVERABLE
+
+Provide:
+
+architecture summary of current implementation
+
+explanation of why the page scroll behavior occurs
+
+recommended modal-based UX design
+
+step-by-step implementation plan
+
+list of files to modify
+
+DO NOT implement changes yet.

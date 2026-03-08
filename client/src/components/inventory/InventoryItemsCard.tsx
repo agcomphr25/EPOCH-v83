@@ -313,17 +313,6 @@ const InventoryForm = ({
           </Select>
         </div>
         <div>
-          <Label htmlFor="source">Source</Label>
-          <Input
-            id="source"
-            name="source"
-            value={formData.source}
-            onChange={onChange}
-            placeholder="Enter source (text field)"
-            data-testid="input-source"
-          />
-        </div>
-        <div>
           <Label htmlFor="secondarySource">Secondary Source</Label>
           <Input
             id="secondarySource"
@@ -416,44 +405,6 @@ const InventoryForm = ({
           </Select>
           <p className="text-xs text-gray-500 mt-1">
             Machine-friendly unit (e.g., "BOX", "GAL", "EA")
-          </p>
-        </div>
-        <div>
-          <Label htmlFor="purchaseUnit">Purchase Unit</Label>
-          <Select
-            value={formData.purchaseUnit}
-            onValueChange={(value) => onSelectChange('purchaseUnit', value)}
-          >
-            <SelectTrigger id="purchaseUnit" data-testid="select-purchaseUnit">
-              <SelectValue placeholder="Select unit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="hr">hr (hour)</SelectItem>
-              <SelectItem value="min">min (minute)</SelectItem>
-              <SelectItem value="oz">oz (ounce)</SelectItem>
-              <SelectItem value="lb">lb (pound)</SelectItem>
-              <SelectItem value="g">g (gram)</SelectItem>
-              <SelectItem value="kg">kg (kilogram)</SelectItem>
-              <SelectItem value="ml">ml (milliliter)</SelectItem>
-              <SelectItem value="L">L (liter)</SelectItem>
-              <SelectItem value="gal">gal (gallon)</SelectItem>
-              <SelectItem value="qt">qt (quart)</SelectItem>
-              <SelectItem value="pt">pt (pint)</SelectItem>
-              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
-              <SelectItem value="ft">ft (foot)</SelectItem>
-              <SelectItem value="in">in (inch)</SelectItem>
-              <SelectItem value="m">m (meter)</SelectItem>
-              <SelectItem value="cm">cm (centimeter)</SelectItem>
-              <SelectItem value="mm">mm (millimeter)</SelectItem>
-              <SelectItem value="ea">ea (each)</SelectItem>
-              <SelectItem value="pc">pc (piece)</SelectItem>
-              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
-              <SelectItem value="sq in">sq in (square inch)</SelectItem>
-              <SelectItem value="sq m">sq m (square meter)</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">
-            Unit of measurement (e.g., "g", "oz", "ea")
           </p>
         </div>
         <div>
@@ -1113,11 +1064,15 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       usageUnit,
     } = formData;
 
+    // purchaseUnit is hidden from the UI — fall back to usageUnit so COGS still
+    // calculates correctly when the two units share the same measurement family.
+    const effectivePurchaseUnit = purchaseUnit || usageUnit;
+
     // Only calculate if we have all required fields
     if (
       costPer &&
       purchaseQuantity &&
-      purchaseUnit &&
+      effectivePurchaseUnit &&
       consumptionRate &&
       usageUnit
     ) {
@@ -1128,7 +1083,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       const calculatedCOGS = calculateCOGS(
         vendorPrice,
         purQty,
-        purchaseUnit,
+        effectivePurchaseUnit,
         consRate,
         usageUnit
       );
@@ -1653,7 +1608,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
         vendorUnit: formData.vendorUnit || null,
         purchaseUnitLabel: formData.purchaseUnitLabel || null,
-        purchaseUnit: formData.purchaseUnit || null,
+        purchaseUnit: formData.purchaseUnit || formData.usageUnit || null,
         purchaseQuantity: formData.purchaseQuantity
           ? parseFloat(formData.purchaseQuantity)
           : null,
@@ -2560,7 +2515,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <div className="mt-6 border-t pt-6">
               <InventoryItemCostHistory
                 agPartNumber={editingItem.agPartNumber}
-                currentCost={editingItem.latestCost || undefined}
                 vendorUnit={editingItem.vendorUnit || undefined}
                 purchaseUnit={editingItem.purchaseUnit || undefined}
                 purchaseQuantity={editingItem.purchaseQuantity || undefined}

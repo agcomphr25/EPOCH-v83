@@ -57,7 +57,7 @@ export interface MrpResult {
 
 /**
  * Returns the SQL fragment that resolves BOM definitions for all_orders rows.
- * Uses the direct FK when available, falls back to sku-match on model_id.
+ * Matches bom_definitions.sku to all_orders.model_id.
  * Wrapped as a CTE alias "resolved_bom".
  */
 const RESOLVED_BOM_CTE = `
@@ -70,13 +70,7 @@ const RESOLVED_BOM_CTE = `
     FROM all_orders ao
     JOIN bom_definitions bd
       ON  bd.is_active = true
-      AND (
-            -- Primary: direct FK (stored as integer column, joined via cast-safe text comparison)
-            (ao.bom_definition_id IS NOT NULL AND bd.id::text = ao.bom_definition_id::text)
-            OR
-            -- Fallback: sku matches model_id slug
-            (ao.bom_definition_id IS NULL AND bd.sku = ao.model_id)
-          )
+      AND bd.sku = ao.model_id
     WHERE ao.status IN ('FINALIZED', 'IN_PROGRESS')
   )
 `;

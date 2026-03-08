@@ -424,7 +424,7 @@ const InventoryForm = ({
           </p>
         </div>
         <div>
-          <Label htmlFor="consumptionRate">Consumption Rate</Label>
+          <Label htmlFor="consumptionRate">Usage Per Item</Label>
           <Input
             id="consumptionRate"
             name="consumptionRate"
@@ -435,7 +435,7 @@ const InventoryForm = ({
             placeholder="50"
             data-testid="input-consumptionRate"
           />
-          <p className="text-xs text-gray-500 mt-1">Amount per item</p>
+          <p className="text-xs text-gray-500 mt-1">Amount of this material required to produce one finished unit</p>
         </div>
         <div>
           <Label htmlFor="usageUnit">Usage Unit</Label>

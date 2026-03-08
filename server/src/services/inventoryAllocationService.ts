@@ -2,7 +2,7 @@ import { db } from '../../db';
 import { inventoryBalances, inventoryTransactions } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
 
-// ── Shared param types ────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AllocationParams {
   agPartNumber: string;
@@ -23,6 +23,9 @@ interface AllocationResult {
   quantityAvailable: number;
 }
 
+// Derived from the Drizzle client so it matches whatever version is installed.
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function refId(val: string | number | undefined): string | null {
@@ -34,8 +37,15 @@ function refId(val: string | number | undefined): string | null {
 // Increments quantity_allocated, recomputes quantity_available.
 // Inserts an "allocation" transaction record.
 // Throws if quantity_available < quantity (unless allowPartial is true).
+//
+// Optional second argument `tx`:
+//   When provided the function runs inside the caller's transaction instead of
+//   opening its own.  This enables fully-atomic multi-item allocation.
 
-export async function allocateInventory(params: AllocationParams): Promise<AllocationResult> {
+export async function allocateInventory(
+  params: AllocationParams,
+  tx?: DbTransaction
+): Promise<AllocationResult> {
   const {
     agPartNumber,
     quantity,
@@ -51,9 +61,9 @@ export async function allocateInventory(params: AllocationParams): Promise<Alloc
     throw new Error(`allocateInventory: quantity must be positive, got ${quantity}`);
   }
 
-  return db.transaction(async (tx) => {
+  const run = async (runner: DbTransaction): Promise<AllocationResult> => {
     // Lock the row for update to prevent concurrent over-allocation
-    const [row] = await tx
+    const [row] = await runner
       .select()
       .from(inventoryBalances)
       .where(
@@ -99,7 +109,7 @@ export async function allocateInventory(params: AllocationParams): Promise<Alloc
     }
 
     // Update: allocated += toAllocate, available = on_hand - new_allocated
-    const [updated] = await tx
+    const [updated] = await runner
       .update(inventoryBalances)
       .set({
         quantityAllocated: sql`${inventoryBalances.quantityAllocated} + ${toAllocate}`,
@@ -110,7 +120,7 @@ export async function allocateInventory(params: AllocationParams): Promise<Alloc
       .returning();
 
     // Insert audit transaction
-    await tx.insert(inventoryTransactions).values({
+    await runner.insert(inventoryTransactions).values({
       agPartNumber,
       transactionType: 'allocation',
       quantity: toAllocate,
@@ -130,7 +140,10 @@ export async function allocateInventory(params: AllocationParams): Promise<Alloc
       quantityAllocated: updated.quantityAllocated ?? 0,
       quantityAvailable: updated.quantityAvailable ?? 0,
     };
-  });
+  };
+
+  // If the caller supplied a transaction, participate in it; otherwise open one.
+  return tx ? run(tx) : db.transaction(run);
 }
 
 // ── deallocateInventory ───────────────────────────────────────────────────────

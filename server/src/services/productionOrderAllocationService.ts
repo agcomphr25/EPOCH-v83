@@ -1,5 +1,5 @@
-import { pool } from '../../db';
-import { allocateInventory, deallocateInventory } from './inventoryAllocationService';
+import { db, pool } from '../../db';
+import { allocateInventory } from './inventoryAllocationService';
 
 const WAREHOUSE_LOCATION = 'WAREHOUSE-01';
 
@@ -27,18 +27,18 @@ async function resolveBomDefinitionId(
   modelId: string | null
 ): Promise<string | null> {
   if (bomDefinitionId) {
-    const rows = await pool.query(
+    const rows = (await pool.query(
       `SELECT id FROM bom_definitions WHERE id = $1 AND is_active = true`,
       [bomDefinitionId]
-    ) as any[];
+    )) as any[];
     if (rows.length > 0) return bomDefinitionId;
   }
 
   if (modelId) {
-    const rows = await pool.query(
+    const rows = (await pool.query(
       `SELECT id FROM bom_definitions WHERE sku = $1 AND is_active = true`,
       [modelId]
-    ) as any[];
+    )) as any[];
     if (rows.length > 0) return rows[0].id as string;
   }
 
@@ -51,7 +51,7 @@ async function resolveBomDefinitionId(
 async function getBomMaterials(
   bomDefId: string
 ): Promise<{ agPartNumber: string; qtyPerUnit: number }[]> {
-  const rows = await pool.query(
+  const rows = (await pool.query(
     `SELECT part_name AS ag_part_number, quantity AS qty_per_unit
      FROM bom_items
      WHERE bom_id = $1
@@ -59,7 +59,7 @@ async function getBomMaterials(
        AND item_type = 'material'
        AND quantity > 0`,
     [bomDefId]
-  ) as any[];
+  )) as any[];
 
   return rows.map((r: any) => ({
     agPartNumber: String(r.ag_part_number),
@@ -72,11 +72,11 @@ async function getBomMaterials(
 // balance record exists (meaning inventory is not tracked for that part).
 
 async function getAvailableQty(agPartNumber: string): Promise<number | null> {
-  const rows = await pool.query(
+  const rows = (await pool.query(
     `SELECT quantity_available FROM inventory_balances
      WHERE ag_part_number = $1 AND location_id = $2`,
     [agPartNumber, WAREHOUSE_LOCATION]
-  ) as any[];
+  )) as any[];
 
   if (rows.length === 0) return null;
   return Number(rows[0].quantity_available ?? 0);
@@ -88,13 +88,14 @@ async function getAvailableQty(agPartNumber: string): Promise<number | null> {
 // Strategy:
 //   1. Resolve BOM definition for the order (via FK or model_id).
 //   2. If no BOM found → return success (allocation is not possible, don't block).
-//   3. For each active material BOM item that has an inventory_balances record:
-//      a. Calculate required_qty = qty_per_unit × orderQuantity.
-//      b. Check available qty. Collect shortages without allocating yet.
-//   4. If any shortages exist → return failure with MATERIAL_SHORTAGE details.
-//   5. If all items have sufficient stock → run allocateInventory for each item.
-//   6. If a race-condition allocation failure occurs mid-run → deallocate any
-//      already-allocated items and return MATERIAL_SHORTAGE.
+//   3. Pre-flight read: check quantity_available for each tracked BOM item.
+//      Collect any shortages without touching the DB.
+//   4. If any shortages → return failure immediately.
+//   5. Execute ALL allocateInventory() calls inside ONE db.transaction().
+//      Each call uses the shared tx, so FOR UPDATE locks are held together.
+//      If any single allocation fails (e.g. race-condition depletion between
+//      pre-flight and execution), the ENTIRE transaction rolls back automatically.
+//      No manual rollback loop is needed.
 
 export async function allocateForOrder(
   orderId: string,
@@ -103,7 +104,7 @@ export async function allocateForOrder(
   orderQuantity: number = 1,
   performedBy: string = 'system'
 ): Promise<AllocationSummary> {
-  // Step 1: Resolve BOM
+  // ── Step 1: Resolve BOM ────────────────────────────────────────────────────
   const bomDefId = await resolveBomDefinitionId(orderId, bomDefinitionId, modelId);
 
   if (!bomDefId) {
@@ -113,7 +114,7 @@ export async function allocateForOrder(
     return { success: true, allocated: [], shortages: [] };
   }
 
-  // Step 2: Fetch BOM material items
+  // ── Step 2: Fetch BOM material items ──────────────────────────────────────
   const materials = await getBomMaterials(bomDefId);
 
   if (materials.length === 0) {
@@ -123,16 +124,16 @@ export async function allocateForOrder(
     return { success: true, allocated: [], shortages: [] };
   }
 
-  // Step 3: Pre-flight availability check
+  // ── Step 3: Pre-flight read — fast-fail before opening a write transaction ─
   const shortages: BomShortage[] = [];
-  const toAllocate: { agPartNumber: string; quantity: number }[] = [];
+  const itemsToAllocate: { agPartNumber: string; quantity: number }[] = [];
 
   for (const mat of materials) {
     const required = mat.qtyPerUnit * orderQuantity;
     const available = await getAvailableQty(mat.agPartNumber);
 
     if (available === null) {
-      // No balance record → inventory is not tracked for this part → skip silently
+      // No balance record → inventory not tracked for this part → skip silently
       console.log(
         `ℹ️  allocateForOrder: No inventory balance for part ${mat.agPartNumber} — skipping`
       );
@@ -142,11 +143,11 @@ export async function allocateForOrder(
     if (available < required) {
       shortages.push({ agPartNumber: mat.agPartNumber, required, available });
     } else {
-      toAllocate.push({ agPartNumber: mat.agPartNumber, quantity: required });
+      itemsToAllocate.push({ agPartNumber: mat.agPartNumber, quantity: required });
     }
   }
 
-  // Step 4: Any shortages → abort without touching DB
+  // ── Step 4: Abort if pre-flight shows shortages ───────────────────────────
   if (shortages.length > 0) {
     console.warn(
       `⚠️  allocateForOrder: MATERIAL_SHORTAGE for order ${orderId}:`,
@@ -155,74 +156,59 @@ export async function allocateForOrder(
     return { success: false, allocated: [], shortages };
   }
 
-  if (toAllocate.length === 0) {
+  if (itemsToAllocate.length === 0) {
     console.log(
       `ℹ️  allocateForOrder: No tracked inventory items to allocate for order ${orderId}`
     );
     return { success: true, allocated: [], shortages: [] };
   }
 
-  // Step 5: Execute allocations; track successful ones for rollback on failure
-  const allocated: { agPartNumber: string; quantity: number }[] = [];
-
-  for (const item of toAllocate) {
-    try {
-      await allocateInventory({
-        agPartNumber: item.agPartNumber,
-        quantity: item.quantity,
-        locationId: WAREHOUSE_LOCATION,
-        referenceType: 'PRODUCTION_ORDER',
-        referenceId: orderId,
-        performedBy,
-        notes: `Auto-allocation on FINALIZED→IN_PROGRESS for order ${orderId}`,
-      });
-      allocated.push(item);
-      console.log(
-        `✅ allocateForOrder: Allocated ${item.quantity}× ${item.agPartNumber} for order ${orderId}`
-      );
-    } catch (allocErr: any) {
-      // Step 6: Race-condition failure — roll back already-allocated items
-      console.error(
-        `❌ allocateForOrder: Allocation failed mid-run for ${item.agPartNumber}:`,
-        allocErr.message
-      );
-
-      for (const done of allocated) {
-        try {
-          await deallocateInventory({
-            agPartNumber: done.agPartNumber,
-            quantity: done.quantity,
+  // ── Step 5: Atomic allocation — ALL materials or NONE ─────────────────────
+  // Every allocateInventory() call participates in the same transaction.
+  // FOR UPDATE locks are acquired together, eliminating the race window that
+  // existed when each call opened its own transaction.
+  // If any call throws, the entire transaction rolls back automatically.
+  try {
+    await db.transaction(async (tx) => {
+      for (const item of itemsToAllocate) {
+        await allocateInventory(
+          {
+            agPartNumber: item.agPartNumber,
+            quantity: item.quantity,
             locationId: WAREHOUSE_LOCATION,
             referenceType: 'PRODUCTION_ORDER',
             referenceId: orderId,
             performedBy,
-            notes: `Rollback: allocation failed mid-run for order ${orderId}`,
-          });
-          console.log(`↩️  allocateForOrder: Rolled back ${done.quantity}× ${done.agPartNumber}`);
-        } catch (rollbackErr: any) {
-          console.error(
-            `❌ allocateForOrder: Rollback failed for ${done.agPartNumber}:`,
-            rollbackErr.message
-          );
-        }
-      }
-
-      return {
-        success: false,
-        allocated: [],
-        shortages: [
-          {
-            agPartNumber: item.agPartNumber,
-            required: item.quantity,
-            available: 0,
+            notes: `Auto-allocation on FINALIZED→IN_PROGRESS for order ${orderId}`,
           },
-        ],
-      };
-    }
+          tx
+        );
+        console.log(
+          `✅ allocateForOrder: Allocated ${item.quantity}× ${item.agPartNumber} for order ${orderId}`
+        );
+      }
+    });
+  } catch (err: any) {
+    // Transaction rolled back automatically — no manual cleanup needed.
+    console.error(
+      `❌ allocateForOrder: Atomic allocation failed and rolled back for order ${orderId}:`,
+      err.message
+    );
+    return {
+      success: false,
+      allocated: [],
+      shortages: [
+        {
+          agPartNumber: err.message.match(/part\s+(\S+)/)?.[1] ?? 'unknown',
+          required: 0,
+          available: 0,
+        },
+      ],
+    };
   }
 
   console.log(
-    `✅ allocateForOrder: All ${allocated.length} material(s) allocated for order ${orderId}`
+    `✅ allocateForOrder: All ${itemsToAllocate.length} material(s) allocated atomically for order ${orderId}`
   );
-  return { success: true, allocated, shortages: [] };
+  return { success: true, allocated: itemsToAllocate, shortages: [] };
 }

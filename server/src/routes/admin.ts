@@ -562,13 +562,14 @@ router.get(
         const from = payload?.actionConfig?.fromDepartment ?? null;
         const to = payload?.actionConfig?.toDepartment ?? null;
         const deptInfo = from && to ? ` (${from} → ${to})` : '';
-        const outcome = e.outcome === 'SUCCESS' ? '' : ` [${e.outcome}]`;
+        const outcomeTag = e.outcome === 'success' ? '' : ` [${e.outcome}]`;
+        const errorNote = e.error_message && e.outcome !== 'success' ? ` — ${e.error_message}` : '';
         events.push({
           timestamp: e.scanned_at ? new Date(e.scanned_at).toISOString() : null,
           type: 'BADGE_SCAN',
-          description: `Badge scan: ${e.action_type}${deptInfo}${outcome}`,
+          description: `Badge scan: ${e.action_type}${deptInfo}${outcomeTag}${errorNote}`,
           actor: e.employee_code ?? null,
-          metadata: { actionType: e.action_type, outcome: e.outcome, payload },
+          metadata: { actionType: e.action_type, outcome: e.outcome, errorMessage: e.error_message ?? null, payload },
         });
       }
 

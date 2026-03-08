@@ -419,4 +419,198 @@ router.get(
   }
 );
 
+// ─── Order Flight Recorder ───────────────────────────────────────────────────
+
+interface FlightEvent {
+  timestamp: string | null;
+  type: string;
+  description: string;
+  actor: string | null;
+  metadata: Record<string, any>;
+}
+
+router.get(
+  '/order-flight-recorder/:orderId',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    const { orderId } = req.params;
+
+    try {
+      const safeQ = async (sql: string, params: any[]): Promise<any[]> => {
+        try {
+          const rows = await pool.query(sql, params) as any[];
+          return Array.isArray(rows) ? rows : [];
+        } catch (err) {
+          console.warn('[FlightRecorder] Query failed:', (err as Error).message, '|', sql.slice(0, 80));
+          return [];
+        }
+      };
+
+      // ── Load all event sources in parallel ───────────────────────────────
+      const [
+        orderRows,
+        auditEventRows,
+        adminLogRows,
+        badgeScanRows,
+        transitionRows,
+      ] = await Promise.all([
+        safeQ(
+          `SELECT created_at, updated_at, department_history, status, current_department
+           FROM all_orders WHERE order_id = $1 LIMIT 1`,
+          [orderId]
+        ),
+        safeQ(
+          `SELECT action, actor_name, actor_role, reason, fields_changed, meta, timestamp
+           FROM audit_events WHERE entity_id = $1 ORDER BY timestamp ASC`,
+          [orderId]
+        ),
+        safeQ(
+          `SELECT field_name, field_label, old_value, new_value, changed_by, timestamp
+           FROM admin_audit_log WHERE order_id = $1 ORDER BY timestamp ASC`,
+          [orderId]
+        ),
+        safeQ(
+          `SELECT employee_code, action_type, action_payload, outcome, error_message, scanned_at
+           FROM badge_scan_audit_log
+           WHERE action_payload->>'targetBarcode' = $1
+           ORDER BY scanned_at ASC`,
+          [orderId]
+        ),
+        safeQ(
+          `SELECT department, entered_at, exited_at, duration_minutes, exit_reason, cycle_number
+           FROM order_department_transitions WHERE entity_id = $1 ORDER BY entered_at ASC`,
+          [orderId]
+        ),
+      ]);
+
+      const events: FlightEvent[] = [];
+
+      // ── 1. ORDER CREATED ─────────────────────────────────────────────────
+      const orderRow = orderRows[0];
+      if (orderRow?.created_at) {
+        events.push({
+          timestamp: new Date(orderRow.created_at).toISOString(),
+          type: 'ORDER_CREATED',
+          description: `Order ${orderId} created`,
+          actor: null,
+          metadata: { status: orderRow.status },
+        });
+      }
+
+      // ── 2. DEPARTMENT HISTORY (embedded JSONB) ───────────────────────────
+      let deptHistory: any[] = [];
+      try {
+        const raw = orderRow?.department_history;
+        deptHistory = Array.isArray(raw)
+          ? raw
+          : typeof raw === 'string'
+          ? JSON.parse(raw)
+          : [];
+      } catch (_) {}
+
+      for (const entry of deptHistory) {
+        const ts = entry.timestamp ?? entry.movedAt ?? null;
+        const from = entry.fromDepartment ?? entry.from ?? '?';
+        const to = entry.toDepartment ?? entry.to ?? '?';
+        const by = entry.movedBy ?? entry.progressedBy ?? entry.assignedTechnician ?? null;
+        events.push({
+          timestamp: ts ? new Date(ts).toISOString() : null,
+          type: 'DEPARTMENT_CHANGE',
+          description: `Department: ${from} → ${to}`,
+          actor: by,
+          metadata: { fromDepartment: from, toDepartment: to },
+        });
+      }
+
+      // ── 3. AUDIT EVENTS ──────────────────────────────────────────────────
+      for (const e of auditEventRows) {
+        const desc = e.reason
+          ? `${e.action}: ${e.reason}`
+          : e.action;
+        events.push({
+          timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : null,
+          type: 'AUDIT_EVENT',
+          description: desc,
+          actor: e.actor_name ?? null,
+          metadata: {
+            action: e.action,
+            role: e.actor_role,
+            fieldsChanged: e.fields_changed,
+            meta: e.meta,
+          },
+        });
+      }
+
+      // ── 4. ADMIN AUDIT LOG (field edits) ─────────────────────────────────
+      for (const e of adminLogRows) {
+        const label = e.field_label || e.field_name;
+        const oldVal = e.old_value === null ? 'null' : JSON.stringify(e.old_value);
+        const newVal = e.new_value === null ? 'null' : JSON.stringify(e.new_value);
+        events.push({
+          timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : null,
+          type: 'FIELD_CHANGE',
+          description: `"${label}" changed: ${oldVal} → ${newVal}`,
+          actor: e.changed_by ?? null,
+          metadata: { fieldName: e.field_name, oldValue: e.old_value, newValue: e.new_value },
+        });
+      }
+
+      // ── 5. BADGE SCANS ───────────────────────────────────────────────────
+      for (const e of badgeScanRows) {
+        const payload = e.action_payload ?? {};
+        const from = payload?.actionConfig?.fromDepartment ?? null;
+        const to = payload?.actionConfig?.toDepartment ?? null;
+        const deptInfo = from && to ? ` (${from} → ${to})` : '';
+        const outcome = e.outcome === 'SUCCESS' ? '' : ` [${e.outcome}]`;
+        events.push({
+          timestamp: e.scanned_at ? new Date(e.scanned_at).toISOString() : null,
+          type: 'BADGE_SCAN',
+          description: `Badge scan: ${e.action_type}${deptInfo}${outcome}`,
+          actor: e.employee_code ?? null,
+          metadata: { actionType: e.action_type, outcome: e.outcome, payload },
+        });
+      }
+
+      // ── 6. DEPARTMENT TRANSITIONS ────────────────────────────────────────
+      for (const t of transitionRows) {
+        events.push({
+          timestamp: t.entered_at ? new Date(t.entered_at).toISOString() : null,
+          type: 'DEPT_ENTERED',
+          description: `Entered: ${t.department}${t.cycle_number > 1 ? ` (cycle ${t.cycle_number})` : ''}`,
+          actor: null,
+          metadata: { department: t.department, cycle: t.cycle_number },
+        });
+        if (t.exited_at) {
+          const durInfo = t.duration_minutes != null ? ` after ${t.duration_minutes}m` : '';
+          const exitInfo = t.exit_reason ? ` [${t.exit_reason}]` : '';
+          events.push({
+            timestamp: new Date(t.exited_at).toISOString(),
+            type: 'DEPT_EXITED',
+            description: `Exited: ${t.department}${durInfo}${exitInfo}`,
+            actor: null,
+            metadata: { department: t.department, durationMinutes: t.duration_minutes, exitReason: t.exit_reason },
+          });
+        }
+      }
+
+      // ── Sort: known timestamps first (ascending), nulls last ─────────────
+      events.sort((a, b) => {
+        if (!a.timestamp && !b.timestamp) return 0;
+        if (!a.timestamp) return 1;
+        if (!b.timestamp) return -1;
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      });
+
+      res.json({ orderId, eventCount: events.length, events });
+    } catch (error) {
+      console.error('❌ Flight Recorder error:', error);
+      res.status(500).json({
+        error: 'Failed to load flight recorder data',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
 export default router;

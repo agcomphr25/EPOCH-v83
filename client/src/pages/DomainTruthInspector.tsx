@@ -21,6 +21,14 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Activity,
+  Star,
+  ArrowRight,
+  PenLine,
+  Scan,
+  LogIn,
+  LogOut,
+  HelpCircle,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -107,6 +115,65 @@ function WarningSeverityBadge({ severity }: { severity: string }) {
   return <Badge variant="outline" className="text-xs">info</Badge>;
 }
 
+const FLIGHT_EVENT_CONFIG = {
+  ORDER_CREATED: {
+    label: 'Created',
+    icon: Star,
+    dotBg: 'bg-green-100',
+    dotIcon: 'text-green-600',
+    badge: 'bg-green-100 text-green-800',
+  },
+  DEPARTMENT_CHANGE: {
+    label: 'Dept Change',
+    icon: ArrowRight,
+    dotBg: 'bg-indigo-100',
+    dotIcon: 'text-indigo-600',
+    badge: 'bg-indigo-100 text-indigo-800',
+  },
+  FIELD_CHANGE: {
+    label: 'Field Edit',
+    icon: PenLine,
+    dotBg: 'bg-blue-100',
+    dotIcon: 'text-blue-600',
+    badge: 'bg-blue-100 text-blue-800',
+  },
+  AUDIT_EVENT: {
+    label: 'Audit',
+    icon: Shield,
+    dotBg: 'bg-purple-100',
+    dotIcon: 'text-purple-600',
+    badge: 'bg-purple-100 text-purple-800',
+  },
+  BADGE_SCAN: {
+    label: 'Badge Scan',
+    icon: Scan,
+    dotBg: 'bg-orange-100',
+    dotIcon: 'text-orange-600',
+    badge: 'bg-orange-100 text-orange-800',
+  },
+  DEPT_ENTERED: {
+    label: 'Entered',
+    icon: LogIn,
+    dotBg: 'bg-teal-100',
+    dotIcon: 'text-teal-600',
+    badge: 'bg-teal-100 text-teal-800',
+  },
+  DEPT_EXITED: {
+    label: 'Exited',
+    icon: LogOut,
+    dotBg: 'bg-gray-100',
+    dotIcon: 'text-gray-500',
+    badge: 'bg-gray-100 text-gray-600',
+  },
+  DEFAULT: {
+    label: 'Event',
+    icon: HelpCircle,
+    dotBg: 'bg-gray-100',
+    dotIcon: 'text-gray-400',
+    badge: 'bg-gray-100 text-gray-600',
+  },
+};
+
 export default function DomainTruthInspector() {
   const [inputId, setInputId] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -114,6 +181,13 @@ export default function DomainTruthInspector() {
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['/api/admin/domain-truth/order', activeId],
     queryFn: () => apiRequest(`/api/admin/domain-truth/order/${activeId}`),
+    enabled: !!activeId,
+    retry: false,
+  });
+
+  const { data: flightData, isLoading: flightLoading } = useQuery<any>({
+    queryKey: ['/api/admin/order-flight-recorder', activeId],
+    queryFn: () => apiRequest(`/api/admin/order-flight-recorder/${activeId}`),
     enabled: !!activeId,
     retry: false,
   });
@@ -133,6 +207,7 @@ export default function DomainTruthInspector() {
   const adminAuditLog: any[] = data?.adminAuditLog ?? [];
   const kickbacks: any[] = data?.kickbacks ?? [];
   const payments: any[] = data?.payments ?? [];
+  const flightEvents: any[] = flightData?.events ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -533,6 +608,74 @@ export default function DomainTruthInspector() {
                       <p className="text-sm text-yellow-900 dark:text-yellow-200">{w.message}</p>
                     </div>
                   ))}
+                </div>
+              )}
+            </SectionCard>
+
+            {/* ─── 8. Order Flight Recorder ─── */}
+            <SectionCard title="8 — Order Flight Recorder" icon={Activity} defaultOpen={true}>
+              {flightLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading flight recorder…
+                </div>
+              ) : flightEvents.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">No recorded events found for this order.</p>
+              ) : (
+                <div className="relative">
+                  {/* Event count summary */}
+                  <p className="text-xs text-gray-400 mb-4">
+                    {flightEvents.length} event{flightEvents.length !== 1 ? 's' : ''} recorded across all sources
+                  </p>
+
+                  {/* Vertical timeline */}
+                  <div className="relative pl-8">
+                    {/* Spine line */}
+                    <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" />
+
+                    {flightEvents.map((evt: any, i: number) => {
+                      const cfg = (FLIGHT_EVENT_CONFIG as any)[evt.type] as typeof FLIGHT_EVENT_CONFIG.DEFAULT ?? FLIGHT_EVENT_CONFIG.DEFAULT;
+                      const Icon = cfg.icon;
+                      const ts = evt.timestamp ? new Date(evt.timestamp) : null;
+
+                      return (
+                        <div key={i} className="relative mb-4 last:mb-0 group">
+                          {/* Dot on spine */}
+                          <div className={`absolute -left-5 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${cfg.dotBg}`}>
+                            <Icon className={`h-2.5 w-2.5 ${cfg.dotIcon}`} />
+                          </div>
+
+                          {/* Event card */}
+                          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-md px-3 py-2 group-hover:border-gray-300 dark:group-hover:border-gray-600 transition-colors">
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cfg.badge}`}>
+                                  {cfg.label}
+                                </span>
+                                <span className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
+                                  {evt.description}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0 text-right">
+                                {evt.actor && (
+                                  <span className="text-xs text-gray-500 font-mono">{evt.actor}</span>
+                                )}
+                                {ts ? (
+                                  <div className="text-right">
+                                    <div className="text-xs text-gray-400 font-mono whitespace-nowrap">
+                                      {ts.toLocaleDateString()} {ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-300 italic">no timestamp</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </SectionCard>

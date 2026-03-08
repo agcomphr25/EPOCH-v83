@@ -614,4 +614,146 @@ router.get(
   }
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Queue Integrity Monitor
+// GET /api/admin/queue-integrity
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MONITORED_DEPARTMENTS = [
+  'Production Queue',
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'Shipping QC',
+  'Shipping',
+];
+
+router.get(
+  '/queue-integrity',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      // Helper: safely run a pool query and return [] on failure
+      const safeQ = async (sql: string, params: any[] = []): Promise<any[]> => {
+        try {
+          const rows = await pool.query(sql, params) as any[];
+          return Array.isArray(rows) ? rows : [];
+        } catch {
+          return [];
+        }
+      };
+
+      // Run all department comparisons + global scans in parallel
+      const [deptResults, invalidRows, orphanRows] = await Promise.all([
+        // ── Per-department comparisons ──────────────────────────────────────
+        Promise.all(
+          MONITORED_DEPARTMENTS.map(async (dept) => {
+            const [expectedRows, actualAllOrders, actualProdOrders] = await Promise.all([
+              // Expected: canonical domain rules (what SHOULD be in this queue)
+              safeQ(
+                `SELECT order_id FROM all_orders
+                 WHERE current_department = $1
+                   AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+                   AND scrap_date IS NULL
+                   AND (is_cancelled IS NULL OR is_cancelled = false)`,
+                [dept]
+              ),
+              // Actual from all_orders — mirrors getOrdersByDepartment filter
+              safeQ(
+                `SELECT order_id FROM all_orders
+                 WHERE current_department = $1
+                   AND status NOT IN ('SCRAPPED','CANCELLED')
+                   AND scrap_date IS NULL`,
+                [dept]
+              ),
+              // Actual from production_orders — also included by getOrdersByDepartment
+              safeQ(
+                `SELECT order_id FROM production_orders
+                 WHERE current_department = $1`,
+                [dept]
+              ),
+            ]);
+
+            const expectedSet = new Set<string>(expectedRows.map((r: any) => String(r.order_id)));
+            const actualSet = new Set<string>([
+              ...actualAllOrders.map((r: any) => String(r.order_id)),
+              ...actualProdOrders.map((r: any) => String(r.order_id)),
+            ]);
+
+            const missingOrders = [...expectedSet].filter((id) => !actualSet.has(id));
+            const unexpectedOrders = [...actualSet].filter((id) => !expectedSet.has(id));
+
+            return {
+              department: dept,
+              expectedCount: expectedSet.size,
+              actualCount: actualSet.size,
+              missingOrders,
+              unexpectedOrders,
+              ok: missingOrders.length === 0 && unexpectedOrders.length === 0,
+            };
+          })
+        ),
+
+        // ── Invalid department scan ─────────────────────────────────────────
+        safeQ(
+          `SELECT order_id, current_department AS invalid_department
+           FROM all_orders
+           WHERE current_department IS NOT NULL
+             AND current_department NOT IN (${MONITORED_DEPARTMENTS.map((_: string, i: number) => `$${i + 1}`).join(',')})
+             AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+             AND scrap_date IS NULL
+             AND (is_cancelled IS NULL OR is_cancelled = false)
+           ORDER BY current_department, order_id`,
+          MONITORED_DEPARTMENTS
+        ),
+
+        // ── Orphaned orders (no department, not closed) ─────────────────────
+        safeQ(
+          `SELECT order_id, status, created_at
+           FROM all_orders
+           WHERE current_department IS NULL
+             AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+             AND scrap_date IS NULL
+             AND (is_cancelled IS NULL OR is_cancelled = false)
+           ORDER BY created_at DESC`,
+          []
+        ),
+      ]);
+
+      const totalMismatches = deptResults.filter((d: any) => !d.ok).length;
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        summary: {
+          departmentsChecked: MONITORED_DEPARTMENTS.length,
+          departmentsWithMismatches: totalMismatches,
+          invalidDepartmentCount: invalidRows.length,
+          orphanedOrderCount: orphanRows.length,
+        },
+        departments: deptResults,
+        invalidDepartments: invalidRows.map((r: any) => ({
+          orderId: r.order_id,
+          invalidDepartment: r.invalid_department,
+        })),
+        orphanedOrders: orphanRows.map((r: any) => ({
+          orderId: r.order_id,
+          status: r.status,
+          createdAt: r.created_at,
+        })),
+      });
+    } catch (error) {
+      console.error('Queue integrity check error:', error);
+      res.status(500).json({
+        error: 'Failed to run queue integrity check',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
 export default router;

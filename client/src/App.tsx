@@ -104,6 +104,7 @@ import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
 import ProductionOrderInspector from './pages/ProductionOrderInspector';
 import DomainTruthInspector from './pages/DomainTruthInspector';
+import QueueIntegrityMonitor from './pages/admin/QueueIntegrityMonitor';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -441,6 +442,7 @@ function App() {
                   <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/admin/inspector/production-order" component={ProductionOrderInspector} />
                   <Route path="/admin/domain-truth" component={DomainTruthInspector} />
+                  <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />

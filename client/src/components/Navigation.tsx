@@ -70,6 +70,7 @@ import {
   AlertTriangle,
   CalendarDays,
   Mic,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -335,6 +336,12 @@ export default function Navigation() {
       label: 'Domain Truth Inspector',
       icon: Database,
       description: 'Read-only diagnostic tool — inspect true system state and queue eligibility for any order',
+    },
+    {
+      path: '/admin/queue-integrity',
+      label: 'Queue Integrity Monitor',
+      icon: ShieldCheck,
+      description: 'Detect mismatches between expected and actual department queue membership',
     },
     {
       path: '/pdf-templates',

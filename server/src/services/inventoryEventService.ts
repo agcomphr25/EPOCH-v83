@@ -174,8 +174,8 @@ async function upsertBalance(
     await db
       .update(inventoryBalances)
       .set({
-        quantityOnHand: sql`${inventoryBalances.quantityOnHand} + ${delta}`,
-        quantityAvailable: sql`GREATEST(0, (${inventoryBalances.quantityOnHand} + ${delta}) - ${inventoryBalances.quantityAllocated})`,
+        quantityOnHand: sql`GREATEST(0, ${inventoryBalances.quantityOnHand} + ${delta})`,
+        quantityAvailable: sql`GREATEST(0, GREATEST(0, ${inventoryBalances.quantityOnHand} + ${delta}) - ${inventoryBalances.quantityAllocated})`,
         updatedAt: new Date(),
       })
       .where(eq(inventoryBalances.id, existing.id));

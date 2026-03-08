@@ -4,6 +4,12 @@ import path from 'path';
 import fs from 'fs/promises';
 import { sql, eq } from 'drizzle-orm';
 import {
+  calculateMaterialDemand,
+  calculateMaterialShortages,
+  calculateBuildCapacity,
+  runMrp,
+} from '../services/mrpMaterialPlanning';
+import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
   insertPartsRequestSchema,
@@ -2850,6 +2856,59 @@ router.get('/fabric/:id', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching fabric inventory item:', error);
     res.status(500).json({ error: 'Failed to fetch fabric inventory item' });
+  }
+});
+
+// ── MRP / Material Planning Engine ────────────────────────────────────────────
+
+router.get('/mrp/demand', async (req: Request, res: Response) => {
+  try {
+    const sku = req.query.sku as string | undefined;
+    const demand = await calculateMaterialDemand(sku);
+    res.json({ demand, count: demand.length, generatedAt: new Date().toISOString() });
+  } catch (error: any) {
+    console.error('MRP demand error:', error);
+    res.status(500).json({ error: 'Failed to calculate material demand', message: error.message });
+  }
+});
+
+router.get('/mrp/shortages', async (req: Request, res: Response) => {
+  try {
+    const sku = req.query.sku as string | undefined;
+    const shortages = await calculateMaterialShortages(undefined, sku);
+    const onlyShort = shortages.filter((s) => s.isShort);
+    res.json({
+      shortages,
+      shortCount: onlyShort.length,
+      allClear: onlyShort.length === 0,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('MRP shortages error:', error);
+    res.status(500).json({ error: 'Failed to calculate material shortages', message: error.message });
+  }
+});
+
+router.get('/mrp/capacity/:sku', async (req: Request, res: Response) => {
+  try {
+    const { sku } = req.params;
+    const capacity = await calculateBuildCapacity(sku);
+    res.json({ ...capacity, generatedAt: new Date().toISOString() });
+  } catch (error: any) {
+    console.error('MRP capacity error:', error);
+    res.status(500).json({ error: 'Failed to calculate build capacity', message: error.message });
+  }
+});
+
+router.get('/mrp/run', async (req: Request, res: Response) => {
+  try {
+    const skuFilter = req.query.sku as string | undefined;
+    const capacitySku = req.query.capacitySku as string | undefined;
+    const result = await runMrp({ skuFilter, capacitySku });
+    res.json(result);
+  } catch (error: any) {
+    console.error('MRP run error:', error);
+    res.status(500).json({ error: 'Failed to run MRP', message: error.message });
   }
 });
 

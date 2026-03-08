@@ -463,6 +463,9 @@ export default function GLENNTestDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Queue Integrity Widget */}
+          <SystemHealthWidget />
         </div>
 
         {/* My Tasks Control Center */}

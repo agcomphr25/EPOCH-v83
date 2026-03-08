@@ -303,7 +303,7 @@ export async function consumeAllocatedInventory(
     await tx.insert(inventoryTransactions).values({
       agPartNumber,
       transactionType: 'consumption',
-      quantity: -quantity,
+      quantity: quantity,
       fromLocation: locationId,
       toLocation: null,
       referenceType: referenceType ?? null,

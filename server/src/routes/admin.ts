@@ -401,6 +401,13 @@ router.get(
         queueEvaluation,
         routingFlags,
         systemWarnings,
+        rawDepartmentHistory: order?.department_history ?? null,
+        parsedHistory: (() => {
+          const raw = order?.department_history;
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          try { return JSON.parse(raw as string); } catch { return []; }
+        })(),
       });
     } catch (error) {
       console.error('❌ Domain Truth Inspector error:', error);

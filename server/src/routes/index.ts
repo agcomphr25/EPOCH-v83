@@ -105,6 +105,7 @@ import partRoutingsRoutes from './partRoutings';
 import travelersRoutes from './travelers';
 import materialLotsRoutes from './materialLots';
 import routingDocumentsRoutes from './routingDocuments';
+import mrpRoutes from './mrp';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
@@ -321,6 +322,9 @@ export function registerRoutes(app: Express): Server {
   
   // Material Lot management routes (AS9100-compliant material traceability)
   app.use('/api/material-lots', materialLotsRoutes);
+
+  // MRP / Material Planning Engine
+  app.use('/api/mrp', mrpRoutes);
   
   // Routing Documents management (work instructions, spec sheets, templates, AI parsing)
   app.use('/api/routing-documents', routingDocumentsRoutes);

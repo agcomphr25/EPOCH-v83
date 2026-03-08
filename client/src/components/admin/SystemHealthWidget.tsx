@@ -11,6 +11,11 @@ interface IntegrityStatus {
   infoCount: number;
   affectedDepartments: string[];
   lastCheckTime: string | null;
+  history: { time: string; healthy: boolean; criticalCount: number; warningCount: number }[];
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export default function SystemHealthWidget() {
@@ -23,9 +28,18 @@ export default function SystemHealthWidget() {
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-        <ShieldCheck className="h-4 w-4 text-indigo-500" />
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Queue Integrity Status</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-indigo-500" />
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Queue Integrity Status</span>
+        </div>
+        {data?.lastCheckTime ? (
+          <span className="text-xs text-gray-400 tabular-nums">
+            Last check: {formatTime(data.lastCheckTime)}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-300 italic">not yet run</span>
+        )}
       </div>
 
       <div className="px-4 py-3">
@@ -69,12 +83,6 @@ export default function SystemHealthWidget() {
               </p>
             )}
           </div>
-        )}
-
-        {data?.lastCheckTime && (
-          <p className="text-xs text-gray-400 mt-2">
-            Last checked {new Date(data.lastCheckTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
         )}
       </div>
 

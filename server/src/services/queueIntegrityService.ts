@@ -1,6 +1,13 @@
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
 
+interface HistoryEntry {
+  time: string;
+  healthy: boolean;
+  criticalCount: number;
+  warningCount: number;
+}
+
 interface IntegrityStatus {
   healthy: boolean;
   criticalCount: number;
@@ -8,7 +15,11 @@ interface IntegrityStatus {
   infoCount: number;
   affectedDepartments: string[];
   lastCheckTime: string | null;
+  history: HistoryEntry[];
 }
+
+const HISTORY_LIMIT = 20;
+const checkHistory: HistoryEntry[] = [];
 
 let currentStatus: IntegrityStatus = {
   healthy: true,
@@ -17,10 +28,11 @@ let currentStatus: IntegrityStatus = {
   infoCount: 0,
   affectedDepartments: [],
   lastCheckTime: null,
+  history: [],
 };
 
 export function getQueueIntegrityStatus(): IntegrityStatus {
-  return { ...currentStatus };
+  return { ...currentStatus, history: [...checkHistory] };
 }
 
 async function safeQ(sql: string, params: any[] = []): Promise<any[]> {
@@ -108,14 +120,21 @@ async function runIntegrityCheck(): Promise<void> {
     const warningCount = warningDepts.length;
     const infoCount = invalidCount > 0 ? 1 : 0;
 
+    const now = new Date().toISOString();
+
     currentStatus = {
       healthy: criticalCount === 0,
       criticalCount,
       warningCount,
       infoCount,
       affectedDepartments: [...criticalDepts, ...warningDepts],
-      lastCheckTime: new Date().toISOString(),
+      lastCheckTime: now,
+      history: checkHistory,
     };
+
+    // Prepend to rolling history (newest first), capped at HISTORY_LIMIT
+    checkHistory.unshift({ time: now, healthy: criticalCount === 0, criticalCount, warningCount });
+    if (checkHistory.length > HISTORY_LIMIT) checkHistory.length = HISTORY_LIMIT;
   } catch (error) {
     console.error('[QueueIntegrityService] Background check failed:', error);
   }

@@ -1,6 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { METRIC_FUNCTIONS, type MetricSlug } from '../services/metricsService';
+import {
+  getOrComputeSnapshot,
+  refreshSnapshot,
+  purgeExpiredSnapshots,
+  type SnapshotPeriod,
+} from '../services/metricsSnapshotService';
 
 const router = Router();
 
@@ -114,6 +120,8 @@ const REGISTRY: Array<{
   },
 ];
 
+// ─── Startup tasks ─────────────────────────────────────────────────────────────
+
 async function ensureRegistrySeeded(): Promise<void> {
   try {
     for (const entry of REGISTRY) {
@@ -146,7 +154,22 @@ async function ensureRegistrySeeded(): Promise<void> {
   }
 }
 
-ensureRegistrySeeded();
+async function startupHousekeeping(): Promise<void> {
+  await ensureRegistrySeeded();
+  const purged = await purgeExpiredSnapshots();
+  if (purged > 0) console.log(`[metrics] Purged ${purged} expired snapshot(s) on startup`);
+}
+
+startupHousekeeping();
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function parsePeriod(raw: unknown): SnapshotPeriod {
+  if (raw === 'hourly' || raw === 'daily') return raw;
+  return 'live';
+}
+
+// ─── GET /api/metrics/ — Registry list ────────────────────────────────────────
 
 router.get('/', async (_req: Request, res: Response) => {
   const rows = REGISTRY.map((r) => ({
@@ -161,49 +184,34 @@ router.get('/', async (_req: Request, res: Response) => {
   res.json({ metrics: rows, total: rows.length });
 });
 
-router.get('/:slug', async (req: Request, res: Response) => {
-  const slug = req.params.slug as MetricSlug;
-
-  const entry = REGISTRY.find((r) => r.slug === slug);
-  if (!entry) {
-    return res.status(404).json({ error: `Unknown metric: ${slug}` });
-  }
-
-  const fn = METRIC_FUNCTIONS[slug];
-  if (!fn) {
-    return res.status(501).json({ error: `No calculation function for metric: ${slug}` });
-  }
-
-  try {
-    const value = await fn();
-    res.json({
-      metric: slug,
-      name: entry.name,
-      value,
-      unit: entry.unit,
-      category: entry.category,
-      defaultVisual: entry.defaultVisual,
-      isLive: entry.isLive,
-      computedAt: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    console.error(`[metrics] Error computing ${slug}:`, err.message);
-    res.status(500).json({ error: `Failed to compute metric: ${slug}`, message: err.message });
-  }
-});
+// ─── GET /api/metrics/bulk/snapshot ───────────────────────────────────────────
+// Must be declared BEFORE /:slug so Express doesn't swallow "bulk" as a slug.
 
 router.get('/bulk/snapshot', async (req: Request, res: Response) => {
+  const period = parsePeriod(req.query.period);
+  const bypass = req.query.bypass === '1';
+
   const requested = req.query.slugs
     ? (req.query.slugs as string).split(',').map((s) => s.trim()) as MetricSlug[]
     : (Object.keys(METRIC_FUNCTIONS) as MetricSlug[]);
 
   const results = await Promise.allSettled(
     requested.map(async (slug) => {
-      const fn = METRIC_FUNCTIONS[slug];
-      if (!fn) throw new Error(`Unknown slug: ${slug}`);
-      const value = await fn();
+      if (!METRIC_FUNCTIONS[slug]) throw new Error(`Unknown slug: ${slug}`);
+      const snap = bypass
+        ? await refreshSnapshot(slug, period)
+        : await getOrComputeSnapshot(slug, period);
       const entry = REGISTRY.find((r) => r.slug === slug);
-      return { slug, name: entry?.name ?? slug, value, unit: entry?.unit ?? '', category: entry?.category ?? '' };
+      return {
+        slug,
+        name:      entry?.name     ?? slug,
+        value:     snap.value,
+        unit:      entry?.unit     ?? '',
+        category:  entry?.category ?? '',
+        fromCache: snap.fromCache,
+        computedAt: snap.computedAt.toISOString(),
+        expiresAt:  snap.expiresAt.toISOString(),
+      };
     }),
   );
 
@@ -220,9 +228,49 @@ router.get('/bulk/snapshot', async (req: Request, res: Response) => {
 
   res.json({
     snapshot,
+    period,
     computedAt: new Date().toISOString(),
     total: requested.length,
   });
+});
+
+// ─── GET /api/metrics/:slug ────────────────────────────────────────────────────
+
+router.get('/:slug', async (req: Request, res: Response) => {
+  const slug = req.params.slug as MetricSlug;
+  const period = parsePeriod(req.query.period);
+  const bypass = req.query.bypass === '1';
+
+  const entry = REGISTRY.find((r) => r.slug === slug);
+  if (!entry) {
+    return res.status(404).json({ error: `Unknown metric: ${slug}` });
+  }
+
+  if (!METRIC_FUNCTIONS[slug]) {
+    return res.status(501).json({ error: `No calculation function for metric: ${slug}` });
+  }
+
+  try {
+    const snap = bypass
+      ? await refreshSnapshot(slug, period)
+      : await getOrComputeSnapshot(slug, period);
+
+    res.json({
+      metric:       slug,
+      name:         entry.name,
+      value:        snap.value,
+      unit:         entry.unit,
+      category:     entry.category,
+      defaultVisual: entry.defaultVisual,
+      isLive:       entry.isLive,
+      fromCache:    snap.fromCache,
+      computedAt:   snap.computedAt.toISOString(),
+      expiresAt:    snap.expiresAt.toISOString(),
+    });
+  } catch (err: any) {
+    console.error(`[metrics] Error computing ${slug}:`, err.message);
+    res.status(500).json({ error: `Failed to compute metric: ${slug}`, message: err.message });
+  }
 });
 
 export default router;

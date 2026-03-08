@@ -79,85 +79,90 @@ router.get(
         }
       };
 
-      // ── 1. Core order from all_orders ─────────────────────────────────────
-      const [orderRows, legacyRows, productionRows, payments, kickbacks, adminAuditLog, auditEventsRows, departmentTransitions] =
+      // ── 1. Resolve core order (supports fb_order_number aliases) ─────────
+      const orderRows = await safeQuery(
+        `SELECT
+          ao.order_id,
+          ao.fb_order_number,
+          ao.status,
+          ao.current_department,
+          ao.current_department_id,
+          ao.scrap_date,
+          ao.is_cancelled,
+          ao.is_flattop,
+          ao.features,
+          ao.model_id,
+          ao.order_source,
+          ao.created_at,
+          ao.due_date,
+          ao.customer_id,
+          ao.department_history,
+          ao.shipped_date,
+          ao.is_paid,
+          ao.is_replacement,
+          ao.urgency,
+          ao.priority_score,
+          ao.scrap_reason,
+          ao.updated_at,
+          c.name AS customer_name,
+          c.email AS customer_email
+        FROM all_orders ao
+        LEFT JOIN customers c ON ao.customer_id = CAST(c.id AS TEXT)
+        WHERE ao.order_id = $1 OR ao.fb_order_number = $1
+        LIMIT 1`,
+        [orderId]
+      );
+
+      const order = orderRows[0] || null;
+      // Use the real order_id from the DB row if found via fb_order_number alias
+      const resolvedId = order?.order_id ?? orderId;
+
+      const [legacyRows, productionRows, payments, kickbacks, adminAuditLog, auditEventsRows, departmentTransitions] =
         await Promise.all([
-          safeQuery(
-            `SELECT
-              ao.order_id,
-              ao.status,
-              ao.current_department,
-              ao.current_department_id,
-              ao.scrap_date,
-              ao.is_cancelled,
-              ao.is_flattop,
-              ao.features,
-              ao.model_id,
-              ao.order_source,
-              ao.created_at,
-              ao.due_date,
-              ao.customer_id,
-              ao.department_history,
-              ao.shipped_date,
-              ao.is_paid,
-              ao.is_replacement,
-              ao.urgency,
-              ao.priority_score,
-              ao.scrap_reason,
-              ao.updated_at,
-              c.name AS customer_name,
-              c.email AS customer_email
-            FROM all_orders ao
-            LEFT JOIN customers c ON ao.customer_id = CAST(c.id AS TEXT)
-            WHERE ao.order_id = $1
-            LIMIT 1`,
-            [orderId]
-          ),
           safeQuery(
             `SELECT order_id, status, current_department, created_at
              FROM orders WHERE order_id = $1 LIMIT 1`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, order_id, production_status, current_department, department_history, created_at
              FROM production_orders WHERE order_id = $1 LIMIT 1`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, order_id, payment_amount, payment_type, payment_date
              FROM payments WHERE order_id = $1 ORDER BY payment_date DESC`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, order_id, kickback_dept, reason_code, reason_text, status, priority,
                     reported_by, kickback_date, resolved_at, resolved_by, resolution_notes
              FROM kickbacks WHERE order_id = $1 ORDER BY kickback_date DESC`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, order_id, field_name, field_label, old_value, new_value,
                     changed_by, user_role, change_type, timestamp
              FROM admin_audit_log WHERE order_id = $1
              ORDER BY timestamp DESC LIMIT 100`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, entity_type, entity_id, action, actor_name, actor_role,
                     reason, fields_changed, meta, timestamp
              FROM audit_events WHERE entity_id = $1
              ORDER BY timestamp DESC LIMIT 100`,
-            [orderId]
+            [resolvedId]
           ),
           safeQuery(
             `SELECT id, entity_type, entity_id, department, entered_at, exited_at,
                     duration_minutes, exit_reason, cycle_number
              FROM order_department_transitions WHERE entity_id = $1
              ORDER BY entered_at DESC`,
-            [orderId]
+            [resolvedId]
           ),
         ]);
 
-      const order = orderRows[0] || null;
       const legacyOrder = legacyRows[0] || null;
       const productionOrder = productionRows[0] || null;
 
@@ -379,6 +384,7 @@ router.get(
       // ── 8. Response ───────────────────────────────────────────────────────
       res.json({
         orderId,
+        resolvedId,
         order,
         legacyOrder,
         productionOrder,
@@ -439,40 +445,43 @@ router.get(
         }
       };
 
-      // ── Load all event sources in parallel ───────────────────────────────
+      // ── Phase 1: Resolve order (supports fb_order_number aliases) ───────
+      const orderRows = await safeQ(
+        `SELECT order_id, created_at, updated_at, department_history, status, current_department
+         FROM all_orders WHERE order_id = $1 OR fb_order_number = $1 LIMIT 1`,
+        [orderId]
+      );
+      // Use the real DB order_id for all downstream queries
+      const resolvedId = orderRows[0]?.order_id ?? orderId;
+
+      // ── Phase 2: Load all event sources in parallel ───────────────────
       const [
-        orderRows,
         auditEventRows,
         adminLogRows,
         badgeScanRows,
         transitionRows,
       ] = await Promise.all([
         safeQ(
-          `SELECT created_at, updated_at, department_history, status, current_department
-           FROM all_orders WHERE order_id = $1 LIMIT 1`,
-          [orderId]
-        ),
-        safeQ(
           `SELECT action, actor_name, actor_role, reason, fields_changed, meta, timestamp
            FROM audit_events WHERE entity_id = $1 ORDER BY timestamp ASC`,
-          [orderId]
+          [resolvedId]
         ),
         safeQ(
           `SELECT field_name, field_label, old_value, new_value, changed_by, timestamp
            FROM admin_audit_log WHERE order_id = $1 ORDER BY timestamp ASC`,
-          [orderId]
+          [resolvedId]
         ),
         safeQ(
           `SELECT employee_code, action_type, action_payload, outcome, error_message, scanned_at
            FROM badge_scan_audit_log
            WHERE action_payload->>'targetBarcode' = $1
            ORDER BY scanned_at ASC`,
-          [orderId]
+          [resolvedId]
         ),
         safeQ(
           `SELECT department, entered_at, exited_at, duration_minutes, exit_reason, cycle_number
            FROM order_department_transitions WHERE entity_id = $1 ORDER BY entered_at ASC`,
-          [orderId]
+          [resolvedId]
         ),
       ]);
 
@@ -484,7 +493,7 @@ router.get(
         events.push({
           timestamp: new Date(orderRow.created_at).toISOString(),
           type: 'ORDER_CREATED',
-          description: `Order ${orderId} created`,
+          description: `Order ${resolvedId} created`,
           actor: null,
           metadata: { status: orderRow.status },
         });
@@ -595,7 +604,7 @@ router.get(
         return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
       });
 
-      res.json({ orderId, eventCount: events.length, events });
+      res.json({ orderId, resolvedId, eventCount: events.length, events });
     } catch (error) {
       console.error('❌ Flight Recorder error:', error);
       res.status(500).json({
@@ -764,9 +773,10 @@ router.get(
   async (req: Request, res: Response) => {
     const { orderId, department } = req.params;
     try {
+      const searchId = orderId.toUpperCase();
       const rows = (await pool.query(
-        `SELECT * FROM all_orders WHERE order_id = $1 LIMIT 1`,
-        [orderId.toUpperCase()]
+        `SELECT * FROM all_orders WHERE order_id = $1 OR fb_order_number = $1 LIMIT 1`,
+        [searchId]
       )) as any[];
 
       if (!rows.length) {

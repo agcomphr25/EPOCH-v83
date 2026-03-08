@@ -229,13 +229,15 @@ export default function DomainTruthInspector() {
     retry: false,
   });
 
+  const explainOrderId = (data as any)?.resolvedId ?? activeId;
+
   const { data: explainData, isLoading: explainLoading } = useQuery<any>({
-    queryKey: ['/api/admin/explain-queue', activeId, explainActiveDept],
+    queryKey: ['/api/admin/explain-queue', explainOrderId, explainActiveDept],
     queryFn: () =>
       apiRequest(
-        `/api/admin/explain-queue/${activeId}/${encodeURIComponent(explainActiveDept!)}`
+        `/api/admin/explain-queue/${explainOrderId}/${encodeURIComponent(explainActiveDept!)}`
       ),
-    enabled: !!activeId && !!explainActiveDept,
+    enabled: !!explainOrderId && !!explainActiveDept,
     retry: false,
   });
 
@@ -313,6 +315,19 @@ export default function DomainTruthInspector() {
         {data && !isLoading && (
           <div className="space-y-4">
 
+            {/* ─── Alias Resolution Notice ─── */}
+            {data.resolvedId && data.resolvedId !== data.orderId && (
+              <Card className="border-blue-300 bg-blue-50 dark:bg-blue-950/20">
+                <CardContent className="py-3 px-4 flex items-center gap-2 text-blue-800 dark:text-blue-300 text-sm">
+                  <Info className="h-4 w-4 flex-shrink-0 text-blue-600" />
+                  <span>
+                    Searched for <span className="font-mono font-semibold">{data.orderId}</span> — resolved to real order ID{' '}
+                    <span className="font-mono font-semibold">{data.resolvedId}</span> via <span className="font-mono">fb_order_number</span>. All sections below reflect the actual order.
+                  </span>
+                </CardContent>
+              </Card>
+            )}
+
             {/* ─── System Warnings ─── */}
             {warnings.length > 0 && (
               <Card className="border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20">
@@ -353,6 +368,9 @@ export default function DomainTruthInspector() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
                     <FieldRow label="order_id" value={order.order_id} mono />
+                    {order.fb_order_number && (
+                      <FieldRow label="fb_order_number" value={order.fb_order_number} mono />
+                    )}
                     <FieldRow label="status" value={<StatusBadge status={order.status} />} />
                     <FieldRow label="current_department" value={order.current_department} />
                     <FieldRow label="current_department_id" value={order.current_department_id} />

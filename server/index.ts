@@ -1330,6 +1330,14 @@ async function initializeBackgroundServices() {
     });
     
     console.log('🏥 Daily system health checks scheduler active (runs at configured time from UI)');
+
+    // Queue integrity background monitor
+    try {
+      const { startQueueIntegrityService } = await import('./src/services/queueIntegrityService');
+      startQueueIntegrityService();
+    } catch (svcError) {
+      console.warn('⚠️ Queue integrity service failed to start:', svcError);
+    }
   } catch (error) {
     console.error('Error initializing background services:', error);
   }

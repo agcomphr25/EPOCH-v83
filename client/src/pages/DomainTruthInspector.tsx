@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -177,6 +178,19 @@ const FLIGHT_EVENT_CONFIG = {
 export default function DomainTruthInspector() {
   const [inputId, setInputId] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [location] = useLocation();
+
+  // Auto-populate from ?orderId= query param (e.g. linked from Queue Integrity Monitor)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('orderId');
+    if (fromUrl) {
+      const id = fromUrl.trim().toUpperCase();
+      setInputId(id);
+      setActiveId(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
 
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['/api/admin/domain-truth/order', activeId],

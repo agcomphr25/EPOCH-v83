@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { seedOrderReferenceTables } from '../../seeds/orderReferenceTables';
 import { pool } from '../../db';
+import { DEPARTMENTS } from '../constants/departments';
+import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
 
 const router = Router();
 
@@ -20,17 +22,7 @@ router.post(
         success: true,
         message: 'Order reference tables (departments and statuses) have been seeded successfully.',
         details: {
-          departments: [
-            'Production Queue',
-            'Layup/Plugging',
-            'Barcode',
-            'CNC',
-            'Gunsmith',
-            'Finish',
-            'Finish QC',
-            'Shipping QC',
-            'Shipping'
-          ],
+          departments: [...DEPARTMENTS],
           statuses: [
             'Holding',
             'Finalized',
@@ -619,18 +611,15 @@ router.get(
 // GET /api/admin/queue-integrity
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MONITORED_DEPARTMENTS = [
-  'Production Queue',
-  'Layup/Plugging',
-  'Barcode',
-  'CNC',
-  'Gunsmith',
-  'Finish',
-  'Finish QC',
-  'Paint',
-  'Shipping QC',
-  'Shipping',
-];
+// Queue integrity status — lightweight summary for health widgets
+router.get(
+  '/queue-integrity/status',
+  authenticateToken,
+  requireRole('ADMIN'),
+  (_req: Request, res: Response) => {
+    res.json(getQueueIntegrityStatus());
+  }
+);
 
 router.get(
   '/queue-integrity',
@@ -652,7 +641,7 @@ router.get(
       const [deptResults, invalidRows, orphanRows] = await Promise.all([
         // ── Per-department comparisons ──────────────────────────────────────
         Promise.all(
-          MONITORED_DEPARTMENTS.map(async (dept) => {
+          DEPARTMENTS.map(async (dept) => {
             const [expectedRows, actualAllOrders, actualProdOrders] = await Promise.all([
               // Expected: canonical domain rules (what SHOULD be in this queue)
               safeQ(
@@ -693,13 +682,19 @@ router.get(
             const missingOrders = [...expectedSet].filter((id) => !actualSet.has(id));
             const unexpectedOrders = [...actualSet].filter((id) => !expectedSet.has(id));
 
+            const severity: 'CRITICAL' | 'WARNING' | 'OK' =
+              missingOrders.length > 0 ? 'CRITICAL' :
+              unexpectedOrders.length > 0 ? 'WARNING' : 'OK';
+
             return {
               department: dept,
               expectedCount: expectedSet.size,
               actualCount: actualSet.size,
+              delta: actualSet.size - expectedSet.size,
+              severity,
               missingOrders,
               unexpectedOrders,
-              ok: missingOrders.length === 0 && unexpectedOrders.length === 0,
+              ok: severity === 'OK',
             };
           })
         ),
@@ -709,12 +704,12 @@ router.get(
           `SELECT order_id, current_department AS invalid_department
            FROM all_orders
            WHERE current_department IS NOT NULL
-             AND current_department NOT IN (${MONITORED_DEPARTMENTS.map((_: string, i: number) => `$${i + 1}`).join(',')})
+             AND current_department NOT IN (${DEPARTMENTS.map((_: string, i: number) => `$${i + 1}`).join(',')})
              AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
              AND scrap_date IS NULL
              AND (is_cancelled IS NULL OR is_cancelled = false)
            ORDER BY current_department, order_id`,
-          MONITORED_DEPARTMENTS
+          [...DEPARTMENTS]
         ),
 
         // ── Orphaned orders (no department, not closed) ─────────────────────
@@ -735,7 +730,7 @@ router.get(
       res.json({
         generatedAt: new Date().toISOString(),
         summary: {
-          departmentsChecked: MONITORED_DEPARTMENTS.length,
+          departmentsChecked: DEPARTMENTS.length,
           departmentsWithMismatches: totalMismatches,
           invalidDepartmentCount: invalidRows.length,
           orphanedOrderCount: orphanRows.length,

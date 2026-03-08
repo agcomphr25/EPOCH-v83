@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { Link } from 'wouter';
 import {
   CheckCircle,
   XCircle,
@@ -11,6 +12,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Loader2,
+  Info,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,8 @@ interface DeptResult {
   department: string;
   expectedCount: number;
   actualCount: number;
+  delta: number;
+  severity: 'CRITICAL' | 'WARNING' | 'OK';
   missingOrders: string[];
   unexpectedOrders: string[];
   ok: boolean;
@@ -37,29 +41,60 @@ interface IntegrityData {
   orphanedOrders: { orderId: string; status: string; createdAt: string }[];
 }
 
+const SEVERITY_CONFIG = {
+  CRITICAL: {
+    row: 'bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30',
+    badge: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    icon: XCircle,
+    iconClass: 'text-red-500',
+    chevron: 'text-red-500',
+  },
+  WARNING: {
+    row: 'bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30',
+    badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+    icon: AlertTriangle,
+    iconClass: 'text-orange-500',
+    chevron: 'text-orange-500',
+  },
+  OK: {
+    row: 'hover:bg-gray-50 dark:hover:bg-gray-900',
+    badge: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    icon: CheckCircle,
+    iconClass: 'text-green-500',
+    chevron: 'text-transparent',
+  },
+} as const;
+
+function OrderIdLink({ id }: { id: string }) {
+  return (
+    <Link href={`/admin/domain-truth?orderId=${encodeURIComponent(id)}`}>
+      <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 rounded px-2 py-0.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 cursor-pointer transition-colors underline underline-offset-2">
+        {id}
+      </span>
+    </Link>
+  );
+}
+
 function DeptRow({ dept }: { dept: DeptResult }) {
   const [open, setOpen] = useState(false);
+  const cfg = SEVERITY_CONFIG[dept.severity];
+  const Icon = cfg.icon;
   const hasMismatch = !dept.ok;
-  const delta = dept.actualCount - dept.expectedCount;
-  const deltaStr = delta === 0 ? '±0' : delta > 0 ? `+${delta}` : `${delta}`;
+  const deltaStr = dept.delta === 0 ? '±0' : dept.delta > 0 ? `+${dept.delta}` : `${dept.delta}`;
 
   return (
     <>
       <tr
-        className={`border-b border-gray-100 dark:border-gray-800 cursor-pointer select-none transition-colors ${
-          hasMismatch
-            ? 'bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30'
-            : 'hover:bg-gray-50 dark:hover:bg-gray-900'
-        }`}
+        className={`border-b border-gray-100 dark:border-gray-800 transition-colors ${cfg.row} ${hasMismatch ? 'cursor-pointer select-none' : ''}`}
         onClick={() => hasMismatch && setOpen((o) => !o)}
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
             {hasMismatch ? (
               open ? (
-                <ChevronDown className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.chevron}`} />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.chevron}`} />
               )
             ) : (
               <span className="w-3.5" />
@@ -77,29 +112,41 @@ function DeptRow({ dept }: { dept: DeptResult }) {
         </td>
         <td className="px-4 py-3 text-center tabular-nums text-sm">
           {hasMismatch ? (
-            <span className="font-semibold text-red-600 dark:text-red-400">{deltaStr}</span>
+            <span
+              className={`font-semibold ${
+                dept.delta < 0 ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'
+              }`}
+            >
+              {deltaStr}
+            </span>
           ) : (
             <span className="text-gray-400">—</span>
           )}
         </td>
         <td className="px-4 py-3 text-center">
-          {hasMismatch ? (
-            <div className="flex items-center justify-center gap-1">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <span className="text-xs font-semibold text-red-600 dark:text-red-400">MISMATCH</span>
-            </div>
+          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded ${cfg.badge}`}>
+            <Icon className={`h-3 w-3 ${cfg.iconClass}`} />
+            {dept.severity}
+          </span>
+        </td>
+        <td className="px-4 py-3 text-center">
+          {dept.ok ? (
+            <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
           ) : (
-            <div className="flex items-center justify-center gap-1">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-xs font-semibold text-green-600 dark:text-green-400">OK</span>
-            </div>
+            <XCircle className="h-4 w-4 text-red-500 mx-auto" />
           )}
         </td>
       </tr>
 
       {open && hasMismatch && (
-        <tr className="bg-red-50/50 dark:bg-red-950/10 border-b border-red-100 dark:border-red-900/40">
-          <td colSpan={5} className="px-8 py-3">
+        <tr
+          className={`border-b border-gray-100 dark:border-gray-800 ${
+            dept.severity === 'CRITICAL'
+              ? 'bg-red-50/50 dark:bg-red-950/10'
+              : 'bg-orange-50/50 dark:bg-orange-950/10'
+          }`}
+        >
+          <td colSpan={6} className="px-8 py-3">
             <div className="grid grid-cols-2 gap-4">
               {dept.missingOrders.length > 0 && (
                 <div>
@@ -111,12 +158,7 @@ function DeptRow({ dept }: { dept: DeptResult }) {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {dept.missingOrders.map((id) => (
-                      <span
-                        key={id}
-                        className="font-mono text-xs bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 rounded px-2 py-0.5"
-                      >
-                        {id}
-                      </span>
+                      <OrderIdLink key={id} id={id} />
                     ))}
                   </div>
                 </div>
@@ -127,16 +169,11 @@ function DeptRow({ dept }: { dept: DeptResult }) {
                     Unexpected in actual queue ({dept.unexpectedOrders.length})
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Returned by the queue but not expected by domain rules (e.g. FULFILLED status).
+                    Returned by the queue but not expected (e.g. FULFILLED or cancelled orders).
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {dept.unexpectedOrders.map((id) => (
-                      <span
-                        key={id}
-                        className="font-mono text-xs bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 rounded px-2 py-0.5"
-                      >
-                        {id}
-                      </span>
+                      <OrderIdLink key={id} id={id} />
                     ))}
                   </div>
                 </div>
@@ -193,7 +230,6 @@ export default function QueueIntegrityMonitor() {
           </Button>
         </div>
 
-        {/* Loading state */}
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -201,7 +237,6 @@ export default function QueueIntegrityMonitor() {
           </div>
         )}
 
-        {/* Error state */}
         {error && (
           <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
             <div className="flex items-center gap-2 font-semibold mb-1">
@@ -259,7 +294,7 @@ export default function QueueIntegrityMonitor() {
                   Department Queue Comparison
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Expected = domain rules · Actual = what the queue API returns (all_orders + production_orders)
+                  Expected = domain rules · Actual = what the queue API returns · Click a mismatch row to expand order IDs
                 </p>
               </div>
               <table className="w-full text-sm">
@@ -278,6 +313,9 @@ export default function QueueIntegrityMonitor() {
                       Delta
                     </th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Severity
+                    </th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Status
                     </th>
                   </tr>
@@ -294,14 +332,13 @@ export default function QueueIntegrityMonitor() {
             {data.invalidDepartments.length > 0 && (
               <div className="bg-white dark:bg-gray-900 rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden">
                 <div className="px-4 py-3 border-b border-orange-100 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <Info className="h-4 w-4 text-blue-500" />
                   <h2 className="text-sm font-semibold text-orange-800 dark:text-orange-300">
-                    Invalid Departments ({data.invalidDepartments.length})
+                    Invalid Departments — INFO ({data.invalidDepartments.length})
                   </h2>
                 </div>
                 <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
-                  Active orders whose <code className="font-mono">current_department</code> is not
-                  in the known department list.
+                  Active orders whose <code className="font-mono">current_department</code> is not in the known department list.
                 </p>
                 <div className="px-4 pb-4 pt-2">
                   <div className="space-y-1">
@@ -310,9 +347,7 @@ export default function QueueIntegrityMonitor() {
                         key={i}
                         className="flex items-center gap-3 text-sm py-1.5 border-b border-gray-50 dark:border-gray-800 last:border-0"
                       >
-                        <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-0.5 text-gray-700 dark:text-gray-300">
-                          {r.orderId}
-                        </span>
+                        <OrderIdLink id={r.orderId} />
                         <span className="text-gray-400">→</span>
                         <Badge variant="outline" className="text-orange-700 border-orange-300 text-xs">
                           {r.invalidDepartment}
@@ -326,45 +361,33 @@ export default function QueueIntegrityMonitor() {
 
             {/* Orphaned orders */}
             {data.orphanedOrders.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-yellow-200 dark:border-yellow-800 overflow-hidden">
-                <div className="px-4 py-3 border-b border-yellow-100 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
-                  <h2 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
-                    Orphaned Orders ({data.orphanedOrders.length})
+              <div className="bg-white dark:bg-gray-900 rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+                <div className="px-4 py-3 border-b border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/20 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <h2 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    Orphaned Orders — CRITICAL ({data.orphanedOrders.length})
                   </h2>
                 </div>
                 <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
-                  Active orders with no <code className="font-mono">current_department</code> set —
-                  they are invisible to all department queues.
+                  Active orders with no <code className="font-mono">current_department</code> — invisible to all department queues.
                 </p>
                 <div className="px-4 pb-4 pt-2">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-gray-800">
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">
-                          Order ID
-                        </th>
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">
-                          Status
-                        </th>
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">
-                          Created
-                        </th>
+                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Order ID</th>
+                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Status</th>
+                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Created</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.orphanedOrders.map((r, i) => (
-                        <tr
-                          key={i}
-                          className="border-b border-gray-50 dark:border-gray-800 last:border-0"
-                        >
-                          <td className="py-1.5 font-mono text-gray-700 dark:text-gray-300">
-                            {r.orderId}
+                        <tr key={i} className="border-b border-gray-50 dark:border-gray-800 last:border-0">
+                          <td className="py-1.5">
+                            <OrderIdLink id={r.orderId} />
                           </td>
                           <td className="py-1.5">
-                            <Badge variant="outline" className="text-xs">
-                              {r.status}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs">{r.status}</Badge>
                           </td>
                           <td className="py-1.5 text-gray-400">
                             {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}
@@ -377,7 +400,6 @@ export default function QueueIntegrityMonitor() {
               </div>
             )}
 
-            {/* All clear for invalid/orphan sections */}
             {data.invalidDepartments.length === 0 && data.orphanedOrders.length === 0 && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-1">
                 <CheckCircle className="h-4 w-4" />

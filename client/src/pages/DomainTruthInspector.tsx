@@ -132,6 +132,78 @@ function WarningSeverityBadge({ severity }: { severity: string }) {
   return <Badge variant="outline" className="text-xs">info</Badge>;
 }
 
+// ── StatusFieldRow — collapses raw value behind a toggle ─────────────────────
+
+function StatusFieldRow({ rawValue }: { rawValue: any }) {
+  const [rawOpen, setRawOpen] = useState(false);
+  const rawStatus = extractStatus(rawValue);
+  return (
+    <div className="flex gap-2 py-1 border-b border-gray-100 dark:border-gray-800">
+      <span className="w-44 flex-shrink-0 text-xs text-gray-500 font-medium pt-0.5">status</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusBadge status={rawStatus} />
+          <span className="text-sm text-gray-700 dark:text-gray-300">{formatStatus(rawStatus)}</span>
+          <button
+            onClick={() => setRawOpen((v) => !v)}
+            className="text-xs text-gray-400 hover:text-gray-600 underline ml-1"
+          >
+            {rawOpen ? 'hide raw' : 'Raw Status Value'}
+          </button>
+        </div>
+        {rawOpen && (
+          <pre className="mt-1 text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-auto max-h-24 whitespace-pre-wrap">
+            {typeof rawValue === 'object' ? JSON.stringify(rawValue, null, 2) : String(rawValue ?? 'null')}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+
+function extractStatus(raw: any): string {
+  if (!raw) return 'UNKNOWN';
+  if (typeof raw === 'string') return raw;
+  if (raw?.props?.status) return raw.props.status;
+  if (raw?.status) return raw.status;
+  return 'UNKNOWN';
+}
+
+function formatStatus(status: string): string {
+  if (!status) return 'Unknown';
+  return status
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+// ── Order type ────────────────────────────────────────────────────────────────
+
+function getOrderType(order: any): string {
+  if (!order) return 'Unknown';
+  if (order.model_id === 'no_stock') return 'Accessory';
+  if (order.is_replacement === true) return 'Replacement';
+  return 'Stock';
+}
+
+// ── Flight recorder label ─────────────────────────────────────────────────────
+
+function getFlightEventLabel(evt: any): string {
+  if (evt.type === 'STATUS_CHANGE') {
+    const match = (evt.description ?? '').match(/→\s*(.+)$/);
+    const target = match ? match[1].trim() : '';
+    return target ? `Status changed → ${formatStatus(target)}` : 'Status Changed';
+  }
+  if (evt.type === 'DEPARTMENT_CHANGE') {
+    const match = (evt.description ?? '').match(/→\s*(.+)$/);
+    const target = match ? match[1].trim() : '';
+    return target ? `Department moved → ${target}` : 'Dept Change';
+  }
+  return (FLIGHT_EVENT_CONFIG as any)[evt.type]?.label ?? FLIGHT_EVENT_CONFIG.DEFAULT.label;
+}
+
 const FLIGHT_EVENT_CONFIG = {
   ORDER_CREATED: {
     label: 'Created',
@@ -139,6 +211,13 @@ const FLIGHT_EVENT_CONFIG = {
     dotBg: 'bg-green-100',
     dotIcon: 'text-green-600',
     badge: 'bg-green-100 text-green-800',
+  },
+  STATUS_CHANGE: {
+    label: 'Status Changed',
+    icon: Activity,
+    dotBg: 'bg-sky-100',
+    dotIcon: 'text-sky-600',
+    badge: 'bg-sky-100 text-sky-800',
   },
   DEPARTMENT_CHANGE: {
     label: 'Dept Change',
@@ -251,7 +330,7 @@ export default function DomainTruthInspector() {
   };
 
   const order = data?.order;
-  const warnings = data?.systemWarnings ?? [];
+  const warnings = (data?.systemWarnings ?? []).filter((w: any) => w.code !== 'LEGACY_TABLE_MISSING');
   const routingFlags = data?.routingFlags ?? [];
   const queueEval = data?.queueEvaluation;
   const departmentTransitions: any[] = data?.departmentTransitions ?? [];
@@ -371,8 +450,9 @@ export default function DomainTruthInspector() {
                     {order.fb_order_number && (
                       <FieldRow label="fb_order_number" value={order.fb_order_number} mono />
                     )}
-                    <FieldRow label="status" value={<StatusBadge status={order.status} />} />
-                    <FieldRow label="current_department" value={order.current_department} />
+                    <StatusFieldRow rawValue={order.status} />
+                    <FieldRow label="Order Type" value={getOrderType(order)} />
+                    <FieldRow label="Pipeline Stage" value={order.current_department ?? '—'} />
                     <FieldRow label="current_department_id" value={order.current_department_id} />
                     <FieldRow label="scrap_date" value={order.scrap_date} mono />
                     <FieldRow label="is_cancelled" value={order.is_cancelled} />
@@ -468,19 +548,35 @@ export default function DomainTruthInspector() {
                 </div>
 
                 <div className="space-y-1">
-                  {queueEval.checks.map((check: any, i: number) => (
-                    <div key={i} className="flex items-start gap-2 text-sm py-0.5">
-                      {check.result ? (
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
-                      )}
-                      <span className={`w-44 flex-shrink-0 font-medium ${check.result ? 'text-green-700' : 'text-red-700'}`}>
-                        {check.rule}
-                      </span>
-                      <span className="text-gray-500 text-xs">{check.detail}</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const isAccessory = order?.model_id === 'no_stock';
+                    const naRules = ['Layup', 'Barcode', 'CNC', 'Gunsmith'];
+                    return queueEval.checks.map((check: any, i: number) => {
+                      const isNa = isAccessory && naRules.some((r) => check.rule?.toLowerCase().includes(r.toLowerCase()));
+                      if (isNa) {
+                        return (
+                          <div key={i} className="flex items-start gap-2 text-sm py-0.5">
+                            <span className="h-4 w-4 flex-shrink-0 mt-0.5 text-center text-gray-400 font-bold text-xs leading-4">—</span>
+                            <span className="w-44 flex-shrink-0 font-medium text-gray-400">{check.rule}</span>
+                            <span className="text-gray-400 text-xs italic">N/A (Accessory order — no stock required)</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={i} className="flex items-start gap-2 text-sm py-0.5">
+                          {check.result ? (
+                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          )}
+                          <span className={`w-44 flex-shrink-0 font-medium ${check.result ? 'text-green-700' : 'text-red-700'}`}>
+                            {check.rule}
+                          </span>
+                          <span className="text-gray-500 text-xs">{check.detail}</span>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </SectionCard>
             )}
@@ -502,6 +598,11 @@ export default function DomainTruthInspector() {
                           <span className="text-xs text-gray-500 mr-2">(value: {flag.value})</span>
                         )}
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{flag.effect}</p>
+                        {flag.flag === 'no_stock_model' && (
+                          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
+                            Accessory order detected. Production steps skipped until Paint.
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -857,7 +958,7 @@ export default function DomainTruthInspector() {
                             <div className="flex items-start justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cfg.badge}`}>
-                                  {cfg.label}
+                                  {getFlightEventLabel(evt)}
                                 </span>
                                 <span className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
                                   {evt.description}

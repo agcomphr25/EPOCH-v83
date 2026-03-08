@@ -1,0 +1,285 @@
+READ-ONLY + IMPLEMENTATION PLAN AUDIT — SIMPLIFY INVENTORY ITEM PROFILE PAGE
+
+Objective
+Audit the current Inventory Item Profile implementation and design a simplified structure that separates:
+
+Item Identity
+
+Purchasing Configuration
+
+Manufacturing Usage
+
+The goal is to remove redundant conversion fields and relocate logic so the UI only asks users for true inputs, while derived values (COGS, conversion math, etc.) are calculated automatically.
+
+This audit must identify where the current fields live in the codebase and database, determine which ones are redundant, and produce a safe refactor plan that does not break purchasing, receiving, or MRP logic.
+
+This task includes analysis + refactor plan, but do NOT modify code yet.
+
+SECTION 1 — INVENTORY ITEM PROFILE ENTRY POINT
+
+Locate the UI responsible for editing inventory items.
+
+Likely files:
+
+client/src/components/inventory/EditInventoryItemModal.tsx
+client/src/components/inventory/InventoryItemEditor.tsx
+client/src/pages/inventory/InventoryItemsPage.tsx
+
+Report:
+
+• exact file path
+• React component name
+• modal or page structure
+• total lines of code
+• form library used (react-hook-form / controlled inputs / other)
+
+Identify how the modal is opened and how form state is managed.
+
+SECTION 2 — FIELD INVENTORY
+
+List all fields currently rendered on the Inventory Item page.
+
+Group them by section in the UI.
+
+Example categories:
+
+Identification
+Supplier Information
+Cost & Quantity (MRP/COGS)
+Production Line Utilization
+Compliance / Documents
+Traceability
+Cost History
+
+For each field report:
+
+• field label in UI
+• form variable name
+• database column it maps to
+• whether the field is user-editable or calculated
+
+SECTION 3 — DATABASE SCHEMA AUDIT
+
+Inspect the table:
+
+inventory_items
+
+List relevant columns including:
+
+ag_part_number
+name
+vendor_id
+supplier_part_number
+source
+secondary_source
+secondary_supplier_part_number
+
+cost_per
+latest_cost
+cogs_per_unit
+
+vendor_unit
+purchase_unit
+purchase_quantity
+consumption_rate
+usage_unit
+
+minimum_stock
+reorder_point
+
+utilized_in_pl1
+utilized_in_pl2
+
+traceability_required
+
+Report which of these fields are:
+
+• true user inputs
+• redundant conversion fields
+• derived values
+
+SECTION 4 — CONVERSION FACTOR ANALYSIS
+
+Analyze the current conversion model.
+
+Current fields:
+
+vendor_unit
+purchase_unit
+purchase_quantity
+consumption_rate
+usage_unit
+
+Determine:
+
+• what calculation the system currently performs to derive COGS
+• whether purchase_unit is actually necessary
+• whether consumption_rate and usage_unit duplicate each other
+
+Document the existing formula used to compute:
+
+cogs_per_unit
+
+SECTION 5 — DEPENDENCY ANALYSIS
+
+Search the codebase for all usages of the following fields:
+
+vendor_unit
+purchase_unit
+purchase_quantity
+consumption_rate
+usage_unit
+cogs_per_unit
+latest_cost
+
+Identify where these fields are referenced:
+
+Vendor PO receiving logic
+COGS calculation
+Inventory event engine
+MRP demand calculations
+Material readiness calculations
+Purchase order suggestions
+
+Report every file and function using these fields.
+
+SECTION 6 — PURCHASING WORKFLOW DEPENDENCIES
+
+Confirm how purchasing uses the item fields.
+
+Inspect:
+
+vendor_po_items
+vendor_pos
+inventory_item_cost_history
+
+Verify how purchase cost and vendor unit quantities are stored when receiving a PO.
+
+Confirm which fields must remain editable to support purchasing workflows.
+
+SECTION 7 — MANUFACTURING USAGE DEPENDENCIES
+
+Inspect where consumption rate / usage unit are used.
+
+Likely areas:
+
+BOM demand calculations
+MRP material planning
+productionOrderAllocationService
+inventory allocation engine
+
+Confirm whether manufacturing calculations actually require:
+
+consumption_rate
+usage_unit
+
+or if a single usage_per_item value is sufficient.
+
+SECTION 8 — SIMPLIFIED DATA MODEL PROPOSAL
+
+Design a simplified model.
+
+Target structure:
+
+Inventory Item
+├─ Identity
+├─ Purchasing
+└─ Manufacturing Usage
+
+Required fields:
+
+IDENTITY
+ag_part_number
+name
+type
+stock_item
+traceability_required
+
+PURCHASING
+vendor_id
+supplier_part_number
+vendor_unit
+purchase_quantity
+purchase_cost
+
+MANUFACTURING USAGE
+usage_per_item
+usage_unit
+
+CALCULATED
+cost_per_usage_unit
+cogs_per_unit
+
+Explain how existing fields map into this simplified model.
+
+SECTION 9 — CALCULATION DESIGN
+
+Define the new calculation logic.
+
+Example:
+
+cost_per_usage_unit =
+purchase_cost ÷ purchase_quantity
+
+cogs_per_unit =
+cost_per_usage_unit × usage_per_item
+
+Confirm which existing fields become derived values and should be read-only in the UI.
+
+SECTION 10 — UI REFACTOR PLAN
+
+Design the new layout for the Inventory Item modal.
+
+Proposed sections:
+
+Item Identity
+Purchasing Configuration
+Manufacturing Usage
+Calculated Values (read-only)
+Cost History
+
+List which current inputs move to each section.
+
+Identify fields that should be removed or hidden.
+
+SECTION 11 — MIGRATION SAFETY
+
+Determine whether any database schema changes are required.
+
+Options:
+
+A) Keep existing columns but hide redundant fields from UI
+B) Add a new column usage_per_item
+C) Deprecate purchase_unit
+
+Report safest migration strategy that avoids breaking existing data.
+
+SECTION 12 — IMPLEMENTATION PLAN
+
+Provide a step-by-step implementation plan including:
+
+UI changes in EditInventoryItemModal
+
+form field removals
+
+derived field calculations
+
+backend validation updates
+
+database migration if needed
+
+List files that must be modified.
+
+SECTION 13 — FINAL OUTPUT
+
+Produce:
+
+full audit of current item profile architecture
+
+list of redundant fields
+
+simplified inventory item data model
+
+UI redesign layout
+
+safe implementation plan

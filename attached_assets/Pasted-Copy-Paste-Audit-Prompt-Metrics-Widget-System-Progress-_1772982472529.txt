@@ -1,0 +1,212 @@
+Copy-Paste Audit Prompt — Metrics & Widget System Progress
+Writing
+
+You are performing a READ-ONLY architectural audit of the EPOCH codebase to evaluate the progress of implementing the Metrics and Widget system.
+
+IMPORTANT:
+This is a discovery audit only. Do NOT modify any files.
+
+Your goal is to determine:
+
+What new metrics infrastructure has been implemented
+
+What parts of the architecture are still missing
+
+Whether the system is now capable of supporting reusable dashboard widgets
+
+PHASE 1 — SEARCH FOR METRICS INFRASTRUCTURE
+
+Scan the repository for the following patterns:
+
+metricsService
+metricService
+metricRegistry
+metrics_registry
+metric_snapshots
+/api/metrics
+useMetric
+WidgetRegistry
+WidgetRenderer
+MetricWidget
+StatWidget
+DashboardWidget
+
+Also search for new files created recently that include:
+
+metrics
+widget
+kpi
+dashboard metrics
+
+For every discovery provide:
+
+FILE PATH
+TYPE (service, route, component, table, hook)
+PURPOSE
+KEY FUNCTIONS
+DEPENDENCIES
+
+PHASE 2 — VERIFY METRIC CALCULATION LAYER
+
+Determine whether a reusable metric calculation layer now exists.
+
+Look for files such as:
+
+server/src/services/metricsService.ts
+server/src/services/kpiService.ts
+server/src/services/dashboardMetrics.ts
+
+If found, extract:
+
+• function names
+• SQL queries or ORM queries used
+• which operational tables they read from
+
+List all metric functions discovered.
+
+PHASE 3 — VERIFY METRIC REGISTRY
+
+Search for any registry or dictionary mechanism.
+
+Possible forms:
+
+database table:
+metrics_registry
+metric_definitions
+metric_catalog
+
+or code registry such as:
+
+metricRegistry.ts
+metrics.ts
+dashboardMetrics.ts
+
+Determine whether metrics are:
+
+A) dynamically registered
+B) hardcoded
+C) still embedded in route handlers
+
+PHASE 4 — VERIFY METRIC API
+
+Search server routes for any centralized metric endpoint.
+
+Examples:
+
+/api/metrics/
+/api/metrics
+/api/dashboard/metrics
+/api/kpi
+
+If found, document:
+
+route path
+controller file
+logic flow
+which services it calls
+
+Determine whether dashboards can fetch metrics from one API instead of many.
+
+PHASE 5 — VERIFY FRONTEND METRIC CONSUMPTION
+
+Search the frontend for:
+
+useMetric
+useMetrics
+metric hooks
+widget components
+
+Identify:
+
+client hooks
+React Query usage
+metric fetching pattern
+
+Determine whether widgets share a common data layer.
+
+PHASE 6 — VERIFY WIDGET SYSTEM
+
+Search for a widget architecture.
+
+Look for:
+
+widgetRegistry
+widgetConfig
+dashboardLayout
+widgetRenderer
+widget definitions
+
+Determine whether dashboards are:
+
+A) still hardcoded pages
+B) dynamically composed from widgets
+C) partially converted
+
+PHASE 7 — IDENTIFY REMAINING INLINE METRICS
+
+Search for SQL aggregations still embedded in routes.
+
+Patterns:
+
+COUNT(
+SUM(
+AVG(
+GROUP BY
+
+Look particularly in:
+
+server/src/routes
+server/src/controllers
+
+List any remaining endpoints that compute metrics directly instead of using a metric service.
+
+PHASE 8 — ARCHITECTURE SUMMARY
+
+Produce the following sections:
+
+SECTION 1 — New Metrics Infrastructure
+SECTION 2 — Metric Calculation Functions
+SECTION 3 — Metric Registry Status
+SECTION 4 — Metric API Status
+SECTION 5 — Frontend Metric Hook Usage
+SECTION 6 — Widget System Status
+SECTION 7 — Remaining Inline Metric Calculations
+
+PHASE 9 — GAP ANALYSIS
+
+Based on the findings, identify which components of the intended architecture are still missing.
+
+Target architecture:
+
+Operational Tables
+↓
+Metric Calculation Layer
+↓
+Metric Registry
+↓
+Metric API
+↓
+Widget Registry
+↓
+Dashboard Layout System
+
+Indicate which layers are:
+
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+NOT IMPLEMENTED
+
+PHASE 10 — NEXT IMPLEMENTATION STEPS
+
+Provide a prioritized list of the next steps required to complete the metrics architecture.
+
+Focus on:
+
+metric service completion
+metric registry
+central metrics API
+widget registry
+dashboard composition
+
+This audit is READ-ONLY.
+Do not generate code changes.

@@ -65,7 +65,7 @@ router.get(
   authenticateToken,
   requireRole('ADMIN'),
   async (req: Request, res: Response) => {
-    const { orderId } = req.params;
+    const orderId = req.params.orderId.trim().toUpperCase();
 
     try {
       // pool.query() from server/db.ts returns the rows array directly (not { rows: [...] })
@@ -432,7 +432,7 @@ router.get(
   authenticateToken,
   requireRole('ADMIN'),
   async (req: Request, res: Response) => {
-    const { orderId } = req.params;
+    const orderId = req.params.orderId.trim().toUpperCase();
 
     try {
       const safeQ = async (sql: string, params: any[]): Promise<any[]> => {
@@ -773,7 +773,7 @@ router.get(
   async (req: Request, res: Response) => {
     const { orderId, department } = req.params;
     try {
-      const searchId = orderId.toUpperCase();
+      const searchId = orderId.trim().toUpperCase();
       const rows = (await pool.query(
         `SELECT * FROM all_orders WHERE order_id = $1 OR fb_order_number = $1 LIMIT 1`,
         [searchId]

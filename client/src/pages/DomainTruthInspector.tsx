@@ -270,6 +270,57 @@ const FLIGHT_EVENT_CONFIG = {
   },
 };
 
+// ── Timeline helpers ──────────────────────────────────────────────────────────
+
+const EVENT_COLORS: Record<string, string> = {
+  DEPARTMENT_CHANGE:  'bg-blue-500',
+  STATUS_CHANGE:      'bg-cyan-500',
+  DEPT_ENTERED:       'bg-green-500',
+  ENTERED_DEPARTMENT: 'bg-green-500',
+  DEPT_EXITED:        'bg-purple-500',
+  EXITED_DEPARTMENT:  'bg-purple-500',
+  BADGE_SCAN:         'bg-orange-500',
+  AUDIT_EVENT:        'bg-gray-400',
+  ORDER_CREATED:      'bg-green-600',
+  FIELD_CHANGE:       'bg-blue-400',
+};
+
+const EVENT_ICONS: Record<string, any> = {
+  DEPARTMENT_CHANGE:  GitBranch,
+  STATUS_CHANGE:      Activity,
+  DEPT_ENTERED:       LogIn,
+  ENTERED_DEPARTMENT: LogIn,
+  DEPT_EXITED:        LogOut,
+  EXITED_DEPARTMENT:  LogOut,
+  BADGE_SCAN:         Scan,
+  AUDIT_EVENT:        Shield,
+  ORDER_CREATED:      Star,
+  FIELD_CHANGE:       PenLine,
+};
+
+function formatFlightTs(ts: Date): string {
+  return ts.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
+    ' ' + ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function minutesBetween(a: string | null | undefined, b: string | null | undefined): number | null {
+  if (!a || !b) return null;
+  const diff = (new Date(b).getTime() - new Date(a).getTime()) / 60000;
+  return Math.round(diff);
+}
+
+function sameMinuteAndType(a: any, b: any): boolean {
+  if (!a || !b || a.type !== b.type) return false;
+  if (!a.timestamp || !b.timestamp) return false;
+  const ma = new Date(a.timestamp);
+  const mb = new Date(b.timestamp);
+  return ma.getFullYear() === mb.getFullYear() &&
+    ma.getMonth() === mb.getMonth() &&
+    ma.getDate() === mb.getDate() &&
+    ma.getHours() === mb.getHours() &&
+    ma.getMinutes() === mb.getMinutes();
+}
+
 export default function DomainTruthInspector() {
   const [inputId, setInputId] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -912,80 +963,121 @@ export default function DomainTruthInspector() {
                 </div>
               ) : flightEvents.length === 0 ? (
                 <p className="text-sm text-gray-400 italic">No recorded events found for this order.</p>
-              ) : (
-                <div className="relative">
-                  {/* Order identity header */}
-                  <div className="flex items-center gap-4 mb-3 text-xs font-mono">
-                    <span>
-                      <span className="text-gray-400">Order:</span>{' '}
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
-                        {flightData?.resolvedId ?? flightData?.orderId}
-                      </span>
-                    </span>
-                    {flightData?.orderId && flightData?.resolvedId && flightData.orderId !== flightData.resolvedId && (
-                      <span>
-                        <span className="text-gray-400">FB Order:</span>{' '}
-                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                          {flightData.orderId}
+              ) : (() => {
+                const sources = [...new Set(flightEvents.map((e: any) => e.source).filter(Boolean))];
+
+                return (
+                  <div>
+                    {/* ── Summary header ─────────────────────────────────────── */}
+                    <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-3 flex-wrap mb-2">
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                          {flightEvents.length} event{flightEvents.length !== 1 ? 's' : ''} recorded
                         </span>
-                      </span>
-                    )}
-                  </div>
-                  {/* Event count summary */}
-                  <p className="text-xs text-gray-400 mb-4">
-                    {flightEvents.length} event{flightEvents.length !== 1 ? 's' : ''} recorded across all sources
-                  </p>
+                        {flightData?.orderId && flightData?.resolvedId && flightData.orderId !== flightData.resolvedId && (
+                          <span className="text-xs text-gray-500 font-mono">
+                            FB: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{flightData.orderId}</span>
+                            {' → '}<span className="font-semibold text-gray-700 dark:text-gray-300">{flightData.resolvedId}</span>
+                          </span>
+                        )}
+                      </div>
+                      {sources.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-400">Sources:</span>
+                          {sources.map((s: any) => (
+                            <span key={s} className="text-xs font-mono bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded px-1.5 py-0.5">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Vertical timeline */}
-                  <div className="relative pl-8">
-                    {/* Spine line */}
-                    <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" />
+                    {/* ── Vertical timeline ──────────────────────────────────── */}
+                    <div className="relative pl-10">
+                      {/* Spine line */}
+                      <div className="absolute left-4 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700" />
 
-                    {flightEvents.map((evt: any, i: number) => {
-                      const cfg = (FLIGHT_EVENT_CONFIG as any)[evt.type] as typeof FLIGHT_EVENT_CONFIG.DEFAULT ?? FLIGHT_EVENT_CONFIG.DEFAULT;
-                      const Icon = cfg.icon;
-                      const ts = evt.timestamp ? new Date(evt.timestamp) : null;
+                      {flightEvents.map((evt: any, i: number) => {
+                        const prevEvt = flightEvents[i - 1] as any | undefined;
+                        const EvtIcon = EVENT_ICONS[evt.type] ?? HelpCircle;
+                        const dotColor = EVENT_COLORS[evt.type] ?? 'bg-gray-400';
+                        const ts = evt.timestamp ? new Date(evt.timestamp) : null;
+                        const isGrouped = i > 0 && sameMinuteAndType(prevEvt, evt);
+                        const delta = i > 0 && !isGrouped
+                          ? minutesBetween(prevEvt?.timestamp, evt.timestamp)
+                          : null;
+                        const label = getFlightEventLabel(evt);
+                        const cfg = (FLIGHT_EVENT_CONFIG as any)[evt.type] ?? FLIGHT_EVENT_CONFIG.DEFAULT;
 
-                      return (
-                        <div key={i} className="relative mb-4 last:mb-0 group">
-                          {/* Dot on spine */}
-                          <div className={`absolute -left-5 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${cfg.dotBg}`}>
-                            <Icon className={`h-2.5 w-2.5 ${cfg.dotIcon}`} />
-                          </div>
-
-                          {/* Event card */}
-                          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-md px-3 py-2 group-hover:border-gray-300 dark:group-hover:border-gray-600 transition-colors">
-                            <div className="flex items-start justify-between gap-2 flex-wrap">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cfg.badge}`}>
-                                  {getFlightEventLabel(evt)}
-                                </span>
-                                <span className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
-                                  {evt.description}
+                        return (
+                          <div key={i}>
+                            {/* Time delta between events */}
+                            {delta !== null && (
+                              <div className="flex items-center gap-2 my-1.5 ml-1">
+                                <span className="text-gray-300 dark:text-gray-600 text-xs">↓</span>
+                                <span className="text-xs text-gray-400">
+                                  {delta === 0 ? '< 1m' : delta === 1 ? '1m' : `${delta}m`}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 text-right">
-                                {evt.actor && (
-                                  <span className="text-xs text-gray-500 font-mono">{evt.actor}</span>
+                            )}
+
+                            {/* Event node */}
+                            <div className={`relative flex gap-3 ${isGrouped ? 'mt-1.5' : i === 0 ? 'mt-0' : 'mt-3'} group`}>
+                              {/* Colored dot on spine */}
+                              <div className={`absolute -left-6 top-2 w-4 h-4 rounded-full ${dotColor} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                                <EvtIcon className="h-2.5 w-2.5 text-white" />
+                              </div>
+
+                              {/* Event card */}
+                              <div className="flex-1 min-w-0 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-md px-3 py-2.5 group-hover:border-gray-300 dark:group-hover:border-gray-600 transition-colors">
+                                {/* Title row */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <EvtIcon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug">
+                                    {label}
+                                  </span>
+                                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${cfg.badge} ml-auto flex-shrink-0`}>
+                                    {evt.type ?? 'EVENT'}
+                                  </span>
+                                </div>
+
+                                {/* Description (if different from label) */}
+                                {evt.description && evt.description !== label && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                                    {evt.description}
+                                  </p>
                                 )}
-                                {ts ? (
-                                  <div className="text-right">
-                                    <div className="text-xs text-gray-400 font-mono whitespace-nowrap">
-                                      {ts.toLocaleDateString()} {ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-gray-300 italic">no timestamp</span>
-                                )}
+
+                                {/* Meta row: timestamp · actor · source */}
+                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                  {ts ? (
+                                    <span className="text-xs text-gray-400 font-mono whitespace-nowrap">
+                                      {formatFlightTs(ts)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-300 italic">no timestamp</span>
+                                  )}
+                                  {evt.actor && (
+                                    <span className="text-xs text-gray-500">
+                                      Actor: <span className="font-mono">{evt.actor}</span>
+                                    </span>
+                                  )}
+                                  {evt.source && (
+                                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 rounded px-1 font-mono">
+                                      {evt.source}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </SectionCard>
 
           </div>

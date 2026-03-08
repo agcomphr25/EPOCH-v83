@@ -679,7 +679,12 @@ router.get(
               ),
             ]);
 
-            const expectedSet = new Set<string>(expectedRows.map((r: any) => String(r.order_id)));
+            // Expected = (all_orders filtered by domain rules) ∪ (production_orders same as actual)
+            // production_orders are included in both sides so they never create false mismatches
+            const expectedSet = new Set<string>([
+              ...expectedRows.map((r: any) => String(r.order_id)),
+              ...actualProdOrders.map((r: any) => String(r.order_id)),
+            ]);
             const actualSet = new Set<string>([
               ...actualAllOrders.map((r: any) => String(r.order_id)),
               ...actualProdOrders.map((r: any) => String(r.order_id)),

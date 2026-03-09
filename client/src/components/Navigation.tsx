@@ -829,10 +829,22 @@ export default function Navigation() {
       description: 'Accounts Payable transactions',
     },
     {
-      path: '/finance/ar',
+      path: '/finance/ar-journal',
       label: 'AR Journal',
       icon: DollarSign,
       description: 'Accounts Receivable transactions',
+    },
+    {
+      path: '/finance/invoices',
+      label: 'Invoices (AR)',
+      icon: FileText,
+      description: 'Accounts Receivable invoices and tracking',
+    },
+    {
+      path: '/finance/ar-aging',
+      label: 'AR Aging',
+      icon: FileText,
+      description: 'Accounts Receivable aging summary',
     },
     {
       path: '/finance/cogs',

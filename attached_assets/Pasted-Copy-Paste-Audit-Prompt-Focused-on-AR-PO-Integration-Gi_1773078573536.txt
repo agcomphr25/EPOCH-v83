@@ -1,0 +1,213 @@
+Copy-Paste Audit Prompt (Focused on AR + PO Integration)
+
+Give this to your Replit agent.
+
+Writing
+
+ROLE
+
+You are conducting a READ-ONLY architectural audit of the EPOCH codebase to prepare for implementing:
+
+• Invoice payment allocation
+• AR aging dashboard
+• Customer PO selection in the invoice form
+• PDF uploads using the existing document storage system
+
+Do NOT modify code.
+
+Your job is to identify where the relevant systems already exist so the new invoice module can integrate with them.
+
+PROJECT CONTEXT
+
+The invoice module already exists with these tables:
+
+invoices
+invoice_lines
+
+Next features to implement:
+
+Payment allocation (one payment applied to multiple invoices)
+
+AR aging dashboard
+
+Invoice form PO selector that loads POs for the selected customer
+
+Attach invoice PDFs using the existing document storage system
+
+Terms dropdown (Net 30, Net 45 etc) with due date auto calculation
+
+PHASE 1 — FIND CUSTOMER PURCHASE ORDERS
+
+Search for tables and schemas containing:
+
+po
+purchase_order
+customer_po
+p2_po
+p1_po
+
+Identify:
+
+• table names
+• schema definitions
+• primary keys
+• customer_id fields
+• PO number fields
+
+Also identify which tables represent customer POs (not vendor POs).
+
+Output:
+
+PO tables
+columns
+relationships to customers
+
+Example output:
+
+customer_po table
+customer_id
+po_number
+status
+
+PHASE 2 — DETERMINE HOW POs CONNECT TO SHIPMENTS
+
+Search shipment tables.
+
+Find:
+
+shipment
+packing_slip
+shipping
+
+Identify:
+
+• whether shipments reference po_id
+• whether shipments reference order_id
+• which field links shipments to POs
+
+Output the relationship chain.
+
+Example:
+
+customer → po → production_order → shipment
+
+PHASE 3 — PAYMENT SYSTEM AUDIT
+
+Search for payment-related tables:
+
+payment
+payments
+transactions
+finance
+ledger
+credit_memo
+
+Identify:
+
+• payment tables
+• schema definitions
+• fields for customer_id
+• fields for payment amount
+• fields for reference numbers
+
+Determine whether payments currently link to:
+
+orders
+credit memos
+anything else
+
+Output the payment schema.
+
+PHASE 4 — DOCUMENT STORAGE SYSTEM
+
+Search for document and upload systems.
+
+Keywords:
+
+documents
+uploads
+file_storage
+document_links
+
+Identify:
+
+• document tables
+• storage provider (local filesystem, S3, etc)
+• upload endpoints
+• UI components used for file upload
+• how documents attach to entities
+
+Confirm whether invoices can attach documents using:
+
+entity_type = "invoice"
+
+PHASE 5 — TERMS / PAYMENT TERMS
+
+Search the codebase for:
+
+terms
+payment_terms
+net30
+net45
+
+Identify whether:
+
+• customers already store payment terms
+• any dropdown components already exist
+• terms calculation utilities exist
+
+Output findings.
+
+PHASE 6 — AR CALCULATION
+
+Determine how AR could be calculated.
+
+Confirm whether the system already has:
+
+payments table
+invoice tables
+ledger entries
+
+Identify what fields exist for:
+
+invoice total
+payment amount
+
+Determine the best way to calculate:
+
+invoice balance
+customer AR balance
+
+PHASE 7 — UI COMPONENTS
+
+Find reusable UI components for:
+
+dropdown selectors
+date pickers
+table editors
+file uploads
+
+These should be reused in the invoice form.
+
+FINAL REPORT
+
+Provide a structured summary including:
+
+Table storing customer POs
+
+Fields needed to populate the invoice PO dropdown
+
+Payment table schema
+
+Recommended invoice_payment_allocations table
+
+Document upload endpoints and UI components
+
+Whether payment terms already exist in customer records
+
+Best way to calculate AR aging
+
+Also provide recommended API endpoints for:
+
+GET /api/customer-pos?customer_id=
+GET /api/ar-aging

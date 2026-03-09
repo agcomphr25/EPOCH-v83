@@ -190,6 +190,33 @@ const REGISTRY: Array<{
     defaultVisual: 'stat_card',
     isLive: true,
   },
+  {
+    slug: 'ar_total_outstanding',
+    name: 'AR Outstanding',
+    description: 'Total outstanding accounts receivable balance across all open invoices',
+    category: 'finance',
+    unit: 'dollars',
+    defaultVisual: 'stat_card',
+    isLive: true,
+  },
+  {
+    slug: 'ar_overdue_count',
+    name: 'AR Overdue Invoices',
+    description: 'Number of invoices past their due date',
+    category: 'finance',
+    unit: 'invoices',
+    defaultVisual: 'stat_card',
+    isLive: true,
+  },
+  {
+    slug: 'ar_open_invoice_count',
+    name: 'AR Open Invoices',
+    description: 'Total number of unpaid/unvoided invoices',
+    category: 'finance',
+    unit: 'invoices',
+    defaultVisual: 'stat_card',
+    isLive: true,
+  },
 ];
 
 // ─── Startup tasks ─────────────────────────────────────────────────────────────

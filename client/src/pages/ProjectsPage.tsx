@@ -106,10 +106,10 @@ export default function ProjectsPage() {
     mutationFn: async (data: typeof newProject) => {
       return apiRequest('/api/projects', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           ...data,
           projectManagerId: data.projectManagerId ? parseInt(data.projectManagerId) : null,
-        }),
+        },
       });
     },
     onSuccess: () => {
@@ -312,14 +312,14 @@ export default function ProjectsPage() {
       )}
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
               Start a new P2 project workflow. All steps will be created automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-y-auto flex-1 pr-2">
             <div className="space-y-2">
               <Label htmlFor="projectName">Project Name *</Label>
               <Input

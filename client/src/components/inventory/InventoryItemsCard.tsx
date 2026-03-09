@@ -2119,13 +2119,16 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         </div>
       ) : (
         <>
-        <div style={{ overflowX: 'scroll', border: '3px solid red', marginBottom: '8px' }}>
-          <div style={{ width: '2000px', height: '30px', background: 'linear-gradient(to right, red, orange, yellow, green, blue, purple)' }}>
-            TEST SCROLL — if you can scroll this colored bar, scrolling works
+        <div style={{ overflow: 'hidden', width: '100%' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'hidden', border: '3px solid red', marginBottom: '8px' }}>
+            <div style={{ width: '2000px', height: '30px', background: 'linear-gradient(to right, red, orange, yellow, green, blue, purple)' }}>
+              TEST SCROLL — if you can scroll this colored bar, scrolling works
+            </div>
           </div>
         </div>
-        <div style={{ overflowX: 'scroll', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
+        <div style={{ overflow: 'hidden', width: '100%' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
@@ -2481,6 +2484,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         </>
       )}

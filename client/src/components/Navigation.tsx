@@ -117,8 +117,7 @@ export default function Navigation() {
     const hostname = window.location.hostname;
     const isLocalhost =
       hostname.includes('localhost') || hostname.includes('127.0.0.1');
-    const isReplitEditor =
-      hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+    const isReplitEditor = hostname.includes('replit.dev');
     return !isLocalhost && !isReplitEditor;
   };
 
@@ -130,18 +129,25 @@ export default function Navigation() {
         localStorage.getItem('sessionToken') ||
         localStorage.getItem('jwtToken');
 
-      // In development, check localStorage for a stored username
       if (!isDeploymentEnvironment()) {
         const storedUsername = localStorage.getItem('dev_username');
         if (storedUsername) {
           return { username: storedUsername };
         }
-        return null;
+        try {
+          const response = await fetch('/api/auth/session', {
+            credentials: 'include',
+          });
+          if (response.ok) {
+            return await response.json();
+          }
+        } catch (error) {
+          // Fall through to default
+        }
+        return { username: 'admin', role: 'ADMIN' };
       }
 
       try {
-        // Use credentials: 'include' to support cookie-based auth (Microsoft login)
-        // Also send Authorization header for token-based auth
         const response = await fetch('/api/auth/session', {
           credentials: 'include',
           headers: token

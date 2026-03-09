@@ -41,8 +41,7 @@ function isDeploymentEnvironment(): boolean {
   const hostname = window.location.hostname;
   const isLocalhost =
     hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor =
-    hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+  const isReplitEditor = hostname.includes('replit.dev');
   return !isLocalhost && !isReplitEditor;
 }
 
@@ -102,9 +101,19 @@ export default function RouteGuard({ children }: RouteGuardProps) {
             employeeId: null 
           };
         }
+        try {
+          const response = await fetch('/api/auth/session', {
+            credentials: 'include',
+          });
+          if (response.ok) {
+            return await response.json();
+          }
+        } catch (error) {
+          // Fall through to anonymous default
+        }
         return { 
           id: 0, 
-          username: 'anonymous', 
+          username: 'admin', 
           role: 'ADMIN',
           employeeId: null 
         };

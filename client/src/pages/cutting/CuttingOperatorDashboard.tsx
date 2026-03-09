@@ -386,27 +386,44 @@ export default function CuttingOperatorDashboard() {
                   }
                   .part-number { font-size: 7pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                   .info { font-size: 6pt; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                  .barcode { max-width: 100%; height: 0.28in; display: block; margin: 2px auto; }
+                  .barcode { width: 2.4in; height: 0.4in; display: block; margin: 2px auto; }
+                  .barcode-text { font-size: 5pt; text-align: center; font-family: monospace; margin: 0; }
                   @media print { .label { border: none; } }
                 </style>
               </head>
               <body>
                 <div class="labels-container">
-                ${data.labels.map((label: any) => `
+                ${data.labels.map((label: any) => {
+                  const esc = (s: string) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                  return `
                   <div class="label">
-                    <div class="part-number">${label.partNumber}</div>
-                    <div class="info">${label.partName}</div>
-                    ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div class="info">${label.barcodeValue}</div>`}
-                    <div class="info">Lot: ${label.fabricLot || 'N/A'} | Roll: ${label.fabricRoll || 'N/A'}</div>
+                    <div class="part-number">${esc(label.partNumber)}</div>
+                    ${label.barcodeImage ? `<img class="barcode" src="${esc(label.barcodeImage)}" alt="barcode" /><div class="barcode-text">${esc(label.barcodeValue)}</div>` : `<div class="info" style="font-family:monospace;font-size:7pt;">${esc(label.barcodeValue)}</div>`}
+                    <div class="info">Lot: ${esc(label.fabricLot || 'N/A')} | Roll: ${esc(label.fabricRoll || 'N/A')}</div>
                     <div class="info">${new Date().toLocaleDateString()}</div>
-                  </div>
-                `).join('')}
+                  </div>`;
+                }).join('')}
                 </div>
+                <script>
+                  function waitForImages() {
+                    var imgs = document.querySelectorAll('img.barcode');
+                    if (imgs.length === 0) { window.print(); return; }
+                    var loaded = 0;
+                    imgs.forEach(function(img) {
+                      if (img.complete) { loaded++; if (loaded === imgs.length) window.print(); }
+                      else {
+                        img.onload = function() { loaded++; if (loaded === imgs.length) window.print(); };
+                        img.onerror = function() { loaded++; if (loaded === imgs.length) window.print(); };
+                      }
+                    });
+                  }
+                  if (document.readyState === 'complete') waitForImages();
+                  else window.addEventListener('load', waitForImages);
+                </script>
               </body>
             </html>
           `);
           printWindow.document.close();
-          printWindow.print();
         }
       }
       toast({ title: 'Labels Generated', description: `${data.count} labels ready to print.` });
@@ -461,7 +478,8 @@ export default function CuttingOperatorDashboard() {
                   }
                   .part-number { font-size: 8pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                   .info { font-size: 6pt; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                  .barcode { max-width: 100%; height: 0.28in; display: block; margin: 2px auto; }
+                  .barcode { width: 2.4in; height: 0.4in; display: block; margin: 2px auto; }
+                  .barcode-text { font-size: 5pt; text-align: center; font-family: monospace; margin: 0; }
                   @media print { .label { border: none; } }
                 </style>
               </head>
@@ -472,17 +490,31 @@ export default function CuttingOperatorDashboard() {
                   return `
                   <div class="label">
                     <div class="part-number">${esc(label.partNumber)} — ${label.sequenceNumber}/${label.quantityRequested}</div>
-                    <div class="info">${esc(label.partName)}</div>
-                    ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div class="info">${esc(label.barcodeValue)}</div>`}
+                    ${label.barcodeImage ? `<img class="barcode" src="${esc(label.barcodeImage)}" alt="barcode" /><div class="barcode-text">${esc(label.barcodeValue)}</div>` : `<div class="info" style="font-family:monospace;font-size:7pt;">${esc(label.barcodeValue)}</div>`}
                     <div class="info">Due: ${label.dueDate ? new Date(label.dueDate).toLocaleDateString() : 'N/A'}</div>
                   </div>`;
                 }).join('')}
                 </div>
+                <script>
+                  function waitForImages() {
+                    var imgs = document.querySelectorAll('img.barcode');
+                    if (imgs.length === 0) { window.print(); return; }
+                    var loaded = 0;
+                    imgs.forEach(function(img) {
+                      if (img.complete) { loaded++; if (loaded === imgs.length) window.print(); }
+                      else {
+                        img.onload = function() { loaded++; if (loaded === imgs.length) window.print(); };
+                        img.onerror = function() { loaded++; if (loaded === imgs.length) window.print(); };
+                      }
+                    });
+                  }
+                  if (document.readyState === 'complete') waitForImages();
+                  else window.addEventListener('load', waitForImages);
+                </script>
               </body>
             </html>
           `);
           printWindow.document.close();
-          printWindow.print();
         }
       }
       setSelectedPrintIds([]);

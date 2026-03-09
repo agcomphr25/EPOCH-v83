@@ -1718,27 +1718,43 @@ export default function CuttingOperatorDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => {
+                  const allIds = mfgQueueItems
+                    .filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS')
+                    .map(i => i.id);
+                  if (allIds.length > 0) bulkPrintBarcodesMutation.mutate(allIds);
+                }}
+                disabled={bulkPrintBarcodesMutation.isPending || mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length === 0}
+                data-testid="button-print-all-barcodes"
+              >
+                <Printer className="h-4 w-4 mr-1" />
+                {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print All Barcodes'}
+              </Button>
               {selectedPrintIds.length > 0 && (
                 <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => bulkPrintBarcodesMutation.mutate(selectedPrintIds)}
                   disabled={bulkPrintBarcodesMutation.isPending}
                   data-testid="button-bulk-print-barcodes"
                 >
                   <Printer className="h-4 w-4 mr-1" />
-                  {bulkPrintBarcodesMutation.isPending ? 'Printing...' : `Print ${selectedPrintIds.length} Barcode(s)`}
+                  {`Print ${selectedPrintIds.length} Selected`}
                 </Button>
               )}
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={selectAllPendingForPrint}
                 data-testid="button-select-all-print"
               >
                 <Barcode className="h-4 w-4 mr-1" />
                 {selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length && selectedPrintIds.length > 0 
                   ? 'Deselect All' 
-                  : 'Select All for Print'}
+                  : 'Select'}
               </Button>
             </div>
           </div>

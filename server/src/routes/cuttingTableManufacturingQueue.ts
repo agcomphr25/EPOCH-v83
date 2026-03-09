@@ -725,11 +725,13 @@ router.post('/sync-p2-demands', async (req: Request, res: Response) => {
 // Bulk print barcodes for scheduled packet queue items
 router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
   try {
-    const { queueIds } = req.body;
+    const { queueIds, quantities } = req.body;
     
     if (!queueIds || !Array.isArray(queueIds) || queueIds.length === 0) {
       return res.status(400).json({ error: 'At least one queue ID is required' });
     }
+    
+    const printQuantities: Record<number, number> = quantities || {};
     
     const queueItems = await db
       .select({
@@ -750,7 +752,8 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
     
     for (const row of queueItems) {
       const partNumber = row.item?.agPartNumber || 'UNK';
-      const qty = row.queue.quantityRequested || 1;
+      const maxQty = row.queue.quantityRequested || 1;
+      const qty = printQuantities[row.queue.id] ? Math.min(printQuantities[row.queue.id], maxQty) : maxQty;
       
       for (let seq = 1; seq <= qty; seq++) {
         const barcodeValue = `MFG-${row.queue.id}-${partNumber}-${seq}`;

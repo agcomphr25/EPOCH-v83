@@ -168,6 +168,7 @@ export default function CuttingOperatorDashboard() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedPrintIds, setSelectedPrintIds] = useState<number[]>([]);
+  const [printQuantities, setPrintQuantities] = useState<Record<number, number>>({});
   const [packetScanBarcode, setPacketScanBarcode] = useState("");
   const [activeScannedPacket, setActiveScannedPacket] = useState<any>(null);
   const [materialScanBarcode, setMaterialScanBarcode] = useState("");
@@ -433,10 +434,10 @@ export default function CuttingOperatorDashboard() {
   });
 
   const bulkPrintBarcodesMutation = useMutation({
-    mutationFn: async (queueIds: number[]) => {
+    mutationFn: async ({ queueIds, quantities }: { queueIds: number[], quantities?: Record<number, number> }) => {
       return apiRequest('/api/cutting-table-mfg-queue/bulk-print-barcodes', {
         method: 'POST',
-        body: JSON.stringify({ queueIds }),
+        body: JSON.stringify({ queueIds, quantities }),
       });
     },
     onSuccess: (data: any) => {
@@ -1722,22 +1723,21 @@ export default function CuttingOperatorDashboard() {
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  const allIds = mfgQueueItems
-                    .filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS')
-                    .map(i => i.id);
-                  if (allIds.length > 0) bulkPrintBarcodesMutation.mutate(allIds);
+                  const printableItems = mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS');
+                  const allIds = printableItems.map(i => i.id);
+                  if (allIds.length > 0) bulkPrintBarcodesMutation.mutate({ queueIds: allIds, quantities: printQuantities });
                 }}
                 disabled={bulkPrintBarcodesMutation.isPending || mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length === 0}
                 data-testid="button-print-all-barcodes"
               >
                 <Printer className="h-4 w-4 mr-1" />
-                {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print All Barcodes'}
+                {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print Barcodes'}
               </Button>
               {selectedPrintIds.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => bulkPrintBarcodesMutation.mutate(selectedPrintIds)}
+                  onClick={() => bulkPrintBarcodesMutation.mutate({ queueIds: selectedPrintIds, quantities: printQuantities })}
                   disabled={bulkPrintBarcodesMutation.isPending}
                   data-testid="button-bulk-print-barcodes"
                 >
@@ -1745,17 +1745,6 @@ export default function CuttingOperatorDashboard() {
                   {`Print ${selectedPrintIds.length} Selected`}
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={selectAllPendingForPrint}
-                data-testid="button-select-all-print"
-              >
-                <Barcode className="h-4 w-4 mr-1" />
-                {selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length && selectedPrintIds.length > 0 
-                  ? 'Deselect All' 
-                  : 'Select'}
-              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1789,6 +1778,7 @@ export default function CuttingOperatorDashboard() {
                     <TableHead>Name</TableHead>
                     <TableHead className="text-center">Progress</TableHead>
                     <TableHead className="text-center">Cuts</TableHead>
+                    <TableHead className="text-center w-24"># to Print</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-center">Priority</TableHead>
                     <TableHead>Due Date</TableHead>
@@ -1833,6 +1823,25 @@ export default function CuttingOperatorDashboard() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.quantityOrdered}
+                            value={printQuantities[item.id] ?? item.quantityOrdered}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setPrintQuantities(prev => ({
+                                ...prev,
+                                [item.id]: Math.max(1, Math.min(val, item.quantityOrdered))
+                              }));
+                            }}
+                            className="w-16 h-7 text-center text-sm mx-auto"
+                            data-testid={`input-print-qty-${item.id}`}
+                          />
+                        )}
                       </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell className="text-center">

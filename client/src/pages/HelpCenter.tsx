@@ -131,7 +131,7 @@ const faqData: FAQItem[] = [
   {
     id: 'gen-1',
     question: 'How do I use the global search?',
-    answer: 'Press Ctrl+K (or Cmd+K on Mac) to open global search. Type your search term to find orders, customers, or navigate to different sections of the app.',
+    answer: 'Press Ctrl+E (or Cmd+E on Mac) to open global search. Type your search term to find orders, customers, or navigate to different sections of the app.',
     category: 'General',
   },
   {

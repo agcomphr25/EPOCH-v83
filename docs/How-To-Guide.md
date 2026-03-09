@@ -121,7 +121,7 @@ This guide covers the essential steps for common tasks in EPOCH v8.
 
 ## Quick Tips
 
-- **Keyboard Shortcuts**: Use Ctrl+K (or Cmd+K on Mac) for global search
+- **Keyboard Shortcuts**: Use Ctrl+E (or Cmd+E on Mac) for global search
 - **Draft Orders**: Save frequently - drafts are preserved until finalized
 - **Balance Due**: The balance updates automatically as payments are recorded
 - **Barcode Scanning**: Use barcode scanners for faster order lookup in Production Queue

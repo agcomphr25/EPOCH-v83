@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
+import { KEYBOARD_SHORTCUTS, formatShortcut } from '@/config/keyboardShortcuts';
 
 import {
   Factory,
@@ -180,10 +181,10 @@ export default function Navigation() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [refetchUser]);
 
-  // Global keyboard shortcut for search (Cmd/Ctrl+K)
+  // Global keyboard shortcut for search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === KEYBOARD_SHORTCUTS.GLOBAL_SEARCH.key) {
         e.preventDefault();
         setSearchOpen(true);
       }
@@ -2185,7 +2186,7 @@ export default function Navigation() {
               <Search className="h-4 w-4" />
               <span className="hidden md:inline">Search</span>
               <kbd className="hidden md:inline px-2 py-0.5 text-xs border rounded bg-gray-50">
-                {navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl+K'}
+                {formatShortcut('GLOBAL_SEARCH')}
               </kbd>
             </Button>
             <InstallPWAButton />

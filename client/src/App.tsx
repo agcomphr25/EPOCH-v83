@@ -66,6 +66,9 @@ import EmailTemplateEditor from './pages/EmailTemplateEditor';
 import SignOrderPageSettings from './pages/SignOrderPageSettings';
 import APJournalPage from './pages/APJournalPage';
 import ARJournalPage from './pages/ARJournalPage';
+import InvoicesPage from './pages/InvoicesPage';
+import InvoiceFormPage from './pages/InvoiceFormPage';
+import InvoiceDetailPage from './pages/InvoiceDetailPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
@@ -711,6 +714,10 @@ function App() {
                   {/* Finance Routes */}
                   <Route path="/finance/ap-journal" component={APJournalPage} />
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
+                  <Route path="/finance/invoices/new" component={InvoiceFormPage} />
+                  <Route path="/finance/invoices/:id/edit" component={InvoiceFormPage} />
+                  <Route path="/finance/invoices/:id" component={InvoiceDetailPage} />
+                  <Route path="/finance/invoices" component={InvoicesPage} />
                   <Route
                     path="/finance/cogs-report"
                     component={COGSReportPage}

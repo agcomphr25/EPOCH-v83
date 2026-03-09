@@ -29,7 +29,7 @@ export default function NewInventoryManagerPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6 overflow-x-auto">
+    <div className="mx-auto p-6 space-y-6 max-w-full">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Inventory Management
@@ -138,7 +138,7 @@ export default function NewInventoryManagerPage() {
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
-          <Card className="border-t-4 border-t-blue-500 relative overflow-x-auto">
+          <Card className="border-t-4 border-t-blue-500 relative">
             <Button
               variant="ghost"
               size="icon"

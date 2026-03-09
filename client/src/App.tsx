@@ -391,7 +391,7 @@ function App() {
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
               <OfflineIndicator />
-              <main className="container mx-auto px-4 py-8 overflow-x-auto">
+              <main className="container mx-auto px-4 py-8">
                 <RouteGuard>
                   <Switch>
                     <Route path="/" component={RootRedirect} />

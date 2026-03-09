@@ -2118,7 +2118,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           list to get started.
         </div>
       ) : (
-        <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
+        <div className="overflow-x-auto w-full">
           <table className="min-w-[1200px] w-full border-collapse border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">

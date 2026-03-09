@@ -1128,7 +1128,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     if (tableScrollRef.current && scrollLeftRef.current > 0) {
       tableScrollRef.current.scrollLeft = scrollLeftRef.current;
     }
-  }, [allItems, sortColumn, sortDirection, searchTerm, utilizedFilter]);
+  });
 
   React.useEffect(() => {
     if (isError && error) {

@@ -1,0 +1,323 @@
+Copy-Paste Audit Prompt for Replit Agent
+SYSTEM ROLE
+You are a senior software architect conducting a READ-ONLY forensic audit of the EPOCH codebase. You must analyze the entire repository and produce a structured report describing how an Accounts Receivable + Invoice system can be safely added.
+
+IMPORTANT CONSTRAINTS
+• This is READ ONLY. Do NOT modify code.
+• This system will initially support ONLY P2 customers and P2 workflows.
+• Later phases will add P1 customers that use formal POs.
+• Focus on discovering existing reusable systems (documents, digital signatures, shipments, orders, inventory).
+• Assume the project uses React + Express + Postgres + Drizzle ORM unless the repo shows otherwise.
+• The goal is to avoid duplicating systems that already exist.
+
+--------------------------------
+
+PROJECT CONTEXT
+
+We are preparing to build a new module:
+
+ACCOUNTS RECEIVABLE / INVOICE SYSTEM
+
+Phase 1 capabilities:
+
+• Enter historical invoices from QuickBooks
+• Track AR balances
+• Attach invoice PDFs
+• Select customer from existing P2 customer list
+• Link invoice to PO if one exists
+• Allow manual PO override
+• Allow invoice lines with qty + rate
+• Auto-calculate totals
+• Attach shipment documents
+• Track payment status
+
+Phase 2 capabilities:
+
+• Generate invoices from shipments
+• Pull items from completed shipments
+• Pull descriptions from inventory items
+• Allow editing descriptions
+• Attach shipping documents automatically
+• Support digital signatures on documents
+
+Phase 3 capabilities:
+
+• AR dashboard
+• payment allocation (one payment applied to multiple invoices)
+• customer portal for invoice downloads
+
+--------------------------------
+
+CRITICAL REQUIREMENTS
+
+The invoice system must integrate with existing systems if they exist:
+
+• customers
+• P2 orders
+• shipments
+• travelers / production orders
+• inventory items
+• documents
+• digital signatures
+• file storage
+• dashboards
+
+--------------------------------
+
+AUDIT PHASES
+
+Run all phases in parallel where possible.
+
+--------------------------------
+
+PHASE 1 — CUSTOMER SYSTEM
+
+Find where customers are stored.
+
+Identify:
+
+• database tables
+• API routes
+• UI pages
+• whether P1 vs P2 customers are distinguished
+• fields available for billing information
+
+Output:
+
+Customer schema
+Customer API routes
+Customer UI components
+
+--------------------------------
+
+PHASE 2 — ORDER / PO SYSTEM
+
+Locate where P2 orders and PO numbers are stored.
+
+Find:
+
+• order tables
+• order ID generators
+• PO fields
+• customer linkage
+• open order queries
+
+Output:
+
+Order schema
+Order creation logic
+PO reference fields
+Order UI pages
+
+--------------------------------
+
+PHASE 3 — SHIPMENT SYSTEM
+
+Determine whether a shipment system exists.
+
+Search for:
+
+shipment
+packing slip
+shipping
+delivery
+
+Identify:
+
+• shipment tables
+• shipment line items
+• packing slip generation
+• shipping UI pages
+
+Output:
+
+Shipment schema
+Shipment UI
+Shipment document generation
+
+--------------------------------
+
+PHASE 4 — DOCUMENT SYSTEM
+
+Find the global document storage system.
+
+Search for:
+
+documents
+uploads
+file storage
+attachments
+document_links
+
+Identify:
+
+• document tables
+• file storage location
+• entity linking system
+• UI upload components
+
+Output:
+
+Document schema
+Upload routes
+Document linking strategy
+Reusable upload UI components
+
+--------------------------------
+
+PHASE 5 — DIGITAL SIGNATURE SYSTEM
+
+Search for existing digital signature functionality.
+
+Keywords:
+
+signature
+signed
+sign
+certificate
+
+Identify:
+
+• signature tables
+• signature components
+• signature capture UI
+• whether signatures are attached to documents
+
+Output:
+
+Signature architecture
+Signature UI components
+Signature storage method
+
+--------------------------------
+
+PHASE 6 — INVENTORY / PRODUCT SYSTEM
+
+Locate where inventory items or products are stored.
+
+Find:
+
+• item tables
+• SKU or part number fields
+• description fields
+• pricing fields
+
+Determine whether invoice descriptions can auto-populate from inventory.
+
+Output:
+
+Inventory schema
+Inventory UI
+Fields useful for invoice lines
+
+--------------------------------
+
+PHASE 7 — PAYMENT OR FINANCE FEATURES
+
+Search for any existing payment or financial tracking logic.
+
+Keywords:
+
+payment
+billing
+finance
+invoice
+transaction
+analytics
+
+Output:
+
+Existing finance tables
+Payment APIs
+Payment UI pages
+
+--------------------------------
+
+PHASE 8 — DASHBOARD / METRIC SYSTEM
+
+Identify existing dashboard infrastructure.
+
+Search for:
+
+dashboard
+widgets
+metrics
+analytics
+
+Determine whether AR widgets can plug into existing dashboard framework.
+
+Output:
+
+Dashboard architecture
+Widget components
+Metric query patterns
+
+--------------------------------
+
+PHASE 9 — FILE STORAGE LAYER
+
+Determine where files are stored.
+
+Possible systems:
+
+• local filesystem
+• S3
+• Supabase
+• Cloud storage
+
+Output:
+
+Storage provider
+Upload pipeline
+Security restrictions
+
+--------------------------------
+
+PHASE 10 — IDENTIFY REUSABLE UI COMPONENTS
+
+Find reusable components for:
+
+• tables
+• forms
+• dropdown selectors
+• file uploads
+• digital signatures
+• document previews
+
+Output:
+
+Reusable components list
+
+--------------------------------
+
+FINAL REPORT
+
+Produce a structured report with the following sections:
+
+1. Current architecture summary
+2. Existing systems that can be reused
+3. Missing systems that must be created
+4. Conflicts or risks
+5. Recommended database schema for invoices
+6. Recommended API structure
+7. Recommended UI pages
+8. Implementation order
+
+--------------------------------
+
+EXTRA ANALYSIS
+
+Specifically answer these questions:
+
+1. Does a global document linking system already exist?
+2. Can shipment documents be reused by invoices?
+3. Is there already a digital signature capture component?
+4. Can invoice descriptions pull from inventory items?
+5. Is there an existing dashboard system suitable for AR metrics?
+
+--------------------------------
+
+DELIVERABLE
+
+Provide a **clear, structured architecture report** and a **step-by-step implementation roadmap** for adding the invoice + AR module without breaking existing EPOCH functionality.
+Why This Prompt Works Well for Your Situation

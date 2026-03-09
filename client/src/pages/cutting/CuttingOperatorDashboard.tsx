@@ -287,11 +287,38 @@ export default function CuttingOperatorDashboard() {
 
       const displayName = item.displayName || packetName || userNotes || item.partName || orderId || null;
       
-      // Find matching BOM - use string comparison for ID matching
-      const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
-        bom.partNumber === item.partNumber || 
-        (bomId && String(bom.id) === String(bomId))
-      );
+      const materialToPacketType: Record<string, string> = {
+        'carbon_fiber': 'carbon fiber packet',
+        'fiberglass': 'fiberglass packet',
+        'mesa': 'mesa packet',
+        'p2_disruptor': 'disruptor',
+        'p2_disruptor_packet': 'disruptor packet',
+        'p2_antenna': 'antenna cover',
+        'p2_antenna_cover': 'antenna cover packet',
+      };
+      
+      const allBOMs = packetBOMs || [];
+      
+      const matchingBOM = 
+        (bomId && allBOMs.find((bom: PacketBOM) => String(bom.id) === String(bomId))) ||
+        (materialType && materialToPacketType[materialType] && allBOMs.find((bom: PacketBOM) => {
+          const target = materialToPacketType[materialType!];
+          return bom.packetType.toLowerCase() === target ||
+            bom.packetType.toLowerCase().includes(target) ||
+            target.includes(bom.packetType.toLowerCase());
+        })) ||
+        (packetName && allBOMs.find((bom: PacketBOM) => 
+          bom.packetType.toLowerCase() === packetName!.toLowerCase() ||
+          bom.packetType.toLowerCase().includes(packetName!.toLowerCase()) ||
+          packetName!.toLowerCase().includes(bom.packetType.toLowerCase())
+        )) ||
+        (item.partNumber && allBOMs.find((bom: PacketBOM) => bom.partNumber === item.partNumber)) ||
+        (item.partName && allBOMs.find((bom: PacketBOM) => 
+          bom.packetType.toLowerCase() === item.partName!.toLowerCase() ||
+          bom.packetType.toLowerCase().includes(item.partName!.toLowerCase()) ||
+          item.partName!.toLowerCase().includes(bom.packetType.toLowerCase())
+        )) ||
+        null;
       
       const yieldPerCut = matchingBOM?.yieldPerCut || 4;
       const estimatedCuts = remaining > 0 ? Math.ceil(remaining / yieldPerCut) : 0;

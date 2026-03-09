@@ -167,6 +167,12 @@ export default function CuttingOperatorDashboard() {
   const [allFabricSearch, setAllFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
+  const [selectedPrintIds, setSelectedPrintIds] = useState<number[]>([]);
+  const [packetScanBarcode, setPacketScanBarcode] = useState("");
+  const [activeScannedPacket, setActiveScannedPacket] = useState<any>(null);
+  const [materialScanBarcode, setMaterialScanBarcode] = useState("");
+  const [validatedRolls, setValidatedRolls] = useState<any[]>([]);
+
   const [productionForm, setProductionForm] = useState({
     quantityCompleted: '',
     fabricBarcode: '',
@@ -425,6 +431,205 @@ export default function CuttingOperatorDashboard() {
       toast({ title: 'Error', description: 'Failed to generate barcodes.', variant: 'destructive' });
     },
   });
+
+  const bulkPrintBarcodesMutation = useMutation({
+    mutationFn: async (queueIds: number[]) => {
+      return apiRequest('/api/cutting-table-mfg-queue/bulk-print-barcodes', {
+        method: 'POST',
+        body: JSON.stringify({ queueIds }),
+      });
+    },
+    onSuccess: (data: any) => {
+      if (data.labels && data.labels.length > 0) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>Packet Barcodes - Avery 8160</title>
+                <style>
+                  @page { size: letter; margin: 0.5in 0.1875in 0.5in 0.1875in; }
+                  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                  .labels-container { width: 8.125in; margin: 0 auto; overflow: hidden; }
+                  .label {
+                    width: 2.625in; height: 1in; padding: 0.04in 0.06in;
+                    box-sizing: border-box; page-break-inside: avoid;
+                    float: left; overflow: hidden;
+                    border: 1px solid #ddd;
+                  }
+                  .part-number { font-size: 8pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                  .info { font-size: 6pt; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                  .barcode { max-width: 100%; height: 0.28in; display: block; margin: 2px auto; }
+                  @media print { .label { border: none; } }
+                </style>
+              </head>
+              <body>
+                <div class="labels-container">
+                ${data.labels.map((label: any) => {
+                  const esc = (s: string) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                  return `
+                  <div class="label">
+                    <div class="part-number">${esc(label.partNumber)}</div>
+                    <div class="info">${esc(label.partName)}</div>
+                    ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div class="info">${esc(label.barcodeValue)}</div>`}
+                    <div class="info">Qty: ${esc(String(label.quantityRequested))} | Due: ${label.dueDate ? new Date(label.dueDate).toLocaleDateString() : 'N/A'}</div>
+                  </div>`;
+                }).join('')}
+                </div>
+              </body>
+            </html>
+          `);
+          printWindow.document.close();
+          printWindow.print();
+        }
+      }
+      setSelectedPrintIds([]);
+      toast({ title: 'Barcodes Ready', description: `${data.count} packet barcode labels ready to print.` });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to generate packet barcodes.', variant: 'destructive' });
+    },
+  });
+
+  const scanStartMutation = useMutation({
+    mutationFn: async (barcode: string) => {
+      return apiRequest('/api/cutting-table-mfg-queue/scan-start', {
+        method: 'POST',
+        body: JSON.stringify({ barcode, username: currentUser?.username || 'scanner' }),
+      });
+    },
+    onSuccess: (data: any) => {
+      setActiveScannedPacket(data);
+      setValidatedRolls([]);
+      setMaterialScanBarcode("");
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      toast({ title: 'Packet Started', description: `${data.queueItem?.partNumber || 'Packet'} is now active. Scan material rolls to begin.` });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Scan Error', description: error?.message || 'Failed to start packet from barcode.', variant: 'destructive' });
+    },
+  });
+
+  const validateMaterialMutation = useMutation({
+    mutationFn: async ({ queueId, barcode }: { queueId: number; barcode: string }) => {
+      const res = await fetch(`/api/cutting-table-mfg-queue/${queueId}/validate-material`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw { ...data, status: res.status };
+      }
+      return data;
+    },
+    onSuccess: (data: any) => {
+      if (data.valid && data.roll) {
+        if (validatedRolls.find(r => r.id === data.roll.id)) {
+          toast({ title: 'Already Added', description: 'This roll is already in your list.' });
+          return;
+        }
+        setValidatedRolls(prev => [...prev, { ...data.roll, warning: data.warning }]);
+        toast({
+          title: 'Material Accepted',
+          description: `${data.roll.fabric || data.roll.nickname} - Roll ${data.roll.rollNumber} matches the BOM.`,
+        });
+      }
+      setMaterialScanBarcode("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Material Rejected',
+        description: error?.error || 'This material does not match the BOM requirements for this packet.',
+        variant: 'destructive',
+      });
+      setMaterialScanBarcode("");
+    },
+  });
+
+  const handlePacketScan = (barcode: string) => {
+    if (!barcode.trim() || scanStartMutation.isPending) return;
+    scanStartMutation.mutate(barcode.trim());
+    setPacketScanBarcode("");
+  };
+
+  const handleMaterialScan = (barcode: string) => {
+    if (!barcode.trim() || !activeScannedPacket?.queueItem?.id || validateMaterialMutation.isPending) return;
+    validateMaterialMutation.mutate({
+      queueId: activeScannedPacket.queueItem.id,
+      barcode: barcode.trim(),
+    });
+  };
+
+  const handleCloseScannedPacket = () => {
+    setActiveScannedPacket(null);
+    setValidatedRolls([]);
+    setMaterialScanBarcode("");
+  };
+
+  const handleCompleteScannedPacket = () => {
+    if (!activeScannedPacket?.queueItem) return;
+    setSelectedMfgItem({
+      id: activeScannedPacket.queueItem.id,
+      partNumber: activeScannedPacket.queueItem.partNumber,
+      partName: activeScannedPacket.queueItem.partName,
+      quantityOrdered: activeScannedPacket.queueItem.quantityRequested || activeScannedPacket.queueItem.remaining,
+      quantityCompleted: activeScannedPacket.queueItem.quantityCompleted || 0,
+      status: activeScannedPacket.queueItem.status,
+      priority: activeScannedPacket.queueItem.priority || 50,
+      assignedTo: activeScannedPacket.queueItem.assignedTo,
+      fabricLot: null,
+      fabricBatch: null,
+      fabricRoll: null,
+      notes: activeScannedPacket.queueItem.notes,
+      createdAt: activeScannedPacket.queueItem.createdAt,
+      dueDate: activeScannedPacket.queueItem.dueDate,
+      estimatedCuts: activeScannedPacket.queueItem.estimatedCuts,
+      packetBomId: activeScannedPacket.bom?.id || null,
+    } as ManufacturingQueueItem);
+    
+    const mappedFabrics = validatedRolls.map((r: any) => ({
+      id: r.id,
+      fabricType: r.fabric || r.nickname || '',
+      fabricPartNumber: r.fabricPartNumber,
+      nickname: r.nickname,
+      commonName: r.fabric,
+      supplierPartNumber: null,
+      internalControlNumber: r.internalControlNumber,
+      lotNumber: r.lotNumber,
+      batchNumber: r.batchNumber,
+      rollNumber: r.rollNumber,
+      quantityInStock: parseFloat(r.squareMeters || '0'),
+      squareMeters: parseFloat(r.squareMeters || '0'),
+      receivedDate: r.receivedDate,
+      expirationDate: r.expirationDate,
+      location: r.location,
+      freezerLocation: r.freezerNumber ? String(r.freezerNumber) : null,
+      barcode: r.barcode,
+      barcodeValue: r.barcode || `FAB-${r.internalControlNumber || 'UNK'}-${r.id?.substring(0, 8) || 'X'}`,
+      status: 'available' as const,
+      lowStockThreshold: 10,
+      isFifoNext: false,
+    }));
+    setScannedFabrics(mappedFabrics);
+    setIsProductionDialogOpen(true);
+    handleCloseScannedPacket();
+  };
+
+  const togglePrintId = (id: number) => {
+    setSelectedPrintIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllPendingForPrint = () => {
+    const pendingIds = mfgQueueItems
+      .filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS')
+      .map(i => i.id);
+    setSelectedPrintIds(prev => 
+      prev.length === pendingIds.length ? [] : pendingIds
+    );
+  };
 
   const resetProductionForm = () => {
     setProductionForm({
@@ -828,17 +1033,40 @@ export default function CuttingOperatorDashboard() {
 
       {/* Quick Actions Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Barcode Scanner - Primary Action */}
+        {/* Scan Packet to Start */}
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <div className="p-2 rounded-lg bg-primary/10">
                 <Scan className="h-4 w-4 text-primary" />
               </div>
-              Quick Scan
+              Scan Packet to Start
             </CardTitle>
+            <CardDescription className="text-xs">Scan a printed packet barcode to begin work</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="flex gap-2 mb-3">
+              <BarcodeInputField
+                id="packet-scan-barcode"
+                value={packetScanBarcode}
+                onChange={(val) => {
+                  setPacketScanBarcode(val);
+                  if (val && val.length > 5 && val.startsWith('MFG-')) {
+                    handlePacketScan(val);
+                  }
+                }}
+                placeholder="Scan packet barcode (MFG-...)..."
+                data-testid="input-packet-scan"
+              />
+              <Button 
+                onClick={() => handlePacketScan(packetScanBarcode)} 
+                className="shrink-0"
+                disabled={scanStartMutation.isPending}
+                data-testid="button-packet-scan"
+              >
+                {scanStartMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+              </Button>
+            </div>
             <div className="flex gap-2">
               <BarcodeInputField
                 id="universal-barcode"
@@ -849,10 +1077,10 @@ export default function CuttingOperatorDashboard() {
                     handleBarcodeScan(val);
                   }
                 }}
-                placeholder="Scan fabric or part barcode..."
+                placeholder="Quick scan fabric roll..."
                 data-testid="input-universal-barcode"
               />
-              <Button onClick={() => handleBarcodeScan(universalBarcode)} className="shrink-0" data-testid="button-scan">
+              <Button onClick={() => handleBarcodeScan(universalBarcode)} className="shrink-0" variant="outline" size="sm" data-testid="button-scan">
                 <Scan className="h-4 w-4" />
               </Button>
             </div>
@@ -985,6 +1213,252 @@ export default function CuttingOperatorDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Active Scanned Packet Panel */}
+      {activeScannedPacket && (
+        <Card className="border-2 border-blue-500 bg-gradient-to-br from-blue-50/50 to-background dark:from-blue-950/30">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Package className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">
+                    Active Packet: {activeScannedPacket.queueItem?.partNumber || 'Unknown'}
+                  </CardTitle>
+                  <CardDescription>
+                    {activeScannedPacket.queueItem?.partName} — {activeScannedPacket.queueItem?.remaining || 0} packets remaining
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleCompleteScannedPacket}
+                  disabled={validatedRolls.length === 0}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Complete with {validatedRolls.length} Roll(s)
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleCloseScannedPacket}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Production Info */}
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 text-sm">Production Summary</h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Remaining</p>
+                    <p className="font-bold text-lg">{activeScannedPacket.queueItem?.remaining || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cuts Needed</p>
+                    <p className="font-bold text-lg">{activeScannedPacket.queueItem?.estimatedCuts || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">m²/Cut</p>
+                    <p className="font-bold text-lg">{activeScannedPacket.bom?.squareMetersPerCut || '-'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Required Materials from BOM */}
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 text-sm flex items-center gap-2">
+                  <Snowflake className="h-4 w-4" />
+                  Required Materials (BOM)
+                </h4>
+                {activeScannedPacket.bomMaterials && activeScannedPacket.bomMaterials.length > 0 ? (
+                  <div className="space-y-1">
+                    {activeScannedPacket.bomMaterials.map((mat: any, idx: number) => (
+                      <div key={mat.id || idx} className="flex items-center justify-between text-sm p-1.5 bg-background rounded">
+                        <span className="font-medium">{mat.fabricType}</span>
+                        <div className="flex items-center gap-2">
+                          {mat.commonName && <span className="text-xs text-muted-foreground">({mat.commonName})</span>}
+                          <Badge variant="secondary" className="text-xs">{mat.rollsRequired} roll(s)</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : activeScannedPacket.bomParts && activeScannedPacket.bomParts.length > 0 ? (
+                  <div className="space-y-1">
+                    {[...new Set(activeScannedPacket.bomParts.map((p: any) => p.fabricType))].map((ft: any) => (
+                      <div key={ft} className="text-sm p-1.5 bg-background rounded font-medium">{ft}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No BOM configured</p>
+                )}
+              </div>
+
+              {/* FIFO Recommended Rolls */}
+              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 text-sm flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  FIFO - Pull These Rolls
+                </h4>
+                {activeScannedPacket.fifoInventory && activeScannedPacket.fifoInventory.length > 0 ? (
+                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                    {activeScannedPacket.fifoInventory.slice(0, 5).map((roll: any, idx: number) => (
+                      <div key={roll.id} className="flex items-center justify-between text-xs p-1.5 bg-background rounded">
+                        <div className="flex items-center gap-1">
+                          {idx === 0 && <Badge className="bg-green-600 text-[10px] px-1">FIRST</Badge>}
+                          <span className="font-medium">{roll.fabric || roll.nickname}</span>
+                        </div>
+                        <div className="text-right">
+                          <div>Roll {roll.rollNumber}</div>
+                          <div className="text-muted-foreground">
+                            {roll.freezerNumber ? `Freezer ${roll.freezerNumber}` : roll.location || '-'}
+                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-amber-600">No matching fabric in inventory</p>
+                )}
+              </div>
+            </div>
+
+            {/* Ply Schedule */}
+            {activeScannedPacket.plySchedule && Array.isArray(activeScannedPacket.plySchedule) && activeScannedPacket.plySchedule.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  Ply Schedule
+                </h4>
+                <div className="max-h-[200px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Ply #</TableHead>
+                        <TableHead>Assigned Parts</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activeScannedPacket.plySchedule.map((ply: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{ply.plyNumber || idx + 1}</TableCell>
+                          <TableCell>
+                            {ply.assignedParts && Array.isArray(ply.assignedParts) ? (
+                              <div className="flex flex-wrap gap-1">
+                                {ply.assignedParts.map((part: any, pidx: number) => (
+                                  <Badge key={pidx} variant="outline" className="text-xs">
+                                    {part.partNumber} {part.quantity > 1 ? `x${part.quantity}` : ''}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Cuts Config */}
+            {activeScannedPacket.cutsConfig && Array.isArray(activeScannedPacket.cutsConfig) && activeScannedPacket.cutsConfig.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Scissors className="h-4 w-4" />
+                  Cuts Configuration
+                </h4>
+                <div className="space-y-2">
+                  {activeScannedPacket.cutsConfig.map((cut: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-muted/50 rounded-lg">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-medium text-sm">{cut.materialName || cut.materialPartNumber || `Cut ${idx + 1}`}</span>
+                        <Badge>{cut.cutsNeeded} cut(s)</Badge>
+                      </div>
+                      {cut.assignedParts && Array.isArray(cut.assignedParts) && cut.assignedParts.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {cut.assignedParts.map((part: any, pidx: number) => (
+                            <Badge key={pidx} variant="secondary" className="text-xs">
+                              {part.partNumber} ({part.partsPerCut}/cut)
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Material Roll Scanning */}
+            <div className="border-2 border-dashed border-primary/30 rounded-lg p-4">
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Barcode className="h-4 w-4" />
+                Scan Material Rolls
+              </h4>
+              <div className="flex gap-2 mb-3">
+                <BarcodeInputField
+                  id="material-scan-barcode"
+                  value={materialScanBarcode}
+                  onChange={(val) => {
+                    setMaterialScanBarcode(val);
+                    if (val && val.length > 5) {
+                      handleMaterialScan(val);
+                    }
+                  }}
+                  placeholder="Scan material roll barcode..."
+                  data-testid="input-material-scan"
+                />
+                <Button
+                  onClick={() => handleMaterialScan(materialScanBarcode)}
+                  className="shrink-0"
+                  disabled={validateMaterialMutation.isPending}
+                  data-testid="button-material-scan"
+                >
+                  {validateMaterialMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {validatedRolls.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                    {validatedRolls.length} roll(s) validated and ready
+                  </p>
+                  {validatedRolls.map((roll: any) => (
+                    <div key={roll.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <div>
+                          <span className="font-medium text-sm">{roll.fabric || roll.nickname}</span>
+                          <span className="text-muted-foreground text-sm ml-2">Roll {roll.rollNumber}</span>
+                        </div>
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>Lot: {roll.lotNumber || 'N/A'} | Batch: {roll.batchNumber || 'N/A'}</div>
+                        <div>
+                          {parseFloat(roll.squareMeters || '0').toFixed(1)} m²
+                          {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Scan material roll barcodes to validate against the BOM
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Fabric Receiving Section */}
       {pendingReceiving > 0 && (
@@ -1243,6 +1717,30 @@ export default function CuttingOperatorDashboard() {
                 </CardDescription>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              {selectedPrintIds.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => bulkPrintBarcodesMutation.mutate(selectedPrintIds)}
+                  disabled={bulkPrintBarcodesMutation.isPending}
+                  data-testid="button-bulk-print-barcodes"
+                >
+                  <Printer className="h-4 w-4 mr-1" />
+                  {bulkPrintBarcodesMutation.isPending ? 'Printing...' : `Print ${selectedPrintIds.length} Barcode(s)`}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={selectAllPendingForPrint}
+                data-testid="button-select-all-print"
+              >
+                <Barcode className="h-4 w-4 mr-1" />
+                {selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length && selectedPrintIds.length > 0 
+                  ? 'Deselect All' 
+                  : 'Select All for Print'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1262,6 +1760,15 @@ export default function CuttingOperatorDashboard() {
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedPrintIds.length > 0 && selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length}
+                        onChange={selectAllPendingForPrint}
+                        className="h-4 w-4 rounded border-gray-300"
+                        title="Select all for printing"
+                      />
+                    </TableHead>
                     <TableHead>Part Number</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead className="text-center">Progress</TableHead>
@@ -1278,10 +1785,22 @@ export default function CuttingOperatorDashboard() {
                       key={item.id} 
                       className={cn(
                         "hover:bg-muted/50 transition-colors",
-                        item.status === 'IN_PROGRESS' && "bg-blue-50/50 dark:bg-blue-950/20"
+                        item.status === 'IN_PROGRESS' && "bg-blue-50/50 dark:bg-blue-950/20",
+                        selectedPrintIds.includes(item.id) && "bg-primary/5"
                       )}
                       data-testid={`row-mfg-item-${item.id}`}
                     >
+                      <TableCell>
+                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                          <input
+                            type="checkbox"
+                            checked={selectedPrintIds.includes(item.id)}
+                            onChange={() => togglePrintId(item.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                            data-testid={`checkbox-print-${item.id}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{item.partName || '-'}</TableCell>
                       <TableCell className="text-center">

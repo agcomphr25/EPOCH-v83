@@ -173,6 +173,7 @@ export default function CuttingOperatorDashboard() {
   const [activeScannedPacket, setActiveScannedPacket] = useState<any>(null);
   const [materialScanBarcode, setMaterialScanBarcode] = useState("");
   const [validatedRolls, setValidatedRolls] = useState<any[]>([]);
+  const autoCompletePendingRef = useRef(false);
 
   const [productionForm, setProductionForm] = useState({
     quantityCompleted: '',
@@ -530,11 +531,49 @@ export default function CuttingOperatorDashboard() {
           toast({ title: 'Already Added', description: 'This roll is already in your list.' });
           return;
         }
-        setValidatedRolls(prev => [...prev, { ...data.roll, warning: data.warning }]);
+        const updatedRolls = [...validatedRolls, { ...data.roll, warning: data.warning }];
+        setValidatedRolls(updatedRolls);
         toast({
           title: 'Material Accepted',
           description: `${data.roll.fabric || data.roll.nickname} - Roll ${data.roll.rollNumber} matches the BOM.`,
         });
+
+        const bomMaterials = activeScannedPacket?.bomMaterials || [];
+        const totalRollsRequired = bomMaterials.reduce((sum: number, m: any) => sum + (m.rollsRequired || 1), 0);
+        if (totalRollsRequired > 0 && updatedRolls.length >= totalRollsRequired && activeScannedPacket?.queueItem && !autoCompletePendingRef.current) {
+          autoCompletePendingRef.current = true;
+          const qi = activeScannedPacket.queueItem;
+          const fabricSources = updatedRolls.map((r: any) => ({
+            fabricInventoryId: r.id,
+            fabricType: r.fabric || r.nickname || '',
+            lotNumber: r.lotNumber,
+            batchNumber: r.batchNumber,
+            rollNumber: r.rollNumber,
+            internalControlNumber: r.internalControlNumber,
+            expirationDate: r.expirationDate,
+            quantityUsed: 1,
+            isDepleted: false,
+          }));
+          toast({
+            title: 'All Materials Scanned',
+            description: `${totalRollsRequired} roll(s) validated — completing packet...`,
+          });
+          completeWithTraceabilityMutation.mutate({
+            id: qi.id,
+            quantityCompleted: 1,
+            fabricSources,
+            completedBy: currentUser?.username || 'unknown',
+            completionNotes: 'Auto-completed: all required materials scanned.',
+          }, {
+            onSuccess: () => {
+              autoCompletePendingRef.current = false;
+              handleCloseScannedPacket();
+            },
+            onError: () => {
+              autoCompletePendingRef.current = false;
+            },
+          });
+        }
       }
       setMaterialScanBarcode("");
     },
@@ -566,6 +605,7 @@ export default function CuttingOperatorDashboard() {
     setActiveScannedPacket(null);
     setValidatedRolls([]);
     setMaterialScanBarcode("");
+    autoCompletePendingRef.current = false;
   };
 
   const handleCompleteScannedPacket = () => {
@@ -1758,7 +1798,7 @@ export default function CuttingOperatorDashboard() {
             <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
               <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p>No items in the queue</p>
-              <p className="text-sm">Schedule packets from the Weekly Schedule page</p>
+              <p className="text-sm">Schedule packets from the Weekly Scheduling page</p>
             </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">

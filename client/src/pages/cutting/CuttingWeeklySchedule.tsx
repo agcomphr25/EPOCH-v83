@@ -650,7 +650,7 @@ export default function CuttingWeeklySchedule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {(mfgQueueData || []).length === 0 ? (
+          {(mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED').length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No packets currently scheduled for cutting
             </div>
@@ -665,7 +665,7 @@ export default function CuttingWeeklySchedule() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(mfgQueueData || []).slice(0, 15).map((item: any) => {
+                {(mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED').slice(0, 15).map((item: any) => {
                   let notes: any = {};
                   let rawNotes = item.notes || '';
                   try { notes = JSON.parse(item.notes || '{}'); } catch {

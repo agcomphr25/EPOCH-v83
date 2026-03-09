@@ -469,10 +469,10 @@ export default function CuttingOperatorDashboard() {
                   const esc = (s: string) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                   return `
                   <div class="label">
-                    <div class="part-number">${esc(label.partNumber)}</div>
+                    <div class="part-number">${esc(label.partNumber)} — ${label.sequenceNumber}/${label.quantityRequested}</div>
                     <div class="info">${esc(label.partName)}</div>
                     ${label.barcodeImage ? `<img class="barcode" src="${label.barcodeImage}" alt="barcode" />` : `<div class="info">${esc(label.barcodeValue)}</div>`}
-                    <div class="info">Qty: ${esc(String(label.quantityRequested))} | Due: ${label.dueDate ? new Date(label.dueDate).toLocaleDateString() : 'N/A'}</div>
+                    <div class="info">Due: ${label.dueDate ? new Date(label.dueDate).toLocaleDateString() : 'N/A'}</div>
                   </div>`;
                 }).join('')}
                 </div>
@@ -1051,7 +1051,7 @@ export default function CuttingOperatorDashboard() {
                 value={packetScanBarcode}
                 onChange={(val) => {
                   setPacketScanBarcode(val);
-                  if (val && val.length > 5 && val.startsWith('MFG-')) {
+                  if (val && val.length > 5 && val.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(val)) {
                     handlePacketScan(val);
                   }
                 }}

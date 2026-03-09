@@ -746,9 +746,14 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
     
     const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
     
-    const labels = await Promise.all(
-      queueItems.map(async (row) => {
-        const barcodeValue = `MFG-${row.queue.id}-${row.item?.agPartNumber || 'UNK'}`;
+    const allLabels: any[] = [];
+    
+    for (const row of queueItems) {
+      const partNumber = row.item?.agPartNumber || 'UNK';
+      const qty = row.queue.quantityRequested || 1;
+      
+      for (let seq = 1; seq <= qty; seq++) {
+        const barcodeValue = `MFG-${row.queue.id}-${partNumber}-${seq}`;
         
         let barcodeImage;
         try {
@@ -764,22 +769,23 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
           barcodeImage = null;
         }
         
-        return {
+        allLabels.push({
           queueId: row.queue.id,
           barcodeValue,
           barcodeImage,
-          partNumber: row.item?.agPartNumber || 'Unknown',
+          partNumber,
           partName: row.item?.name || 'Unknown',
-          quantityRequested: row.queue.quantityRequested,
+          quantityRequested: qty,
+          sequenceNumber: seq,
           quantityCompleted: row.queue.quantityCompleted || 0,
           priority: row.queue.priority,
           dueDate: row.queue.dueDate,
           status: row.queue.status,
-        };
-      })
-    );
+        });
+      }
+    }
     
-    res.json({ labels, count: labels.length });
+    res.json({ labels: allLabels, count: allLabels.length });
   } catch (error) {
     console.error('Error generating bulk barcodes:', error);
     res.status(500).json({ error: 'Failed to generate bulk barcodes' });
@@ -795,10 +801,10 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Barcode is required' });
     }
     
-    // Parse the barcode format: MFG-{id}-{partNumber}
-    const match = barcode.match(/^MFG-(\d+)-(.+)$/);
+    // Parse the barcode format: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}
+    const match = barcode.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
     if (!match) {
-      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber}' });
+      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}' });
     }
     
     const queueId = parseInt(match[1]);

@@ -2118,8 +2118,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           list to get started.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-200 dark:border-gray-700">
+        <div style={{ overflow: 'hidden', width: '100%' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
@@ -2475,6 +2476,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

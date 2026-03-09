@@ -9,28 +9,20 @@ export interface BarcodeOptions {
   margin?: number;
 }
 
-/**
- * Generate a barcode image as a base64-encoded SVG data URL
- * Uses bwip-js which is pure JavaScript with no native dependencies
- * @param value - The value to encode in the barcode
- * @param options - Barcode generation options
- * @returns Base64-encoded SVG data URL string
- */
 export async function generateBarcodeImage(
   value: string,
   options: BarcodeOptions = {}
 ): Promise<string> {
   const {
     format = 'CODE128',
-    width = 2,
-    height = 100,
+    width = 3,
+    height = 10,
     displayValue = true,
-    fontSize = 20,
-    margin = 10,
+    fontSize = 10,
+    margin = 5,
   } = options;
 
   try {
-    // Map common format names to bwip-js bcid values
     const bcidMap: Record<string, string> = {
       'CODE128': 'code128',
       'CODE39': 'code39',
@@ -46,12 +38,11 @@ export async function generateBarcodeImage(
 
     const bcid = bcidMap[format.toUpperCase()] || 'code128';
 
-    // Generate SVG barcode using bwip-js (pure JavaScript, no native deps)
-    const svg = bwipjs.toSVG({
+    const pngBuffer = await bwipjs.toBuffer({
       bcid: bcid,
       text: value,
       scale: width,
-      height: Math.round(height / 10), // bwip-js uses mm, convert from px
+      height: height,
       includetext: displayValue,
       textxalign: 'center',
       textsize: fontSize,
@@ -59,9 +50,8 @@ export async function generateBarcodeImage(
       paddingheight: margin,
     });
 
-    // Convert SVG to base64 data URL
-    const base64Svg = Buffer.from(svg).toString('base64');
-    return `data:image/svg+xml;base64,${base64Svg}`;
+    const base64Png = pngBuffer.toString('base64');
+    return `data:image/png;base64,${base64Png}`;
   } catch (error) {
     console.error('Error generating barcode:', error);
     throw new Error(`Failed to generate barcode for value: ${value}`);

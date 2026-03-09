@@ -4,6 +4,7 @@ import {
   arInvoices,
   arInvoiceLines,
   p2Customers,
+  p2PurchaseOrders,
 } from '../../schema';
 import { eq, desc, sql, and, ilike } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
@@ -13,6 +14,30 @@ const router = Router();
 
 router.use(authenticateToken);
 router.use(requireAdminAccess);
+
+router.get('/customer-pos', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.query;
+    if (!customerId) {
+      return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    const pos = await db
+      .select({
+        id: p2PurchaseOrders.id,
+        poNumber: p2PurchaseOrders.poNumber,
+        status: p2PurchaseOrders.status,
+      })
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.customerId, String(customerId)))
+      .orderBy(desc(p2PurchaseOrders.createdAt));
+
+    res.json(pos);
+  } catch (error) {
+    console.error('Failed to fetch customer POs:', error);
+    res.status(500).json({ error: 'Failed to fetch customer POs' });
+  }
+});
 
 router.get('/', async (req: Request, res: Response) => {
   try {

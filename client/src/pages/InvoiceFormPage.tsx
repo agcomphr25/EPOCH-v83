@@ -79,6 +79,16 @@ export default function InvoiceFormPage() {
     queryKey: ['/api/p2-customers-bypass'],
   });
 
+  const { data: customerPos = [], isLoading: loadingPos } = useQuery<{ id: number; poNumber: string; status: string }[]>({
+    queryKey: ['/api/ar-invoices/customer-pos', form.customerId],
+    queryFn: async () => {
+      const r = await fetch(`/api/ar-invoices/customer-pos?customerId=${encodeURIComponent(form.customerId)}`, { credentials: 'include' });
+      if (!r.ok) throw new Error('Failed to load POs');
+      return r.json();
+    },
+    enabled: !!form.customerId,
+  });
+
   const { data: existingInvoice, isLoading: loadingInvoice } = useQuery<any>({
     queryKey: ['/api/ar-invoices', editId],
     enabled: isEditing,
@@ -123,7 +133,12 @@ export default function InvoiceFormPage() {
   const totalAmount = subtotal + taxAmount;
 
   const updateField = (field: keyof InvoiceFormData, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === 'customerId' && value !== prev.customerId) {
+        return { ...prev, customerId: value, poId: '', poOverride: '' };
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const updateLine = (index: number, field: keyof InvoiceLine, value: string) => {
@@ -305,13 +320,30 @@ export default function InvoiceFormPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="poId">PO ID</Label>
-              <Input
-                id="poId"
+              <Label htmlFor="poId">Purchase Order</Label>
+              <Select
                 value={form.poId}
-                onChange={(e) => updateField('poId', e.target.value)}
-                placeholder="Optional"
-              />
+                onValueChange={(v) => updateField('poId', v === '__none__' ? '' : v)}
+                disabled={!form.customerId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    !form.customerId
+                      ? 'Select a customer first'
+                      : loadingPos
+                        ? 'Loading POs...'
+                        : 'None'
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {customerPos.map((po) => (
+                    <SelectItem key={po.id} value={String(po.id)}>
+                      {po.poNumber} ({po.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -320,7 +352,7 @@ export default function InvoiceFormPage() {
                 id="poOverride"
                 value={form.poOverride}
                 onChange={(e) => updateField('poOverride', e.target.value)}
-                placeholder="Optional"
+                placeholder="Manual PO number"
               />
             </div>
 

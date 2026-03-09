@@ -13303,3 +13303,65 @@ export const units = pgTable('units', {
 export const insertUnitSchema = createInsertSchema(units).omit({ id: true, createdAt: true });
 export type Unit = typeof units.$inferSelect;
 export type InsertUnit = z.infer<typeof insertUnitSchema>;
+
+// ─── AR Invoices ────────────────────────────────────────────────────────────
+export const arInvoices = pgTable('ar_invoices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  customerId: text('customer_id').notNull(),
+  invoiceNumber: text('invoice_number').notNull(),
+  invoiceDate: date('invoice_date').notNull(),
+  dueDate: date('due_date'),
+  terms: text('terms'),
+  poId: text('po_id'),
+  poOverride: text('po_override'),
+  subtotal: numeric('subtotal').notNull(),
+  taxAmount: numeric('tax_amount').notNull().default('0'),
+  totalAmount: numeric('total_amount').notNull(),
+  status: text('status').notNull().default('OPEN'),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  customerIdx: index('ar_invoices_customer_id_idx').on(table.customerId),
+  invoiceNumberIdx: index('ar_invoices_invoice_number_idx').on(table.invoiceNumber),
+}));
+
+export const insertArInvoiceSchema = createInsertSchema(arInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ArInvoice = typeof arInvoices.$inferSelect;
+export type InsertArInvoice = z.infer<typeof insertArInvoiceSchema>;
+
+// ─── AR Invoice Lines ───────────────────────────────────────────────────────
+export const arInvoiceLines = pgTable('ar_invoice_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  invoiceId: uuid('invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'cascade' }),
+  inventoryItemId: text('inventory_item_id'),
+  description: text('description').notNull(),
+  qty: numeric('qty').notNull(),
+  unitPrice: numeric('unit_price').notNull(),
+  lineTotal: numeric('line_total').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertArInvoiceLineSchema = createInsertSchema(arInvoiceLines).omit({
+  id: true,
+  createdAt: true,
+});
+export type ArInvoiceLine = typeof arInvoiceLines.$inferSelect;
+export type InsertArInvoiceLine = z.infer<typeof insertArInvoiceLineSchema>;
+
+// ─── AR Relations (declared after both tables) ──────────────────────────────
+export const arInvoicesRelations = relations(arInvoices, ({ many }) => ({
+  lines: many(arInvoiceLines),
+}));
+
+export const arInvoiceLinesRelations = relations(arInvoiceLines, ({ one }) => ({
+  invoice: one(arInvoices, {
+    fields: [arInvoiceLines.invoiceId],
+    references: [arInvoices.id],
+  }),
+}));

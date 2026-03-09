@@ -152,6 +152,7 @@ import unitsRouter from './units';
 import materialIntelligenceRoutes from './materialIntelligence';
 import emailTemplatesRoutes from './emailTemplates';
 import signOrderSettingsRoutes from './signOrderSettings';
+import arInvoicesRoutes from './arInvoices';
 
 export function registerRoutes(app: Express): Server {
   // Temporary debug route - raw order data inspector
@@ -607,6 +608,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/dashboards', dashboardsRouter);
   app.use('/api/units', unitsRouter);
   app.use('/api/material-intelligence', materialIntelligenceRoutes);
+  app.use('/api/ar-invoices', arInvoicesRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

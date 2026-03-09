@@ -835,6 +835,12 @@ export default function Navigation() {
       description: 'Accounts Receivable transactions',
     },
     {
+      path: '/finance/invoices',
+      label: 'Invoices (AR)',
+      icon: FileText,
+      description: 'Accounts Receivable invoices and tracking',
+    },
+    {
       path: '/finance/cogs',
       label: 'COGS Report',
       icon: TrendingUp,

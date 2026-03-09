@@ -86,6 +86,7 @@ type ManufacturingQueueItem = {
   id: number;
   partNumber: string | null;
   partName: string | null;
+  displayName: string | null;
   quantityOrdered: number;
   quantityCompleted: number;
   status: string;
@@ -268,14 +269,23 @@ export default function CuttingOperatorDashboard() {
       const quantityCompleted = item.quantityCompleted || 0;
       const remaining = Math.max(0, quantityOrdered - quantityCompleted);
       
-      // Parse bomId from notes if not at top level
       let bomId = item.packetBomId;
-      if (!bomId && item.notes) {
+      let packetName: string | null = null;
+      let userNotes: string | null = null;
+      let orderId: string | null = null;
+      let materialType: string | null = item.materialType || null;
+      if (item.notes) {
         try {
           const parsedNotes = JSON.parse(item.notes);
-          bomId = parsedNotes.bomId;
+          if (!bomId) bomId = parsedNotes.bomId;
+          packetName = parsedNotes.packetName || null;
+          userNotes = parsedNotes.userNotes || null;
+          orderId = parsedNotes.orderId || null;
+          if (!materialType) materialType = parsedNotes.materialType || null;
         } catch {}
       }
+
+      const displayName = item.displayName || packetName || userNotes || item.partName || orderId || null;
       
       // Find matching BOM - use string comparison for ID matching
       const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
@@ -290,6 +300,7 @@ export default function CuttingOperatorDashboard() {
         quantityOrdered,
         quantityCompleted,
         estimatedCuts,
+        displayName,
         packetBomId: bomId || matchingBOM?.id,
       };
     });
@@ -646,6 +657,7 @@ export default function CuttingOperatorDashboard() {
       id: activeScannedPacket.queueItem.id,
       partNumber: activeScannedPacket.queueItem.partNumber,
       partName: activeScannedPacket.queueItem.partName,
+      displayName: activeScannedPacket.queueItem.displayName || activeScannedPacket.queueItem.partName,
       quantityOrdered: activeScannedPacket.queueItem.quantityRequested || activeScannedPacket.queueItem.remaining,
       quantityCompleted: activeScannedPacket.queueItem.quantityCompleted || 0,
       status: activeScannedPacket.queueItem.status,
@@ -1301,7 +1313,7 @@ export default function CuttingOperatorDashboard() {
                     Active Packet: {activeScannedPacket.queueItem?.partNumber || 'Unknown'}
                   </CardTitle>
                   <CardDescription>
-                    {activeScannedPacket.queueItem?.partName} — {activeScannedPacket.queueItem?.remaining || 0} packets remaining
+                    {activeScannedPacket.queueItem?.displayName || activeScannedPacket.queueItem?.partName} — {activeScannedPacket.queueItem?.remaining || 0} packets remaining
                   </CardDescription>
                 </div>
               </div>
@@ -1880,7 +1892,7 @@ export default function CuttingOperatorDashboard() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{item.partName || '-'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{item.displayName || item.partName || '-'}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <span className={cn(
@@ -1988,7 +2000,7 @@ export default function CuttingOperatorDashboard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scissors className="h-5 w-5" />
-              Cutting Workflow: {selectedMfgItem?.partNumber || selectedMfgItem?.partName}
+              Cutting Workflow: {selectedMfgItem?.displayName || selectedMfgItem?.partNumber || selectedMfgItem?.partName}
             </DialogTitle>
             <DialogDescription>
               Step {workflowStep === 'fabric' ? '1 of 4: Retrieve Fabric' : workflowStep === 'cutting' ? '2 of 4: Cutting Programs' : workflowStep === 'complete' ? '3 of 4: Complete & Print Labels' : '4 of 4: Fabric Disposition'}
@@ -2431,7 +2443,7 @@ export default function CuttingOperatorDashboard() {
       <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Complete Production: {selectedMfgItem?.partNumber || selectedMfgItem?.partName}</DialogTitle>
+            <DialogTitle>Complete Production: {selectedMfgItem?.displayName || selectedMfgItem?.partNumber || selectedMfgItem?.partName}</DialogTitle>
             <DialogDescription>
               Enter completion details with fabric traceability
             </DialogDescription>

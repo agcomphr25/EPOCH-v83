@@ -672,15 +672,11 @@ export default function CuttingWeeklySchedule() {
                     // Not JSON - might be plain string notes
                   }
                   
-                  // Build display description with multiple fallbacks
                   const getDescription = () => {
-                    // 1. Try packetName from notes first (most accurate)
+                    if (item.displayName) return item.displayName;
                     if (notes.packetName) return notes.packetName;
-                    // 2. Try JSON userNotes
                     if (notes.userNotes) return notes.userNotes;
-                    // 3. Try JSON orderId
                     if (notes.orderId) return notes.orderId;
-                    // 4. Try part name from the item
                     if (item.partName) return item.partName;
                     // 4. Try material type from parsed notes
                     if (notes.materialType) {

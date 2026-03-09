@@ -47,6 +47,8 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       let materialType = null;
       let source = null;
       let orderId = null;
+      let packetName = null;
+      let userNotes = null;
       
       try {
         if (row.queue.notes) {
@@ -55,15 +57,20 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
           materialType = parsedNotes.materialType || null;
           source = parsedNotes.source || null;
           orderId = parsedNotes.orderId || null;
+          packetName = parsedNotes.packetName || null;
+          userNotes = parsedNotes.userNotes || null;
         }
       } catch (e) {
         // Notes might not be JSON, that's ok
       }
+
+      const displayName = packetName || userNotes || row.item?.name || orderId || null;
       
       return {
         ...row.queue,
         partNumber: row.item?.agPartNumber,
         partName: row.item?.name,
+        displayName,
         inventoryItem: row.item,
         packetBomId,
         materialType,
